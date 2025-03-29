@@ -190,7 +190,7 @@ export default function OddsTable({ games, view = 'moneyline' }: OddsTableProps)
                         
                         return (
                           <td key={book} className="px-2 md:px-4 py-3 whitespace-nowrap text-center">
-                            {outcomeData ? (
+                            {outcomeData && typeof outcomeData.point !== 'undefined' ? (
                               <div className={`text-xs md:text-sm ${
                                 isBest ? 'text-green-600 font-bold' : 'text-gray-900'
                               }`}>
@@ -216,7 +216,7 @@ export default function OddsTable({ games, view = 'moneyline' }: OddsTableProps)
                         
                         return (
                           <td key={book} className="px-2 md:px-4 py-3 whitespace-nowrap text-center">
-                            {outcomeData ? (
+                            {outcomeData && typeof outcomeData.point !== 'undefined' ? (
                               <div className={`text-xs md:text-sm ${
                                 isBest ? 'text-green-600 font-bold' : 'text-gray-900'
                               }`}>
@@ -259,7 +259,7 @@ function checkIfBestForSpreadOrTotal(game: Game, team: string, book: string, mar
       if (!market) return;
       
       const outcome = market.outcomes.find((o: Outcome) => o.name === team);
-      if (!outcome || outcome.point === undefined) return;
+      if (!outcome || typeof outcome.point === 'undefined') return;
       
       allLines.push({
         bookmaker: bookmaker.title,
@@ -315,7 +315,7 @@ function checkIfBestForSpreadOrTotal(game: Game, team: string, book: string, mar
       if (!market) return;
       
       const outcome = market.outcomes.find((o: Outcome) => o.name === totalsName);
-      if (!outcome || outcome.point === undefined) return;
+      if (!outcome || typeof outcome.point === 'undefined') return;
       
       allLines.push({
         bookmaker: bookmaker.title,
