@@ -41,6 +41,12 @@ export interface FuturesTeam {
   odds: { [bookmaker: string]: number };
 }
 
+// Define the RawGameData interface for the raw data
+interface RawGameData {
+  id: string;
+  bookmakers: Bookmaker[];
+}
+
 // List of supported bookmakers
 export const BOOKMAKERS = ['DraftKings', 'FanDuel', 'BetMGM', 'Caesars'];
 
@@ -93,7 +99,7 @@ export async function fetchFutures(sport: string): Promise<FuturesMarket[]> {
     // We want to group by market (e.g. "Championship Winner") and then by team
     const marketsByTitle: { [key: string]: FuturesMarket } = {};
     
-    rawData.forEach((item: any) => {
+    rawData.forEach((item: RawGameData) => {
       item.bookmakers.forEach((bookmaker: Bookmaker) => {
         bookmaker.markets.forEach((market: Market) => {
           if (!marketsByTitle[market.key]) {
