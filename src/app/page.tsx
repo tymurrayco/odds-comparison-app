@@ -1,4 +1,4 @@
-// src/app/page.tsx
+// src/app/page.tsx (modified with caching)
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -7,8 +7,13 @@ import LeagueNav from '@/components/LeagueNav';
 import GameCard from '@/components/GameCard';
 import FuturesTable from '@/components/FuturesTable';
 
+interface CacheItem<T> {
+  data: T;
+  timestamp: number;
+  league: string;
+}
+
 export default function Home() {
- // Initialize with default league
  const [activeLeague, setActiveLeague] = useState('basketball_nba');
  const [activeView, setActiveView] = useState<'games' | 'futures'>('games');
  const [games, setGames] = useState<Game[]>([]);
@@ -16,7 +21,14 @@ export default function Home() {
  const [loading, setLoading] = useState(true);
  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
  const [isClient, setIsClient] = useState(false);
-
+ 
+ // Cache state
+ const [gamesCache, setGamesCache] = useState<{ [league: string]: CacheItem<Game[]> }>({});
+ const [futuresCache, setFuturesCache] = useState<{ [league: string]: CacheItem<FuturesMarket[]> }>({});
+ 
+ // Cache time in milliseconds (e.g., 5 minutes)
+ const CACHE_TIME = 5 * 60 * 1000;
+ 
  // Define the Masters league ID correctly
  const MASTERS_LEAGUE_ID = 'golf_masters_tournament_winner';
 
@@ -45,46 +57,120 @@ export default function Home() {
    }
  }, [activeLeague, isClient]);
 
+ // Check if data is in cache and still valid
+ const isValidCache = <T,>(cache: { [league: string]: CacheItem<T> }, league: string): boolean => {
+   if (!cache[league]) return false;
+   const now = Date.now();
+   return (now - cache[league].timestamp) < CACHE_TIME;
+ };
+
+ // Load data from cache or API
  const loadData = useCallback(async function() {
    setLoading(true);
+   
+   // Add a small delay to prevent rapid successive calls
+   await new Promise(resolve => setTimeout(resolve, 100));
+   
+   const now = Date.now();
+   const needsGames = activeView === 'games' && activeLeague !== MASTERS_LEAGUE_ID;
+   const needsFutures = activeView === 'futures' || activeLeague === MASTERS_LEAGUE_ID;
+   
    try {
-     // Add an artificial delay to make the loading state more visible
-     await new Promise(resolve => setTimeout(resolve, 500));
+     let gamesLoaded = false;
+     let futuresLoaded = false;
      
-     // Determine what data to load
-     if (activeLeague === MASTERS_LEAGUE_ID || activeView === 'futures') {
-       const data = await fetchFutures(activeLeague);
-       setFutures(data);
-     } else {
-       const data = await fetchOdds(activeLeague);
-       setGames(data);
+     // Load games if needed
+     if (needsGames) {
+       if (isValidCache(gamesCache, activeLeague)) {
+         // Use cached data
+         setGames(gamesCache[activeLeague].data);
+         gamesLoaded = true;
+       } else {
+         // Fetch fresh data
+         const data = await fetchOdds(activeLeague);
+         setGames(data);
+         setGamesCache(prev => ({
+           ...prev,
+           [activeLeague]: { data, timestamp: now, league: activeLeague }
+         }));
+         gamesLoaded = true;
+       }
      }
      
-     setLastUpdated(new Date());
+     // Load futures if needed
+     if (needsFutures) {
+       if (isValidCache(futuresCache, activeLeague)) {
+         // Use cached data
+         setFutures(futuresCache[activeLeague].data);
+         futuresLoaded = true;
+       } else {
+         // Fetch fresh data
+         const data = await fetchFutures(activeLeague);
+         setFutures(data);
+         setFuturesCache(prev => ({
+           ...prev,
+           [activeLeague]: { data, timestamp: now, league: activeLeague }
+         }));
+         futuresLoaded = true;
+       }
+     }
+     
+     if (gamesLoaded || futuresLoaded) {
+       setLastUpdated(new Date());
+     }
    } catch (error) {
      console.error('Error loading data:', error);
    } finally {
      setLoading(false);
    }
+ }, [activeLeague, activeView, gamesCache, futuresCache]);
+
+ // Force reload with fresh data (for refresh button)
+ const forceRefresh = useCallback(async function() {
+   setLoading(true);
    
-   // Return a resolved promise so we can await this function
-   return Promise.resolve();
+   try {
+     const now = Date.now();
+     
+     // Load based on the current view and league
+     if (activeView === 'games' && activeLeague !== MASTERS_LEAGUE_ID) {
+       const data = await fetchOdds(activeLeague);
+       setGames(data);
+       setGamesCache(prev => ({
+         ...prev,
+         [activeLeague]: { data, timestamp: now, league: activeLeague }
+       }));
+     } else {
+       const data = await fetchFutures(activeLeague);
+       setFutures(data);
+       setFuturesCache(prev => ({
+         ...prev,
+         [activeLeague]: { data, timestamp: now, league: activeLeague }
+       }));
+     }
+     
+     setLastUpdated(new Date());
+   } catch (error) {
+     console.error('Error refreshing data:', error);
+   } finally {
+     setLoading(false);
+   }
  }, [activeLeague, activeView]);
  
  // Load data when league or view changes
  useEffect(() => {
    loadData();
- }, [loadData]); // Now we only need loadData in the dependency array
+ }, [loadData]);
 
  // Force the effective view for rendering
  const effectiveView = activeLeague === MASTERS_LEAGUE_ID ? 'futures' : activeView;
 
  return (
-   <main className="min-h-screen bg-green-100">
+   <main className="min-h-screen bg-gray-50">
      <header className="bg-white shadow-sm">
        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
          <div className="flex h-16 items-center">
-           <h1 className="text-xl font-bold text-green-600">odds.day</h1>
+           <h1 className="text-xl font-bold text-blue-600">OddsCompare</h1>
          </div>
        </div>
      </header>
@@ -93,8 +179,8 @@ export default function Home() {
        {/* League Navigation */}
        <LeagueNav 
          activeLeague={activeLeague} 
-         setActiveLeague={setActiveLeague}
-         onRefresh={loadData}
+         setActiveLeague={setActiveLeague} 
+         onRefresh={forceRefresh}  // Use forceRefresh for manual refresh
          lastUpdated={lastUpdated}
        />
 
