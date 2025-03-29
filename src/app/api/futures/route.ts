@@ -12,7 +12,8 @@ export async function GET(request: Request) {
   }
 
   // Map sport keys to their championship endpoint
-  const sportToChampionship = {
+  // Add the index signature to fix TypeScript error
+  const sportToChampionship: { [key: string]: string } = {
     'basketball_nba': 'basketball_nba_championship_winner',
     'americanfootball_nfl': 'americanfootball_nfl_super_bowl_winner',
     'baseball_mlb': 'baseball_mlb_world_series_winner',
