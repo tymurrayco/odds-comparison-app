@@ -121,7 +121,7 @@ export default function Home() {
                ) : (
                  <div>
                    {futures.map((market, index) => (
-                     <FuturesTable key={index} market={market} leagueId={activeLeague} />
+                     <FuturesTable key={index} market={market} />
                    ))}
                  </div>
                )}
