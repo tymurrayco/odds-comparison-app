@@ -48,7 +48,8 @@ export default function FuturesTable({ market }: FuturesTableProps) {
               
               // Determine best odds
               let bestOddsValue = -Infinity;
-              let bestOddsBooks = [];
+              // Add explicit string[] type to the array
+              let bestOddsBooks: string[] = [];
               
               BOOKMAKERS.forEach(book => {
                 if (item.odds[book] !== undefined) {

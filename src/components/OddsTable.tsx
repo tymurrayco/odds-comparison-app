@@ -27,13 +27,13 @@ export default function OddsTable({ games, view = 'moneyline' }: OddsTableProps)
     <div>
       {games.map(game => {
         // For each team, calculate which bookmakers offer the best odds
-        const bestBookmakersByTeam = {};
+        const bestBookmakersByTeam: { [key: string]: string[] } = {};
         
         // Calculate best bookmakers for moneyline
         if (marketKey === 'h2h') {
           // For each team, find all available odds
           [game.away_team, game.home_team].forEach(team => {
-            const allOdds = [];
+            const allOdds: { bookmaker: string; price: number }[] = [];
             
             // Collect all odds for this team
             BOOKMAKERS.forEach(book => {
@@ -85,12 +85,6 @@ export default function OddsTable({ games, view = 'moneyline' }: OddsTableProps)
               .map(odds => odds.bookmaker);
             
             bestBookmakersByTeam[team] = bestBookmakers;
-          });
-        } else if (marketKey === 'spreads' || marketKey === 'totals') {
-          // For spread and totals, use the existing logic
-          [game.away_team, game.home_team].forEach(team => {
-            const isBest = checkIfBestForSpreadOrTotal(game, team, marketKey);
-            bestBookmakersByTeam[team] = isBest;
           });
         }
         
@@ -226,17 +220,17 @@ export default function OddsTable({ games, view = 'moneyline' }: OddsTableProps)
 }
 
 // Helper function for spread and totals
-function checkIfBestForSpreadOrTotal(game, team, book, marketKey) {
+function checkIfBestForSpreadOrTotal(game: any, team: string, book: string, marketKey: string): boolean {
   if (marketKey === 'spreads') {
     // For spreads, we'll find the best available lines and then pick the ones with the best juice
-    const allLines = [];
+    const allLines: { bookmaker: string; point: number; price: number }[] = [];
     
     // Collect all spread lines for this team
-    game.bookmakers.forEach(bookmaker => {
-      const market = bookmaker.markets.find(m => m.key === 'spreads');
+    game.bookmakers.forEach((bookmaker: any) => {
+      const market = bookmaker.markets.find((m: any) => m.key === 'spreads');
       if (!market) return;
       
-      const outcome = market.outcomes.find(o => o.name === team);
+      const outcome = market.outcomes.find((o: any) => o.name === team);
       if (!outcome) return;
       
       allLines.push({
@@ -286,13 +280,13 @@ function checkIfBestForSpreadOrTotal(game, team, book, marketKey) {
     const totalsName = isOver ? 'Over' : 'Under';
     
     // Collect all totals lines for this type (Over/Under)
-    const allLines = [];
+    const allLines: { bookmaker: string; point: number; price: number }[] = [];
     
-    game.bookmakers.forEach(bookmaker => {
-      const market = bookmaker.markets.find(m => m.key === 'totals');
+    game.bookmakers.forEach((bookmaker: any) => {
+      const market = bookmaker.markets.find((m: any) => m.key === 'totals');
       if (!market) return;
       
-      const outcome = market.outcomes.find(o => o.name === totalsName);
+      const outcome = market.outcomes.find((o: any) => o.name === totalsName);
       if (!outcome) return;
       
       allLines.push({
