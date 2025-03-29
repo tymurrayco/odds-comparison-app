@@ -3,7 +3,6 @@ import { FuturesMarket, BOOKMAKERS } from '@/lib/api';
 
 interface FuturesTableProps {
   market: FuturesMarket;
-  // Removed the unused leagueId parameter
 }
 
 export default function FuturesTable({ market }: FuturesTableProps) {
@@ -12,8 +11,8 @@ export default function FuturesTable({ market }: FuturesTableProps) {
     return odds.toString();
   };
 
-  // Bookmaker logos mapping
-  const bookmakerLogos = {
+  // Bookmaker logos mapping with type annotation
+  const bookmakerLogos: { [key: string]: string } = {
     'DraftKings': '/bookmaker-logos/draftkings.png',
     'FanDuel': '/bookmaker-logos/fd.png',
     'BetMGM': '/bookmaker-logos/betmgm.png',
