@@ -121,7 +121,7 @@ export default function Home() {
                ) : (
                  <div>
                    {futures.map((market, index) => (
-                     <FuturesTable key={index} market={market} />
+                     <FuturesTable key={index} market={market} compactMode={true} />
                    ))}
                  </div>
                )}

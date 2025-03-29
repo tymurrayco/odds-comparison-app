@@ -3,9 +3,10 @@ import { FuturesMarket, BOOKMAKERS } from '@/lib/api';
 
 interface FuturesTableProps {
   market: FuturesMarket;
+  compactMode?: boolean; // Add this new prop
 }
 
-export default function FuturesTable({ market }: FuturesTableProps) {
+export default function FuturesTable({ market, compactMode = false }: FuturesTableProps) {
   const formatOdds = (odds: number): string => {
     if (odds > 0) return `+${odds}`;
     return odds.toString();
@@ -76,7 +77,12 @@ export default function FuturesTable({ market }: FuturesTableProps) {
                           e.currentTarget.style.display = 'none';
                         }}
                       />
-                      {item.team}
+                      {/* Show team name only on desktop if compactMode is true */}
+                      {!compactMode ? (
+                        item.team
+                      ) : (
+                        <span className="sm:inline hidden">{item.team}</span>
+                      )}
                     </div>
                   </td>
                   {BOOKMAKERS.map(book => (
