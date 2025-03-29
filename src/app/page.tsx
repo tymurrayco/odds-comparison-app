@@ -1,8 +1,8 @@
 // src/app/page.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
-import { LEAGUES, fetchOdds, fetchFutures, Game, FuturesMarket } from '@/lib/api';
+import { useState, useEffect, useCallback } from 'react';
+import { fetchOdds, fetchFutures, Game, FuturesMarket } from '@/lib/api';
 import LeagueNav from '@/components/LeagueNav';
 import GameCard from '@/components/GameCard';
 import FuturesTable from '@/components/FuturesTable';
@@ -15,7 +15,7 @@ export default function Home() {
  const [loading, setLoading] = useState(true);
  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
- async function loadData() {
+ const loadData = useCallback(async function() {
    setLoading(true);
    try {
      // Add an artificial delay to make the loading state more visible
@@ -37,12 +37,12 @@ export default function Home() {
    
    // Return a resolved promise so we can await this function
    return Promise.resolve();
- }
+ }, [activeLeague, activeView]);
  
  // Load data when league or view changes
  useEffect(() => {
    loadData();
- }, [activeLeague, activeView]);
+ }, [loadData]); // Now we only need loadData in the dependency array
 
  return (
    <main className="min-h-screen bg-gray-50">

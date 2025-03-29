@@ -3,10 +3,10 @@ import { FuturesMarket, BOOKMAKERS } from '@/lib/api';
 
 interface FuturesTableProps {
   market: FuturesMarket;
-  leagueId: string;
+  // Removed the unused leagueId parameter
 }
 
-export default function FuturesTable({ market, leagueId }: FuturesTableProps) {
+export default function FuturesTable({ market }: FuturesTableProps) {
   const formatOdds = (odds: number): string => {
     if (odds > 0) return `+${odds}`;
     return odds.toString();
