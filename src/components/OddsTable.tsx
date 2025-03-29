@@ -7,6 +7,34 @@ interface OddsTableProps {
   view?: 'moneyline' | 'spread' | 'totals';
 }
 
+// Define interfaces for the types used in this component
+interface Bookmaker {
+  title: string;
+  markets: Market[];
+}
+
+interface Market {
+  key: string;
+  outcomes: Outcome[];
+}
+
+interface Outcome {
+  name: string;
+  price: number;
+  point?: number;
+}
+
+interface OddsItem {
+  bookmaker: string;
+  price: number;
+}
+
+interface LineItem {
+  bookmaker: string;
+  point: number;
+  price: number;
+}
+
 export default function OddsTable({ games, view = 'moneyline' }: OddsTableProps) {
   if (!games || games.length === 0) {
     return <div className="p-4">No games available</div>;
@@ -33,7 +61,7 @@ export default function OddsTable({ games, view = 'moneyline' }: OddsTableProps)
         if (marketKey === 'h2h') {
           // For each team, find all available odds
           [game.away_team, game.home_team].forEach(team => {
-            const allOdds: { bookmaker: string; price: number }[] = [];
+            const allOdds: OddsItem[] = [];
             
             // Collect all odds for this team
             BOOKMAKERS.forEach(book => {
@@ -220,18 +248,18 @@ export default function OddsTable({ games, view = 'moneyline' }: OddsTableProps)
 }
 
 // Helper function for spread and totals
-function checkIfBestForSpreadOrTotal(game: any, team: string, book: string, marketKey: string): boolean {
+function checkIfBestForSpreadOrTotal(game: Game, team: string, book: string, marketKey: string): boolean {
   if (marketKey === 'spreads') {
     // For spreads, we'll find the best available lines and then pick the ones with the best juice
-    const allLines: { bookmaker: string; point: number; price: number }[] = [];
+    const allLines: LineItem[] = [];
     
     // Collect all spread lines for this team
-    game.bookmakers.forEach((bookmaker: any) => {
-      const market = bookmaker.markets.find((m: any) => m.key === 'spreads');
+    game.bookmakers.forEach((bookmaker: Bookmaker) => {
+      const market = bookmaker.markets.find((m: Market) => m.key === 'spreads');
       if (!market) return;
       
-      const outcome = market.outcomes.find((o: any) => o.name === team);
-      if (!outcome) return;
+      const outcome = market.outcomes.find((o: Outcome) => o.name === team);
+      if (!outcome || outcome.point === undefined) return;
       
       allLines.push({
         bookmaker: bookmaker.title,
@@ -280,14 +308,14 @@ function checkIfBestForSpreadOrTotal(game: any, team: string, book: string, mark
     const totalsName = isOver ? 'Over' : 'Under';
     
     // Collect all totals lines for this type (Over/Under)
-    const allLines: { bookmaker: string; point: number; price: number }[] = [];
+    const allLines: LineItem[] = [];
     
-    game.bookmakers.forEach((bookmaker: any) => {
-      const market = bookmaker.markets.find((m: any) => m.key === 'totals');
+    game.bookmakers.forEach((bookmaker: Bookmaker) => {
+      const market = bookmaker.markets.find((m: Market) => m.key === 'totals');
       if (!market) return;
       
-      const outcome = market.outcomes.find((o: any) => o.name === totalsName);
-      if (!outcome) return;
+      const outcome = market.outcomes.find((o: Outcome) => o.name === totalsName);
+      if (!outcome || outcome.point === undefined) return;
       
       allLines.push({
         bookmaker: bookmaker.title,
