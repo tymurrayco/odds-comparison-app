@@ -166,11 +166,11 @@ export default function Home() {
  const effectiveView = activeLeague === MASTERS_LEAGUE_ID ? 'futures' : activeView;
 
  return (
-   <main className="min-h-screen bg-gray-50">
+   <main className="min-h-screen bg-blue-50">
      <header className="bg-white shadow-sm">
        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
          <div className="flex h-16 items-center">
-           <h1 className="text-xl font-bold text-blue-600">OddsCompare</h1>
+           <h1 className="text-xl font-bold text-blue-600">odds.day</h1>
          </div>
        </div>
      </header>
