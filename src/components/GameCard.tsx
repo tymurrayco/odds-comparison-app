@@ -13,7 +13,13 @@ export default function GameCard({ game }: GameCardProps) {
   // Format the date and time
   const gameDate = new Date(game.commence_time);
   const formattedDate = gameDate.toLocaleDateString(undefined, {month: 'short', day: 'numeric'});
-  const formattedTime = gameDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ' ET';
+  
+  // Get the user's timezone abbreviation
+  const timeZoneAbbr = new Intl.DateTimeFormat('en', { timeZoneName: 'short' })
+    .formatToParts(gameDate)
+    .find(part => part.type === 'timeZoneName')?.value || '';
+  
+  const formattedTime = gameDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
   
   // Check if game is live
   const now = new Date();
@@ -36,7 +42,7 @@ export default function GameCard({ game }: GameCardProps) {
               )}
             </div>
             <p className="text-xs md:text-sm text-gray-500">
-              {formattedDate} at {formattedTime}
+              {formattedDate} at {formattedTime} {timeZoneAbbr}
             </p>
           </div>
           
