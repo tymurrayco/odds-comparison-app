@@ -14,6 +14,25 @@ export default function Home() {
  const [futures, setFutures] = useState<FuturesMarket[]>([]);
  const [loading, setLoading] = useState(true);
  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+ const [isClient, setIsClient] = useState(false);
+
+ // Set isClient to true when component mounts on client side
+ useEffect(() => {
+   setIsClient(true);
+   
+   // Load saved league from localStorage after client-side hydration
+   const savedLeague = localStorage.getItem('activeLeague');
+   if (savedLeague) {
+     setActiveLeague(savedLeague);
+   }
+ }, []);
+
+ // Save to localStorage when activeLeague changes, but only after hydration
+ useEffect(() => {
+   if (isClient) {
+     localStorage.setItem('activeLeague', activeLeague);
+   }
+ }, [activeLeague, isClient]);
 
  const loadData = useCallback(async function() {
    setLoading(true);
