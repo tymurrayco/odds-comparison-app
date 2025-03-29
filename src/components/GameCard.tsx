@@ -79,6 +79,7 @@ export default function GameCard({ game }: GameCardProps) {
         <OddsTable 
           games={[game]}
           view={expandedMarket}
+          compactMode={true} // Add this prop to enable compact mode for mobile
         />
       </div>
     </div>

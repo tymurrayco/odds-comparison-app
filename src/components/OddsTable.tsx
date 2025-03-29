@@ -5,6 +5,7 @@ import { formatOdds } from '@/lib/utils';
 interface OddsTableProps {
   games: Game[];
   view?: 'moneyline' | 'spread' | 'totals';
+  compactMode?: boolean; // Add this new prop
 }
 
 // Define interfaces for the types used in this component
@@ -35,7 +36,7 @@ interface LineItem {
   price: number;
 }
 
-export default function OddsTable({ games, view = 'moneyline' }: OddsTableProps) {
+export default function OddsTable({ games, view = 'moneyline', compactMode = false }: OddsTableProps) {
   if (!games || games.length === 0) {
     return <div className="p-4">No games available</div>;
   }
@@ -144,7 +145,12 @@ export default function OddsTable({ games, view = 'moneyline' }: OddsTableProps)
                             e.currentTarget.style.display = 'none';
                           }}
                         />
-                        {team}
+                        {/* Show team name only on desktop if compactMode is true */}
+                        {!compactMode ? (
+                          team
+                        ) : (
+                          <span className="sm:inline hidden">{team}</span>
+                        )}
                       </div>
                     </td>
                     

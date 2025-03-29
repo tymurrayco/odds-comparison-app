@@ -59,6 +59,7 @@ export const LEAGUES = [
   { id: 'basketball_ncaab', name: 'NCAAB', icon: '/league-icons/ncaab.png' },
   { id: 'americanfootball_ncaaf', name: 'NCAAF', icon: '/league-icons/ncaaf.png' },
   { id: 'soccer_epl', name: 'EPL', icon: '/league-icons/epl.png' },
+  { id: 'golf_masters_tournament_winner', name: 'Masters', icon: '/league-icons/masters.png' },
 ];
 
 /**
