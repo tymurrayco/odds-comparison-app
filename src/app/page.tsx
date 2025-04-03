@@ -256,8 +256,22 @@ export default function Home() {
                  </div>
                ) : (
                  <div>
+
+                  {/* Banner for Masters on mobile */}
+{activeLeague === MASTERS_LEAGUE_ID && (
+  <div className="sm:hidden bg-blue-50 p-2 text-center border-b border-blue-100 mb-4">
+    <p className="text-xs text-blue-800 font-medium">
+      ↔️ Rotate phone horizontally to see golfer names
+    </p>
+  </div>
+)}
                    {futures.map((market, index) => (
-                     <FuturesTable key={index} market={market} compactMode={true} />
+                     <FuturesTable 
+                     key={index} 
+                     market={market} 
+                     compactMode={true}
+                     isMasters={activeLeague === MASTERS_LEAGUE_ID && false} // Force false to prevent name changes
+                   />
                    ))}
                  </div>
                )}
