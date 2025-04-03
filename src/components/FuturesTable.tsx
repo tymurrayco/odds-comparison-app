@@ -1,5 +1,6 @@
 // src/components/FuturesTable.tsx
 import { FuturesMarket, BOOKMAKERS } from '@/lib/api';
+import React from 'react';
 
 interface FuturesTableProps {
   market: FuturesMarket;
@@ -29,6 +30,56 @@ export default function FuturesTable({
     'FanDuel': '/bookmaker-logos/fd.png',
     'BetMGM': '/bookmaker-logos/betmgm.png',
     'Caesars': '/bookmaker-logos/caesars.png'
+  };
+
+  // Custom display for team cell based on whether it's Masters and screen size
+  const renderTeamCell = (team: string) => {
+    const teamLogoSrc = `/team-logos/${team.toLowerCase().replace(/\s+/g, '')}.png`;
+    const lastName = getLastName(team);
+    
+    if (isMasters) {
+      // For Masters - always show the logo, but conditionally show name based on screen size
+      return (
+        <div className="flex items-center" style={{ display: 'flex', alignItems: 'center' }}>
+          <img 
+            src={teamLogoSrc}
+            alt=""
+            className="h-5 w-5 mr-2"
+            style={{ height: '20px', width: '20px', marginRight: '8px' }}
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+            }}
+          />
+          {/* Force display of last name on mobile */}
+          <div className="sm:hidden" style={{ display: 'inline-block' }}>
+            {lastName}
+          </div>
+          {/* Show full name on desktop */}
+          <div className="hidden sm:block">
+            {team}
+          </div>
+        </div>
+      );
+    } else {
+      // For non-Masters tabs
+      return (
+        <div className="flex items-center">
+          <img 
+            src={teamLogoSrc}
+            alt=""
+            className="h-5 w-5 mr-2"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+            }}
+          />
+          {!compactMode ? (
+            <span>{team}</span>
+          ) : (
+            <span className="sm:inline hidden">{team}</span>
+          )}
+        </div>
+      );
+    }
   };
 
   return (
@@ -73,40 +124,7 @@ export default function FuturesTable({
               return (
                 <tr key={index}>
                   <td className="px-2 md:px-4 py-3 whitespace-nowrap text-xs md:text-sm font-medium text-gray-900 truncate max-w-[120px]">
-                    <div className="flex items-center">
-                      {/* Always show the icon */}
-                      <img 
-                        src={`/team-logos/${item.team.toLowerCase().replace(/\s+/g, '')}.png`}
-                        alt=""
-                        className="h-5 w-5 mr-2"
-                        onError={(e) => {
-                          e.currentTarget.style.display = 'none';
-                        }}
-                      />
-                      
-                      {/* Masters-specific logic */}
-                      {isMasters ? (
-                        <>
-                          {/* Always show the last name on mobile, regardless of compact mode */}
-                          <div className="block sm:hidden">
-                            {getLastName(item.team)}
-                          </div>
-                          {/* On desktop: Show full name */}
-                          <div className="hidden sm:block">
-                            {item.team}
-                          </div>
-                        </>
-                      ) : (
-                        // Original logic for non-Masters tabs
-                        !compactMode ? (
-                          // Normal mode: always show team name
-                          item.team
-                        ) : (
-                          // Compact mode: hide team name on mobile, show on desktop
-                          <span className="sm:inline hidden">{item.team}</span>
-                        )
-                      )}
-                    </div>
+                    {renderTeamCell(item.team)}
                   </td>
                   {BOOKMAKERS.map(book => (
                     <td key={book} className="px-2 md:px-4 py-3 whitespace-nowrap text-center">
