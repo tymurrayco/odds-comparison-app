@@ -32,32 +32,45 @@ export default function FuturesTable({
     'Caesars': '/bookmaker-logos/caesars.png'
   };
 
+  // Custom CSS for handling Masters mobile display
+  const mobileLastNameStyle = {
+    display: 'inline-block',
+    marginLeft: '4px',
+    fontSize: '12px',
+    fontWeight: 'bold',
+    position: 'relative' as 'relative',
+    zIndex: 10,
+    whiteSpace: 'nowrap' as 'nowrap',
+  };
+
   // Custom display for team cell based on whether it's Masters and screen size
   const renderTeamCell = (team: string) => {
     const teamLogoSrc = `/team-logos/${team.toLowerCase().replace(/\s+/g, '')}.png`;
     const lastName = getLastName(team);
     
     if (isMasters) {
-      // For Masters - always show the logo, but conditionally show name based on screen size
+      // For Masters - specialized approach with direct styles
       return (
-        <div className="flex items-center" style={{ display: 'flex', alignItems: 'center' }}>
+        <div className="flex items-center" style={{ width: '100%', display: 'flex', alignItems: 'center' }}>
           <img 
             src={teamLogoSrc}
             alt=""
-            className="h-5 w-5 mr-2"
-            style={{ height: '20px', width: '20px', marginRight: '8px' }}
+            className="h-5 w-5 mr-1"
+            style={{ height: '20px', width: '20px', marginRight: '4px', flexShrink: 0 }}
             onError={(e) => {
               e.currentTarget.style.display = 'none';
             }}
           />
-          {/* Force display of last name on mobile */}
-          <div className="sm:hidden" style={{ display: 'inline-block' }}>
+          
+          {/* Always show last name on mobile */}
+          <span className="sm:hidden" style={mobileLastNameStyle}>
             {lastName}
-          </div>
-          {/* Show full name on desktop */}
-          <div className="hidden sm:block">
+          </span>
+          
+          {/* Show full name on desktop/tablet */}
+          <span className="hidden sm:inline">
             {team}
-          </div>
+          </span>
         </div>
       );
     } else {
@@ -123,7 +136,7 @@ export default function FuturesTable({
               
               return (
                 <tr key={index}>
-                  <td className="px-2 md:px-4 py-3 whitespace-nowrap text-xs md:text-sm font-medium text-gray-900 truncate max-w-[120px]">
+                  <td className="px-2 md:px-4 py-3 whitespace-normal text-xs md:text-sm font-medium text-gray-900">
                     {renderTeamCell(item.team)}
                   </td>
                   {BOOKMAKERS.map(book => (
