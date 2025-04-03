@@ -84,17 +84,17 @@ export default function FuturesTable({
                         }}
                       />
                       
-                      {/* Conditional display logic based on whether it's Masters and device size */}
+                      {/* Masters-specific logic */}
                       {isMasters ? (
                         <>
-                          {/* On mobile for Masters: Show last name */}
-                          <span className="sm:hidden inline">
+                          {/* Always show the last name on mobile, regardless of compact mode */}
+                          <div className="block sm:hidden">
                             {getLastName(item.team)}
-                          </span>
-                          {/* On desktop for Masters: Show full name */}
-                          <span className="hidden sm:inline">
+                          </div>
+                          {/* On desktop: Show full name */}
+                          <div className="hidden sm:block">
                             {item.team}
-                          </span>
+                          </div>
                         </>
                       ) : (
                         // Original logic for non-Masters tabs
