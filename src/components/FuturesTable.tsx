@@ -38,9 +38,9 @@ export default function FuturesTable({
     marginLeft: '4px',
     fontSize: '12px',
     fontWeight: 'bold',
-    position: 'relative' as 'relative',
+    position: 'relative' as const,
     zIndex: 10,
-    whiteSpace: 'nowrap' as 'nowrap',
+    whiteSpace: 'nowrap' as const,
   };
 
   // Custom display for team cell based on whether it's Masters and screen size
