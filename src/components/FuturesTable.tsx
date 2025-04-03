@@ -55,12 +55,8 @@ export default function FuturesTable({
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {market.teams.map((item, index) => {
-              // Log the odds to help debug
-              console.log(`Team ${item.team} odds:`, item.odds);
-              
               // Determine best odds
               let bestOddsValue = -Infinity;
-              // Add explicit string[] type to the array
               let bestOddsBooks: string[] = [];
               
               BOOKMAKERS.forEach(book => {
@@ -74,12 +70,11 @@ export default function FuturesTable({
                 }
               });
               
-              console.log(`Team ${item.team} best odds: ${bestOddsValue} at ${bestOddsBooks.join(', ')}`);
-              
               return (
                 <tr key={index}>
                   <td className="px-2 md:px-4 py-3 whitespace-nowrap text-xs md:text-sm font-medium text-gray-900 truncate max-w-[120px]">
                     <div className="flex items-center">
+                      {/* Always show the icon */}
                       <img 
                         src={`/team-logos/${item.team.toLowerCase().replace(/\s+/g, '')}.png`}
                         alt=""
@@ -88,23 +83,26 @@ export default function FuturesTable({
                           e.currentTarget.style.display = 'none';
                         }}
                       />
-                      {/* Modified display logic for Masters */}
+                      
+                      {/* Conditional display logic based on whether it's Masters and device size */}
                       {isMasters ? (
                         <>
-                          {/* On mobile: show icon + last name */}
-                          <span className="sm:hidden">
+                          {/* On mobile for Masters: Show last name */}
+                          <span className="sm:hidden inline">
                             {getLastName(item.team)}
                           </span>
-                          {/* On desktop: show full team name */}
+                          {/* On desktop for Masters: Show full name */}
                           <span className="hidden sm:inline">
                             {item.team}
                           </span>
                         </>
                       ) : (
-                        // Original logic for non-Masters
+                        // Original logic for non-Masters tabs
                         !compactMode ? (
+                          // Normal mode: always show team name
                           item.team
                         ) : (
+                          // Compact mode: hide team name on mobile, show on desktop
                           <span className="sm:inline hidden">{item.team}</span>
                         )
                       )}
