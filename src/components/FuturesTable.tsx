@@ -97,16 +97,18 @@ export default function FuturesTable({
 
   return (
     <div className="bg-white rounded-lg shadow-md mb-6 overflow-hidden">
+      {/* Banner notice for Masters on mobile */}
+      {isMasters && (
+        <div className="sm:hidden bg-blue-50 p-2 text-center border-b border-blue-100">
+          <p className="text-xs text-blue-800 font-medium">
+            ↔️ Rotate phone horizontally to see golfer names
+          </p>
+        </div>
+      )}
       <div className="p-3 md:p-4 border-b border-gray-200">
         <h3 className="text-sm md:text-lg font-semibold text-gray-900">
           {market.title}
         </h3>
-        {/* Show rotation hint only for Masters on mobile */}
-        {isMasters && (
-          <p className="sm:hidden text-xs text-gray-600 mt-1 italic">
-            Rotate phone horizontally to see golfer names
-          </p>
-        )}
       </div>
       
       <div className="overflow-x-auto">
