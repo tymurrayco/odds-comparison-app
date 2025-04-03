@@ -3,13 +3,24 @@ import { FuturesMarket, BOOKMAKERS } from '@/lib/api';
 
 interface FuturesTableProps {
   market: FuturesMarket;
-  compactMode?: boolean; // Add this new prop
+  compactMode?: boolean;
+  isMasters?: boolean; // New prop to identify Masters tab
 }
 
-export default function FuturesTable({ market, compactMode = false }: FuturesTableProps) {
+export default function FuturesTable({ 
+  market, 
+  compactMode = false,
+  isMasters = false // Default to false
+}: FuturesTableProps) {
   const formatOdds = (odds: number): string => {
     if (odds > 0) return `+${odds}`;
     return odds.toString();
+  };
+
+  // Function to get last name from full name
+  const getLastName = (fullName: string): string => {
+    const nameParts = fullName.split(' ');
+    return nameParts[nameParts.length - 1];
   };
 
   // Bookmaker logos mapping with type annotation
@@ -77,11 +88,25 @@ export default function FuturesTable({ market, compactMode = false }: FuturesTab
                           e.currentTarget.style.display = 'none';
                         }}
                       />
-                      {/* Show team name only on desktop if compactMode is true */}
-                      {!compactMode ? (
-                        item.team
+                      {/* Modified display logic for Masters */}
+                      {isMasters ? (
+                        <>
+                          {/* On mobile: show icon + last name */}
+                          <span className="sm:hidden">
+                            {getLastName(item.team)}
+                          </span>
+                          {/* On desktop: show full team name */}
+                          <span className="hidden sm:inline">
+                            {item.team}
+                          </span>
+                        </>
                       ) : (
-                        <span className="sm:inline hidden">{item.team}</span>
+                        // Original logic for non-Masters
+                        !compactMode ? (
+                          item.team
+                        ) : (
+                          <span className="sm:inline hidden">{item.team}</span>
+                        )
                       )}
                     </div>
                   </td>
