@@ -101,6 +101,12 @@ export default function FuturesTable({
         <h3 className="text-sm md:text-lg font-semibold text-gray-900">
           {market.title}
         </h3>
+        {/* Show rotation hint only for Masters on mobile */}
+        {isMasters && (
+          <p className="sm:hidden text-xs text-gray-600 mt-1 italic">
+            Rotate phone horizontally to see golfer names
+          </p>
+        )}
       </div>
       
       <div className="overflow-x-auto">
