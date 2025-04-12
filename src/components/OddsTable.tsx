@@ -8,13 +8,6 @@ interface OddsTableProps {
   compactMode?: boolean; // Add this new prop
 }
 
-// Define interfaces for the types used in this component
-interface Outcome {
-  name: string;
-  price: number;
-  point?: number;
-}
-
 interface OddsItem {
   bookmaker: string;
   price: number;
