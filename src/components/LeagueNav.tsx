@@ -7,9 +7,16 @@ interface LeagueNavProps {
   setActiveLeague: (league: string) => void;
   onRefresh: () => void;
   lastUpdated: Date;
+  apiRequestsRemaining?: string | null;
 }
 
-export default function LeagueNav({ activeLeague, setActiveLeague, onRefresh, lastUpdated }: LeagueNavProps) {
+export default function LeagueNav({ 
+  activeLeague, 
+  setActiveLeague, 
+  onRefresh, 
+  lastUpdated,
+  apiRequestsRemaining
+}: LeagueNavProps) {
   const [timeString, setTimeString] = useState<string>('');
   const [isRefreshing, setIsRefreshing] = useState(false);
   
@@ -22,6 +29,15 @@ export default function LeagueNav({ activeLeague, setActiveLeague, onRefresh, la
     await onRefresh();
     setIsRefreshing(false);
   };
+
+  // Format API requests remaining - remove decimals and add commas
+  const formatNumber = (numStr: string | null) => {
+    if (!numStr) return null;
+    // Parse as float, round to integer, then format with commas
+    return Math.round(parseFloat(numStr)).toLocaleString();
+  };
+
+  const formattedRequests = apiRequestsRemaining ? formatNumber(apiRequestsRemaining) : null;
 
   return (
     <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
@@ -63,6 +79,13 @@ export default function LeagueNav({ activeLeague, setActiveLeague, onRefresh, la
               </span>
             ) : 'Refresh'}
           </button>
+          
+          {/* Display formatted API requests remaining */}
+          {formattedRequests && (
+            <span className="ml-2 px-2 py-1 bg-gray-100 rounded-full text-xs">
+              {formattedRequests}
+            </span>
+          )}
         </div>
       </div>
     </div>

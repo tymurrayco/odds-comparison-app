@@ -47,6 +47,12 @@ interface RawGameData {
   bookmakers: Bookmaker[];
 }
 
+// Define the ApiResponse interface for responses that include rate limit info
+export interface ApiResponse<T> {
+  data: T;
+  requestsRemaining: string | null;
+}
+
 // List of supported bookmakers
 export const BOOKMAKERS = ['DraftKings', 'FanDuel', 'BetMGM', 'BetRivers'];
 
@@ -66,19 +72,27 @@ export const LEAGUES = [
  * Fetch sports odds for a specific sport
  * 
  * @param sport - The sport key, e.g. 'basketball_nba'
- * @returns Array of game objects with odds from various bookmakers
+ * @returns Object with array of game objects and API requests remaining
  */
-export async function fetchOdds(sport: string): Promise<Game[]> {
+export async function fetchOdds(sport: string): Promise<ApiResponse<Game[]>> {
   try {
     const response = await fetch(`/api/odds?sport=${sport}`);
     if (!response.ok) {
       throw new Error(`Error fetching odds: ${response.statusText}`);
     }
     const data = await response.json();
-    return data;
+    const requestsRemaining = response.headers.get('x-requests-remaining');
+    
+    return {
+      data,
+      requestsRemaining
+    };
   } catch (error) {
     console.error('Error fetching odds:', error);
-    return [];
+    return {
+      data: [],
+      requestsRemaining: null
+    };
   }
 }
 
@@ -86,15 +100,16 @@ export async function fetchOdds(sport: string): Promise<Game[]> {
  * Fetch futures odds for a specific sport
  * 
  * @param sport - The sport key, e.g. 'basketball_nba'
- * @returns Array of futures market objects
+ * @returns Object with array of futures market objects and API requests remaining
  */
-export async function fetchFutures(sport: string): Promise<FuturesMarket[]> {
+export async function fetchFutures(sport: string): Promise<ApiResponse<FuturesMarket[]>> {
   try {
     const response = await fetch(`/api/futures?sport=${sport}`);
     if (!response.ok) {
       throw new Error(`Error fetching futures: ${response.statusText}`);
     }
     const rawData = await response.json();
+    const requestsRemaining = response.headers.get('x-requests-remaining');
     
     // Process the raw data into a more usable format
     // We want to group by market (e.g. "Championship Winner") and then by team
@@ -164,9 +179,15 @@ export async function fetchFutures(sport: string): Promise<FuturesMarket[]> {
       });
     });
     
-    return markets;
+    return {
+      data: markets,
+      requestsRemaining
+    };
   } catch (error) {
     console.error('Error fetching futures:', error);
-    return [];
+    return {
+      data: [],
+      requestsRemaining: null
+    };
   }
 }

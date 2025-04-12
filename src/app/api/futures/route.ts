@@ -42,7 +42,20 @@ export async function GET(request: Request) {
     }
     
     const data = await response.json();
-    return NextResponse.json(data);
+    
+    // Extract rate limit headers
+    const requestsRemaining = response.headers.get('x-requests-remaining');
+    const requestsUsed = response.headers.get('x-requests-used');
+    console.log('API Rate Limit - Remaining:', requestsRemaining, 'Used:', requestsUsed);
+    
+    // Create a new response with the data and pass through the headers
+    const nextResponse = NextResponse.json(data);
+    
+    // Add rate limit headers to our response
+    if (requestsRemaining) nextResponse.headers.set('x-requests-remaining', requestsRemaining);
+    if (requestsUsed) nextResponse.headers.set('x-requests-used', requestsUsed);
+    
+    return nextResponse;
   } catch (error) {
     console.error('Error fetching futures:', error);
     return NextResponse.json([], { status: 200 });

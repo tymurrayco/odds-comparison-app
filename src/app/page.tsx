@@ -21,6 +21,7 @@ export default function Home() {
  const [loading, setLoading] = useState(true);
  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
  const [isClient, setIsClient] = useState(false);
+ const [apiRequestsRemaining, setApiRequestsRemaining] = useState<string | null>(null);
  
  // Cache state
  const [gamesCache, setGamesCache] = useState<{ [league: string]: CacheItem<Game[]> }>({});
@@ -87,11 +88,12 @@ export default function Home() {
          gamesLoaded = true;
        } else {
          // Fetch fresh data
-         const data = await fetchOdds(activeLeague);
-         setGames(data);
+         const response = await fetchOdds(activeLeague);
+         setGames(response.data);
+         setApiRequestsRemaining(response.requestsRemaining);
          setGamesCache(prev => ({
            ...prev,
-           [activeLeague]: { data, timestamp: now, league: activeLeague }
+           [activeLeague]: { data: response.data, timestamp: now, league: activeLeague }
          }));
          gamesLoaded = true;
        }
@@ -105,11 +107,12 @@ export default function Home() {
          futuresLoaded = true;
        } else {
          // Fetch fresh data
-         const data = await fetchFutures(activeLeague);
-         setFutures(data);
+         const response = await fetchFutures(activeLeague);
+         setFutures(response.data);
+         setApiRequestsRemaining(response.requestsRemaining);
          setFuturesCache(prev => ({
            ...prev,
-           [activeLeague]: { data, timestamp: now, league: activeLeague }
+           [activeLeague]: { data: response.data, timestamp: now, league: activeLeague }
          }));
          futuresLoaded = true;
        }
@@ -134,18 +137,20 @@ export default function Home() {
      
      // Load based on the current view and league
      if (activeView === 'games' && activeLeague !== MASTERS_LEAGUE_ID) {
-       const data = await fetchOdds(activeLeague);
-       setGames(data);
+       const response = await fetchOdds(activeLeague);
+       setGames(response.data);
+       setApiRequestsRemaining(response.requestsRemaining);
        setGamesCache(prev => ({
          ...prev,
-         [activeLeague]: { data, timestamp: now, league: activeLeague }
+         [activeLeague]: { data: response.data, timestamp: now, league: activeLeague }
        }));
      } else {
-       const data = await fetchFutures(activeLeague);
-       setFutures(data);
+       const response = await fetchFutures(activeLeague);
+       setFutures(response.data);
+       setApiRequestsRemaining(response.requestsRemaining);
        setFuturesCache(prev => ({
          ...prev,
-         [activeLeague]: { data, timestamp: now, league: activeLeague }
+         [activeLeague]: { data: response.data, timestamp: now, league: activeLeague }
        }));
      }
      
@@ -182,6 +187,7 @@ export default function Home() {
          setActiveLeague={setActiveLeague} 
          onRefresh={forceRefresh}  // Use forceRefresh for manual refresh
          lastUpdated={lastUpdated}
+         apiRequestsRemaining={apiRequestsRemaining}
        />
 
        {/* Toggle between Games and Futures - Custom version for Masters */}
