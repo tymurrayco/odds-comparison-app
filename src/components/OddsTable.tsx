@@ -46,7 +46,7 @@ export default function OddsTable({ games, view = 'moneyline', compactMode = fal
     'DraftKings': '/bookmaker-logos/draftkings.png',
     'FanDuel': '/bookmaker-logos/fd.png',
     'BetMGM': '/bookmaker-logos/betmgm.png',
-    'Caesars': '/bookmaker-logos/caesars.png'
+    'BetRivers': '/bookmaker-logos/betrivers.png'
   };
   
   // Map market keys

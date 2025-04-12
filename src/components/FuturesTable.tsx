@@ -29,7 +29,7 @@ export default function FuturesTable({
     'DraftKings': '/bookmaker-logos/draftkings.png',
     'FanDuel': '/bookmaker-logos/fd.png',
     'BetMGM': '/bookmaker-logos/betmgm.png',
-    'Caesars': '/bookmaker-logos/caesars.png'
+    'BetRivers': '/bookmaker-logos/betrivers.png'
   };
 
   // Custom CSS for handling Masters mobile display

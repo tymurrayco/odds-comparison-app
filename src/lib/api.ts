@@ -48,7 +48,7 @@ interface RawGameData {
 }
 
 // List of supported bookmakers
-export const BOOKMAKERS = ['DraftKings', 'FanDuel', 'BetMGM', 'Caesars'];
+export const BOOKMAKERS = ['DraftKings', 'FanDuel', 'BetMGM', 'BetRivers'];
 
 // List of leagues
 export const LEAGUES = [
