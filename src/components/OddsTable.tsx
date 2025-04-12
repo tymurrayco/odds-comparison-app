@@ -117,6 +117,113 @@ export default function OddsTable({ games, view = 'moneyline', compactMode = fal
           });
         }
         
+        // Pre-calculate best bookmakers for spreads
+        if (marketKey === 'spreads') {
+          [game.away_team, game.home_team].forEach(teamName => {
+            const allOdds: { bookmaker: string, point: number, price: number }[] = [];
+            
+            // Collect all odds for this team
+            BOOKMAKERS.forEach(book => {
+              const bookieData = game.bookmakers.find(b => b.title === book);
+              if (!bookieData) return;
+              
+              const market = bookieData.markets.find(m => m.key === 'spreads');
+              if (!market) return;
+              
+              const outcome = market.outcomes.find(o => o.name === teamName);
+              if (!outcome || typeof outcome.point === 'undefined') return;
+              
+              allOdds.push({
+                bookmaker: book,
+                point: outcome.point,
+                price: outcome.price
+              });
+            });
+            
+            if (allOdds.length === 0) {
+              bestBookmakersByTeam[teamName] = [];
+              return;
+            }
+            
+            // Find the best spread value
+            const bestPoint = Math.max(...allOdds.map(odds => odds.point));
+            
+            // Get all bookmakers with the best point
+            const bookiesWithBestPoint = allOdds.filter(odds => odds.point === bestPoint);
+            
+            // If only one bookmaker has the best point, it's the best
+            if (bookiesWithBestPoint.length === 1) {
+              bestBookmakersByTeam[teamName] = [bookiesWithBestPoint[0].bookmaker];
+              return;
+            }
+            
+            // Find the best price among bookmakers with the best point
+            const bestPrice = Math.max(...bookiesWithBestPoint.map(odds => odds.price));
+            
+            // All bookmakers with both the best point and the best price are "best"
+            bestBookmakersByTeam[teamName] = bookiesWithBestPoint
+              .filter(odds => odds.price === bestPrice)
+              .map(odds => odds.bookmaker);
+          });
+        }
+        
+        // Pre-calculate best bookmakers for totals
+        if (marketKey === 'totals') {
+          // For totals we associate Over with away team and Under with home team
+          const totalTypes = ['Over', 'Under'];
+          const teams = [game.away_team, game.home_team];
+          
+          teams.forEach((teamName, index) => {
+            const totalType = totalTypes[index];
+            const allOdds: { bookmaker: string, point: number, price: number }[] = [];
+            
+            // Collect all odds for this total type
+            BOOKMAKERS.forEach(book => {
+              const bookieData = game.bookmakers.find(b => b.title === book);
+              if (!bookieData) return;
+              
+              const market = bookieData.markets.find(m => m.key === 'totals');
+              if (!market) return;
+              
+              const outcome = market.outcomes.find(o => o.name === totalType);
+              if (!outcome || typeof outcome.point === 'undefined') return;
+              
+              allOdds.push({
+                bookmaker: book,
+                point: outcome.point,
+                price: outcome.price
+              });
+            });
+            
+            if (allOdds.length === 0) {
+              bestBookmakersByTeam[teamName] = [];
+              return;
+            }
+            
+            // Find the best point value (lowest for Over, highest for Under)
+            const bestPoint = totalType === 'Over' ?
+              Math.min(...allOdds.map(odds => odds.point)) :
+              Math.max(...allOdds.map(odds => odds.point));
+            
+            // Get all bookmakers with the best point
+            const bookiesWithBestPoint = allOdds.filter(odds => odds.point === bestPoint);
+            
+            // If only one bookmaker has the best point, it's the best
+            if (bookiesWithBestPoint.length === 1) {
+              bestBookmakersByTeam[teamName] = [bookiesWithBestPoint[0].bookmaker];
+              return;
+            }
+            
+            // Find the best price among bookmakers with the best point
+            const bestPrice = Math.max(...bookiesWithBestPoint.map(odds => odds.price));
+            
+            // All bookmakers with both the best point and the best price are "best"
+            bestBookmakersByTeam[teamName] = bookiesWithBestPoint
+              .filter(odds => odds.price === bestPrice)
+              .map(odds => odds.bookmaker);
+          });
+        }
+        
         return (
           <table key={game.id} className="min-w-full">
             <thead className="bg-gray-50">
@@ -158,13 +265,7 @@ export default function OddsTable({ games, view = 'moneyline', compactMode = fal
                       const bookieData = game.bookmakers.find(b => b.title === book);
                       
                       // Check if this is one of the best bookmakers for this team
-                      let isBest = false;
-                      if (marketKey === 'h2h') {
-                        isBest = bestBookmakersByTeam[team]?.includes(book) || false;
-                      } else if (marketKey === 'spreads' || marketKey === 'totals') {
-                        // For spread and totals, use the existing logic
-                        isBest = checkIfBestForSpreadOrTotal(game, team, book, marketKey);
-                      }
+                      const isBest = bestBookmakersByTeam[team]?.includes(book) || false;
                       
                       if (marketKey === 'h2h') {
                         const marketData = bookieData?.markets.find(m => m.key === 'h2h');
@@ -251,116 +352,4 @@ export default function OddsTable({ games, view = 'moneyline', compactMode = fal
       })}
     </div>
   );
-}
-
-// Helper function for spread and totals
-function checkIfBestForSpreadOrTotal(game: Game, team: string, book: string, marketKey: string): boolean {
-  if (marketKey === 'spreads') {
-    // For spreads, we'll find the best available lines and then pick the ones with the best juice
-    const allLines: LineItem[] = [];
-    
-    // Collect all spread lines for this team
-    game.bookmakers.forEach((bookmaker: Bookmaker) => {
-      const market = bookmaker.markets.find((m: Market) => m.key === 'spreads');
-      if (!market) return;
-      
-      const outcome = market.outcomes.find((o: Outcome) => o.name === team);
-      if (!outcome || typeof outcome.point === 'undefined') return;
-      
-      allLines.push({
-        bookmaker: bookmaker.title,
-        point: outcome.point,
-        price: outcome.price
-      });
-    });
-    
-    if (allLines.length === 0) return false;
-    
-    // Get the current bookmaker's data
-    const currentBookieData = allLines.find(line => line.bookmaker === book);
-    if (!currentBookieData) return false;
-    
-    // Determine if this is a favorite (negative spread) or underdog (positive spread)
-    const isFavorite = currentBookieData.point < 0;
-    
-    // Find the best spread value (point)
-    // For favorites (negative spread), higher value (closer to zero) is better
-    // For underdogs (positive spread), higher value is better
-    const bestPoint = isFavorite ? 
-      Math.max(...allLines.map(line => line.point)) : 
-      Math.max(...allLines.map(line => line.point));
-    
-    // If this bookmaker doesn't have the best point, it's not the best
-    if (currentBookieData.point !== bestPoint) return false;
-    
-    // Get all bookmakers with the best point
-    const bookiesWithBestPoint = allLines.filter(line => line.point === bestPoint);
-    
-    // If only one bookmaker has the best point, and it's this one, it's the best
-    if (bookiesWithBestPoint.length === 1 && bookiesWithBestPoint[0].bookmaker === book) {
-      return true;
-    }
-    
-    // Find the best price (juice) among bookmakers with the best point
-    // Best juice is the highest price value (least negative for negative prices)
-    const bestPrice = Math.max(...bookiesWithBestPoint.map(line => line.price));
-    
-    // This bookmaker is the best if it has both the best point and the best price
-    return currentBookieData.point === bestPoint && currentBookieData.price === bestPrice;
-  }
-  
-  if (marketKey === 'totals') {
-    const isOver = team === game.away_team;
-    const totalsName = isOver ? 'Over' : 'Under';
-    
-    // Collect all totals lines for this type (Over/Under)
-    const allLines: LineItem[] = [];
-    
-    game.bookmakers.forEach((bookmaker: Bookmaker) => {
-      const market = bookmaker.markets.find((m: Market) => m.key === 'totals');
-      if (!market) return;
-      
-      const outcome = market.outcomes.find((o: Outcome) => o.name === totalsName);
-      if (!outcome || typeof outcome.point === 'undefined') return;
-      
-      allLines.push({
-        bookmaker: bookmaker.title,
-        point: outcome.point,
-        price: outcome.price
-      });
-    });
-    
-    if (allLines.length === 0) return false;
-    
-    // Get the current bookmaker's data
-    const currentBookieData = allLines.find(line => line.bookmaker === book);
-    if (!currentBookieData) return false;
-    
-    // Find the best point value
-    // For Over bets, lower point is better
-    // For Under bets, higher point is better
-    const bestPoint = isOver ? 
-      Math.min(...allLines.map(line => line.point)) : 
-      Math.max(...allLines.map(line => line.point));
-    
-    // If this bookmaker doesn't have the best point, it's not the best
-    if (currentBookieData.point !== bestPoint) return false;
-    
-    // Get all bookmakers with the best point
-    const bookiesWithBestPoint = allLines.filter(line => line.point === bestPoint);
-    
-    // If only one bookmaker has the best point, and it's this one, it's the best
-    if (bookiesWithBestPoint.length === 1 && bookiesWithBestPoint[0].bookmaker === book) {
-      return true;
-    }
-    
-    // Find the best price (juice) among bookmakers with the best point
-    // Best juice is the highest price value (least negative for negative prices)
-    const bestPrice = Math.max(...bookiesWithBestPoint.map(line => line.price));
-    
-    // This bookmaker is the best if it has both the best point and the best price
-    return currentBookieData.point === bestPoint && currentBookieData.price === bestPrice;
-  }
-  
-  return false;
 }
