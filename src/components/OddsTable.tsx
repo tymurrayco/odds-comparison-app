@@ -9,11 +9,6 @@ interface OddsTableProps {
 }
 
 // Define interfaces for the types used in this component
-interface Market {
-  key: string;
-  outcomes: Outcome[];
-}
-
 interface Outcome {
   name: string;
   price: number;
