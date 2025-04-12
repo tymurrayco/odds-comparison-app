@@ -62,7 +62,7 @@ export const LEAGUES = [
   { id: 'americanfootball_nfl', name: 'NFL', icon: '/league-icons/nfl.png' },
   { id: 'baseball_mlb', name: 'MLB', icon: '/league-icons/mlb.png' },
   { id: 'icehockey_nhl', name: 'NHL', icon: '/league-icons/nhl.png' },
-  { id: 'basketball_ncaab', name: 'NCAAB', icon: '/league-icons/ncaab.png' },
+  { id: 'baseball_ncaa', name: 'CWS', icon: '/league-icons/cws.png' },
   { id: 'americanfootball_ncaaf', name: 'NCAAF', icon: '/league-icons/ncaaf.png' },
   { id: 'soccer_epl', name: 'EPL', icon: '/league-icons/epl.png' },
   { id: 'golf_masters_tournament_winner', name: 'Masters', icon: '/league-icons/masters.png' },
