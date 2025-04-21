@@ -1,7 +1,7 @@
 // src/lib/api.ts
 
-// Import the venue service with the correct interface
-import { getVenueForGame, refreshVenueData, VenueInfo } from './venueService';
+// Import the venue service without the unused VenueInfo interface
+import { getVenueForGame } from './venueService';
 
 // Define the types we need
 export interface Game {
@@ -88,32 +88,18 @@ export async function fetchOdds(sport: string): Promise<ApiResponse<Game[]>> {
     const requestsRemaining = response.headers.get('x-requests-remaining');
     
     // Add venue information to each game
-    const gamesWithVenues = await Promise.all(data.map(async (game: any) => {
+    const gamesWithVenues = await Promise.all(data.map(async (game) => {
       // Extract date from commence_time for more accurate event lookup
-      const gameDate = game.commence_time ? 
-        new Date(game.commence_time).toISOString().split('T')[0] : 
-        undefined;
+      const gameDate = new Date(game.commence_time).toISOString().split('T')[0];
       
       // Get venue info for this game
-      try {
-        const venueInfo = await getVenueForGame(
-          game.home_team || '', 
-          game.away_team || '', 
-          gameDate
-        );
-        
-        // Return game with venue name only
-        return {
-          ...game,
-          location: venueInfo && venueInfo.venue ? venueInfo.venue : ''
-        };
-      } catch (venueError) {
-        console.error('Error getting venue for game:', venueError);
-        return {
-          ...game,
-          location: ''
-        };
-      }
+      const venueInfo = await getVenueForGame(game.home_team, game.away_team, gameDate);
+      
+      // Return game with venue name only
+      return {
+        ...game,
+        location: venueInfo ? venueInfo.venue : ''
+      };
     }));
     
     return {
@@ -148,6 +134,7 @@ export async function fetchFutures(sport: string): Promise<ApiResponse<FuturesMa
     // We want to group by market (e.g. "Championship Winner") and then by team
     const marketsByTitle: { [key: string]: FuturesMarket } = {};
     
+    // Fix the 'any' type by using our RawGameData interface
     rawData.forEach((item: RawGameData) => {
       item.bookmakers.forEach((bookmaker: Bookmaker) => {
         bookmaker.markets.forEach((market: Market) => {
@@ -232,9 +219,6 @@ export async function fetchFutures(sport: string): Promise<ApiResponse<FuturesMa
  * @returns Promise resolving to the refreshed data
  */
 export async function refreshData(sport: string): Promise<ApiResponse<Game[]>> {
-  // Refresh the venue data cache first
-  await refreshVenueData();
-  
   // Then fetch the latest odds with venues
   return fetchOdds(sport);
 }
