@@ -41,9 +41,38 @@ export default function GameCard({ game }: GameCardProps) {
                 </span>
               )}
             </div>
+            
+            {/* Game time */}
             <p className="text-xs md:text-sm text-gray-500">
               {formattedDate} at {formattedTime} {timeZoneAbbr}
             </p>
+            
+            {/* Show location if available */}
+            {game.location && (
+              <p className="mt-1 flex items-center text-xs md:text-sm text-gray-500">
+                <svg 
+                  xmlns="http://www.w3.org/2000/svg" 
+                  className="h-3 w-3 mr-1" 
+                  fill="none" 
+                  viewBox="0 0 24 24" 
+                  stroke="currentColor"
+                >
+                  <path 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round" 
+                    strokeWidth={2} 
+                    d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" 
+                  />
+                  <path 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round" 
+                    strokeWidth={2} 
+                    d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" 
+                  />
+                </svg>
+                <span>{game.location}</span>
+              </p>
+            )}
           </div>
           
           <div className="flex space-x-1 md:space-x-2">
@@ -85,7 +114,7 @@ export default function GameCard({ game }: GameCardProps) {
         <OddsTable 
           games={[game]}
           view={expandedMarket}
-          compactMode={true} // Add this prop to enable compact mode for mobile
+          compactMode={true} // Enable compact mode for mobile
         />
       </div>
     </div>

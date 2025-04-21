@@ -1,5 +1,8 @@
 // src/lib/api.ts
 
+// Import the venue service with the correct interface
+import { getVenueForGame, refreshVenueData, VenueInfo } from './venueService';
+
 // Define the types we need
 export interface Game {
   id: string;
@@ -9,6 +12,7 @@ export interface Game {
   home_team: string;
   away_team: string;
   bookmakers: Bookmaker[];
+  location?: string; // Added new field for venue location
 }
 
 export interface Bookmaker {
@@ -83,8 +87,37 @@ export async function fetchOdds(sport: string): Promise<ApiResponse<Game[]>> {
     const data = await response.json();
     const requestsRemaining = response.headers.get('x-requests-remaining');
     
+    // Add venue information to each game
+    const gamesWithVenues = await Promise.all(data.map(async (game: any) => {
+      // Extract date from commence_time for more accurate event lookup
+      const gameDate = game.commence_time ? 
+        new Date(game.commence_time).toISOString().split('T')[0] : 
+        undefined;
+      
+      // Get venue info for this game
+      try {
+        const venueInfo = await getVenueForGame(
+          game.home_team || '', 
+          game.away_team || '', 
+          gameDate
+        );
+        
+        // Return game with venue name only
+        return {
+          ...game,
+          location: venueInfo && venueInfo.venue ? venueInfo.venue : ''
+        };
+      } catch (venueError) {
+        console.error('Error getting venue for game:', venueError);
+        return {
+          ...game,
+          location: ''
+        };
+      }
+    }));
+    
     return {
-      data,
+      data: gamesWithVenues,
       requestsRemaining
     };
   } catch (error) {
@@ -190,4 +223,18 @@ export async function fetchFutures(sport: string): Promise<ApiResponse<FuturesMa
       requestsRemaining: null
     };
   }
+}
+
+/**
+ * Refresh all data including venue information
+ * 
+ * @param sport - The sport key to refresh
+ * @returns Promise resolving to the refreshed data
+ */
+export async function refreshData(sport: string): Promise<ApiResponse<Game[]>> {
+  // Refresh the venue data cache first
+  await refreshVenueData();
+  
+  // Then fetch the latest odds with venues
+  return fetchOdds(sport);
 }
