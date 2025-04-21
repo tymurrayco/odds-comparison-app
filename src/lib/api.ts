@@ -88,7 +88,8 @@ export async function fetchOdds(sport: string): Promise<ApiResponse<Game[]>> {
     const requestsRemaining = response.headers.get('x-requests-remaining');
     
     // Add venue information to each game
-    const gamesWithVenues = await Promise.all(data.map(async (game) => {
+    // Fixed: Added explicit Game type to the game parameter
+    const gamesWithVenues = await Promise.all(data.map(async (game: Game) => {
       // Extract date from commence_time for more accurate event lookup
       const gameDate = new Date(game.commence_time).toISOString().split('T')[0];
       
