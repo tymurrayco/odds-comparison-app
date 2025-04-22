@@ -1,8 +1,47 @@
 // src/lib/venueService.ts
 
 /**
- * Interfaces for venue data
+ * Interfaces for ESPN data structures
  */
+interface ESPNEvent {
+  id: string;
+  name: string;
+  date: string;
+  competitions: ESPNCompetition[];
+}
+
+interface ESPNCompetition {
+  competitors: ESPNCompetitor[];
+  venue?: ESPNVenue;
+}
+
+interface ESPNCompetitor {
+  homeAway: 'home' | 'away';
+  team: ESPNTeam;
+}
+
+interface ESPNTeam {
+  displayName: string;
+  shortDisplayName?: string;
+  name?: string;
+  location?: string;
+  abbreviation?: string;
+}
+
+interface ESPNVenue {
+  fullName: string;
+  address?: {
+    city?: string;
+    state?: string;
+  };
+}
+
+interface ScoredMatch {
+  event: ESPNEvent;
+  score: number;
+  homeTeam?: string;
+  awayTeam?: string;
+}
 export interface VenueInfo {
   venue: string;        // Name of the venue/stadium
   city?: string;        // City of the venue
@@ -186,7 +225,7 @@ function getSportAndLeague(sport_key: string): {sport: string, league: string} |
  * Enhanced matching algorithm for finding games
  * Tries both "away @ home" combinations 
  */
-function findMatchingGame(events: any[], awayTeam: string, homeTeam: string): any | null {
+function findMatchingGame(events: ESPNEvent[], awayTeam: string, homeTeam: string): ESPNEvent | null {
   if (!events || !Array.isArray(events) || events.length === 0) return null;
   
   // Clean team names
@@ -252,7 +291,7 @@ function findMatchingGame(events: any[], awayTeam: string, homeTeam: string): an
   };
   
   // Score all events and find the best match
-  const scoredEvents = events.map(event => {
+  const scoredEvents: ScoredMatch[] = events.map(event => {
     const competitors = event.competitions?.[0]?.competitors || [];
     if (competitors.length < 2) return { event, score: 999 };
     
