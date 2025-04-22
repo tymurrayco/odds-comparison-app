@@ -32,7 +32,10 @@ export default function GameCard({ game }: GameCardProps) {
           <div className="mb-2 sm:mb-0">
             <div className="flex items-center">
               <h3 className="text-sm md:text-lg font-semibold text-gray-900 truncate">
-                {game.home_team} vs {game.away_team}
+                {game.away_team} @ {game.home_team}
+                {game.corrected_home_away && (
+                  <span className="ml-2 text-xs text-gray-500">(corrected)</span>
+                )}
               </h3>
               {isLive && (
                 <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">

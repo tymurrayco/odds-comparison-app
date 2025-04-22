@@ -4,8 +4,8 @@ import { formatOdds } from '@/lib/utils';
 
 interface OddsTableProps {
   games: Game[];
-  view?: 'moneyline' | 'spread' | 'totals';
-  compactMode?: boolean; // Add this new prop
+  view?: 'moneyline' | 'spread' | 'totals' | 'spreads_h1';
+  compactMode?: boolean; 
 }
 
 interface OddsItem {
@@ -27,7 +27,9 @@ export default function OddsTable({ games, view = 'moneyline', compactMode = fal
   };
   
   // Map market keys
-  const marketKey = view === 'moneyline' ? 'h2h' : view === 'spread' ? 'spreads' : 'totals';
+  const marketKey = view === 'moneyline' ? 'h2h' : 
+                   view === 'spread' ? 'spreads' : 
+                   view === 'spreads_h1' ? 'spreads_h1' : 'totals';
 
   return (
     <div>
@@ -94,8 +96,8 @@ export default function OddsTable({ games, view = 'moneyline', compactMode = fal
           });
         }
         
-        // Pre-calculate best bookmakers for spreads
-        if (marketKey === 'spreads') {
+        // Pre-calculate best bookmakers for spreads and 1H spreads
+        if (marketKey === 'spreads' || marketKey === 'spreads_h1') {
           [game.away_team, game.home_team].forEach(teamName => {
             const allOdds: { bookmaker: string, point: number, price: number }[] = [];
             
@@ -104,7 +106,7 @@ export default function OddsTable({ games, view = 'moneyline', compactMode = fal
               const bookieData = game.bookmakers.find(b => b.title === book);
               if (!bookieData) return;
               
-              const market = bookieData.markets.find(m => m.key === 'spreads');
+              const market = bookieData.markets.find(m => m.key === marketKey);
               if (!market) return;
               
               const outcome = market.outcomes.find(o => o.name === teamName);
@@ -268,8 +270,8 @@ export default function OddsTable({ games, view = 'moneyline', compactMode = fal
                         );
                       }
                       
-                      if (marketKey === 'spreads') {
-                        const marketData = bookieData?.markets.find(m => m.key === 'spreads');
+                      if (marketKey === 'spreads' || marketKey === 'spreads_h1') {
+                        const marketData = bookieData?.markets.find(m => m.key === marketKey);
                         const outcomeData = marketData?.outcomes.find(o => o.name === team);
                         
                         return (

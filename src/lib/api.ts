@@ -1,7 +1,7 @@
 // src/lib/api.ts
 
-// Import the venue service without the unused VenueInfo interface
-import { getVenueForGame } from './venueService';
+// Import the venue service
+import { getVenueForGame, getVenueFromESPN } from './venueService';
 
 // Define the types we need
 export interface Game {
@@ -12,7 +12,8 @@ export interface Game {
   home_team: string;
   away_team: string;
   bookmakers: Bookmaker[];
-  location?: string; // Added new field for venue location
+  location?: string; // Venue location
+  corrected_home_away?: boolean; // Flag indicating if home/away were swapped
 }
 
 export interface Bookmaker {
@@ -87,19 +88,58 @@ export async function fetchOdds(sport: string): Promise<ApiResponse<Game[]>> {
     const data = await response.json();
     const requestsRemaining = response.headers.get('x-requests-remaining');
     
-    // Add venue information to each game
-    // Fixed: Added explicit Game type to the game parameter
+    // Log a sample game to debug home/away designations
+    if (data.length > 0) {
+      console.log('Sample game from odds API:', {
+        home: data[0].home_team,
+        away: data[0].away_team
+      });
+    }
+    
+    // Try to use ESPN API first for venue and home/away correction
     const gamesWithVenues = await Promise.all(data.map(async (game: Game) => {
       // Extract date from commence_time for more accurate event lookup
       const gameDate = new Date(game.commence_time).toISOString().split('T')[0];
       
-      // Get venue info for this game
+      // First try ESPN API (which will also verify home/away teams)
+      const espnVenueInfo = await getVenueFromESPN(game);
+      
+      if (espnVenueInfo) {
+        // Check if teams were corrected
+        if (espnVenueInfo.correctedHomeTeam && espnVenueInfo.correctedAwayTeam) {
+          // Teams were swapped - odds API had it backwards
+          console.log(`Correcting home/away teams for ${game.home_team} vs ${game.away_team}`);
+          
+          // Create corrected game object
+          return {
+            ...game,
+            location: espnVenueInfo.venue + (espnVenueInfo.city && espnVenueInfo.state 
+              ? ` - ${espnVenueInfo.city}, ${espnVenueInfo.state}` 
+              : (espnVenueInfo.city || espnVenueInfo.state ? ` - ${espnVenueInfo.city || espnVenueInfo.state}` : '')),
+            // Set these fields so GameCard can use them if needed
+            home_team: espnVenueInfo.correctedHomeTeam,
+            away_team: espnVenueInfo.correctedAwayTeam,
+            corrected_home_away: true
+          };
+        } else {
+          // Teams were correct, just add venue info
+          return {
+            ...game,
+            location: espnVenueInfo.venue + (espnVenueInfo.city && espnVenueInfo.state 
+              ? ` - ${espnVenueInfo.city}, ${espnVenueInfo.state}` 
+              : (espnVenueInfo.city || espnVenueInfo.state ? ` - ${espnVenueInfo.city || espnVenueInfo.state}` : '')),
+            corrected_home_away: false
+          };
+        }
+      }
+      
+      // Fall back to original venue service if ESPN doesn't have data
       const venueInfo = await getVenueForGame(game.home_team, game.away_team, gameDate);
       
-      // Return game with venue name only
       return {
         ...game,
-        location: venueInfo ? venueInfo.venue : ''
+        location: venueInfo ? venueInfo.venue : '',
+        corrected_home_away: false
       };
     }));
     
