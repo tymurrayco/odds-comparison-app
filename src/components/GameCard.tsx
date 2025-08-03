@@ -8,7 +8,13 @@ interface GameCardProps {
 }
 
 export default function GameCard({ game }: GameCardProps) {
-  const [expandedMarket, setExpandedMarket] = useState<'moneyline' | 'spread' | 'totals'>('spread');
+  // Check if this is a soccer sport
+  const isSoccer = game.sport_key === 'soccer_epl' || game.sport_key === 'soccer_usa_mls';
+  
+  // Default to moneyline for soccer, spread for everything else
+  const [expandedMarket, setExpandedMarket] = useState<'moneyline' | 'spread' | 'totals'>(
+    isSoccer ? 'moneyline' : 'spread'
+  );
   
   // Format the date and time
   const gameDate = new Date(game.commence_time);
