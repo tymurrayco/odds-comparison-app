@@ -22,6 +22,7 @@ export default function Home() {
  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
  const [isClient, setIsClient] = useState(false);
  const [apiRequestsRemaining, setApiRequestsRemaining] = useState<string | null>(null);
+ const [teamFilter, setTeamFilter] = useState(''); // NEW: Team filter state
  
  // Cache state
  const [gamesCache, setGamesCache] = useState<{ [league: string]: CacheItem<Game[]> }>({});
@@ -170,6 +171,14 @@ export default function Home() {
  // Force the effective view for rendering
  const effectiveView = activeLeague === MASTERS_LEAGUE_ID ? 'futures' : activeView;
 
+ // NEW: Filter games based on team name
+ const filteredGames = games.filter(game => {
+   if (!teamFilter.trim()) return true;
+   const searchTerm = teamFilter.toLowerCase().trim();
+   return game.home_team.toLowerCase().includes(searchTerm) || 
+          game.away_team.toLowerCase().includes(searchTerm);
+ });
+
  return (
    <main className="min-h-screen bg-blue-50">
      <header className="bg-white shadow-sm">
@@ -189,6 +198,63 @@ export default function Home() {
          lastUpdated={lastUpdated}
          apiRequestsRemaining={apiRequestsRemaining}
        />
+
+       {/* NEW: Team filter - only shown for Games view */}
+       {effectiveView === 'games' && (
+         <div className="mb-6">
+           <div className="relative">
+             <input
+               type="text"
+               placeholder="Filter by team name..."
+               value={teamFilter}
+               onChange={(e) => setTeamFilter(e.target.value)}
+               className="w-full px-4 py-2 pl-10 pr-4 text-gray-700 bg-white border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+             />
+             <div className="absolute inset-y-0 left-0 flex items-center pl-3">
+               <svg
+                 className="w-5 h-5 text-gray-400"
+                 fill="none"
+                 stroke="currentColor"
+                 viewBox="0 0 24 24"
+                 xmlns="http://www.w3.org/2000/svg"
+               >
+                 <path
+                   strokeLinecap="round"
+                   strokeLinejoin="round"
+                   strokeWidth={2}
+                   d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                 />
+               </svg>
+             </div>
+             {teamFilter && (
+               <button
+                 onClick={() => setTeamFilter('')}
+                 className="absolute inset-y-0 right-0 flex items-center pr-3"
+               >
+                 <svg
+                   className="w-5 h-5 text-gray-400 hover:text-gray-600"
+                   fill="none"
+                   stroke="currentColor"
+                   viewBox="0 0 24 24"
+                   xmlns="http://www.w3.org/2000/svg"
+                 >
+                   <path
+                     strokeLinecap="round"
+                     strokeLinejoin="round"
+                     strokeWidth={2}
+                     d="M6 18L18 6M6 6l12 12"
+                   />
+                 </svg>
+               </button>
+             )}
+           </div>
+           {teamFilter && (
+             <p className="mt-2 text-sm text-gray-600">
+               Showing {filteredGames.length} of {games.length} games
+             </p>
+           )}
+         </div>
+       )}
 
        {/* Toggle between Games and Futures - Custom version for Masters */}
        {activeLeague === MASTERS_LEAGUE_ID ? (
@@ -214,7 +280,10 @@ export default function Home() {
                    ? 'bg-blue-600 text-white'
                    : 'bg-white text-gray-700 hover:bg-gray-50'
                } border border-gray-200`}
-               onClick={() => setActiveView('games')}
+               onClick={() => {
+                 setActiveView('games');
+                 setTeamFilter(''); // UPDATED: Clear filter when switching views
+               }}
              >
                Games
              </button>
@@ -242,13 +311,13 @@ export default function Home() {
          <div>
            {effectiveView === 'games' ? (
              <div>
-               {games.length === 0 ? (
+               {filteredGames.length === 0 ? (
                  <div className="bg-white rounded-lg shadow p-6 text-center">
-                   No games available for this league right now.
+                   {teamFilter ? `No games found matching "${teamFilter}".` : 'No games available for this league right now.'}
                  </div>
                ) : (
                  <div>
-                   {games.map(game => (
+                   {filteredGames.map(game => (
                      <GameCard key={game.id} game={game} />
                    ))}
                  </div>
