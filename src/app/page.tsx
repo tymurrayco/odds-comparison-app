@@ -132,7 +132,7 @@ export default function Home() {
    } finally {
      setLoading(false);
    }
- }, [activeLeague, activeView, gamesCache, futuresCache]);
+ }, [activeLeague, activeView, gamesCache, futuresCache, isValidCache]);
 
  // Force reload with fresh data (for refresh button)
  const forceRefresh = useCallback(async function() {
@@ -306,7 +306,7 @@ export default function Home() {
              <div className="flex flex-wrap gap-2 items-center">
                {teamFilter && (
                  <span className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
-                   Search: "{teamFilter}"
+                   Search: &quot;{teamFilter}&quot;
                    <button
                      onClick={() => setTeamFilter('')}
                      className="ml-2 hover:text-blue-600"
@@ -482,7 +482,7 @@ export default function Home() {
              <div>
                {filteredFutures.length === 0 ? (
                  <div className="bg-white rounded-lg shadow p-6 text-center">
-                   {teamFilter ? `No results found matching "${teamFilter}".` : 'No futures available for this league right now.'}
+                   {teamFilter ? `No results found matching &quot;${teamFilter}&quot;.` : 'No futures available for this league right now.'}
                  </div>
                ) : (
                  <div>
