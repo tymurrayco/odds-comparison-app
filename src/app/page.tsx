@@ -15,6 +15,16 @@ interface CacheItem<T> {
   league: string;
 }
 
+// Cache time in milliseconds (e.g., 5 minutes)
+const CACHE_TIME = 5 * 60 * 1000;
+
+// Check if data is in cache and still valid - moved outside component
+const isValidCache = <T,>(cache: { [league: string]: CacheItem<T> }, league: string): boolean => {
+  if (!cache[league]) return false;
+  const now = Date.now();
+  return (now - cache[league].timestamp) < CACHE_TIME;
+};
+
 export default function Home() {
  const [activeLeague, setActiveLeague] = useState('basketball_nba');
  const [activeView, setActiveView] = useState<'games' | 'futures'>('games');
@@ -30,9 +40,6 @@ export default function Home() {
  // Cache state
  const [gamesCache, setGamesCache] = useState<{ [league: string]: CacheItem<Game[]> }>({});
  const [futuresCache, setFuturesCache] = useState<{ [league: string]: CacheItem<FuturesMarket[]> }>({});
- 
- // Cache time in milliseconds (e.g., 5 minutes)
- const CACHE_TIME = 5 * 60 * 1000;
  
  // Define the Masters league ID correctly
  const MASTERS_LEAGUE_ID = 'golf_masters_tournament_winner';
@@ -63,13 +70,6 @@ export default function Home() {
      localStorage.setItem('activeLeague', activeLeague);
    }
  }, [activeLeague, isClient]);
-
- // Check if data is in cache and still valid
- const isValidCache = <T,>(cache: { [league: string]: CacheItem<T> }, league: string): boolean => {
-   if (!cache[league]) return false;
-   const now = Date.now();
-   return (now - cache[league].timestamp) < CACHE_TIME;
- };
 
  // Load data from cache or API
  const loadData = useCallback(async function() {
@@ -132,7 +132,7 @@ export default function Home() {
    } finally {
      setLoading(false);
    }
- }, [activeLeague, activeView, gamesCache, futuresCache, isValidCache]);
+ }, [activeLeague, activeView, gamesCache, futuresCache]);
 
  // Force reload with fresh data (for refresh button)
  const forceRefresh = useCallback(async function() {
