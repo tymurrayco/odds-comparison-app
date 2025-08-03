@@ -58,14 +58,16 @@ export const BOOKMAKERS = ['DraftKings', 'FanDuel', 'BetMGM', 'BetRivers'];
 
 // List of leagues with isActive flag
 export const LEAGUES = [
-  { id: 'basketball_nba', name: 'NBA', icon: '/league-icons/nba.png', isActive: true },
+  { id: 'baseball_mlb', name: 'MLB', icon: '/league-icons/mlb.png', isActive: true },
   { id: 'americanfootball_nfl', name: 'NFL', icon: '/league-icons/nfl.png', isActive: true },
   { id: 'americanfootball_nfl_preseason', name: 'NFL PreSzn', icon: '/league-icons/nfl.png', isActive: true },
-  { id: 'baseball_mlb', name: 'MLB', icon: '/league-icons/mlb.png', isActive: true },
-  { id: 'icehockey_nhl', name: 'NHL', icon: '/league-icons/nhl.png', isActive: true },
-  { id: 'baseball_ncaa', name: 'CWS', icon: '/league-icons/cws.png', isActive: false }, // Hidden - out of season
   { id: 'americanfootball_ncaaf', name: 'NCAAF', icon: '/league-icons/ncaaf.png', isActive: true },
   { id: 'soccer_epl', name: 'EPL', icon: '/league-icons/epl.png', isActive: true },
+  { id: 'soccer_usa_mls', name: 'MLS', icon: '/league-icons/mls.png', isActive: true },
+  { id: 'basketball_wnba', name: 'WNBA', icon: '/league-icons/wnba.png', isActive: true },
+  { id: 'icehockey_nhl', name: 'NHL', icon: '/league-icons/nhl.png', isActive: true },
+  { id: 'basketball_nba', name: 'NBA', icon: '/league-icons/nba.png', isActive: true },
+  { id: 'baseball_ncaa', name: 'CWS', icon: '/league-icons/cws.png', isActive: false }, // Hidden - out of season
   { id: 'lacrosse_ncaa', name: 'NCAAL', icon: '/league-icons/ncaal.png', isActive: false }, // Hidden - out of season
 ];
 
