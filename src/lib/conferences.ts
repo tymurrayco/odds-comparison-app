@@ -88,7 +88,6 @@ export const CONFERENCES: ConferenceData = {
     // Independent
     "Notre Dame Fighting Irish": "Independent",
     "UConn Huskies": "Independent",
-    "UMass Minutemen": "Independent",
     
     // Mountain West
     "Air Force Falcons": "Mountain West",
