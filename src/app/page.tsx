@@ -1,11 +1,13 @@
-// src/app/page.tsx (modified with caching)
+// src/app/page.tsx (modified with caching and conference filtering)
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { fetchOdds, fetchFutures, Game, FuturesMarket } from '@/lib/api';
 import LeagueNav from '@/components/LeagueNav';
 import GameCard from '@/components/GameCard';
 import FuturesTable from '@/components/FuturesTable';
+import ConferenceFilter from '@/components/ConferenceFilter';
+import { getTeamConference } from '@/lib/conferences';
 
 interface CacheItem<T> {
   data: T;
@@ -22,7 +24,8 @@ export default function Home() {
  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
  const [isClient, setIsClient] = useState(false);
  const [apiRequestsRemaining, setApiRequestsRemaining] = useState<string | null>(null);
- const [teamFilter, setTeamFilter] = useState(''); // NEW: Team filter state
+ const [teamFilter, setTeamFilter] = useState(''); // Team filter state
+ const [selectedConferences, setSelectedConferences] = useState<string[]>([]); // NEW: Conference filter state
  
  // Cache state
  const [gamesCache, setGamesCache] = useState<{ [league: string]: CacheItem<Game[]> }>({});
@@ -51,6 +54,7 @@ export default function Home() {
      setActiveView('futures');
    }
    setTeamFilter(''); // Clear filter when changing leagues
+   setSelectedConferences([]); // NEW: Clear conference filter when changing leagues
  }, [activeLeague]);
 
  // Save to localStorage when activeLeague changes, but only after hydration
@@ -172,15 +176,35 @@ export default function Home() {
  // Force the effective view for rendering
  const effectiveView = activeLeague === MASTERS_LEAGUE_ID ? 'futures' : activeView;
 
- // NEW: Filter games based on team name
- const filteredGames = games.filter(game => {
-   if (!teamFilter.trim()) return true;
-   const searchTerm = teamFilter.toLowerCase().trim();
-   return game.home_team.toLowerCase().includes(searchTerm) || 
-          game.away_team.toLowerCase().includes(searchTerm);
- });
+ // UPDATED: Filter games based on team name AND conferences
+ const filteredGames = useMemo(() => {
+   let filtered = games;
 
- // NEW: Filter futures based on team/player name
+   // Filter by team name
+   if (teamFilter.trim()) {
+     const searchTerm = teamFilter.toLowerCase().trim();
+     filtered = filtered.filter(game => 
+       game.home_team.toLowerCase().includes(searchTerm) || 
+       game.away_team.toLowerCase().includes(searchTerm)
+     );
+   }
+
+   // Filter by conference if any are selected
+   if (selectedConferences.length > 0) {
+     filtered = filtered.filter(game => {
+       const homeConference = getTeamConference(activeLeague, game.home_team);
+       const awayConference = getTeamConference(activeLeague, game.away_team);
+       
+       // Show game if either team is in a selected conference
+       return (homeConference && selectedConferences.includes(homeConference)) ||
+              (awayConference && selectedConferences.includes(awayConference));
+     });
+   }
+
+   return filtered;
+ }, [games, teamFilter, selectedConferences, activeLeague]);
+
+ // Filter futures based on team/player name
  const filteredFutures = futures.map(market => ({
    ...market,
    teams: market.teams.filter(team => {
@@ -189,6 +213,9 @@ export default function Home() {
      return team.team.toLowerCase().includes(searchTerm);
    })
  })).filter(market => market.teams.length > 0); // Only show markets with matching teams
+
+ // Check if current sport supports conference filtering
+ const supportsConferenceFilter = ['americanfootball_ncaaf', 'basketball_ncaab'].includes(activeLeague);
 
  return (
    <main className="min-h-screen bg-blue-50">
@@ -210,13 +237,123 @@ export default function Home() {
          apiRequestsRemaining={apiRequestsRemaining}
        />
 
-       {/* NEW: Team filter - shown for both Games and Futures views */}
-       {(effectiveView === 'games' || effectiveView === 'futures') && (
+       {/* UPDATED: Team filter and Conference filter - shown for Games view */}
+       {effectiveView === 'games' && (
+         <div className="mb-6 space-y-4">
+           <div className="flex flex-col sm:flex-row gap-4">
+             {/* Team filter */}
+             <div className="flex-1">
+               <div className="relative">
+                 <input
+                   type="text"
+                   placeholder="Filter by team name..."
+                   value={teamFilter}
+                   onChange={(e) => setTeamFilter(e.target.value)}
+                   className="w-full px-4 py-2 pl-10 pr-4 text-gray-700 bg-white border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                 />
+                 <div className="absolute inset-y-0 left-0 flex items-center pl-3">
+                   <svg
+                     className="w-5 h-5 text-gray-400"
+                     fill="none"
+                     stroke="currentColor"
+                     viewBox="0 0 24 24"
+                     xmlns="http://www.w3.org/2000/svg"
+                   >
+                     <path
+                       strokeLinecap="round"
+                       strokeLinejoin="round"
+                       strokeWidth={2}
+                       d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                     />
+                   </svg>
+                 </div>
+                 {teamFilter && (
+                   <button
+                     onClick={() => setTeamFilter('')}
+                     className="absolute inset-y-0 right-0 flex items-center pr-3"
+                   >
+                     <svg
+                       className="w-5 h-5 text-gray-400 hover:text-gray-600"
+                       fill="none"
+                       stroke="currentColor"
+                       viewBox="0 0 24 24"
+                       xmlns="http://www.w3.org/2000/svg"
+                     >
+                       <path
+                         strokeLinecap="round"
+                         strokeLinejoin="round"
+                         strokeWidth={2}
+                         d="M6 18L18 6M6 6l12 12"
+                       />
+                     </svg>
+                   </button>
+                 )}
+               </div>
+             </div>
+
+             {/* Conference Filter - NEW */}
+             {supportsConferenceFilter && (
+               <ConferenceFilter
+                 activeLeague={activeLeague}
+                 selectedConferences={selectedConferences}
+                 onConferencesChange={setSelectedConferences}
+               />
+             )}
+           </div>
+
+           {/* Active filters display */}
+           {(teamFilter || selectedConferences.length > 0) && (
+             <div className="flex flex-wrap gap-2 items-center">
+               {teamFilter && (
+                 <span className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
+                   Search: "{teamFilter}"
+                   <button
+                     onClick={() => setTeamFilter('')}
+                     className="ml-2 hover:text-blue-600"
+                   >
+                     ×
+                   </button>
+                 </span>
+               )}
+               {selectedConferences.map(conf => (
+                 <span key={conf} className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-green-100 text-green-800">
+                   {conf}
+                   <button
+                     onClick={() => setSelectedConferences(selectedConferences.filter(c => c !== conf))}
+                     className="ml-2 hover:text-green-600"
+                   >
+                     ×
+                   </button>
+                 </span>
+               ))}
+               <button
+                 onClick={() => {
+                   setTeamFilter('');
+                   setSelectedConferences([]);
+                 }}
+                 className="text-sm text-gray-600 hover:text-gray-800"
+               >
+                 Clear all filters
+               </button>
+             </div>
+           )}
+
+           {/* Results count */}
+           {(teamFilter || selectedConferences.length > 0) && (
+             <p className="text-sm text-gray-600">
+               Showing {filteredGames.length} of {games.length} games
+             </p>
+           )}
+         </div>
+       )}
+
+       {/* Team filter for Futures view */}
+       {effectiveView === 'futures' && (
          <div className="mb-6">
            <div className="relative">
              <input
                type="text"
-               placeholder={effectiveView === 'games' ? "Filter by team name..." : "Filter by team/player name..."}
+               placeholder="Filter by team/player name..."
                value={teamFilter}
                onChange={(e) => setTeamFilter(e.target.value)}
                className="w-full px-4 py-2 pl-10 pr-4 text-gray-700 bg-white border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
@@ -261,10 +398,7 @@ export default function Home() {
            </div>
            {teamFilter && (
              <p className="mt-2 text-sm text-gray-600">
-               {effectiveView === 'games' 
-                 ? `Showing ${filteredGames.length} of ${games.length} games`
-                 : `Showing ${filteredFutures.reduce((acc, m) => acc + m.teams.length, 0)} of ${futures.reduce((acc, m) => acc + m.teams.length, 0)} entries`
-               }
+               Showing {filteredFutures.reduce((acc, m) => acc + m.teams.length, 0)} of {futures.reduce((acc, m) => acc + m.teams.length, 0)} entries
              </p>
            )}
          </div>
@@ -296,7 +430,8 @@ export default function Home() {
                } border border-gray-200`}
                onClick={() => {
                  setActiveView('games');
-                 setTeamFilter(''); // UPDATED: Clear filter when switching views
+                 setTeamFilter(''); // Clear filter when switching views
+                 setSelectedConferences([]); // Clear conference filter when switching views
                }}
              >
                Games
@@ -310,7 +445,8 @@ export default function Home() {
                } border border-gray-200 border-l-0`}
                onClick={() => {
                  setActiveView('futures');
-                 setTeamFilter(''); // UPDATED: Clear filter when switching views
+                 setTeamFilter(''); // Clear filter when switching views
+                 setSelectedConferences([]); // Clear conference filter when switching views
                }}
              >
                Futures
@@ -330,7 +466,9 @@ export default function Home() {
              <div>
                {filteredGames.length === 0 ? (
                  <div className="bg-white rounded-lg shadow p-6 text-center">
-                   {teamFilter ? `No games found matching "${teamFilter}".` : 'No games available for this league right now.'}
+                   {teamFilter || selectedConferences.length > 0 
+                     ? 'No games match your filters.' 
+                     : 'No games available for this league right now.'}
                  </div>
                ) : (
                  <div>
@@ -348,22 +486,21 @@ export default function Home() {
                  </div>
                ) : (
                  <div>
-
-                  {/* Banner for Masters on mobile */}
-{activeLeague === MASTERS_LEAGUE_ID && (
-  <div className="sm:hidden bg-blue-50 p-2 text-center border-b border-blue-100 mb-4">
-    <p className="text-xs text-blue-800 font-medium">
-      ↔️ Rotate phone horizontally to see golfer names
-    </p>
-  </div>
-)}
+                   {/* Banner for Masters on mobile */}
+                   {activeLeague === MASTERS_LEAGUE_ID && (
+                     <div className="sm:hidden bg-blue-50 p-2 text-center border-b border-blue-100 mb-4">
+                       <p className="text-xs text-blue-800 font-medium">
+                         ↔️ Rotate phone horizontally to see golfer names
+                       </p>
+                     </div>
+                   )}
                    {filteredFutures.map((market, index) => (
                      <FuturesTable 
-                     key={index} 
-                     market={market} 
-                     compactMode={true}
-                     isMasters={activeLeague === MASTERS_LEAGUE_ID && false} // Force false to prevent name changes
-                   />
+                       key={index} 
+                       market={market} 
+                       compactMode={true}
+                       isMasters={activeLeague === MASTERS_LEAGUE_ID && false} // Force false to prevent name changes
+                     />
                    ))}
                  </div>
                )}
