@@ -50,6 +50,7 @@ export default function Home() {
    if (activeLeague === MASTERS_LEAGUE_ID) {
      setActiveView('futures');
    }
+   setTeamFilter(''); // Clear filter when changing leagues
  }, [activeLeague]);
 
  // Save to localStorage when activeLeague changes, but only after hydration
@@ -179,6 +180,16 @@ export default function Home() {
           game.away_team.toLowerCase().includes(searchTerm);
  });
 
+ // NEW: Filter futures based on team/player name
+ const filteredFutures = futures.map(market => ({
+   ...market,
+   teams: market.teams.filter(team => {
+     if (!teamFilter.trim()) return true;
+     const searchTerm = teamFilter.toLowerCase().trim();
+     return team.team.toLowerCase().includes(searchTerm);
+   })
+ })).filter(market => market.teams.length > 0); // Only show markets with matching teams
+
  return (
    <main className="min-h-screen bg-blue-50">
      <header className="bg-white shadow-sm">
@@ -199,13 +210,13 @@ export default function Home() {
          apiRequestsRemaining={apiRequestsRemaining}
        />
 
-       {/* NEW: Team filter - only shown for Games view */}
-       {effectiveView === 'games' && (
+       {/* NEW: Team filter - shown for both Games and Futures views */}
+       {(effectiveView === 'games' || effectiveView === 'futures') && (
          <div className="mb-6">
            <div className="relative">
              <input
                type="text"
-               placeholder="Filter by team name..."
+               placeholder={effectiveView === 'games' ? "Filter by team name..." : "Filter by team/player name..."}
                value={teamFilter}
                onChange={(e) => setTeamFilter(e.target.value)}
                className="w-full px-4 py-2 pl-10 pr-4 text-gray-700 bg-white border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
@@ -250,7 +261,10 @@ export default function Home() {
            </div>
            {teamFilter && (
              <p className="mt-2 text-sm text-gray-600">
-               Showing {filteredGames.length} of {games.length} games
+               {effectiveView === 'games' 
+                 ? `Showing ${filteredGames.length} of ${games.length} games`
+                 : `Showing ${filteredFutures.reduce((acc, m) => acc + m.teams.length, 0)} of ${futures.reduce((acc, m) => acc + m.teams.length, 0)} entries`
+               }
              </p>
            )}
          </div>
@@ -294,7 +308,10 @@ export default function Home() {
                    ? 'bg-blue-600 text-white'
                    : 'bg-white text-gray-700 hover:bg-gray-50'
                } border border-gray-200 border-l-0`}
-               onClick={() => setActiveView('futures')}
+               onClick={() => {
+                 setActiveView('futures');
+                 setTeamFilter(''); // UPDATED: Clear filter when switching views
+               }}
              >
                Futures
              </button>
@@ -325,9 +342,9 @@ export default function Home() {
              </div>
            ) : (
              <div>
-               {futures.length === 0 ? (
+               {filteredFutures.length === 0 ? (
                  <div className="bg-white rounded-lg shadow p-6 text-center">
-                   No futures available for this league right now.
+                   {teamFilter ? `No results found matching "${teamFilter}".` : 'No futures available for this league right now.'}
                  </div>
                ) : (
                  <div>
@@ -340,7 +357,7 @@ export default function Home() {
     </p>
   </div>
 )}
-                   {futures.map((market, index) => (
+                   {filteredFutures.map((market, index) => (
                      <FuturesTable 
                      key={index} 
                      market={market} 
