@@ -43,7 +43,7 @@ export default function LeagueNav({
     <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
       <div className="flex flex-col sm:flex-row justify-between mb-2">
         <div className="flex flex-wrap gap-2 mb-2 sm:mb-0">
-          {LEAGUES.map(league => (
+          {LEAGUES.filter(league => league.isActive).map(league => (
             <button
               key={league.id}
               className={`px-4 py-2 rounded-full ${
