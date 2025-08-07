@@ -1,6 +1,7 @@
 // src/components/GameCard.tsx
 import { useState } from 'react';
 import OddsTable from './OddsTable';
+import TeamAnalysis from './TeamAnalysis';
 import { Game } from '@/lib/api';
 
 interface GameCardProps {
@@ -11,8 +12,11 @@ export default function GameCard({ game }: GameCardProps) {
   // Check if this is a soccer sport
   const isSoccer = game.sport_key === 'soccer_epl' || game.sport_key === 'soccer_usa_mls';
   
+  // Check if this is NCAAF
+  const isNCAAF = game.sport_key === 'americanfootball_ncaaf';
+  
   // Default to moneyline for soccer, spread for everything else
-  const [expandedMarket, setExpandedMarket] = useState<'moneyline' | 'spread' | 'totals'>(
+  const [expandedMarket, setExpandedMarket] = useState<'moneyline' | 'spread' | 'totals' | 'analysis'>(
     isSoccer ? 'moneyline' : 'spread'
   );
   
@@ -86,18 +90,41 @@ export default function GameCard({ game }: GameCardProps) {
             >
               Totals
             </button>
+            {/* Only show Analysis tab for NCAAF games */}
+            {isNCAAF && (
+              <button 
+                className={`px-2 md:px-3 py-1 text-xs md:text-sm rounded-md ${
+                  expandedMarket === 'analysis' 
+                    ? 'bg-blue-600 text-white' 
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+                onClick={() => setExpandedMarket('analysis')}
+              >
+                Analysis
+              </button>
+            )}
           </div>
         </div>
       </div>
       
-      {/* Odds table */}
-      <div className="overflow-x-auto">
-        <OddsTable 
-          games={[game]}
-          view={expandedMarket}
-          compactMode={true}
+      {/* Content area based on selected tab */}
+      {expandedMarket === 'analysis' && isNCAAF ? (
+        <TeamAnalysis 
+          awayTeam={game.away_team}
+          homeTeam={game.home_team}
         />
-      </div>
+      ) : (
+        /* Odds table for other tabs */
+        <div className="overflow-x-auto">
+          <OddsTable 
+            games={[game]}
+            view={expandedMarket === 'spread' ? 'spread' : 
+                  expandedMarket === 'moneyline' ? 'moneyline' : 
+                  'totals'}
+            compactMode={true}
+          />
+        </div>
+      )}
     </div>
   );
 }
