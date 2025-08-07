@@ -39,7 +39,6 @@ export const FEI_TEAM_MAPPING: { [key: string]: string } = {
   'Alabama Crimson Tide': 'Alabama',
   'Texas Longhorns': 'Texas',
   'Penn State Nittany Lions': 'Penn State',
-  'Ole Miss Rebels': 'Ole Miss',
   'Michigan State Spartans': 'Michigan State',
   'Michigan Wolverines': 'Michigan',
   'Mississippi State Bulldogs': 'Mississippi State',
