@@ -50,13 +50,12 @@ export default function TeamAnalysis({ awayTeam, homeTeam }: TeamAnalysisProps) 
   const generateInsights = (away: FEITeamData, home: FEITeamData): BettingInsight[] => {
     const insights: BettingInsight[] = [];
     const feiDiff = away.fei - home.fei;
-    const ofeiDiff = away.ofei - home.ofei;
-    const dfeiDiff = away.dfei - home.dfei;
+
     
     // 1. Overall matchup assessment (always provide one)
     if (Math.abs(feiDiff) > 1.0) {
       const strongerTeam = feiDiff > 0 ? away.team : home.team;
-      const weakerTeam = feiDiff > 0 ? home.team : away.team;
+   
       insights.push({
         type: 'advantage',
         message: `🔥 MASSIVE ADVANTAGE: ${strongerTeam} has an elite edge (${Math.abs(feiDiff).toFixed(2)} FEI gap). Expect a potential blowout.`
