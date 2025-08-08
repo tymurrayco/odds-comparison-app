@@ -1,6 +1,20 @@
 // src/lib/feiData.ts
 
-// Define the FEI team data structure
+// Import possession data type from API route
+export interface PossessionData {
+  ove: number;     // Offensive Value per possession
+  oveRank: number;
+  dve: number;     // Defensive Value per possession  
+  dveRank: number;
+  sve: number;     // Special teams value per possession
+  sveRank: number;
+  ovg: number;     // Offensive Value per Game
+  dvg: number;     // Defensive Value per Game
+  svg: number;     // Special teams value per game
+  npg: number;     // Non-garbage Possessions per Game
+}
+
+// Enhanced FEI team data structure with possession data
 export interface FEITeamData {
   rank: number;
   team: string;
@@ -27,6 +41,30 @@ export interface FEITeamData {
   gwdRank: number;
   awd: number;      // Average win differential
   awdRank: number;
+  // Possession efficiency data
+  possession?: PossessionData;
+}
+
+// Score projection result type
+export interface ScoreProjection {
+  away: {
+    expected: number;
+    low: number;
+    high: number;
+  };
+  home: {
+    expected: number;
+    low: number;
+    high: number;
+  };
+  total: {
+    expected: number;
+    low: number;
+    high: number;
+  };
+  spread: number;
+  possessions: number;
+  confidence: string;
 }
 
 // Team name mapping to handle variations between your odds data and FEI data
@@ -155,7 +193,6 @@ export const FEI_TEAM_MAPPING: { [key: string]: string } = {
   'Air Force Falcons': 'Air Force',
   'San Jose State Spartans': 'San Jose State',
   'Liberty Flames': 'Liberty',
-  // Additional Group of 5 teams with mascots
   'Ball State Cardinals': 'Ball State',
   'Bowling Green Falcons': 'Bowling Green',
   'BGSU Falcons': 'Bowling Green',
@@ -197,7 +234,7 @@ let lastFetchTime: number | null = null;
 const CACHE_DURATION = 1000 * 60 * 60; // 1 hour cache
 
 /**
- * Fetches and parses FEI data from the BCF Toys website
+ * Fetches and parses FEI data from the BCF Toys website with possession data
  * Note: This function needs to be called from a server-side API route
  * to avoid CORS issues
  */
@@ -208,20 +245,75 @@ export async function fetchFEIData(): Promise<FEITeamData[]> {
   }
 
   try {
-    // In production, this should be called through your API route to avoid CORS
-    const response = await fetch('/api/fei-data');
+    // Fetch both FEI and possession data in parallel
+    const [feiResponse, possessionResponse] = await Promise.all([
+      fetch('/api/fei-data'),
+      fetch('/api/possession-data')
+    ]);
     
-    if (!response.ok) {
+    if (!feiResponse.ok) {
       throw new Error('Failed to fetch FEI data');
     }
     
-    const data = await response.json();
+    const feiData: FEITeamData[] = await feiResponse.json();
+    let possessionData: any[] = [];
+    
+    if (possessionResponse.ok) {
+      possessionData = await possessionResponse.json();
+    } else {
+      console.warn('Could not fetch possession data, continuing without it');
+    }
+    
+    // Create a map of possession data by team name
+    const possessionMap = new Map<string, PossessionData>();
+    possessionData.forEach(team => {
+      possessionMap.set(team.team, team);
+    });
+    
+    // Merge possession data into FEI data
+    const enhancedData = feiData.map(team => {
+      let possession = possessionMap.get(team.team);
+      
+      // Try alternate team names if not found
+      if (!possession) {
+        // Handle team name variations
+        const alternateNames: Record<string, string[]> = {
+          'Miami': ['Miami (FL)', 'Miami'],
+          'Miami (OH)': ['Miami (OH)', 'Miami-OH'],
+          'USC': ['USC', 'Southern Cal'],
+          'UAB': ['UAB', 'Alabama-Birmingham'],
+          'UTEP': ['UTEP', 'Texas-El Paso'],
+          'UTSA': ['UTSA', 'Texas-San Antonio'],
+          'UL Monroe': ['UL Monroe', 'Louisiana-Monroe'],
+          'Louisiana': ['Louisiana', 'Louisiana-Lafayette', 'ULL'],
+        };
+        
+        const alts = alternateNames[team.team];
+        if (alts) {
+          for (const alt of alts) {
+            possession = possessionMap.get(alt);
+            if (possession) break;
+          }
+        }
+      }
+      
+      return {
+        ...team,
+        possession
+      };
+    });
+    
+    // Log any teams missing possession data for debugging
+    const missingPossession = enhancedData.filter(t => !t.possession);
+    if (missingPossession.length > 0) {
+      console.log('Teams missing possession data:', missingPossession.map(t => t.team).join(', '));
+    }
     
     // Cache the data
-    feiDataCache = data;
+    feiDataCache = enhancedData;
     lastFetchTime = Date.now();
     
-    return data;
+    return enhancedData;
   } catch (error) {
     console.error('Error fetching FEI data:', error);
     // Return cached data if available, even if expired
@@ -230,6 +322,118 @@ export async function fetchFEIData(): Promise<FEITeamData[]> {
     }
     throw error;
   }
+}
+
+/**
+ * Calculate expected score using both FEI and possession data
+ */
+export function calculateExpectedScore(
+  away: FEITeamData,
+  home: FEITeamData
+): ScoreProjection {
+  // Fallback if no possession data
+  if (!away.possession || !home.possession) {
+    return calculateBasicFEIScore(away, home);
+  }
+  
+  const awayPoss = away.possession;
+  const homePoss = home.possession;
+  
+  // Method 1: Direct scoring value approach (using actual game values)
+  const directMethod = {
+    away: 28 + (awayPoss.ovg - homePoss.dvg) / 2,
+    home: 30 + (homePoss.ovg - awayPoss.dvg) / 2
+  };
+  
+  // Method 2: Possession-based with FEI adjustments
+  const avgPossessions = (awayPoss.npg + homePoss.npg) / 2;
+  const possessionMethod = {
+    // Combine unadjusted possession efficiency with opponent-adjusted FEI
+    away: (awayPoss.ove * avgPossessions / 2) + (away.ofei * 5) - (home.dfei * 3),
+    home: (homePoss.ove * avgPossessions / 2) + (home.ofei * 5) - (away.dfei * 3) + 2.5
+  };
+  
+  // Method 3: Hybrid approach weighing both
+  const hybrid = {
+    away: (directMethod.away * 0.4) + (possessionMethod.away * 0.6),
+    home: (directMethod.home * 0.4) + (possessionMethod.home * 0.6)
+  };
+  
+  // Add pace adjustment
+  const paceMultiplier = avgPossessions / 21; // 21 is roughly average
+  
+  const finalScores = {
+    away: Math.round(hybrid.away * (paceMultiplier * 0.2 + 0.8)), // Mild pace adjustment
+    home: Math.round(hybrid.home * (paceMultiplier * 0.2 + 0.8))
+  };
+  
+  // Calculate confidence
+  const confidence = getProjectionConfidence(away, home, awayPoss, homePoss);
+  
+  return {
+    away: {
+      expected: finalScores.away,
+      low: Math.max(0, finalScores.away - 4),
+      high: finalScores.away + 4
+    },
+    home: {
+      expected: finalScores.home,
+      low: Math.max(0, finalScores.home - 4),
+      high: finalScores.home + 4
+    },
+    total: {
+      expected: finalScores.away + finalScores.home,
+      low: finalScores.away + finalScores.home - 7,
+      high: finalScores.away + finalScores.home + 7
+    },
+    spread: finalScores.home - finalScores.away,
+    possessions: Math.round(avgPossessions),
+    confidence
+  };
+}
+
+// Fallback for teams without possession data
+function calculateBasicFEIScore(away: FEITeamData, home: FEITeamData): ScoreProjection {
+  const awayScore = 28 + (away.ofei * 10) - (home.dfei * 5);
+  const homeScore = 30 + (home.ofei * 10) - (away.dfei * 5);
+  
+  return {
+    away: {
+      expected: Math.round(awayScore),
+      low: Math.max(0, Math.round(awayScore - 4)),
+      high: Math.round(awayScore + 4)
+    },
+    home: {
+      expected: Math.round(homeScore),
+      low: Math.max(0, Math.round(homeScore - 4)),
+      high: Math.round(homeScore + 4)
+    },
+    total: {
+      expected: Math.round(awayScore + homeScore),
+      low: Math.round(awayScore + homeScore - 7),
+      high: Math.round(awayScore + homeScore + 7)
+    },
+    spread: Math.round(homeScore - awayScore),
+    possessions: 21, // Default average
+    confidence: 'Moderate (No Possession Data)'
+  };
+}
+
+function getProjectionConfidence(
+  away: FEITeamData,
+  home: FEITeamData,
+  awayPoss: PossessionData,
+  homePoss: PossessionData
+): string {
+  const feiDiff = Math.abs(away.fei - home.fei);
+  const possessionConsistency = Math.abs(awayPoss.npg - homePoss.npg) < 3;
+  const clearMismatch = Math.abs(away.ofei - home.dfei) > 0.5 || 
+                        Math.abs(home.ofei - away.dfei) > 0.5;
+  
+  if (feiDiff > 0.7 && clearMismatch) return 'Very High';
+  if (feiDiff > 0.4 || (possessionConsistency && clearMismatch)) return 'High';
+  if (feiDiff > 0.2) return 'Moderate';
+  return 'Low';
 }
 
 /**

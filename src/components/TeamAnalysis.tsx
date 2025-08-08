@@ -1,6 +1,6 @@
 // src/components/TeamAnalysis.tsx
 import { useEffect, useState } from 'react';
-import { FEITeamData, fetchFEIData, getTeamFEIData, formatFEIValue, getTeamLogoName } from '@/lib/feiData';
+import { FEITeamData, fetchFEIData, getTeamFEIData, formatFEIValue, getTeamLogoName, calculateExpectedScore, ScoreProjection } from '@/lib/feiData';
 
 interface TeamAnalysisProps {
   awayTeam: string;
@@ -11,6 +11,159 @@ interface BettingInsight {
   type: 'advantage' | 'warning' | 'neutral';
   message: string;
 }
+
+// Score Projection Component
+const ScoreProjectionDisplay = ({ 
+  awayData, 
+  homeData 
+}: { 
+  awayData: FEITeamData; 
+  homeData: FEITeamData;
+}) => {
+  const projection = calculateExpectedScore(awayData, homeData);
+  
+  // Determine insights based on projection
+  const getInsights = () => {
+    const insights = [];
+    
+    // Pace insight
+    if (projection.possessions > 23) {
+      insights.push({ icon: '⚡', text: 'Fast-paced game expected' });
+    } else if (projection.possessions < 19) {
+      insights.push({ icon: '🐌', text: 'Slow, grinding game likely' });
+    }
+    
+    // Total insight
+    if (projection.total.expected > 60) {
+      insights.push({ icon: '🎯', text: 'Lean OVER - high scoring environment' });
+    } else if (projection.total.expected < 45) {
+      insights.push({ icon: '🛡️', text: 'Lean UNDER - defensive battle' });
+    }
+    
+    // Spread insight
+    if (Math.abs(projection.spread) > 14) {
+      insights.push({ icon: '💪', text: 'Large spread justified by efficiency gap' });
+    } else if (Math.abs(projection.spread) < 3) {
+      insights.push({ icon: '🎲', text: 'True toss-up - take the points' });
+    }
+    
+    return insights;
+  };
+  
+  const insights = getInsights();
+  const favoredTeam = projection.spread > 0 ? homeData : awayData;
+  
+  return (
+    <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl shadow-sm border border-purple-100 p-3 md:p-4 mb-4">
+      <h4 className="text-xs md:text-sm font-bold text-gray-700 mb-3 text-center uppercase tracking-wider">
+        📊 FEI + Possession Score Projection
+      </h4>
+      
+      {/* Score Display */}
+      <div className="grid grid-cols-2 gap-3 mb-3">
+        <div className="text-center bg-white rounded-lg p-2 shadow-sm">
+          <div className="text-xs text-gray-600 mb-1">{awayData.team}</div>
+          <div className="text-2xl md:text-3xl font-bold text-gray-900">
+            {projection.away.expected}
+          </div>
+          <div className="text-xs text-gray-500">
+            ({projection.away.low}-{projection.away.high})
+          </div>
+          {awayData.possession && (
+            <div className="text-xs text-purple-600 mt-1">
+              {awayData.possession.ovg.toFixed(1)} OVG | {awayData.possession.npg.toFixed(1)} poss
+            </div>
+          )}
+        </div>
+        
+        <div className="text-center bg-white rounded-lg p-2 shadow-sm">
+          <div className="text-xs text-gray-600 mb-1">{homeData.team}</div>
+          <div className="text-2xl md:text-3xl font-bold text-gray-900">
+            {projection.home.expected}
+          </div>
+          <div className="text-xs text-gray-500">
+            ({projection.home.low}-{projection.home.high})
+          </div>
+          {homeData.possession && (
+            <div className="text-xs text-purple-600 mt-1">
+              {homeData.possession.ovg.toFixed(1)} OVG | {homeData.possession.npg.toFixed(1)} poss
+            </div>
+          )}
+        </div>
+      </div>
+      
+      {/* Key Metrics */}
+      <div className="grid grid-cols-3 gap-2 mb-3">
+        <div className="bg-white rounded-lg p-2 text-center">
+          <div className="text-xs text-gray-600">Total</div>
+          <div className="font-bold text-lg text-purple-700">
+            {projection.total.expected}
+          </div>
+          <div className="text-xs text-gray-500">
+            ({projection.total.low}-{projection.total.high})
+          </div>
+        </div>
+        
+        <div className="bg-white rounded-lg p-2 text-center">
+          <div className="text-xs text-gray-600">Spread</div>
+          <div className="font-bold text-lg text-purple-700">
+            {favoredTeam.team}
+          </div>
+          <div className="text-xs text-gray-500">
+            -{Math.abs(projection.spread).toFixed(1)}
+          </div>
+        </div>
+        
+        <div className="bg-white rounded-lg p-2 text-center">
+          <div className="text-xs text-gray-600">Possessions</div>
+          <div className="font-bold text-lg text-purple-700">
+            {projection.possessions}
+          </div>
+          <div className="text-xs text-gray-500">
+            per team
+          </div>
+        </div>
+      </div>
+      
+      {/* Confidence Level */}
+      <div className="bg-white rounded-lg p-2 mb-3 text-center">
+        <span className="text-xs text-gray-600 mr-2">Projection Confidence:</span>
+        <span className={`font-bold text-sm ${
+          projection.confidence === 'Very High' ? 'text-green-600' :
+          projection.confidence === 'High' ? 'text-green-500' :
+          projection.confidence === 'Moderate' ? 'text-yellow-600' :
+          'text-orange-500'
+        }`}>
+          {projection.confidence}
+        </span>
+      </div>
+      
+      {/* Insights */}
+      {insights.length > 0 && (
+        <div className="space-y-1">
+          {insights.map((insight, idx) => (
+            <div key={idx} className="bg-purple-100 rounded-lg p-2 text-xs flex items-center">
+              <span className="mr-2 text-lg">{insight.icon}</span>
+              <span className="text-purple-800 font-medium">{insight.text}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      
+      {/* Data Quality Indicator */}
+      {(!awayData.possession || !homeData.possession) && (
+        <div className="mt-2 text-xs text-center text-orange-600 bg-orange-50 rounded p-1">
+          ⚠️ Using FEI-only projection (possession data unavailable)
+        </div>
+      )}
+      
+      {/* Methodology Note */}
+      <div className="mt-3 text-xs text-center text-gray-500 italic">
+        Combines opponent-adjusted FEI with actual possession efficiency data
+      </div>
+    </div>
+  );
+};
 
 export default function TeamAnalysis({ awayTeam, homeTeam }: TeamAnalysisProps) {
   const [loading, setLoading] = useState(true);
@@ -440,27 +593,6 @@ export default function TeamAnalysis({ awayTeam, homeTeam }: TeamAnalysisProps) 
 
   return (
     <div className="p-3 md:p-4">
-      {/* Betting Insights Section */}
-      {insights.length > 0 && (
-        <div className="mb-4 md:mb-6 space-y-2">
-          <h4 className="text-xs md:text-sm font-bold text-gray-700 mb-2 uppercase tracking-wider">💡 Betting Angles</h4>
-          {insights.map((insight, index) => (
-            <div 
-              key={index}
-              className={`p-2 md:p-3 rounded-lg text-xs md:text-sm shadow-sm ${
-                insight.type === 'advantage' 
-                  ? 'bg-gradient-to-r from-emerald-50 to-green-50 border border-emerald-200 text-emerald-800'
-                  : insight.type === 'warning'
-                  ? 'bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 text-amber-800'
-                  : 'bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 text-blue-800'
-              }`}
-            >
-              {insight.message}
-            </div>
-          ))}
-        </div>
-      )}
-      
       {/* Team Headers with Logos - Mobile Optimized */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-4 mb-4 md:mb-6">
         <div className="text-center">
@@ -500,6 +632,30 @@ export default function TeamAnalysis({ awayTeam, homeTeam }: TeamAnalysisProps) 
       <div className="md:hidden text-center text-xs text-gray-500 mb-3">
         — VS —
       </div>
+
+      {/* Score Projection Component */}
+      <ScoreProjectionDisplay awayData={awayData} homeData={homeData} />
+
+      {/* Betting Insights Section */}
+      {insights.length > 0 && (
+        <div className="mb-4 md:mb-6 space-y-2">
+          <h4 className="text-xs md:text-sm font-bold text-gray-700 mb-2 uppercase tracking-wider">💡 Betting Angles</h4>
+          {insights.map((insight, index) => (
+            <div 
+              key={index}
+              className={`p-2 md:p-3 rounded-lg text-xs md:text-sm shadow-sm ${
+                insight.type === 'advantage' 
+                  ? 'bg-gradient-to-r from-emerald-50 to-green-50 border border-emerald-200 text-emerald-800'
+                  : insight.type === 'warning'
+                  ? 'bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 text-amber-800'
+                  : 'bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 text-blue-800'
+              }`}
+            >
+              {insight.message}
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Main Efficiency Ratings - Mobile Optimized */}
       <div className="space-y-3 md:space-y-4 mb-4 md:mb-6">
