@@ -17,6 +17,7 @@ export default function TeamAnalysis({ awayTeam, homeTeam }: TeamAnalysisProps) 
   const [error, setError] = useState<string | null>(null);
   const [awayData, setAwayData] = useState<FEITeamData | null>(null);
   const [homeData, setHomeData] = useState<FEITeamData | null>(null);
+  const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -46,203 +47,281 @@ export default function TeamAnalysis({ awayTeam, homeTeam }: TeamAnalysisProps) 
     loadData();
   }, [awayTeam, homeTeam]);
 
-  // Generate betting insights based on FEI data - ENHANCED VERSION
+  // Close tooltip on click outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.tooltip-container')) {
+        setActiveTooltip(null);
+      }
+    };
+
+    if (activeTooltip) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [activeTooltip]);
+
+  // Generate betting insights based on FEI data - REFINED VERSION
   const generateInsights = (away: FEITeamData, home: FEITeamData): BettingInsight[] => {
     const insights: BettingInsight[] = [];
     const feiDiff = away.fei - home.fei;
 
-    
     // 1. Overall matchup assessment (always provide one)
     if (Math.abs(feiDiff) > 1.0) {
       const strongerTeam = feiDiff > 0 ? away.team : home.team;
-   
+      const weakerTeam = feiDiff > 0 ? home.team : away.team;
+      const strongerRank = feiDiff > 0 ? away.rank : home.rank;
+      const weakerRank = feiDiff > 0 ? home.rank : away.rank;
+      
       insights.push({
         type: 'advantage',
-        message: `🔥 MASSIVE ADVANTAGE: ${strongerTeam} has an elite edge (${Math.abs(feiDiff).toFixed(2)} FEI gap). Expect a potential blowout.`
+        message: `🔥 MASSIVE MISMATCH: ${strongerTeam} (#${strongerRank}) has an enormous efficiency edge over ${weakerTeam} (#${weakerRank}). ${Math.abs(feiDiff).toFixed(2)} FEI gap suggests a 14+ point spread is justified.`
       });
     } else if (Math.abs(feiDiff) > 0.5) {
       const strongerTeam = feiDiff > 0 ? away.team : home.team;
       insights.push({
         type: 'advantage',
-        message: `Strong Edge: ${strongerTeam} has a significant advantage (${Math.abs(feiDiff).toFixed(2)} FEI). Consider them if getting points or giving less than 10.`
+        message: `Strong Edge: ${strongerTeam} has significant possession efficiency advantage (${Math.abs(feiDiff).toFixed(2)} FEI gap). Look for them to control the game - consider if getting points.`
       });
     } else if (Math.abs(feiDiff) > 0.25) {
       const strongerTeam = feiDiff > 0 ? away.team : home.team;
       insights.push({
         type: 'neutral',
-        message: `Slight Edge: ${strongerTeam} has a modest advantage (${Math.abs(feiDiff).toFixed(2)} FEI). Could be closer than the spread suggests.`
+        message: `Slight Edge: ${strongerTeam} has modest efficiency advantage (${Math.abs(feiDiff).toFixed(2)} FEI). Could be closer than spread suggests if it's 7+ points.`
       });
     } else {
       insights.push({
         type: 'neutral',
-        message: `Toss-up Game: Very evenly matched teams (${Math.abs(feiDiff).toFixed(2)} FEI difference). Look for value on the underdog with the points.`
+        message: `Dead Even: Nearly identical efficiency ratings (${Math.abs(feiDiff).toFixed(2)} FEI difference). True coin flip - grab the points with either team.`
       });
     }
     
-    // 2. Offense vs Defense mismatches
+    // 2. Offense vs Defense mismatches - what they mean for scoring
     const awayOvsHomeD = away.ofei - home.dfei;
     const homeOvsAwayD = home.ofei - away.dfei;
     
-    if (awayOvsHomeD > 0.8) {
+    if (awayOvsHomeD > 1.0) {
       insights.push({
         type: 'advantage',
-        message: `📈 ${away.team}'s offense (#${away.ofeiRank}) has a huge edge over ${home.team}'s defense (#${home.dfeiRank}). Strong OVER lean.`
+        message: `💥 ${away.team}'s offense (#${away.ofeiRank}) will DOMINATE ${home.team}'s defense (#${home.dfeiRank}). Expect explosive plays and 30+ points from ${away.team}.`
       });
-    } else if (awayOvsHomeD > 0.4) {
+    } else if (awayOvsHomeD > 0.5) {
       insights.push({
         type: 'advantage',
-        message: `📊 ${away.team}'s offense should find success against ${home.team}'s defense. Consider the OVER if total looks low.`
+        message: `📈 ${away.team}'s offense has clear advantage vs ${home.team}'s defense. Should sustain drives and score efficiently - lean OVER.`
       });
-    }
-    
-    if (homeOvsAwayD > 0.8) {
-      insights.push({
-        type: 'advantage',
-        message: `📈 ${home.team}'s offense (#${home.ofeiRank}) has a huge edge over ${away.team}'s defense (#${away.dfeiRank}). Strong OVER lean.`
-      });
-    } else if (homeOvsAwayD > 0.4) {
-      insights.push({
-        type: 'advantage',
-        message: `📊 ${home.team}'s offense should find success against ${away.team}'s defense. Consider the OVER if total looks low.`
-      });
-    }
-    
-    // 3. Defensive battles or offensive shootouts
-    if (away.dfei > 0.4 && home.dfei > 0.4) {
+    } else if (awayOvsHomeD < -0.8) {
       insights.push({
         type: 'warning',
-        message: `🛡️ Defensive Battle: Both teams have elite defenses (Top ${Math.max(away.dfeiRank, home.dfeiRank)} nationally). Strong UNDER play.`
-      });
-    } else if (away.dfei < -0.3 && home.dfei < -0.3) {
-      insights.push({
-        type: 'warning',
-        message: `🎯 Shootout Alert: Both defenses struggle (${away.team} #${away.dfeiRank}, ${home.team} #${home.dfeiRank}). Hammer the OVER.`
+        message: `🔒 ${home.team}'s defense (#${home.dfeiRank}) will shut down ${away.team}'s offense (#${away.ofeiRank}). Expect lots of punts and field position battle.`
       });
     }
     
-    // 4. Special teams edge (lower threshold to catch more games)
-    const sfeiDiff = Math.abs(away.sfei - home.sfei);
-    if (sfeiDiff > 0.08) {
-      const betterST = away.sfei > home.sfei ? away.team : home.team;
-      const stRank = away.sfei > home.sfei ? away.sfeiRank : home.sfeiRank;
-      insights.push({
-        type: 'neutral',
-        message: `⚡ Special teams edge to ${betterST} (#${stRank}). Could be decisive in a close game or provide hidden value.`
-      });
-    } else if (sfeiDiff > 0.04) {
-      const betterST = away.sfei > home.sfei ? away.team : home.team;
-      insights.push({
-        type: 'neutral',
-        message: `Special teams slightly favor ${betterST}. Worth considering in a pick 'em situation.`
-      });
-    }
-    
-    // 5. Extreme rankings mismatches
-    if ((away.rank <= 10 && home.rank >= 40) || (home.rank <= 10 && away.rank >= 40)) {
-      const favorite = away.rank <= 10 ? away.team : home.team;
-      const underdog = away.rank <= 10 ? home.team : away.team;
-      const rankDiff = Math.abs(away.rank - home.rank);
+    if (homeOvsAwayD > 1.0) {
       insights.push({
         type: 'advantage',
-        message: `⚠️ Talent Gap: ${favorite} (Top ${Math.min(away.rank, home.rank)}) vs ${underdog} (#${Math.max(away.rank, home.rank)}). ${rankDiff}+ spot ranking difference usually means double-digit spread is justified.`
+        message: `💥 ${home.team}'s offense (#${home.ofeiRank}) will DOMINATE ${away.team}'s defense (#${away.dfeiRank}). Expect explosive plays and 30+ points from ${home.team}.`
+      });
+    } else if (homeOvsAwayD > 0.5) {
+      insights.push({
+        type: 'advantage',
+        message: `📈 ${home.team}'s offense has clear advantage vs ${away.team}'s defense. Should sustain drives and score efficiently - lean OVER.`
+      });
+    } else if (homeOvsAwayD < -0.8) {
+      insights.push({
+        type: 'warning',
+        message: `🔒 ${away.team}'s defense (#${away.dfeiRank}) will shut down ${home.team}'s offense (#${home.ofeiRank}). Expect lots of punts and field position battle.`
       });
     }
     
-    // 6. Pace and scoring environment insights (always add at least one)
+    // 3. Elite units vs terrible units - extreme disparities
+    if (away.ofeiRank <= 10 && home.dfeiRank >= 100) {
+      insights.push({
+        type: 'advantage',
+        message: `🎯 SMASH SPOT: Elite offense (${away.team} #${away.ofeiRank}) vs horrible defense (${home.team} #${home.dfeiRank}). ${away.team} team total OVER is the play.`
+      });
+    }
+    if (home.ofeiRank <= 10 && away.dfeiRank >= 100) {
+      insights.push({
+        type: 'advantage',
+        message: `🎯 SMASH SPOT: Elite offense (${home.team} #${home.ofeiRank}) vs horrible defense (${away.team} #${away.dfeiRank}). ${home.team} team total OVER is the play.`
+      });
+    }
+    
+    // 4. Scoring environment based on actual efficiency, not just rankings
     const totalOffenseStrength = away.ofei + home.ofei;
     const totalDefenseStrength = away.dfei + home.dfei;
     const scoringEnvironment = totalOffenseStrength - totalDefenseStrength;
     
-    if (insights.filter(i => i.message.includes('OVER') || i.message.includes('UNDER')).length === 0) {
-      if (scoringEnvironment > 0.5) {
+    if (scoringEnvironment > 1.0) {
+      insights.push({
+        type: 'advantage',
+        message: `🎰 SHOOTOUT ALERT: Combined offensive efficiency far exceeds defensive efficiency (${scoringEnvironment.toFixed(2)} net). Both teams will score at will - HAMMER the OVER.`
+      });
+    } else if (scoringEnvironment > 0.5) {
+      insights.push({
+        type: 'neutral',
+        message: `📊 Offense-Friendly: Offenses have efficiency edge (${scoringEnvironment.toFixed(2)} net). Lean toward OVER if total is reasonable.`
+      });
+    } else if (scoringEnvironment < -1.0) {
+      insights.push({
+        type: 'warning',
+        message: `🏰 DEFENSIVE STRUGGLE: Defenses dominate efficiency matchup (${Math.abs(scoringEnvironment).toFixed(2)} net). Could be ugly - strong UNDER play.`
+      });
+    } else if (scoringEnvironment < -0.5) {
+      insights.push({
+        type: 'warning',
+        message: `🛡️ Defense-Friendly: Defensive efficiency exceeds offensive (${Math.abs(scoringEnvironment).toFixed(2)} net). Lean UNDER if total seems high.`
+      });
+    }
+    
+    // 5. Special teams can swing close games
+    const sfeiDiff = away.sfei - home.sfei;
+    if (Math.abs(sfeiDiff) > 0.15) {
+      const betterST = sfeiDiff > 0 ? away.team : home.team;
+      const worseSTRank = sfeiDiff > 0 ? home.sfeiRank : away.sfeiRank;
+      insights.push({
+        type: 'advantage',
+        message: `⚡ HUGE special teams edge to ${betterST}. Opponent ranked #${worseSTRank} - expect short fields and hidden points worth 4-7 point swing.`
+      });
+    } else if (Math.abs(sfeiDiff) > 0.08) {
+      const betterST = sfeiDiff > 0 ? away.team : home.team;
+      const stRank = sfeiDiff > 0 ? away.sfeiRank : home.sfeiRank;
+      insights.push({
+        type: 'neutral',
+        message: `⚡ Special teams favor ${betterST} (#${stRank}). Worth 3-4 points in a close game - factor this into spread analysis.`
+      });
+    }
+    
+    // 6. Quality assessment - are these good teams or bad teams?
+    const avgRank = (away.rank + home.rank) / 2;
+    if (avgRank <= 25) {
+      if (!insights.some(i => i.message.includes('playoff') || i.message.includes('ranked'))) {
         insights.push({
           type: 'neutral',
-          message: `💰 Scoring Environment: Offenses outmatch defenses (${scoringEnvironment.toFixed(2)} net). Lean toward the OVER.`
+          message: `🏆 High-Level Game: Both teams are Top 25 caliber. Execution and coaching matter more than talent - look for live betting opportunities.`
         });
-      } else if (scoringEnvironment < -0.5) {
+      }
+    } else if (avgRank >= 90) {
+      insights.push({
+        type: 'warning',
+        message: `⚠️ Caution: Both teams rank 90+ overall. High variance expected - weird things happen in bad football games. Consider staying away.`
+      });
+    }
+    
+    // 7. Consistency vs Inconsistency - properly defined
+    const awayVariance = Math.abs(away.ofeiRank - away.dfeiRank);
+    const homeVariance = Math.abs(home.ofeiRank - home.dfeiRank);
+    
+    // Only call a team "consistent" if they're actually good at both or bad at both with low variance
+    if (awayVariance < 15 && away.rank <= 40) {
+      if (homeVariance > 50) {
         insights.push({
           type: 'neutral',
-          message: `🔒 Low-Scoring Environment: Defenses outmatch offenses (${Math.abs(scoringEnvironment).toFixed(2)} net). Lean toward the UNDER.`
+          message: `📊 ${away.team} is elite on both sides (Off #${away.ofeiRank}/Def #${away.dfeiRank}) while ${home.team} is wildly inconsistent. Trust the complete team.`
+        });
+      }
+    } else if (homeVariance < 15 && home.rank <= 40) {
+      if (awayVariance > 50) {
+        insights.push({
+          type: 'neutral',
+          message: `📊 ${home.team} is elite on both sides (Off #${home.ofeiRank}/Def #${home.dfeiRank}) while ${away.team} is wildly inconsistent. Trust the complete team.`
+        });
+      }
+    }
+    
+    // Identify one-dimensional teams
+    if (away.ofeiRank <= 25 && away.dfeiRank >= 80) {
+      insights.push({
+        type: 'warning',
+        message: `🎲 ${away.team} is all offense (#${away.ofeiRank}) with no defense (#${away.dfeiRank}). High variance - they'll either win big or lose big.`
+      });
+    } else if (away.dfeiRank <= 25 && away.ofeiRank >= 80) {
+      insights.push({
+        type: 'warning',
+        message: `🛡️ ${away.team} is all defense (#${away.dfeiRank}) with no offense (#${away.ofeiRank}). Need to win ugly - UNDER has value.`
+      });
+    }
+    
+    if (home.ofeiRank <= 25 && home.dfeiRank >= 80) {
+      insights.push({
+        type: 'warning',
+        message: `🎲 ${home.team} is all offense (#${home.ofeiRank}) with no defense (#${home.dfeiRank}). High variance - they'll either win big or lose big.`
+      });
+    } else if (home.dfeiRank <= 25 && home.ofeiRank >= 80) {
+      insights.push({
+        type: 'warning',
+        message: `🛡️ ${home.team} is all defense (#${home.dfeiRank}) with no offense (#${home.ofeiRank}). Need to win ugly - UNDER has value.`
+      });
+    }
+    
+    // 8. Home field advantage in close matchups
+    if (Math.abs(feiDiff) < 0.3) {
+      const homeFieldValue = 0.15; // Approximate FEI value of home field
+      const adjustedDiff = feiDiff + homeFieldValue; // Adjust for home team
+      
+      if (adjustedDiff > 0) {
+        insights.push({
+          type: 'neutral',
+          message: `🏟️ Close matchup flips with home field: ${home.team} gets ~3 points for home advantage, making them the efficiency favorite. Take the home dog if getting points.`
         });
       } else {
         insights.push({
           type: 'neutral',
-          message: `📊 Balanced Matchup: Offense and defense strengths offset. Total should be properly set by the market.`
+          message: `🏟️ ${home.team}'s home field advantage (worth ~3 points) makes this a true toss-up. Slight lean to home team if line is pick 'em.`
         });
       }
     }
     
-    // 7. Home field consideration (if metrics are close)
-    if (Math.abs(feiDiff) < 0.3 && !insights.some(i => i.message.includes('home'))) {
+    // 9. Travel and road warrior analysis
+    if (away.rank <= 15 && away.ofei > 0.5) {
       insights.push({
-        type: 'neutral',
-        message: `🏟️ Home Field Factor: In a close matchup, ${home.team}'s home advantage could be the difference. Consider them getting points.`
+        type: 'advantage',
+        message: `✈️ ${away.team} (#${away.rank}) has elite offense that travels well. Don't be scared laying road points with efficiency this good.`
       });
     }
     
-    // 8. Consistency/Volatility insight based on ranking gaps between units
-    const awayConsistency = Math.abs(away.ofeiRank - away.dfeiRank);
-    const homeConsistency = Math.abs(home.ofeiRank - home.dfeiRank);
-    
-    if (awayConsistency < 15 && homeConsistency > 40) {
-      insights.push({
-        type: 'neutral',
-        message: `📈 ${away.team} is more balanced (Off #${away.ofeiRank}/Def #${away.dfeiRank}) vs ${home.team}'s volatility. Favor consistency in close spreads.`
-      });
-    } else if (homeConsistency < 15 && awayConsistency > 40) {
-      insights.push({
-        type: 'neutral',
-        message: `📈 ${home.team} is more balanced (Off #${home.ofeiRank}/Def #${home.dfeiRank}) vs ${away.team}'s volatility. Favor consistency in close spreads.`
-      });
-    }
-    
-    // 9. Strength of strength - when a team is good at what matters most
-    if (away.ofei > 0.6 && away.ofeiRank <= 15) {
-      if (!insights.some(i => i.message.includes(`${away.team}'s offense`))) {
-        insights.push({
-          type: 'advantage',
-          message: `🎯 ${away.team} has an elite offense (#${away.ofeiRank}) that travels well. Trust them on the road.`
-        });
-      }
-    }
-    if (home.dfei > 0.6 && home.dfeiRank <= 15) {
-      if (!insights.some(i => i.message.includes(`${home.team}'s defense`))) {
-        insights.push({
-          type: 'advantage',
-          message: `🏰 ${home.team}'s elite defense (#${home.dfeiRank}) at home is a fortress. Tough environment for ${away.team}.`
-        });
-      }
-    }
-    
-    // 10. Guarantee at least 2-3 meaningful insights
-    if (insights.length < 2) {
-      // Add a trend-based insight
-      if (away.rank < home.rank) {
+    // 10. Red zone and scoring efficiency implications
+    if (away.ofei > 0.3 && home.dfei < -0.3) {
+      if (!insights.some(i => i.message.includes('red zone'))) {
         insights.push({
           type: 'neutral',
-          message: `📊 Ranking Edge: ${away.team} (#${away.rank}) is the better overall team vs ${home.team} (#${home.rank}). Road favorites often provide value.`
+          message: `🎯 ${away.team} should dominate red zone against ${home.team}'s weak D. Expect TDs not FGs - good for ${away.team} team total OVER.`
         });
-      } else {
+      }
+    }
+    if (home.ofei > 0.3 && away.dfei < -0.3) {
+      if (!insights.some(i => i.message.includes('red zone'))) {
         insights.push({
           type: 'neutral',
-          message: `📊 Home Team Quality: ${home.team} (#${home.rank}) has a slight overall edge vs ${away.team} (#${away.rank}). Home favorites tend to cover at a higher rate.`
+          message: `🎯 ${home.team} should dominate red zone against ${away.team}'s weak D. Expect TDs not FGs - good for ${home.team} team total OVER.`
         });
       }
     }
     
-    // 11. Add a contrarian angle if we still need insights
+    // 11. Ensure minimum insights with valuable context
     if (insights.length < 3) {
-      const publicSide = feiDiff > 0.2 ? away.team : (feiDiff < -0.2 ? home.team : null);
-      if (publicSide) {
+      // Add pace and possession insights
+      if (away.ofei > 0 && home.ofei > 0) {
+        insights.push({
+          type: 'neutral',
+          message: `⏱️ Both teams have positive offensive efficiency. More possessions = more scoring opportunities. Slight OVER lean in up-tempo game.`
+        });
+      } else if (away.ofei < -0.2 && home.ofei < -0.2) {
+        insights.push({
+          type: 'warning',
+          message: `🐌 Both offenses struggle with efficiency. Expect long, grinding drives that eat clock and limit possessions. UNDER has value.`
+        });
+      }
+      
+      // Market efficiency angle
+      const publicSide = Math.abs(feiDiff) > 0.3 ? (feiDiff > 0 ? away.team : home.team) : null;
+      if (publicSide && insights.length < 4) {
         const otherTeam = publicSide === away.team ? home.team : away.team;
         insights.push({
           type: 'warning',
-          message: `🎲 Contrarian Angle: If public heavily backing ${publicSide}, consider ${otherTeam} for value. Markets often overadjust to FEI gaps.`
-        });
-      } else {
-        insights.push({
-          type: 'neutral',
-          message: `🎲 Market Efficiency: This even matchup likely has a sharp line. Look for live betting opportunities after seeing early game flow.`
+          message: `💰 FEI suggests ${publicSide} is better, but if line doesn't reflect full gap, ${otherTeam} may offer contrarian value. Shop for best number.`
         });
       }
     }
@@ -255,6 +334,62 @@ export default function TeamAnalysis({ awayTeam, homeTeam }: TeamAnalysisProps) 
     const logoName = getTeamLogoName(teamName);
     return `/team-logos/${logoName}.png`;
   };
+
+  // Metric explanations
+  const metricExplanations = {
+    fei: {
+      title: "Overall FEI",
+      description: "Opponent-adjusted efficiency measuring expected scoring advantage per possession against an average team. Combines offense, defense, and special teams.",
+      interpretation: "Higher is better • 0.0 = average • Elite > 0.5 • Poor < -0.3"
+    },
+    ofei: {
+      title: "Offensive FEI", 
+      description: "Opponent-adjusted scoring efficiency per offensive possession. Measures how many points above/below average an offense generates per drive.",
+      interpretation: "Higher is better • 0.0 = average • Elite > 0.4 • Poor < -0.2"
+    },
+    dfei: {
+      title: "Defensive FEI",
+      description: "Opponent-adjusted defensive efficiency per possession. Measures how many points below/above average a defense allows per drive.",
+      interpretation: "Higher is better • 0.0 = average • Elite > 0.4 • Poor < -0.2"
+    },
+    sfei: {
+      title: "Special Teams FEI",
+      description: "Measures field position value generated by special teams units including kickoffs, punts, returns, and field goals.",
+      interpretation: "Higher is better • 0.0 = average • Elite > 0.08 • Poor < -0.05"
+    }
+  };
+
+  const InfoIcon = ({ metric }: { metric: string }) => (
+    <div className="relative inline-block ml-1 tooltip-container">
+      <button
+        onClick={() => setActiveTooltip(activeTooltip === metric ? null : metric)}
+        className="inline-flex items-center justify-center w-4 h-4 text-xs rounded-full bg-amber-200 text-amber-800 hover:bg-amber-300 transition-colors"
+        aria-label={`Information about ${metric}`}
+      >
+        i
+      </button>
+      {activeTooltip === metric && (
+        <div className="absolute z-10 w-64 p-3 mt-1 text-xs bg-white rounded-lg shadow-xl border border-amber-200 left-1/2 transform -translate-x-1/2 md:left-auto md:right-0 md:transform-none">
+          <button
+            onClick={() => setActiveTooltip(null)}
+            className="absolute top-1 right-1 text-gray-400 hover:text-gray-600"
+            aria-label="Close"
+          >
+            ×
+          </button>
+          <div className="font-bold text-amber-900 mb-1">
+            {metricExplanations[metric as keyof typeof metricExplanations].title}
+          </div>
+          <div className="text-gray-700 mb-2">
+            {metricExplanations[metric as keyof typeof metricExplanations].description}
+          </div>
+          <div className="text-amber-800 font-medium text-xs">
+            {metricExplanations[metric as keyof typeof metricExplanations].interpretation}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 
   if (loading) {
     return (
@@ -368,21 +503,26 @@ export default function TeamAnalysis({ awayTeam, homeTeam }: TeamAnalysisProps) 
 
       {/* Main Efficiency Ratings - Mobile Optimized */}
       <div className="space-y-3 md:space-y-4 mb-4 md:mb-6">
-        <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl shadow-sm border border-gray-100 p-3 md:p-4">
+        <div className="bg-gradient-to-br from-gray-100 to-gray-50 rounded-xl shadow-sm border border-gray-200 p-3 md:p-4">
           <h4 className="text-xs md:text-sm font-bold text-gray-700 mb-3 md:mb-4 text-center uppercase tracking-wider">Efficiency Ratings</h4>
           
           {/* Overall FEI */}
           <div className="bg-white rounded-lg p-2 mb-2 md:mb-3 shadow-sm">
             <div className="grid grid-cols-3 gap-1 md:gap-2 items-center">
               <div className={`text-right text-sm md:text-base ${feiColors.away}`}>
-                {formatFEIValue(awayData.fei)}
+                <span className="block md:inline">{formatFEIValue(awayData.fei)}</span>
+                <span className="text-xs text-gray-400 block md:inline md:ml-1">#{awayData.rank}</span>
               </div>
               <div className="text-center">
-                <div className="text-xs md:text-sm font-medium text-gray-900">Overall</div>
+                <div className="text-xs md:text-sm font-medium text-gray-900 flex items-center justify-center">
+                  Overall
+                  <InfoIcon metric="fei" />
+                </div>
                 <div className="text-xs text-gray-500">FEI</div>
               </div>
               <div className={`text-left text-sm md:text-base ${feiColors.home}`}>
-                {formatFEIValue(homeData.fei)}
+                <span className="block md:inline">{formatFEIValue(homeData.fei)}</span>
+                <span className="text-xs text-gray-400 block md:inline md:ml-1">#{homeData.rank}</span>
               </div>
             </div>
           </div>
@@ -395,7 +535,10 @@ export default function TeamAnalysis({ awayTeam, homeTeam }: TeamAnalysisProps) 
                 <span className="text-xs text-gray-400 block md:inline md:ml-1">#{awayData.ofeiRank}</span>
               </div>
               <div className="text-center">
-                <div className="text-xs md:text-sm font-medium text-gray-900">Offense</div>
+                <div className="text-xs md:text-sm font-medium text-gray-900 flex items-center justify-center">
+                  Offense
+                  <InfoIcon metric="ofei" />
+                </div>
                 <div className="text-xs text-gray-500">OFEI</div>
               </div>
               <div className={`text-left text-sm md:text-base ${ofeiColors.home}`}>
@@ -413,7 +556,10 @@ export default function TeamAnalysis({ awayTeam, homeTeam }: TeamAnalysisProps) 
                 <span className="text-xs text-gray-400 block md:inline md:ml-1">#{awayData.dfeiRank}</span>
               </div>
               <div className="text-center">
-                <div className="text-xs md:text-sm font-medium text-gray-900">Defense</div>
+                <div className="text-xs md:text-sm font-medium text-gray-900 flex items-center justify-center">
+                  Defense
+                  <InfoIcon metric="dfei" />
+                </div>
                 <div className="text-xs text-gray-500">DFEI</div>
               </div>
               <div className={`text-left text-sm md:text-base ${dfeiColors.home}`}>
@@ -431,7 +577,10 @@ export default function TeamAnalysis({ awayTeam, homeTeam }: TeamAnalysisProps) 
                 <span className="text-xs text-gray-400 block md:inline md:ml-1">#{awayData.sfeiRank}</span>
               </div>
               <div className="text-center">
-                <div className="text-xs md:text-sm font-medium text-gray-900">Special Teams</div>
+                <div className="text-xs md:text-sm font-medium text-gray-900 flex items-center justify-center">
+                  Special Teams
+                  <InfoIcon metric="sfei" />
+                </div>
                 <div className="text-xs text-gray-500">SFEI</div>
               </div>
               <div className={`text-left text-sm md:text-base ${sfeiColors.home}`}>
@@ -483,7 +632,7 @@ export default function TeamAnalysis({ awayTeam, homeTeam }: TeamAnalysisProps) 
 
       {/* Legend - Mobile Optimized */}
       <div className="mt-4 md:mt-6 text-xs text-gray-500 text-center">
-        <p className="font-medium">Higher values = better • Rankings shown as #</p>
+        <p className="font-medium">Higher FEI values = better efficiency • Rankings shown as #</p>
         <p className="mt-1">
           <span className="text-emerald-600 font-bold">Green</span> = Advantage 
           <span className="text-rose-500 ml-2">Red</span> = Disadvantage
