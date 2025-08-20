@@ -455,7 +455,7 @@ export default function MyBets() {
                         )}
                       </div>
 
-                      {/* Bet Type - Hidden on mobile for both views, visible on desktop */}
+                      {/* Bet Type - Hidden on mobile for both views, visible on desktp */}
                       <span className="hidden sm:inline-flex text-xs px-1.5 py-0.5 bg-blue-100 rounded text-blue-700 font-medium">
                         {getBetTypeLabel(bet.betType)}
                       </span>
