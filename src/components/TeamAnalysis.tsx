@@ -1,6 +1,6 @@
 // src/components/TeamAnalysis.tsx
 import { useEffect, useState } from 'react';
-import { FEITeamData, fetchFEIData, getTeamFEIData, formatFEIValue, getTeamLogoName, calculateExpectedScore, ScoreProjection } from '@/lib/feiData';
+import { FEITeamData, fetchFEIData, getTeamFEIData, formatFEIValue, getTeamLogoName, calculateExpectedScore } from '@/lib/feiData';
 
 interface TeamAnalysisProps {
   awayTeam: string;
