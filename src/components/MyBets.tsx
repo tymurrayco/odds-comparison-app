@@ -220,23 +220,9 @@ export default function MyBets() {
     return `/team-logos/${cleanName}.png`;
   };
 
-  // Get abbreviated team name (last word or first 3 letters)
-  const getTeamAbbr = (teamName: string) => {
-    const words = teamName.split(' ');
-    if (words.length > 1) {
-      // For multi-word names, use the last word (e.g., "Ohio State Buckeyes" → "Buckeyes")
-      return words[words.length - 1];
-    }
-    // For single word, use first 3 letters
-    return teamName.substring(0, 3).toUpperCase();
-  };
-
   const toggleExpanded = (betId: string) => {
     setExpandedBetId(expandedBetId === betId ? null : betId);
   };
-
-  // Get overall stats (for both views combined)
-  const overallStats = useMemo(() => getBetStats(myBets), []);
 
   return (
     <div className="space-y-4">
