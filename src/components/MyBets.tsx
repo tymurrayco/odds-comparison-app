@@ -354,8 +354,10 @@ export default function MyBets() {
                         {getStatusIcon(bet.status)}
                       </div>
 
-                      {/* Event Date - Shows prominently */}
-                      <div className="flex flex-col items-start min-w-[48px] sm:min-w-[52px]">
+                      {/* Event Date - Shows prominently - Hidden on mobile for futures */}
+                      <div className={`flex flex-col items-start min-w-[48px] sm:min-w-[52px] ${
+                        viewType === 'futures' ? 'hidden sm:flex' : ''
+                      }`}>
                         <span className="text-xs font-medium text-gray-700">
                           {formatDate(bet.eventDate)}
                         </span>
@@ -366,15 +368,15 @@ export default function MyBets() {
                         )}
                       </div>
 
-                      {/* Sport/League Badge - Hidden on mobile for games/parlays, visible for futures */}
-                      <span className={`text-xs px-1.5 py-0.5 bg-gray-100 rounded text-gray-600 ${
-                        viewType === 'futures' ? 'inline-flex' : 'hidden sm:inline-flex'
-                      }`}>
+                      {/* Sport/League Badge - Hidden on mobile for both views */}
+                      <span className="hidden sm:inline-flex text-xs px-1.5 py-0.5 bg-gray-100 rounded text-gray-600">
                         {bet.league}
                       </span>
 
                       {/* Teams/Description with Logos - Mobile optimized */}
-                      <div className="flex items-center gap-1 flex-1 min-w-0">
+                      <div className={`flex items-center gap-1 min-w-0 ${
+                        viewType === 'futures' ? '' : 'flex-1'
+                      }`}>
                         {viewType === 'games' && teams ? (
                           <>
                             {/* Mobile: Show logos only or with abbreviated names */}
@@ -424,11 +426,11 @@ export default function MyBets() {
                         ) : futureTeam ? (
                           <>
                             {/* Mobile: Show logo only for futures */}
-                            <div className="flex sm:hidden items-center gap-1">
+                            <div className="flex sm:hidden items-center gap-2">
                               <img 
                                 src={getTeamLogo(futureTeam)}
                                 alt=""
-                                className="h-5 w-5"
+                                className="h-6 w-6 flex-shrink-0"
                                 onError={(e) => {
                                   e.currentTarget.style.display = 'none';
                                 }}
@@ -475,10 +477,8 @@ export default function MyBets() {
                         </span>
                       </span>
 
-                      {/* Odds - Hidden on mobile for games/parlays, visible for futures */}
-                      <span className={`text-xs text-gray-500 min-w-[40px] text-right ${
-                        viewType === 'futures' ? 'inline-flex' : 'hidden sm:inline'
-                      }`}>
+                      {/* Odds - Hidden on mobile for both views */}
+                      <span className="hidden sm:inline text-xs text-gray-500 min-w-[40px] text-right">
                         {formatOdds(bet.odds)}
                       </span>
 
@@ -531,6 +531,10 @@ export default function MyBets() {
                             <span className="block mt-1 text-gray-700">
                               {teams.away} @ {teams.home}
                             </span>
+                            <div className="mt-2 flex justify-between text-xs">
+                              <span className="text-gray-500">League:</span>
+                              <span>{bet.league}</span>
+                            </div>
                           </div>
                         )}
                         
@@ -541,6 +545,10 @@ export default function MyBets() {
                             <span className="block mt-1 text-gray-700">
                               {bet.description}
                             </span>
+                            <div className="mt-2 flex justify-between text-xs">
+                              <span className="text-gray-500">League:</span>
+                              <span>{bet.league}</span>
+                            </div>
                           </div>
                         )}
                         
