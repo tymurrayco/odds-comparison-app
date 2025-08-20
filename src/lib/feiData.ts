@@ -2,6 +2,7 @@
 
 // Import possession data type from API route
 export interface PossessionData {
+  team: string;    // Team name - ADDED THIS LINE TO FIX THE BUILD ERROR
   ove: number;     // Offensive Value per possession
   oveRank: number;
   dve: number;     // Defensive Value per possession  
@@ -255,8 +256,8 @@ export async function fetchFEIData(): Promise<FEITeamData[]> {
       throw new Error('Failed to fetch FEI data');
     }
     
- const feiData: FEITeamData[] = await feiResponse.json();
-let possessionData: PossessionData[] = [];
+    const feiData: FEITeamData[] = await feiResponse.json();
+    let possessionData: PossessionData[] = [];  // FIXED TYPE: Changed from any[] to PossessionData[]
     
     if (possessionResponse.ok) {
       possessionData = await possessionResponse.json();
