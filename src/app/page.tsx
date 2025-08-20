@@ -188,8 +188,8 @@ export default function Home() {
     }
   }, [loadData, activeView]);
 
-  // Force the effective view for rendering
-  const effectiveView = activeLeague === MASTERS_LEAGUE_ID ? 'futures' : activeView;
+  // Force the effective view for rendering - WITH EXPLICIT TYPE ANNOTATION
+  const effectiveView: 'games' | 'futures' | 'mybets' = activeLeague === MASTERS_LEAGUE_ID ? 'futures' : activeView;
 
   // Filter games based on team name AND conferences
   const filteredGames = useMemo(() => {
