@@ -52,78 +52,90 @@ export default function MyBets() {
     // Sort by event date with special logic:
     // 1. Pending games sorted by event date (upcoming first)
     // 2. Completed games sorted by event date (most recent first)
-    filtered.sort((a, b) => {
-      const aEventDate = new Date(a.eventDate);
-      const bEventDate = new Date(b.eventDate);
+    return filtered.sort((a, b) => {
+      const dateA = new Date(a.eventDate).getTime();
+      const dateB = new Date(b.eventDate).getTime();
       
-      // Both pending: upcoming games first (ascending)
+      // Both pending: earlier event first
       if (a.status === 'pending' && b.status === 'pending') {
-        return aEventDate.getTime() - bEventDate.getTime();
+        return dateA - dateB;
       }
       
       // One pending, one not: pending first
       if (a.status === 'pending' && b.status !== 'pending') return -1;
       if (a.status !== 'pending' && b.status === 'pending') return 1;
       
-      // Both completed: most recent first (descending)
-      return bEventDate.getTime() - aEventDate.getTime();
+      // Both completed: more recent first
+      return dateB - dateA;
     });
-
-    return filtered;
   }, [currentBets, statusFilter]);
 
-  const getStatusColor = (status: BetStatus) => {
-    switch(status) {
-      case 'won': return 'bg-green-100 text-green-800 border-green-200';
-      case 'lost': return 'bg-red-100 text-red-800 border-red-200';
-      case 'pending': return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'push': return 'bg-gray-100 text-gray-800 border-gray-200';
+  // Helper functions
+  const getStatusColor = (status: BetStatus): string => {
+    switch (status) {
+      case 'won': return 'bg-green-100 text-green-700 border-green-200';
+      case 'lost': return 'bg-red-100 text-red-700 border-red-200';
+      case 'push': return 'bg-gray-100 text-gray-700 border-gray-300';
+      case 'pending': return 'bg-blue-100 text-blue-700 border-blue-200';
+      default: return 'bg-gray-100 text-gray-700';
     }
   };
 
-  const getStatusIcon = (status: BetStatus) => {
-    switch(status) {
+  const getStatusIcon = (status: BetStatus): string => {
+    switch (status) {
       case 'won': return '✓';
       case 'lost': return '✗';
-      case 'pending': return '○';
       case 'push': return '—';
+      case 'pending': return '○';
+      default: return '?';
     }
   };
 
-  const getBetTypeLabel = (type: BetType) => {
-    switch(type) {
-      case 'spread': return 'Spread';
-      case 'moneyline': return 'ML';
-      case 'total': return 'O/U';
-      case 'prop': return 'Prop';
-      case 'parlay': return 'Parlay';
-      case 'future': return 'Future';
-    }
+  const formatOdds = (odds: number): string => {
+    if (odds > 0) return `+${odds}`;
+    return odds.toString();
   };
 
-  const formatOdds = (odds: number) => {
-    return odds > 0 ? `+${odds}` : odds.toString();
-  };
-
-  const formatDate = (dateString: string, showYear: boolean = false) => {
+  const formatDate = (dateString: string, includeTime: boolean = false): string => {
     const date = new Date(dateString);
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    const now = new Date();
+    const isToday = date.toDateString() === now.toDateString();
+    const isTomorrow = date.toDateString() === new Date(now.getTime() + 86400000).toDateString();
     
-    // Check if it's today or tomorrow
-    if (date.toDateString() === today.toDateString()) {
-      return 'Today';
-    } else if (date.toDateString() === tomorrow.toDateString()) {
-      return 'Tomorrow';
+    if (isToday) {
+      return includeTime ? `Today ${date.toLocaleTimeString('en-US', { 
+        hour: 'numeric', 
+        minute: '2-digit' 
+      })}` : 'Today';
     }
     
-    // Otherwise show date
+    if (isTomorrow) {
+      return includeTime ? `Tomorrow ${date.toLocaleTimeString('en-US', { 
+        hour: 'numeric', 
+        minute: '2-digit' 
+      })}` : 'Tomorrow';
+    }
+    
     return date.toLocaleDateString('en-US', { 
       month: 'short', 
       day: 'numeric',
-      year: showYear || date.getFullYear() !== today.getFullYear() ? 'numeric' : undefined
+      ...(includeTime && { 
+        hour: 'numeric', 
+        minute: '2-digit' 
+      })
     });
+  };
+
+  const getBetTypeLabel = (betType: BetType): string => {
+    switch (betType) {
+      case 'spread': return 'Spread';
+      case 'moneyline': return 'ML';
+      case 'total': return 'Total';
+      case 'future': return 'Future';
+      case 'prop': return 'Prop';
+      case 'parlay': return 'Parlay';
+      default: return betType;
+    }
   };
 
   const formatTimeRemaining = (eventDate: string): string | null => {
@@ -208,6 +220,17 @@ export default function MyBets() {
     return `/team-logos/${cleanName}.png`;
   };
 
+  // Get abbreviated team name (last word or first 3 letters)
+  const getTeamAbbr = (teamName: string) => {
+    const words = teamName.split(' ');
+    if (words.length > 1) {
+      // For multi-word names, use the last word (e.g., "Ohio State Buckeyes" → "Buckeyes")
+      return words[words.length - 1];
+    }
+    // For single word, use first 3 letters
+    return teamName.substring(0, 3).toUpperCase();
+  };
+
   const toggleExpanded = (betId: string) => {
     setExpandedBetId(expandedBetId === betId ? null : betId);
   };
@@ -286,89 +309,103 @@ export default function MyBets() {
               onClick={() => setStatusFilter(status)}
               className={`px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-colors ${
                 statusFilter === status 
-                  ? status === 'pending' ? 'bg-blue-600 text-white'
-                    : status === 'won' ? 'bg-green-600 text-white'
-                    : status === 'lost' ? 'bg-red-600 text-white'
-                    : 'bg-gray-700 text-white'
+                  ? status === 'pending' ? 'bg-blue-600 text-white' :
+                    status === 'won' ? 'bg-green-600 text-white' :
+                    status === 'lost' ? 'bg-red-600 text-white' :
+                    'bg-gray-600 text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
-              {status === 'all' ? `All (${stats.totalBets})` :
-               status === 'pending' ? `Pending (${stats.pendingBets})` :
-               status === 'won' ? `Won (${stats.wonBets})` :
-               `Lost (${stats.lostBets})`}
+              {status.charAt(0).toUpperCase() + status.slice(1)}
+              <span className="ml-1">
+                ({status === 'all' ? currentBets.length :
+                  currentBets.filter(b => b.status === status).length})
+              </span>
             </button>
           ))}
         </div>
       </div>
 
-      {/* Compact Bets List */}
+      {/* Bets List */}
       <div className="space-y-2">
         {displayedBets.length === 0 ? (
           <div className="bg-white rounded-lg shadow p-6 text-center text-gray-500">
-            No {viewType} bets found {statusFilter !== 'all' ? `with status: ${statusFilter}` : ''}
+            {statusFilter === 'all' 
+              ? `No ${viewType === 'games' ? 'game bets or parlays' : 'futures'} placed yet.`
+              : `No ${statusFilter} ${viewType === 'games' ? 'game bets or parlays' : 'futures'}.`}
           </div>
         ) : (
-          <>
-            {displayedBets.map((bet, index) => {
-              const teams = parseTeams(bet);
-              // For futures and single-team parlays, check for team field
-              const futureTeam = (bet.betType === 'future' || (bet.betType === 'parlay' && !teams)) 
-                ? bet.team 
-                : null;
-              const isExpanded = expandedBetId === bet.id;
-              const profit = bet.status === 'won' ? calculateProfit(bet.stake, bet.odds) : 
-                           bet.status === 'lost' ? -bet.stake : 0;
-              
-              // Check if we need a divider between pending and completed
-              const showDivider = index > 0 && 
-                displayedBets[index - 1].status === 'pending' && 
-                bet.status !== 'pending';
-              
-              return (
-                <React.Fragment key={bet.id}>
-                  {showDivider && (
-                    <div className="flex items-center gap-2 my-3">
-                      <div className="flex-1 h-px bg-gray-200"></div>
-                      <span className="text-xs text-gray-500 px-2">Completed</span>
-                      <div className="flex-1 h-px bg-gray-200"></div>
-                    </div>
-                  )}
-                  <div className={`bg-white rounded-lg shadow hover:shadow-md transition-shadow ${
-                    bet.status === 'pending' && formatTimeRemaining(bet.eventDate) === 'Soon' ? 'ring-2 ring-blue-400' : ''
-                  }`}>
-                    {/* Main Bet Row - All on One Line */}
-                    <div 
-                      className="p-3 cursor-pointer"
-                      onClick={() => toggleExpanded(bet.id)}
-                    >
-                      <div className="flex items-center gap-2">
-                        {/* Status Icon */}
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${getStatusColor(bet.status)}`}>
-                          {getStatusIcon(bet.status)}
-                        </div>
+          displayedBets.map(bet => {
+            const isExpanded = expandedBetId === bet.id;
+            const profit = calculateProfit(bet.stake, bet.odds, bet.status);
+            const teams = parseTeams(bet);
+            const futureTeam = bet.betType === 'future' ? bet.team : null;
 
-                        {/* Event Date - Shows prominently */}
-                        <div className="flex flex-col items-start min-w-[52px]">
-                          <span className="text-xs font-medium text-gray-700">
-                            {formatDate(bet.eventDate)}
+            return (
+              <div key={bet.id}>
+                <div className={`bg-white rounded-lg shadow border-l-4 transition-all duration-200 ${
+                  getStatusColor(bet.status).split(' ')[2]
+                } ${
+                  bet.status === 'pending' && formatTimeRemaining(bet.eventDate) === 'Soon' 
+                    ? 'ring-2 ring-blue-400' : ''
+                }`}>
+                  {/* Main Bet Row - Mobile Optimized */}
+                  <div 
+                    className="p-3 cursor-pointer"
+                    onClick={() => toggleExpanded(bet.id)}
+                  >
+                    <div className="flex items-center gap-2">
+                      {/* Status Icon */}
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${getStatusColor(bet.status)}`}>
+                        {getStatusIcon(bet.status)}
+                      </div>
+
+                      {/* Event Date - Shows prominently */}
+                      <div className="flex flex-col items-start min-w-[48px] sm:min-w-[52px]">
+                        <span className="text-xs font-medium text-gray-700">
+                          {formatDate(bet.eventDate)}
+                        </span>
+                        {bet.status === 'pending' && formatTimeRemaining(bet.eventDate) && (
+                          <span className="text-xs text-blue-500 font-medium">
+                            {formatTimeRemaining(bet.eventDate)}
                           </span>
-                          {bet.status === 'pending' && formatTimeRemaining(bet.eventDate) && (
-                            <span className="text-xs text-blue-500 font-medium">
-                              {formatTimeRemaining(bet.eventDate)}
-                            </span>
-                          )}
-                        </div>
+                        )}
+                      </div>
 
-                        {/* Sport/League Badge */}
-                        <span className="text-xs px-1.5 py-0.5 bg-gray-100 rounded text-gray-600">
+                      {/* Sport/League Badge - Hidden on mobile for games/parlays */}
+                      {(viewType === 'futures' || window.innerWidth >= 640) && (
+                        <span className="hidden sm:inline-flex text-xs px-1.5 py-0.5 bg-gray-100 rounded text-gray-600">
                           {bet.league}
                         </span>
+                      )}
 
-                        {/* Teams/Description with Logos (if available) */}
-                        <div className="flex items-center gap-1 flex-1 min-w-0">
-                          {teams ? (
-                            <>
+                      {/* Teams/Description with Logos - Mobile optimized */}
+                      <div className="flex items-center gap-1 flex-1 min-w-0">
+                        {viewType === 'games' && teams ? (
+                          <>
+                            {/* Mobile: Show logos only or with abbreviated names */}
+                            <div className="flex sm:hidden items-center gap-1">
+                              <img 
+                                src={getTeamLogo(teams.away)}
+                                alt=""
+                                className="h-5 w-5"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                }}
+                              />
+                              <span className="text-xs text-gray-400">@</span>
+                              <img 
+                                src={getTeamLogo(teams.home)}
+                                alt=""
+                                className="h-5 w-5"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                }}
+                              />
+                            </div>
+                            
+                            {/* Desktop: Show full team names with logos */}
+                            <div className="hidden sm:flex items-center gap-1">
                               <img 
                                 src={getTeamLogo(teams.away)}
                                 alt=""
@@ -388,156 +425,147 @@ export default function MyBets() {
                                 }}
                               />
                               <span className="text-sm truncate">{teams.home}</span>
-                            </>
-                          ) : futureTeam ? (
-                            <>
-                              <img 
-                                src={getTeamLogo(futureTeam)}
-                                alt=""
-                                className="h-4 w-4"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = 'none';
-                                }}
-                              />
-                              <span className="text-sm truncate">{bet.description}</span>
-                            </>
-                          ) : (
+                            </div>
+                          </>
+                        ) : futureTeam ? (
+                          <>
+                            <img 
+                              src={getTeamLogo(futureTeam)}
+                              alt=""
+                              className="h-4 w-4"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                              }}
+                            />
                             <span className="text-sm truncate">{bet.description}</span>
-                          )}
-                        </div>
+                          </>
+                        ) : (
+                          <span className="text-sm truncate">{bet.description}</span>
+                        )}
+                      </div>
 
-                        {/* Bet Type */}
-                        <span className="text-xs px-1.5 py-0.5 bg-blue-100 rounded text-blue-700 font-medium">
-                          {getBetTypeLabel(bet.betType)}
+                      {/* Bet Type */}
+                      <span className="text-xs px-1.5 py-0.5 bg-blue-100 rounded text-blue-700 font-medium">
+                        {getBetTypeLabel(bet.betType)}
+                      </span>
+
+                      {/* The Bet - Show abbreviated on mobile */}
+                      <span className="text-sm font-bold text-blue-600 min-w-[60px] sm:min-w-[80px] text-right truncate">
+                        {/* Show shorter version on mobile */}
+                        <span className="sm:hidden">
+                          {bet.bet.length > 15 ? bet.bet.substring(0, 15) + '...' : bet.bet}
                         </span>
-
-                        {/* The Bet - Show abbreviated for futures */}
-                        <span className="text-sm font-bold text-blue-600 min-w-[80px] text-right truncate">
+                        <span className="hidden sm:inline">
                           {viewType === 'futures' && bet.bet.length > 25 
                             ? bet.bet.substring(0, 25) + '...' 
                             : bet.bet}
                         </span>
+                      </span>
 
-                        {/* Odds */}
-                        <span className="text-xs text-gray-500 min-w-[40px] text-right">
+                      {/* Odds - Hidden on mobile for games/parlays */}
+                      {(viewType === 'futures' || window.innerWidth >= 640) && (
+                        <span className="hidden sm:inline text-xs text-gray-500 min-w-[40px] text-right">
                           {formatOdds(bet.odds)}
                         </span>
+                      )}
 
-                        {/* Book Logo */}
-                        {bet.book && bookmakerLogos[bet.book] && (
-                          <img 
-                            src={bookmakerLogos[bet.book]}
-                            alt={bet.book}
-                            className="h-5 w-auto"
-                          />
+                      {/* Book Logo - Always visible */}
+                      {bet.book && bookmakerLogos[bet.book] && (
+                        <img 
+                          src={bookmakerLogos[bet.book]}
+                          alt={bet.book}
+                          className="h-4 sm:h-5 w-auto"
+                        />
+                      )}
+
+                      {/* Profit/Loss Indicator - Always visible for completed bets */}
+                      {bet.status !== 'pending' && (
+                        <span className={`text-xs font-medium min-w-[40px] sm:min-w-[45px] text-right ${
+                          profit > 0 ? 'text-green-600' : profit < 0 ? 'text-red-600' : 'text-gray-500'
+                        }`}>
+                          {profit > 0 ? '+' : ''}{profit !== 0 ? profit.toFixed(2) : 'Push'}
+                        </span>
+                      )}
+
+                      {/* Expand Arrow */}
+                      <svg 
+                        className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                  </div>
+
+                  {/* Expanded Details */}
+                  {isExpanded && (
+                    <div className="px-3 pb-3 pt-0 border-t border-gray-100">
+                      <div className="mt-2 space-y-1 text-xs">
+                        {/* Show full bet description for parlays */}
+                        {bet.betType === 'parlay' && (
+                          <div className="mb-2 p-2 bg-blue-50 rounded">
+                            <span className="font-medium text-blue-800">Full Parlay:</span>
+                            <span className="block mt-1 text-blue-700">{bet.bet}</span>
+                          </div>
                         )}
-
-                        {/* Profit/Loss Indicator */}
-                        {bet.status !== 'pending' && (
-                          <span className={`text-xs font-medium min-w-[45px] text-right ${
-                            profit > 0 ? 'text-green-600' : profit < 0 ? 'text-red-600' : 'text-gray-500'
-                          }`}>
-                            {profit > 0 ? '+' : ''}{profit !== 0 ? profit.toFixed(2) : 'Push'}
-                          </span>
+                        
+                        {/* Show full team names on mobile when expanded */}
+                        {viewType === 'games' && teams && (
+                          <div className="sm:hidden mb-2 p-2 bg-gray-50 rounded">
+                            <span className="font-medium text-gray-800">Game:</span>
+                            <span className="block mt-1 text-gray-700">
+                              {teams.away} @ {teams.home}
+                            </span>
+                          </div>
                         )}
-
-                        {/* Expand Arrow */}
-                        <svg 
-                          className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
+                        
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Bet placed:</span>
+                          <span>{formatRelativeDate(bet.date)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Event date:</span>
+                          <span>{formatDate(bet.eventDate, true)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Stake:</span>
+                          <span>{bet.stake} units</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Odds:</span>
+                          <span>{formatOdds(bet.odds)}</span>
+                        </div>
+                        {bet.status === 'pending' ? (
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">To Win:</span>
+                            <span className="text-blue-600">
+                              {calculateProfit(bet.stake, bet.odds).toFixed(2)} units
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">Result:</span>
+                            <span className={profit > 0 ? 'text-green-600' : profit < 0 ? 'text-red-600' : 'text-gray-500'}>
+                              {profit > 0 ? `+${profit.toFixed(2)}` : profit < 0 ? profit.toFixed(2) : 'Push'} units
+                            </span>
+                          </div>
+                        )}
+                        {bet.notes && (
+                          <div className="mt-2 p-2 bg-gray-50 rounded">
+                            <span className="font-medium text-gray-700">Notes:</span>
+                            <p className="mt-1 text-gray-600">{bet.notes}</p>
+                          </div>
+                        )}
                       </div>
                     </div>
-
-                    {/* Expanded Details */}
-                    {isExpanded && (
-                      <div className="px-3 pb-3 pt-0 border-t border-gray-100">
-                        <div className="mt-2 space-y-1 text-xs">
-                          {/* Show full bet description for parlays */}
-                          {bet.betType === 'parlay' && (
-                            <div className="mb-2 p-2 bg-blue-50 rounded">
-                              <span className="font-medium text-blue-800">Full Parlay:</span>
-                              <span className="block mt-1 text-blue-700">{bet.bet}</span>
-                            </div>
-                          )}
-                          <div className="flex justify-between">
-                            <span className="text-gray-500">Bet placed:</span>
-                            <span>{formatRelativeDate(bet.date)}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-500">Event date:</span>
-                            <span>{formatDate(bet.eventDate, true)}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-500">Stake:</span>
-                            <span>{bet.stake} units</span>
-                          </div>
-                          {bet.status === 'pending' ? (
-                            <div className="flex justify-between">
-                              <span className="text-gray-500">To Win:</span>
-                              <span className="text-blue-600">
-                                {calculateProfit(bet.stake, bet.odds).toFixed(2)} units
-                              </span>
-                            </div>
-                          ) : (
-                            <div className="flex justify-between">
-                              <span className="text-gray-500">Result:</span>
-                              <span className={profit > 0 ? 'text-green-600' : profit < 0 ? 'text-red-600' : 'text-gray-600'}>
-                                {profit > 0 ? '+' : ''}{profit.toFixed(2)} units
-                              </span>
-                            </div>
-                          )}
-                          {bet.result && bet.result !== 'pending' && (
-                            <div className="flex justify-between">
-                              <span className="text-gray-500">Score:</span>
-                              <span>{bet.result}</span>
-                            </div>
-                          )}
-                          {bet.notes && (
-                            <div className="mt-2 p-2 bg-gray-50 rounded">
-                              <span className="text-gray-600 italic">{bet.notes}</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </React.Fragment>
-              );
-            })}
-          </>
+                  )}
+                </div>
+              </div>
+            );
+          })
         )}
-      </div>
-
-      {/* Quick Stats Summary */}
-      {stats.pendingBets > 0 && (
-        <div className="bg-blue-50 rounded-lg p-3 text-xs">
-          <div className="flex justify-between items-center">
-            <span className="text-blue-700">
-              Pending: {stats.pendingStake.toFixed(2)} units at risk
-            </span>
-            <span className="text-blue-700 font-medium">
-              Potential return: {(stats.pendingPotentialPayout).toFixed(2)} units 
-              (+{stats.pendingPotentialProfit.toFixed(2)})
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* Overall Stats Summary (optional - shows combined stats) */}
-      <div className="bg-gray-50 rounded-lg p-3 text-xs">
-        <div className="flex justify-between items-center">
-          <span className="text-gray-600">
-            Overall: {overallStats.totalBets} bets • {overallStats.wonBets}W-{overallStats.lostBets}L-{overallStats.pushBets}P
-          </span>
-          <span className="text-gray-700 font-medium">
-            Total pending: {overallStats.pendingStake.toFixed(2)} units
-          </span>
-        </div>
       </div>
     </div>
   );
