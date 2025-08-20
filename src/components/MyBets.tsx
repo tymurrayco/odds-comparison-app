@@ -438,8 +438,8 @@ export default function MyBets() {
                         )}
                       </div>
 
-                      {/* Bet Type */}
-                      <span className="text-xs px-1.5 py-0.5 bg-blue-100 rounded text-blue-700 font-medium">
+                      {/* Bet Type - Hidden on mobile, visible on desktop */}
+                      <span className="hidden sm:inline-flex text-xs px-1.5 py-0.5 bg-blue-100 rounded text-blue-700 font-medium">
                         {getBetTypeLabel(bet.betType)}
                       </span>
 
@@ -514,6 +514,14 @@ export default function MyBets() {
                             </span>
                           </div>
                         )}
+                        
+                        {/* Show bet type on mobile when expanded */}
+                        <div className="sm:hidden flex justify-between mb-1">
+                          <span className="text-gray-500">Bet type:</span>
+                          <span className="px-1.5 py-0.5 bg-blue-100 rounded text-blue-700 font-medium text-xs">
+                            {getBetTypeLabel(bet.betType)}
+                          </span>
+                        </div>
                         
                         <div className="flex justify-between">
                           <span className="text-gray-500">Bet placed:</span>
