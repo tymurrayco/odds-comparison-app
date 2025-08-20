@@ -336,7 +336,7 @@ export default function Home() {
                       <button
                         onClick={() => setActiveView('games')}
                         className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                          effectiveView === 'games'
+                          activeView === 'games'
                             ? 'bg-blue-600 text-white'
                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                         }`}
@@ -346,7 +346,7 @@ export default function Home() {
                       <button
                         onClick={() => setActiveView('futures')}
                         className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                          effectiveView === 'futures'
+                          activeView === 'futures'
                             ? 'bg-blue-600 text-white'
                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                         }`}
