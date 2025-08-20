@@ -303,7 +303,7 @@ export const myBets: Bet[] = [
     awayTeam: 'East Carolina Pirates',
     homeTeam: 'NC State Wolfpack',
     betType: 'spread',
-    bet: 'East Carolina +12.5',
+    bet: 'ECU +12.5',
     odds: -110,
     stake: 1.10,
     status: 'pending',
