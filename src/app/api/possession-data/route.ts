@@ -56,7 +56,7 @@ function parsePossessionTable(html: string): PossessionData[] {
   const rowMatches = [...tableContent.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)];
   
   // Find header row to get column indices
-  let headerIndices: any = {};
+  const headerIndices: any = {};
   let foundHeader = false;
   
   for (const rowMatch of rowMatches) {

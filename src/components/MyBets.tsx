@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { myBets, getBetStats, calculatePayout, calculateProfit, Bet, BetStatus, BetType } from '@/lib/myBets';
+import { myBets, getBetStats, calculateProfit, Bet, BetStatus, BetType } from '@/lib/myBets';
 
 // Bookmaker logos mapping
 const bookmakerLogos: { [key: string]: string } = {
