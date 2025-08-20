@@ -375,7 +375,7 @@ export default function MyBets() {
 
                       {/* Teams/Description with Logos - Mobile optimized */}
                       <div className={`flex items-center gap-1 min-w-0 ${
-                        viewType === 'futures' ? '' : 'flex-1'
+                        viewType === 'games' ? 'flex-1' : ''
                       }`}>
                         {viewType === 'games' && teams ? (
                           <>
@@ -493,7 +493,9 @@ export default function MyBets() {
 
                       {/* Profit/Loss Indicator - Always visible for completed bets */}
                       {bet.status !== 'pending' && (
-                        <span className={`text-xs font-medium min-w-[40px] sm:min-w-[45px] text-right ${
+                        <span className={`text-xs font-medium text-right ${
+                          viewType === 'futures' ? 'hidden sm:inline min-w-[40px] sm:min-w-[45px]' : 'min-w-[40px] sm:min-w-[45px]'
+                        } ${
                           profit > 0 ? 'text-green-600' : profit < 0 ? 'text-red-600' : 'text-gray-500'
                         }`}>
                           {profit > 0 ? '+' : ''}{profit !== 0 ? profit.toFixed(2) : 'Push'}
@@ -541,9 +543,9 @@ export default function MyBets() {
                         {/* Show full future description on mobile when expanded */}
                         {viewType === 'futures' && (
                           <div className="sm:hidden mb-2 p-2 bg-gray-50 rounded">
-                            <span className="font-medium text-gray-800">Future bet:</span>
+                            <span className="font-medium text-gray-800">Full bet:</span>
                             <span className="block mt-1 text-gray-700">
-                              {bet.description}
+                              {bet.bet}
                             </span>
                             <div className="mt-2 flex justify-between text-xs">
                               <span className="text-gray-500">League:</span>
