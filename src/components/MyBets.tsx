@@ -366,12 +366,12 @@ export default function MyBets() {
                         )}
                       </div>
 
-                      {/* Sport/League Badge - Hidden on mobile for games/parlays */}
-                      {(viewType === 'futures' || window.innerWidth >= 640) && (
-                        <span className="hidden sm:inline-flex text-xs px-1.5 py-0.5 bg-gray-100 rounded text-gray-600">
-                          {bet.league}
-                        </span>
-                      )}
+                      {/* Sport/League Badge - Hidden on mobile for games/parlays, visible for futures */}
+                      <span className={`text-xs px-1.5 py-0.5 bg-gray-100 rounded text-gray-600 ${
+                        viewType === 'futures' ? 'inline-flex' : 'hidden sm:inline-flex'
+                      }`}>
+                        {bet.league}
+                      </span>
 
                       {/* Teams/Description with Logos - Mobile optimized */}
                       <div className="flex items-center gap-1 flex-1 min-w-0">
@@ -423,31 +423,50 @@ export default function MyBets() {
                           </>
                         ) : futureTeam ? (
                           <>
-                            <img 
-                              src={getTeamLogo(futureTeam)}
-                              alt=""
-                              className="h-4 w-4"
-                              onError={(e) => {
-                                e.currentTarget.style.display = 'none';
-                              }}
-                            />
-                            <span className="text-sm truncate">{bet.description}</span>
+                            {/* Mobile: Show logo only for futures */}
+                            <div className="flex sm:hidden items-center gap-1">
+                              <img 
+                                src={getTeamLogo(futureTeam)}
+                                alt=""
+                                className="h-5 w-5"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                }}
+                              />
+                            </div>
+                            
+                            {/* Desktop: Show logo and full description for futures */}
+                            <div className="hidden sm:flex items-center gap-1">
+                              <img 
+                                src={getTeamLogo(futureTeam)}
+                                alt=""
+                                className="h-4 w-4"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                }}
+                              />
+                              <span className="text-sm truncate">{bet.description}</span>
+                            </div>
                           </>
                         ) : (
                           <span className="text-sm truncate">{bet.description}</span>
                         )}
                       </div>
 
-                      {/* Bet Type - Hidden on mobile, visible on desktop */}
+                      {/* Bet Type - Hidden on mobile for both views, visible on desktop */}
                       <span className="hidden sm:inline-flex text-xs px-1.5 py-0.5 bg-blue-100 rounded text-blue-700 font-medium">
                         {getBetTypeLabel(bet.betType)}
                       </span>
 
                       {/* The Bet - Show abbreviated on mobile */}
                       <span className="text-sm font-bold text-blue-600 min-w-[60px] sm:min-w-[80px] text-right truncate">
-                        {/* Show shorter version on mobile */}
+                        {/* Show shorter version on mobile for games, longer for futures */}
                         <span className="sm:hidden">
-                          {bet.bet.length > 15 ? bet.bet.substring(0, 15) + '...' : bet.bet}
+                          {viewType === 'games' && bet.bet.length > 15 
+                            ? bet.bet.substring(0, 15) + '...' 
+                            : viewType === 'futures' && bet.bet.length > 30
+                            ? bet.bet.substring(0, 30) + '...'
+                            : bet.bet}
                         </span>
                         <span className="hidden sm:inline">
                           {viewType === 'futures' && bet.bet.length > 25 
@@ -456,12 +475,12 @@ export default function MyBets() {
                         </span>
                       </span>
 
-                      {/* Odds - Hidden on mobile for games/parlays */}
-                      {(viewType === 'futures' || window.innerWidth >= 640) && (
-                        <span className="hidden sm:inline text-xs text-gray-500 min-w-[40px] text-right">
-                          {formatOdds(bet.odds)}
-                        </span>
-                      )}
+                      {/* Odds - Hidden on mobile for games/parlays, visible for futures */}
+                      <span className={`text-xs text-gray-500 min-w-[40px] text-right ${
+                        viewType === 'futures' ? 'inline-flex' : 'hidden sm:inline'
+                      }`}>
+                        {formatOdds(bet.odds)}
+                      </span>
 
                       {/* Book Logo - Always visible */}
                       {bet.book && bookmakerLogos[bet.book] && (
@@ -511,6 +530,16 @@ export default function MyBets() {
                             <span className="font-medium text-gray-800">Game:</span>
                             <span className="block mt-1 text-gray-700">
                               {teams.away} @ {teams.home}
+                            </span>
+                          </div>
+                        )}
+                        
+                        {/* Show full future description on mobile when expanded */}
+                        {viewType === 'futures' && (
+                          <div className="sm:hidden mb-2 p-2 bg-gray-50 rounded">
+                            <span className="font-medium text-gray-800">Future bet:</span>
+                            <span className="block mt-1 text-gray-700">
+                              {bet.description}
                             </span>
                           </div>
                         )}
