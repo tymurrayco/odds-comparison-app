@@ -255,8 +255,8 @@ export async function fetchFEIData(): Promise<FEITeamData[]> {
       throw new Error('Failed to fetch FEI data');
     }
     
-    const feiData: FEITeamData[] = await feiResponse.json();
-    let possessionData: any[] = [];
+ const feiData: FEITeamData[] = await feiResponse.json();
+let possessionData: PossessionData[] = [];
     
     if (possessionResponse.ok) {
       possessionData = await possessionResponse.json();
