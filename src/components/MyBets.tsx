@@ -323,7 +323,15 @@ export default function MyBets() {
         ) : (
           displayedBets.map(bet => {
             const isExpanded = expandedBetId === bet.id;
-            const profit = calculateProfit(bet.stake, bet.odds, bet.status);
+            // Calculate actual profit/loss based on status
+            let profit = 0;
+            if (bet.status === 'won') {
+              profit = calculateProfit(bet.stake, bet.odds);
+            } else if (bet.status === 'lost') {
+              profit = -bet.stake;
+            }
+            // status === 'push' or 'pending' remains 0
+            
             const teams = parseTeams(bet);
             const futureTeam = bet.betType === 'future' ? bet.team : null;
 
