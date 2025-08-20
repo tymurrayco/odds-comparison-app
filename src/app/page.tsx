@@ -360,9 +360,9 @@ export default function Home() {
                 {/* Conference Filter - only show for supported sports */}
                 {supportsConferenceFilter && (
                   <ConferenceFilter
-                    sport={activeLeague}
+                    activeLeague={activeLeague}
                     selectedConferences={selectedConferences}
-                    onConferenceChange={setSelectedConferences}
+                    onConferencesChange={setSelectedConferences}
                   />
                 )}
                 
