@@ -460,16 +460,19 @@ export default function MyBets() {
                         {getBetTypeLabel(bet.betType)}
                       </span>
 
-                      {/* The Bet - Show abbreviated on mobile */}
-                      <span className="text-sm font-bold text-blue-600 min-w-[60px] sm:min-w-[80px] text-right truncate">
-                        {/* Show shorter version on mobile for games, longer for futures */}
+                      {/* The Bet/Description - Different fields for mobile futures */}
+                      <span className={`text-sm font-bold text-blue-600 truncate ${
+                        viewType === 'futures' 
+                          ? 'flex-1 text-left sm:text-right' 
+                          : 'min-w-[60px] sm:min-w-[80px] text-right'
+                      }`}>
+                        {/* MOBILE: Show DESCRIPTION for futures, BET for games */}
                         <span className="sm:hidden">
-                          {viewType === 'games' && bet.bet.length > 15 
-                            ? bet.bet.substring(0, 15) + '...' 
-                            : viewType === 'futures' && bet.bet.length > 30
-                            ? bet.bet.substring(0, 30) + '...'
-                            : bet.bet}
+                          {viewType === 'games' 
+                            ? (bet.bet.length > 15 ? bet.bet.substring(0, 15) + '...' : bet.bet)
+                            : bet.description}
                         </span>
+                        {/* DESKTOP: Always show BET field */}
                         <span className="hidden sm:inline">
                           {viewType === 'futures' && bet.bet.length > 25 
                             ? bet.bet.substring(0, 25) + '...' 
