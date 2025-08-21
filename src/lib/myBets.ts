@@ -144,7 +144,7 @@ export const myBets: Bet[] = [
     stake: 1.05,
     status: 'pending',
     result: 'pending',
-    notes: 'Totally different Bearkats team this year. Offense should put up way more points. WKU should also be good on offense. Western Illinois QB transfer bringing his OC. Bearkat defense may be terrible',
+    notes: 'Totally different Bearkats team this year. Offense should put up way more points. WKU should also be good on offense. Abilene Christian QB transfer bringing his OC. Bearkat defense may be terrible',
     book: 'FanDuel'
   },
          {
