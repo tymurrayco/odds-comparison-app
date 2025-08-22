@@ -124,10 +124,17 @@ export default function MyBets() {
   };
 
   const formatDate = (dateString: string, includeTime: boolean = false): string => {
-    const date = new Date(dateString);
+    // Parse as local date by adding time component to avoid UTC interpretation
+    const date = new Date(dateString + 'T00:00:00');
     const now = new Date();
-    const isToday = date.toDateString() === now.toDateString();
-    const isTomorrow = date.toDateString() === new Date(now.getTime() + 86400000).toDateString();
+    
+    // Set both dates to start of day for comparison
+    const dateStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const tomorrowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    
+    const isToday = dateStart.getTime() === todayStart.getTime();
+    const isTomorrow = dateStart.getTime() === tomorrowStart.getTime();
     
     if (isToday) {
       return includeTime ? `Today ${date.toLocaleTimeString('en-US', { 
@@ -166,9 +173,15 @@ export default function MyBets() {
   };
 
   const formatTimeRemaining = (eventDate: string): string | null => {
+    // Parse as local date by adding time component
+    const event = new Date(eventDate + 'T00:00:00');
     const now = new Date();
-    const event = new Date(eventDate);
-    const diff = event.getTime() - now.getTime();
+    
+    // Set event to start of its day for consistent comparison
+    const eventStart = new Date(event.getFullYear(), event.getMonth(), event.getDate());
+    const nowTime = now.getTime();
+    
+    const diff = eventStart.getTime() - nowTime;
     
     if (diff < 0) return null; // Event has passed
     
@@ -179,6 +192,8 @@ export default function MyBets() {
       return 'Soon';
     } else if (hours < 24) {
       return `${hours}h`;
+    } else if (days === 1) {
+      return '1d';  // More accurate for exactly 1 day
     } else if (days <= 7) {
       return `${days}d`;
     } else if (days <= 30) {
@@ -191,7 +206,8 @@ export default function MyBets() {
   };
 
   const formatRelativeDate = (dateString: string): string => {
-    const date = new Date(dateString);
+    // Parse as local date
+    const date = new Date(dateString + 'T00:00:00');
     const now = new Date();
     const diff = now.getTime() - date.getTime();
     

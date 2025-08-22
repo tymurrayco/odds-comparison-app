@@ -10,14 +10,22 @@ export default function BetAdminPage() {
   const [bets, setBets] = useState<Bet[]>([]);
   const [loading, setLoading] = useState(false);
   const [editingBet, setEditingBet] = useState<Bet | null>(null);
-  const [showForm, setShowForm] = useState(false); // Start closed on mobil
+  const [showForm, setShowForm] = useState(false); // Start closed on mobile
   const [filter, setFilter] = useState<'all' | 'pending' | 'completed'>('pending');
   const [view, setView] = useState<'form' | 'list'>('list'); // Mobile view toggle
   
+  // Format date for display in form (YYYY-MM-DD for input fields)
+  const formatDateForInput = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+  
   // Form state with better defaults
   const getInitialFormState = () => ({
-    date: new Date().toISOString().split('T')[0],
-    eventDate: new Date().toISOString().split('T')[0],
+    date: formatDateForInput(new Date()),
+    eventDate: formatDateForInput(new Date()),
     sport: 'Football',
     league: 'NCAAF',
     description: '',
@@ -157,13 +165,17 @@ export default function BetAdminPage() {
     if (filter === 'completed') return bet.status !== 'pending';
     return true;
   }).sort((a, b) => {
+    // Parse dates as local dates for consistent sorting
+    const dateA = new Date(a.eventDate + 'T00:00:00').getTime();
+    const dateB = new Date(b.eventDate + 'T00:00:00').getTime();
+    
     // Pending bets: sort by event date (earliest first)
     if (a.status === 'pending' && b.status === 'pending') {
-      return new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime();
+      return dateA - dateB;
     }
     // Completed bets: sort by event date (most recent first)
     if (a.status !== 'pending' && b.status !== 'pending') {
-      return new Date(b.eventDate).getTime() - new Date(a.eventDate).getTime();
+      return dateB - dateA;
     }
     // Pending before completed
     return a.status === 'pending' ? -1 : 1;
@@ -262,7 +274,7 @@ export default function BetAdminPage() {
                   onClick={() => {
                     const tomorrow = new Date();
                     tomorrow.setDate(tomorrow.getDate() + 1);
-                    setFormData({...formData, eventDate: tomorrow.toISOString().split('T')[0]});
+                    setFormData({...formData, eventDate: formatDateForInput(tomorrow)});
                   }}
                   className="px-3 py-2 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200"
                 >
@@ -534,7 +546,7 @@ export default function BetAdminPage() {
                     <div className="flex-1">
                       <div className="font-medium text-sm">{bet.description}</div>
                       <div className="text-xs text-gray-500 mt-1">
-                        {new Date(bet.eventDate).toLocaleDateString('en-US', {
+                        {new Date(bet.eventDate + 'T00:00:00').toLocaleDateString('en-US', {
                           month: 'short',
                           day: 'numeric'
                         })} • {bet.league}
@@ -611,7 +623,7 @@ export default function BetAdminPage() {
                   {filteredBets.map((bet) => (
                     <tr key={bet.id} className="border-b hover:bg-gray-50">
                       <td className="p-2">
-                        {new Date(bet.eventDate).toLocaleDateString('en-US', {
+                        {new Date(bet.eventDate + 'T00:00:00').toLocaleDateString('en-US', {
                           month: 'short',
                           day: 'numeric'
                         })}
