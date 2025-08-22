@@ -10,7 +10,7 @@ export default function BetAdminPage() {
   const [bets, setBets] = useState<Bet[]>([]);
   const [loading, setLoading] = useState(false);
   const [editingBet, setEditingBet] = useState<Bet | null>(null);
-  const [showForm, setShowForm] = useState(false); // Start closed on mobile
+  const [showForm, setShowForm] = useState(false); // Start closed on mobil
   const [filter, setFilter] = useState<'all' | 'pending' | 'completed'>('pending');
   const [view, setView] = useState<'form' | 'list'>('list'); // Mobile view toggle
   
