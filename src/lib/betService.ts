@@ -100,7 +100,26 @@ export async function createBet(bet: Omit<Bet, 'id'>) {
 
 // Update an existing bet
 export async function updateBet(id: string, updates: Partial<Bet>) {
-  const dbUpdates: any = {};
+  interface DbUpdate {
+    date?: string;
+    event_date?: string;
+    sport?: string;
+    league?: string;
+    description?: string;
+    away_team?: string | null;
+    home_team?: string | null;
+    team?: string | null;
+    bet_type?: BetType;
+    bet?: string;
+    odds?: number;
+    stake?: number;
+    status?: BetStatus;
+    result?: string | null;
+    book?: string | null;
+    notes?: string | null;
+  }
+  
+  const dbUpdates: DbUpdate = {};
   
   // Only add fields that are being updated
   if (updates.date !== undefined) dbUpdates.date = updates.date;
@@ -108,17 +127,17 @@ export async function updateBet(id: string, updates: Partial<Bet>) {
   if (updates.sport !== undefined) dbUpdates.sport = updates.sport;
   if (updates.league !== undefined) dbUpdates.league = updates.league;
   if (updates.description !== undefined) dbUpdates.description = updates.description;
-  if (updates.awayTeam !== undefined) dbUpdates.away_team = updates.awayTeam;
-  if (updates.homeTeam !== undefined) dbUpdates.home_team = updates.homeTeam;
-  if (updates.team !== undefined) dbUpdates.team = updates.team;
+  if (updates.awayTeam !== undefined) dbUpdates.away_team = updates.awayTeam || null;
+  if (updates.homeTeam !== undefined) dbUpdates.home_team = updates.homeTeam || null;
+  if (updates.team !== undefined) dbUpdates.team = updates.team || null;
   if (updates.betType !== undefined) dbUpdates.bet_type = updates.betType;
   if (updates.bet !== undefined) dbUpdates.bet = updates.bet;
   if (updates.odds !== undefined) dbUpdates.odds = updates.odds;
   if (updates.stake !== undefined) dbUpdates.stake = updates.stake;
   if (updates.status !== undefined) dbUpdates.status = updates.status;
-  if (updates.result !== undefined) dbUpdates.result = updates.result;
-  if (updates.book !== undefined) dbUpdates.book = updates.book;
-  if (updates.notes !== undefined) dbUpdates.notes = updates.notes;
+  if (updates.result !== undefined) dbUpdates.result = updates.result || null;
+  if (updates.book !== undefined) dbUpdates.book = updates.book || null;
+  if (updates.notes !== undefined) dbUpdates.notes = updates.notes || null;
 
   const { data, error } = await supabase
     .from('bets')
