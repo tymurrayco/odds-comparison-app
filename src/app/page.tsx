@@ -1,7 +1,8 @@
-// src/app/page.tsx (modified with My Bets tab - COMPLETE FILE)
+// src/app/page.tsx (modified with My Bets tab and Press-and-Hold Admin Access)
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { fetchOdds, fetchFutures, Game, FuturesMarket } from '@/lib/api';
 import LeagueNav from '@/components/LeagueNav';
 import GameCard from '@/components/GameCard';
@@ -27,6 +28,10 @@ const isValidCache = <T,>(cache: { [league: string]: CacheItem<T> }, league: str
 };
 
 export default function Home() {
+  const router = useRouter();
+  const pressTimer = useRef<NodeJS.Timeout | null>(null);
+  const [isHolding, setIsHolding] = useState(false);
+  
   const [activeLeague, setActiveLeague] = useState('basketball_nba');
   const [activeView, setActiveView] = useState<'games' | 'futures' | 'mybets'>('games'); // Added 'mybets'
   const [games, setGames] = useState<Game[]>([]);
@@ -238,16 +243,67 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
             <h1 className="text-xl font-bold text-blue-600">odds.day</h1>
-            {/* My Bets Tab Button - Positioned in header */}
+            {/* My Bets Tab Button with Press-and-Hold for Admin Access */}
             <button
-              onClick={() => setActiveView(activeView === 'mybets' ? 'games' : 'mybets')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              onMouseDown={(e) => {
+                e.preventDefault();
+                setIsHolding(true);
+                console.log('Starting hold timer...'); // Debug log
+                // Start 2-second timer for admin access
+                pressTimer.current = setTimeout(() => {
+                  console.log('Timer completed! Navigating to admin...'); // Debug log
+                  setIsHolding(false);
+                  router.push('/admin/bets');
+                }, 2000);
+              }}
+              onMouseUp={() => {
+                console.log('Mouse up, clearing timer'); // Debug log
+                setIsHolding(false);
+                // If timer exists and hasn't fired yet, do normal toggle
+                if (pressTimer.current) {
+                  clearTimeout(pressTimer.current);
+                  pressTimer.current = null;
+                  setActiveView(activeView === 'mybets' ? 'games' : 'mybets');
+                }
+              }}
+              onMouseLeave={() => {
+                console.log('Mouse left button, clearing timer'); // Debug log
+                setIsHolding(false);
+                // Cancel timer if mouse leaves button
+                if (pressTimer.current) {
+                  clearTimeout(pressTimer.current);
+                  pressTimer.current = null;
+                }
+              }}
+              onTouchStart={(e) => {
+                e.preventDefault();
+                setIsHolding(true);
+                console.log('Touch start, starting timer...'); // Debug log
+                // Start 2-second timer for admin access (mobile)
+                pressTimer.current = setTimeout(() => {
+                  console.log('Touch timer completed! Navigating to admin...'); // Debug log
+                  setIsHolding(false);
+                  router.push('/admin/bets');
+                }, 2000);
+              }}
+              onTouchEnd={() => {
+                console.log('Touch end, clearing timer'); // Debug log
+                setIsHolding(false);
+                // If timer exists and hasn't fired yet, do normal toggle (mobile)
+                if (pressTimer.current) {
+                  clearTimeout(pressTimer.current);
+                  pressTimer.current = null;
+                  setActiveView(activeView === 'mybets' ? 'games' : 'mybets');
+                }
+              }}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-all select-none ${
                 activeView === 'mybets'
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
+              } ${isHolding ? 'scale-95 ring-2 ring-blue-400' : ''}`}
+              style={{ userSelect: 'none' }}
             >
-              📊 Bets
+              📊 Bets {isHolding && '...'}
             </button>
           </div>
         </div>

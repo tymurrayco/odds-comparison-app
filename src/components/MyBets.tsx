@@ -1,10 +1,12 @@
 // src/components/MyBets.tsx
+// Updated to fetch from Supabase while keeping ALL existing functionality
+
 'use client';
 
-import React, { useState, useMemo } from 'react';
-import { myBets, getBetStats, calculateProfit, Bet, BetStatus, BetType } from '@/lib/myBets';
+import React, { useState, useMemo, useEffect } from 'react';
+import { fetchBets, getBetStats, calculateProfit, Bet, BetStatus, BetType } from '@/lib/betService';
 
-// Bookmaker logos mapping
+// Bookmaker logos mapping - KEPT FROM YOUR ORIGINAL
 const bookmakerLogos: { [key: string]: string } = {
   'DraftKings': '/bookmaker-logos/draftkings.png',
   'FanDuel': '/bookmaker-logos/fd.png',
@@ -13,11 +15,36 @@ const bookmakerLogos: { [key: string]: string } = {
 };
 
 export default function MyBets() {
+  // NEW: State for Supabase data
+  const [myBets, setMyBets] = useState<Bet[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
+  // KEPT: All your existing state
   const [statusFilter, setStatusFilter] = useState<BetStatus | 'all'>('all');
   const [expandedBetId, setExpandedBetId] = useState<string | null>(null);
   const [viewType, setViewType] = useState<'games' | 'futures'>('games');
 
-  // Separate bets into games and futures
+  // NEW: Fetch bets from Supabase on mount
+  useEffect(() => {
+    loadBets();
+  }, []);
+
+  const loadBets = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const fetchedBets = await fetchBets();
+      setMyBets(fetchedBets);
+    } catch (err) {
+      console.error('Error loading bets:', err);
+      setError('Failed to load bets. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // KEPT: Separate bets into games and futures (exactly as you had it)
   const gameBets = useMemo(() => {
     return myBets.filter(bet => 
       bet.betType === 'spread' || 
@@ -26,21 +53,21 @@ export default function MyBets() {
       bet.betType === 'prop' ||
       bet.betType === 'parlay'  // Moved parlays to games
     );
-  }, []);
+  }, [myBets]); // Changed dependency from [] to [myBets]
 
   const futureBets = useMemo(() => {
     return myBets.filter(bet => 
       bet.betType === 'future'  // Only futures here now
     );
-  }, []);
+  }, [myBets]); // Changed dependency from [] to [myBets]
 
-  // Get the right set of bets based on view
+  // KEPT: Get the right set of bets based on view
   const currentBets = viewType === 'games' ? gameBets : futureBets;
 
-  // Calculate stats for current view
+  // KEPT: Calculate stats for current view
   const stats = useMemo(() => getBetStats(currentBets), [currentBets]);
 
-  // Filter and sort bets
+  // KEPT: Filter and sort bets (exactly as you had it)
   const displayedBets = useMemo(() => {
     let filtered = [...currentBets];
     
@@ -70,7 +97,7 @@ export default function MyBets() {
     });
   }, [currentBets, statusFilter]);
 
-  // Helper functions
+  // KEPT: All your helper functions exactly as they were
   const getStatusColor = (status: BetStatus): string => {
     switch (status) {
       case 'won': return 'bg-green-100 text-green-700 border-green-200';
@@ -184,7 +211,7 @@ export default function MyBets() {
     }
   };
 
-  // Parse teams from description
+  // KEPT: Parse teams from description
   const parseTeams = (bet: Bet) => {
     // Don't parse teams for futures - they use the team field instead
     if (bet.betType === 'future') {
@@ -224,6 +251,31 @@ export default function MyBets() {
     setExpandedBetId(expandedBetId === betId ? null : betId);
   };
 
+  // NEW: Loading state
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-[400px]">
+        <div className="text-gray-500">Loading bets...</div>
+      </div>
+    );
+  }
+
+  // NEW: Error state
+  if (error) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+        <p className="text-red-600">{error}</p>
+        <button 
+          onClick={loadBets}
+          className="mt-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  // KEPT: Your entire render logic exactly as it was
   return (
     <div className="space-y-4">
       {/* View Toggle */}
@@ -258,7 +310,7 @@ export default function MyBets() {
         </div>
       </div>
 
-      {/* Compact Stats Bar */}
+      {/* Compact Stats Bar - KEPT EXACTLY AS IS */}
       <div className="bg-white rounded-lg shadow p-3">
         <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
           <div className="flex items-center gap-4">
@@ -286,7 +338,7 @@ export default function MyBets() {
         </div>
       </div>
 
-      {/* Filter Tabs */}
+      {/* Filter Tabs - KEPT EXACTLY AS IS */}
       <div className="bg-white rounded-lg shadow p-2">
         <div className="flex gap-1 overflow-x-auto">
           {(['all', 'pending', 'won', 'lost'] as const).map(status => (
@@ -312,7 +364,7 @@ export default function MyBets() {
         </div>
       </div>
 
-      {/* Bets List */}
+      {/* Bets List - KEPT YOUR ENTIRE COMPLEX RENDER LOGIC */}
       <div className="space-y-2">
         {displayedBets.length === 0 ? (
           <div className="bg-white rounded-lg shadow p-6 text-center text-gray-500">
@@ -343,7 +395,7 @@ export default function MyBets() {
                   bet.status === 'pending' && formatTimeRemaining(bet.eventDate) === 'Soon' 
                     ? 'ring-2 ring-blue-400' : ''
                 }`}>
-                  {/* Main Bet Row - Mobile Optimized */}
+                  {/* Main Bet Row - Mobile Optimized - KEPT EXACTLY AS IS */}
                   <div 
                     className="p-3 cursor-pointer"
                     onClick={() => toggleExpanded(bet.id)}
@@ -517,7 +569,7 @@ export default function MyBets() {
                     </div>
                   </div>
 
-                  {/* Expanded Details */}
+                  {/* Expanded Details - KEPT EXACTLY AS IS */}
                   {isExpanded && (
                     <div className="px-3 pb-3 pt-0 border-t border-gray-100">
                       <div className="mt-2 space-y-1 text-xs">
