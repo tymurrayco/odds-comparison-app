@@ -1,4 +1,4 @@
-// src/app/admin/bets/page.tsx - Mobile-Optimized Version
+// src/app/admin/bets/page.tsx - Mobile-Optimized Version with 24-Hour Indicator
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -20,6 +20,23 @@ export default function BetAdminPage() {
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
+  };
+  
+  // Check if event is today or tomorrow
+  const isWithin24Hours = (eventDate: string): boolean => {
+    const event = new Date(eventDate + 'T00:00:00');
+    const now = new Date();
+    
+    // Get start of today
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    // Get start of day after tomorrow (so we can check today and tomorrow)
+    const dayAfterTomorrow = new Date(todayStart);
+    dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 2);
+    
+    // Check if event is today or tomorrow
+    const eventTime = event.getTime();
+    return eventTime >= todayStart.getTime() && eventTime < dayAfterTomorrow.getTime();
   };
   
   // Form state with better defaults
@@ -545,7 +562,13 @@ export default function BetAdminPage() {
                   <div className="flex justify-between items-start mb-2">
                     <div className="flex-1">
                       <div className="font-medium text-sm">{bet.description}</div>
-                      <div className="text-xs text-gray-500 mt-1">
+                      <div className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                        {isWithin24Hours(bet.eventDate) && bet.status === 'pending' && (
+                          <span 
+                            className="inline-block w-2 h-2 bg-orange-500 rounded-full animate-pulse" 
+                            title="Within 24 hours"
+                          />
+                        )}
                         {new Date(bet.eventDate + 'T00:00:00').toLocaleDateString('en-US', {
                           month: 'short',
                           day: 'numeric'
@@ -623,10 +646,20 @@ export default function BetAdminPage() {
                   {filteredBets.map((bet) => (
                     <tr key={bet.id} className="border-b hover:bg-gray-50">
                       <td className="p-2">
-                        {new Date(bet.eventDate + 'T00:00:00').toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric'
-                        })}
+                        <div className="flex items-center gap-1">
+                          {isWithin24Hours(bet.eventDate) && bet.status === 'pending' && (
+                            <span 
+                              className="inline-block w-2 h-2 bg-orange-500 rounded-full animate-pulse" 
+                              title="Within 24 hours"
+                            />
+                          )}
+                          <span>
+                            {new Date(bet.eventDate + 'T00:00:00').toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric'
+                            })}
+                          </span>
+                        </div>
                       </td>
                       <td className="p-2">
                         <div className="font-medium">{bet.description}</div>
