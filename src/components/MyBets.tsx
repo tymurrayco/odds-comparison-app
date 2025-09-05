@@ -44,14 +44,15 @@ export default function MyBets() {
     }
   };
 
-  // KEPT: Separate bets into games and futures (exactly as you had it)
+  // KEPT: Separate bets into games and futures (updated to include teasers with games)
   const gameBets = useMemo(() => {
     return myBets.filter(bet => 
       bet.betType === 'spread' || 
       bet.betType === 'moneyline' || 
       bet.betType === 'total' || 
       bet.betType === 'prop' ||
-      bet.betType === 'parlay'  // Moved parlays to games
+      bet.betType === 'parlay' ||
+      bet.betType === 'teaser'  // Added teasers to games
     );
   }, [myBets]); // Changed dependency from [] to [myBets]
 
@@ -110,7 +111,7 @@ export default function MyBets() {
 
   const getStatusIcon = (status: BetStatus): string => {
     switch (status) {
-      case 'won': return '✓';
+      case 'won': return '✔';
       case 'lost': return '✗';
       case 'push': return '—';
       case 'pending': return '○';
@@ -168,6 +169,7 @@ export default function MyBets() {
       case 'future': return 'Future';
       case 'prop': return 'Prop';
       case 'parlay': return 'Parlay';
+      case 'teaser': return 'Teaser';
       default: return betType;
     }
   };
@@ -227,7 +229,7 @@ export default function MyBets() {
     }
   };
 
-  // KEPT: Parse teams from description
+  // UPDATED: Parse teams from description with support for teasers
   const parseTeams = (bet: Bet) => {
     // Don't parse teams for futures - they use the team field instead
     if (bet.betType === 'future') {
@@ -243,7 +245,8 @@ export default function MyBets() {
     const patterns = [
       /(.+?)\s*@\s*(.+)/,
       /(.+?)\s*vs\.?\s*(.+)/i,
-      /(.+?)\s+\bat\b\s+(.+)/i  // \b ensures "at" is a complete word
+      /(.+?)\s+\bat\b\s+(.+)/i,  // \b ensures "at" is a complete word
+      /(.+?)\s*&\s*(.+)/i,  // Added pattern for teasers
     ];
     
     for (const pattern of patterns) {
@@ -291,10 +294,10 @@ export default function MyBets() {
     );
   }
 
-  // KEPT: Your entire render logic exactly as it was
+  // KEPT: Your entire render logic exactly as it was with updates for teasers
   return (
     <div className="space-y-4">
-      {/* View Toggle */}
+      {/* View Toggle - Updated label to include Teasers */}
       <div className="bg-white rounded-lg shadow p-2">
         <div className="flex gap-2 justify-center">
           <button
@@ -308,7 +311,7 @@ export default function MyBets() {
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
-            Games/Parlays ({gameBets.length})
+            Games/Parlays/Teasers ({gameBets.length})
           </button>
           <button
             onClick={() => {
@@ -380,13 +383,13 @@ export default function MyBets() {
         </div>
       </div>
 
-      {/* Bets List - KEPT YOUR ENTIRE COMPLEX RENDER LOGIC */}
+      {/* Bets List - UPDATED for teasers */}
       <div className="space-y-2">
         {displayedBets.length === 0 ? (
           <div className="bg-white rounded-lg shadow p-6 text-center text-gray-500">
             {statusFilter === 'all' 
-              ? `No ${viewType === 'games' ? 'game bets or parlays' : 'futures'} placed yet.`
-              : `No ${statusFilter} ${viewType === 'games' ? 'game bets or parlays' : 'futures'}.`}
+              ? `No ${viewType === 'games' ? 'game bets, parlays, or teasers' : 'futures'} placed yet.`
+              : `No ${statusFilter} ${viewType === 'games' ? 'game bets, parlays, or teasers' : 'futures'}.`}
           </div>
         ) : (
           displayedBets.map(bet => {
@@ -402,6 +405,7 @@ export default function MyBets() {
             
             const teams = parseTeams(bet);
             const futureTeam = bet.betType === 'future' ? bet.team : null;
+            const isTeaser = bet.betType === 'teaser';
 
             return (
               <div key={bet.id}>
@@ -411,7 +415,7 @@ export default function MyBets() {
                   bet.status === 'pending' && formatTimeRemaining(bet.eventDate) === 'Soon' 
                     ? 'ring-2 ring-blue-400' : ''
                 }`}>
-                  {/* Main Bet Row - Mobile Optimized - KEPT EXACTLY AS IS */}
+                  {/* Main Bet Row - Mobile Optimized - UPDATED FOR TEASERS */}
                   <div 
                     className="p-3 cursor-pointer"
                     onClick={() => toggleExpanded(bet.id)}
@@ -441,7 +445,7 @@ export default function MyBets() {
                         {bet.league}
                       </span>
 
-                      {/* Teams/Description with Logos - Mobile optimized */}
+                      {/* Teams/Description with Logos - Mobile optimized with teaser support */}
                       <div className={`flex items-center gap-1 min-w-0 ${
                         viewType === 'games' ? 'flex-1' : ''
                       }`}>
@@ -457,7 +461,9 @@ export default function MyBets() {
                                   e.currentTarget.style.display = 'none';
                                 }}
                               />
-                              <span className="text-xs text-gray-400">@</span>
+                              <span className="text-xs text-gray-400">
+                                {isTeaser ? '&' : '@'}
+                              </span>
                               <img 
                                 src={getTeamLogo(teams.home)}
                                 alt=""
@@ -479,7 +485,9 @@ export default function MyBets() {
                                 }}
                               />
                               <span className="text-sm truncate">{teams.away}</span>
-                              <span className="text-xs text-gray-400">@</span>
+                              <span className="text-xs text-gray-400">
+                                {isTeaser ? '&' : '@'}
+                              </span>
                               <img 
                                 src={getTeamLogo(teams.home)}
                                 alt=""
@@ -585,14 +593,16 @@ export default function MyBets() {
                     </div>
                   </div>
 
-                  {/* Expanded Details - KEPT EXACTLY AS IS */}
+                  {/* Expanded Details - UPDATED FOR TEASERS */}
                   {isExpanded && (
                     <div className="px-3 pb-3 pt-0 border-t border-gray-100">
                       <div className="mt-2 space-y-1 text-xs">
-                        {/* Show full bet description for parlays */}
-                        {bet.betType === 'parlay' && (
+                        {/* Show full bet description for parlays and teasers */}
+                        {(bet.betType === 'parlay' || bet.betType === 'teaser') && (
                           <div className="mb-2 p-2 bg-blue-50 rounded">
-                            <span className="font-medium text-blue-800">Full Parlay:</span>
+                            <span className="font-medium text-blue-800">
+                              Full {bet.betType === 'teaser' ? 'Teaser' : 'Parlay'}:
+                            </span>
                             <span className="block mt-1 text-blue-700">{bet.bet}</span>
                           </div>
                         )}
@@ -600,9 +610,11 @@ export default function MyBets() {
                         {/* Show full team names on mobile when expanded */}
                         {viewType === 'games' && teams && (
                           <div className="sm:hidden mb-2 p-2 bg-gray-50 rounded">
-                            <span className="font-medium text-gray-800">Game:</span>
+                            <span className="font-medium text-gray-800">
+                              {isTeaser ? 'Teaser' : 'Game'}:
+                            </span>
                             <span className="block mt-1 text-gray-700">
-                              {teams.away} @ {teams.home}
+                              {teams.away} {isTeaser ? '&' : '@'} {teams.home}
                             </span>
                             <div className="mt-2 flex justify-between text-xs">
                               <span className="text-gray-500">League:</span>

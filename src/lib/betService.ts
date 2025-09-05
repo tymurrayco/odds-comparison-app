@@ -4,7 +4,7 @@
 import { supabase } from './supabase';
 
 export type BetStatus = 'pending' | 'won' | 'lost' | 'push';
-export type BetType = 'spread' | 'moneyline' | 'total' | 'prop' | 'parlay' | 'future';
+export type BetType = 'spread' | 'moneyline' | 'total' | 'prop' | 'parlay' | 'teaser' | 'future';
 
 // This matches your existing Bet interface
 export interface Bet {

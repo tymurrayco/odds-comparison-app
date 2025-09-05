@@ -161,6 +161,7 @@ export default function BetAdminPage() {
     const patterns = [
       /(.+?)\s*@\s*(.+)/,
       /(.+?)\s*vs\.?\s*(.+)/i,
+      /(.+?)\s*&\s*(.+)/i,  // Added pattern for teasers
     ];
     
     for (const pattern of patterns) {
@@ -366,6 +367,7 @@ export default function BetAdminPage() {
                       <option value="total">Total</option>
                       <option value="prop">Prop</option>
                       <option value="parlay">Parlay</option>
+                      <option value="teaser">Teaser</option>
                       <option value="future">Future</option>
                     </select>
                   </div>
@@ -374,13 +376,13 @@ export default function BetAdminPage() {
                 {/* Description - Full Width */}
                 <div>
                   <label className="block text-xs font-medium mb-1">
-                    Description {formData.betType === 'future' ? '' : '(e.g., Team @ Team)'}
+                    Description {formData.betType === 'future' ? '' : formData.betType === 'teaser' ? '(e.g., Team & Team)' : '(e.g., Team @ Team)'}
                   </label>
                   <input
                     type="text"
                     value={formData.description}
                     onChange={(e) => setFormData({...formData, description: e.target.value})}
-                    placeholder={formData.betType === 'future' ? 'Championship/Award' : 'Away @ Home'}
+                    placeholder={formData.betType === 'future' ? 'Championship/Award' : formData.betType === 'teaser' ? 'Team & Team' : 'Away @ Home'}
                     className="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500"
                     required
                   />
@@ -401,7 +403,9 @@ export default function BetAdminPage() {
                 ) : (
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-medium mb-1">Away Team</label>
+                      <label className="block text-xs font-medium mb-1">
+                        {formData.betType === 'teaser' ? 'First Team' : 'Away Team'}
+                      </label>
                       <input
                         type="text"
                         value={formData.awayTeam}
@@ -412,7 +416,9 @@ export default function BetAdminPage() {
                     </div>
                     
                     <div>
-                      <label className="block text-xs font-medium mb-1">Home Team</label>
+                      <label className="block text-xs font-medium mb-1">
+                        {formData.betType === 'teaser' ? 'Second Team' : 'Home Team'}
+                      </label>
                       <input
                         type="text"
                         value={formData.homeTeam}
@@ -434,6 +440,7 @@ export default function BetAdminPage() {
                     placeholder={
                       formData.betType === 'spread' ? 'Team -3.5' :
                       formData.betType === 'total' ? 'Over 52.5' :
+                      formData.betType === 'teaser' ? 'Team1 +7, Team2 -3' :
                       formData.betType === 'future' ? 'To win Championship' :
                       'Bet description'
                     }
