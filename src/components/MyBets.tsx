@@ -812,10 +812,10 @@ export default function MyBets() {
                           </span>
                         </div>
                         
-                        {/* Sport and League - NEW */}
+                        {/* League info */}
                         <div className="flex justify-between">
-                          <span className="text-gray-500">Sport:</span>
-                          <span>{sportInfo.emoji} {sportInfo.name} - {bet.league}</span>
+                          <span className="text-gray-500">League:</span>
+                          <span>{bet.league}</span>
                         </div>
                         
                         <div className="flex justify-between">
