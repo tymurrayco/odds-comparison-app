@@ -1,5 +1,5 @@
 // src/components/MyBets.tsx
-// Updated to show records grouped by sport
+// Updated to fetch from Supabase while keeping ALL existing functionality
 
 'use client';
 
@@ -14,18 +14,6 @@ const bookmakerLogos: { [key: string]: string } = {
   'BetRivers': '/bookmaker-logos/betrivers.png'
 };
 
-// Sport display names and emojis
-const sportConfig: { [key: string]: { name: string; emoji: string } } = {
-  'Football': { name: 'Football', emoji: '🏈' },
-  'Basketball': { name: 'Basketball', emoji: '🏀' },
-  'Baseball': { name: 'Baseball', emoji: '⚾' },
-  'Hockey': { name: 'Hockey', emoji: '🏒' },
-  'Soccer': { name: 'Soccer', emoji: '⚽' },
-  'Golf': { name: 'Golf', emoji: '⛳' },
-  'Tennis': { name: 'Tennis', emoji: '🎾' },
-  'MMA': { name: 'MMA', emoji: '🥊' },
-};
-
 export default function MyBets() {
   // NEW: State for Supabase data
   const [myBets, setMyBets] = useState<Bet[]>([]);
@@ -36,9 +24,6 @@ export default function MyBets() {
   const [statusFilter, setStatusFilter] = useState<BetStatus | 'all'>('all');
   const [expandedBetId, setExpandedBetId] = useState<string | null>(null);
   const [viewType, setViewType] = useState<'games' | 'futures'>('games');
-  
-  // NEW: Sport filter state
-  const [selectedSport, setSelectedSport] = useState<string>('all');
 
   // NEW: Fetch bets from Supabase on mount
   useEffect(() => {
@@ -80,40 +65,12 @@ export default function MyBets() {
   // KEPT: Get the right set of bets based on view
   const currentBets = viewType === 'games' ? gameBets : futureBets;
 
-  // NEW: Get unique sports from current bets
-  const availableSports = useMemo(() => {
-    const sports = new Set(currentBets.map(bet => bet.sport));
-    return Array.from(sports).sort();
-  }, [currentBets]);
-
-  // NEW: Filter bets by selected sport
-  const sportFilteredBets = useMemo(() => {
-    if (selectedSport === 'all') return currentBets;
-    return currentBets.filter(bet => bet.sport === selectedSport);
-  }, [currentBets, selectedSport]);
-
-  // NEW: Calculate stats by sport
-  const statsBySport = useMemo(() => {
-    const sportStats: { [sport: string]: ReturnType<typeof getBetStats> } = {};
-    
-    // Calculate for each sport
-    availableSports.forEach(sport => {
-      const sportBets = currentBets.filter(bet => bet.sport === sport);
-      sportStats[sport] = getBetStats(sportBets);
-    });
-    
-    // Add overall stats
-    sportStats['all'] = getBetStats(currentBets);
-    
-    return sportStats;
-  }, [currentBets, availableSports]);
-
-  // Get current stats based on selected sport
-  const stats = statsBySport[selectedSport] || getBetStats([]);
+  // KEPT: Calculate stats for current view
+  const stats = useMemo(() => getBetStats(currentBets), [currentBets]);
 
   // KEPT: Filter and sort bets (exactly as you had it)
   const displayedBets = useMemo(() => {
-    let filtered = [...sportFilteredBets];
+    let filtered = [...currentBets];
     
     // Apply status filter
     if (statusFilter !== 'all') {
@@ -139,7 +96,7 @@ export default function MyBets() {
       // Both completed: more recent first
       return dateB - dateA;
     });
-  }, [sportFilteredBets, statusFilter]);
+  }, [currentBets, statusFilter]);
 
   // KEPT: All your helper functions exactly as they were
   const getStatusColor = (status: BetStatus): string => {
@@ -337,7 +294,7 @@ export default function MyBets() {
     );
   }
 
-  // KEPT: Your entire render logic exactly as it was with updates for sport grouping
+  // KEPT: Your entire render logic exactly as it was with updates for teasers
   return (
     <div className="space-y-4">
       {/* View Toggle - Updated label to include Teasers */}
@@ -347,7 +304,6 @@ export default function MyBets() {
             onClick={() => {
               setViewType('games');
               setStatusFilter('all');
-              setSelectedSport('all');
             }}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
               viewType === 'games'
@@ -361,7 +317,6 @@ export default function MyBets() {
             onClick={() => {
               setViewType('futures');
               setStatusFilter('all');
-              setSelectedSport('all');
             }}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
               viewType === 'futures'
@@ -374,143 +329,33 @@ export default function MyBets() {
         </div>
       </div>
 
-      {/* NEW: Sport Filter - Show when there are multiple sports */}
-      {availableSports.length > 1 && (
-        <div className="bg-white rounded-lg shadow p-2">
-          <div className="flex gap-2 overflow-x-auto justify-center flex-wrap">
-            <button
-              onClick={() => setSelectedSport('all')}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                selectedSport === 'all'
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              All Sports ({statsBySport['all']?.totalBets || 0})
-            </button>
-            {availableSports.map(sport => {
-              const config = sportConfig[sport] || { name: sport, emoji: '🎯' };
-              const sportStat = statsBySport[sport];
-              return (
-                <button
-                  key={sport}
-                  onClick={() => setSelectedSport(sport)}
-                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                    selectedSport === sport
-                      ? 'bg-purple-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  <span className="mr-1">{config.emoji}</span>
-                  {config.name} ({sportStat?.totalBets || 0})
-                </button>
-              );
-            })}
+      {/* Compact Stats Bar - KEPT EXACTLY AS IS */}
+      <div className="bg-white rounded-lg shadow p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+          <div className="flex items-center gap-4">
+            <span className="font-bold">
+              {stats.wonBets}-{stats.lostBets}-{stats.pushBets}
+            </span>
+            <span className="text-gray-500">
+              {stats.winRate.toFixed(0)}% Win
+            </span>
+            <span className={`font-medium ${stats.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {stats.profit >= 0 ? '+' : ''}{stats.profit.toFixed(2)} units
+            </span>
+            <span className="text-gray-500">
+              {stats.roi >= 0 ? '+' : ''}{stats.roi.toFixed(1)}% ROI
+            </span>
+          </div>
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-blue-600 font-medium">
+              {stats.pendingBets} pending
+            </span>
+            <span className="text-gray-500">
+              ({stats.pendingStake.toFixed(2)} units)
+            </span>
           </div>
         </div>
-      )}
-
-      {/* NEW: Sport-Specific Stats Bar - Shows breakdown by sport */}
-      {selectedSport === 'all' && availableSports.length > 1 ? (
-        <div className="bg-white rounded-lg shadow p-3">
-          {/* Overall Stats */}
-          <div className="border-b pb-2 mb-2">
-            <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-              <div className="flex items-center gap-4">
-                <span className="font-bold text-purple-600">Overall:</span>
-                <span className="font-bold">
-                  {stats.wonBets}-{stats.lostBets}-{stats.pushBets}
-                </span>
-                <span className="text-gray-500">
-                  {stats.winRate.toFixed(0)}% Win
-                </span>
-                <span className={`font-medium ${stats.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {stats.profit >= 0 ? '+' : ''}{stats.profit.toFixed(2)} units
-                </span>
-                <span className="text-gray-500">
-                  {stats.roi >= 0 ? '+' : ''}{stats.roi.toFixed(1)}% ROI
-                </span>
-              </div>
-              <div className="flex items-center gap-2 text-xs">
-                <span className="text-blue-600 font-medium">
-                  {stats.pendingBets} pending
-                </span>
-                <span className="text-gray-500">
-                  ({stats.pendingStake.toFixed(2)} units)
-                </span>
-              </div>
-            </div>
-          </div>
-          
-          {/* Sport Breakdown */}
-          <div className="space-y-1">
-            {availableSports.map(sport => {
-              const sportStat = statsBySport[sport];
-              const config = sportConfig[sport] || { name: sport, emoji: '🎯' };
-              return (
-                <div key={sport} className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base">{config.emoji}</span>
-                    <span className="font-medium">{config.name}:</span>
-                    <span>
-                      {sportStat.wonBets}-{sportStat.lostBets}-{sportStat.pushBets}
-                    </span>
-                    <span className="text-gray-500">
-                      ({sportStat.winRate.toFixed(0)}% Win)
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className={`font-medium ${sportStat.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {sportStat.profit >= 0 ? '+' : ''}{sportStat.profit.toFixed(2)} units
-                    </span>
-                    <span className="text-gray-500">
-                      {sportStat.roi >= 0 ? '+' : ''}{sportStat.roi.toFixed(1)}% ROI
-                    </span>
-                    {sportStat.pendingBets > 0 && (
-                      <span className="text-blue-600">
-                        {sportStat.pendingBets} pending
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ) : (
-        // Single Sport Stats Bar (Original compact view)
-        <div className="bg-white rounded-lg shadow p-3">
-          <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-            <div className="flex items-center gap-4">
-              {selectedSport !== 'all' && (
-                <span className="font-bold text-purple-600">
-                  {sportConfig[selectedSport]?.emoji} {sportConfig[selectedSport]?.name}:
-                </span>
-              )}
-              <span className="font-bold">
-                {stats.wonBets}-{stats.lostBets}-{stats.pushBets}
-              </span>
-              <span className="text-gray-500">
-                {stats.winRate.toFixed(0)}% Win
-              </span>
-              <span className={`font-medium ${stats.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {stats.profit >= 0 ? '+' : ''}{stats.profit.toFixed(2)} units
-              </span>
-              <span className="text-gray-500">
-                {stats.roi >= 0 ? '+' : ''}{stats.roi.toFixed(1)}% ROI
-              </span>
-            </div>
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-blue-600 font-medium">
-                {stats.pendingBets} pending
-              </span>
-              <span className="text-gray-500">
-                ({stats.pendingStake.toFixed(2)} units)
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
+      </div>
 
       {/* Filter Tabs - KEPT EXACTLY AS IS */}
       <div className="bg-white rounded-lg shadow p-2">
@@ -530,25 +375,21 @@ export default function MyBets() {
             >
               {status.charAt(0).toUpperCase() + status.slice(1)}
               <span className="ml-1">
-                ({status === 'all' ? sportFilteredBets.length :
-                  sportFilteredBets.filter(b => b.status === status).length})
+                ({status === 'all' ? currentBets.length :
+                  currentBets.filter(b => b.status === status).length})
               </span>
             </button>
           ))}
         </div>
       </div>
 
-      {/* Bets List - UPDATED for sport display */}
+      {/* Bets List - UPDATED for teasers */}
       <div className="space-y-2">
         {displayedBets.length === 0 ? (
           <div className="bg-white rounded-lg shadow p-6 text-center text-gray-500">
             {statusFilter === 'all' 
-              ? selectedSport === 'all'
-                ? `No ${viewType === 'games' ? 'game bets, parlays, or teasers' : 'futures'} placed yet.`
-                : `No ${sportConfig[selectedSport]?.name || selectedSport} ${viewType === 'games' ? 'bets' : 'futures'} placed yet.`
-              : selectedSport === 'all'
-                ? `No ${statusFilter} ${viewType === 'games' ? 'game bets, parlays, or teasers' : 'futures'}.`
-                : `No ${statusFilter} ${sportConfig[selectedSport]?.name || selectedSport} ${viewType === 'games' ? 'bets' : 'futures'}.`}
+              ? `No ${viewType === 'games' ? 'game bets, parlays, or teasers' : 'futures'} placed yet.`
+              : `No ${statusFilter} ${viewType === 'games' ? 'game bets, parlays, or teasers' : 'futures'}.`}
           </div>
         ) : (
           displayedBets.map(bet => {
@@ -565,7 +406,6 @@ export default function MyBets() {
             const teams = parseTeams(bet);
             const futureTeam = bet.betType === 'future' ? bet.team : null;
             const isTeaser = bet.betType === 'teaser';
-            const sportInfo = sportConfig[bet.sport] || { name: bet.sport, emoji: '🎯' };
 
             return (
               <div key={bet.id}>
@@ -575,7 +415,7 @@ export default function MyBets() {
                   bet.status === 'pending' && formatTimeRemaining(bet.eventDate) === 'Soon' 
                     ? 'ring-2 ring-blue-400' : ''
                 }`}>
-                  {/* Main Bet Row - Mobile Optimized - UPDATED FOR SPORT DISPLAY */}
+                  {/* Main Bet Row - Mobile Optimized - UPDATED FOR TEASERS */}
                   <div 
                     className="p-3 cursor-pointer"
                     onClick={() => toggleExpanded(bet.id)}
@@ -585,13 +425,6 @@ export default function MyBets() {
                       <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${getStatusColor(bet.status)}`}>
                         {getStatusIcon(bet.status)}
                       </div>
-
-                      {/* Sport Emoji - NEW */}
-                      {selectedSport === 'all' && (
-                        <span className="text-base" title={sportInfo.name}>
-                          {sportInfo.emoji}
-                        </span>
-                      )}
 
                       {/* Event Date - Shows prominently - Hidden on mobile for futures */}
                       <div className={`flex flex-col items-start min-w-[48px] sm:min-w-[52px] ${
@@ -760,7 +593,7 @@ export default function MyBets() {
                     </div>
                   </div>
 
-                  {/* Expanded Details - UPDATED FOR SPORT INFO */}
+                  {/* Expanded Details - UPDATED FOR TEASERS */}
                   {isExpanded && (
                     <div className="px-3 pb-3 pt-0 border-t border-gray-100">
                       <div className="mt-2 space-y-1 text-xs">
@@ -810,12 +643,6 @@ export default function MyBets() {
                           <span className="px-1.5 py-0.5 bg-blue-100 rounded text-blue-700 font-medium text-xs">
                             {getBetTypeLabel(bet.betType)}
                           </span>
-                        </div>
-                        
-                        {/* League info */}
-                        <div className="flex justify-between">
-                          <span className="text-gray-500">League:</span>
-                          <span>{bet.league}</span>
                         </div>
                         
                         <div className="flex justify-between">
