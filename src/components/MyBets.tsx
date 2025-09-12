@@ -1,5 +1,6 @@
 // src/components/MyBets.tsx
 // Updated to fetch from Supabase while keeping ALL existing functionality
+// NOW WITH LEAGUE-SPECIFIC STATISTICS
 
 'use client';
 
@@ -67,6 +68,32 @@ export default function MyBets() {
 
   // KEPT: Calculate stats for current view
   const stats = useMemo(() => getBetStats(currentBets), [currentBets]);
+
+  // NEW: Calculate stats by league for games view
+  const statsByLeague = useMemo(() => {
+    if (viewType !== 'games') return {};
+    
+    // Group bets by league
+    const leagueGroups: { [league: string]: Bet[] } = {};
+    currentBets.forEach(bet => {
+      if (!leagueGroups[bet.league]) {
+        leagueGroups[bet.league] = [];
+      }
+      leagueGroups[bet.league].push(bet);
+    });
+    
+    // Calculate stats for each league
+    const leagueStats: { [league: string]: ReturnType<typeof getBetStats> } = {};
+    Object.entries(leagueGroups).forEach(([league, bets]) => {
+      leagueStats[league] = getBetStats(bets);
+    });
+    
+    // Sort leagues by total number of bets (most bets first)
+    const sortedLeagues = Object.entries(leagueStats)
+      .sort((a, b) => b[1].totalBets - a[1].totalBets);
+    
+    return Object.fromEntries(sortedLeagues);
+  }, [currentBets, viewType]);
 
   // KEPT: Filter and sort bets (exactly as you had it)
   const displayedBets = useMemo(() => {
@@ -356,6 +383,43 @@ export default function MyBets() {
           </div>
         </div>
       </div>
+
+      {/* NEW: League-specific Stats - Only shown for games view */}
+      {viewType === 'games' && Object.keys(statsByLeague).length > 0 && (
+        <div className="bg-white rounded-lg shadow p-3">
+          <div className="space-y-2">
+            {Object.entries(statsByLeague).map(([league, leagueStats], index) => (
+              <div key={league} className={`flex flex-wrap items-center justify-between gap-2 text-xs ${index > 0 ? 'border-t pt-2' : ''}`}>
+                <div className="flex items-center gap-3">
+                  <span className="font-semibold text-gray-700 min-w-[50px]">{league}</span>
+                  <span className="font-medium">
+                    {leagueStats.wonBets}-{leagueStats.lostBets}-{leagueStats.pushBets}
+                  </span>
+                  <span className="text-gray-500">
+                    {leagueStats.winRate.toFixed(0)}% Win
+                  </span>
+                  <span className={`font-medium ${leagueStats.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {leagueStats.profit >= 0 ? '+' : ''}{leagueStats.profit.toFixed(2)} units
+                  </span>
+                  <span className="text-gray-500">
+                    {leagueStats.roi >= 0 ? '+' : ''}{leagueStats.roi.toFixed(1)}% ROI
+                  </span>
+                </div>
+                {leagueStats.pendingBets > 0 && (
+                  <div className="flex items-center gap-1 text-xs">
+                    <span className="text-blue-600">
+                      {leagueStats.pendingBets} pending
+                    </span>
+                    <span className="text-gray-500">
+                      ({leagueStats.pendingStake.toFixed(2)}u)
+                    </span>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Filter Tabs - KEPT EXACTLY AS IS */}
       <div className="bg-white rounded-lg shadow p-2">
