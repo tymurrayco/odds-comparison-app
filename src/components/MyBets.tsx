@@ -94,7 +94,7 @@ export default function MyBets() {
 
   // NEW: Calculate stats by sport
   const statsBySport = useMemo(() => {
-    const sportStats: { [sport: string]: any } = {};
+    const sportStats: { [sport: string]: ReturnType<typeof getBetStats> } = {};
     
     // Calculate for each sport
     availableSports.forEach(sport => {
