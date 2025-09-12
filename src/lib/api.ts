@@ -60,7 +60,7 @@ export const BOOKMAKERS = ['DraftKings', 'FanDuel', 'BetMGM', 'BetRivers'];
 export const LEAGUES = [
   { id: 'baseball_mlb', name: 'MLB', icon: '/league-icons/mlb.png', isActive: true },
   { id: 'americanfootball_nfl', name: 'NFL', icon: '/league-icons/nfl.png', isActive: true },
-  { id: 'americanfootball_nfl_preseason', name: 'NFL PreSzn', icon: '/league-icons/nfl.png', isActive: true },
+  { id: 'americanfootball_nfl_preseason', name: 'NFL PreSzn', icon: '/league-icons/nfl.png', isActive: false },
   { id: 'americanfootball_ncaaf', name: 'NCAAF', icon: '/league-icons/ncaaf.png', isActive: true },
   { id: 'soccer_epl', name: 'EPL', icon: '/league-icons/epl.png', isActive: true },
   { id: 'soccer_usa_mls', name: 'MLS', icon: '/league-icons/mls.png', isActive: true },
