@@ -1,11 +1,16 @@
 // src/components/OddsTable.tsx
+'use client';
+
+import { useRef, useState } from 'react';
 import { Game, BOOKMAKERS } from '@/lib/api';
 import { formatOdds } from '@/lib/utils';
+import { createBet } from '@/lib/betService';
 
 interface OddsTableProps {
   games: Game[];
   view?: 'moneyline' | 'spread' | 'totals' | 'spreads_h1';
-  compactMode?: boolean; 
+  compactMode?: boolean;
+  league?: string; // Add league prop for bet creation
 }
 
 interface OddsItem {
@@ -13,10 +18,128 @@ interface OddsItem {
   price: number;
 }
 
-export default function OddsTable({ games, view = 'moneyline', compactMode = false }: OddsTableProps) {
+// Helper function to calculate stake for 1 unit to-win
+function calculateStakeForOneUnit(odds: number): number {
+  if (odds > 0) {
+    // Underdog: stake = 100 / odds to win 1 unit
+    return 100 / odds;
+  } else {
+    // Favorite: stake = |odds| / 100 to win 1 unit
+    return Math.abs(odds) / 100;
+  }
+}
+
+// Helper function to map league ID to sport name
+function getSportFromLeague(league: string): string {
+  if (league.includes('nba') || league.includes('basketball')) return 'Basketball';
+  if (league.includes('nfl') || league.includes('americanfootball_nfl')) return 'Football';
+  if (league.includes('ncaaf') || league.includes('americanfootball_ncaaf')) return 'Football';
+  if (league.includes('nhl') || league.includes('icehockey')) return 'Hockey';
+  if (league.includes('mlb') || league.includes('baseball')) return 'Baseball';
+  if (league.includes('mls') || league.includes('soccer')) return 'Soccer';
+  if (league.includes('epl') || league.includes('soccer')) return 'Soccer';
+  if (league.includes('wnba')) return 'Basketball';
+  return 'Other';
+}
+
+// Helper function to get league display name
+function getLeagueDisplayName(league: string): string {
+  const leagueMap: { [key: string]: string } = {
+    'basketball_nba': 'NBA',
+    'americanfootball_nfl': 'NFL',
+    'americanfootball_ncaaf': 'NCAAF',
+    'icehockey_nhl': 'NHL',
+    'baseball_mlb': 'MLB',
+    'soccer_usa_mls': 'MLS',
+    'soccer_epl': 'EPL',
+    'basketball_wnba': 'WNBA'
+  };
+  return leagueMap[league] || league.toUpperCase();
+}
+
+export default function OddsTable({ games, view = 'moneyline', compactMode = false, league = 'basketball_nba' }: OddsTableProps) {
+  const pressTimer = useRef<NodeJS.Timeout | null>(null);
+  const [isHolding, setIsHolding] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
   if (!games || games.length === 0) {
     return <div className="p-4">No games available</div>;
   }
+
+  // Show toast notification
+  const showToast = (message: string, type: 'success' | 'error') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  // Handle press-and-hold to create bet
+  const handlePressStart = (
+    game: Game,
+    team: string,
+    odds: number,
+    bookmaker: string,
+    betType: 'spread' | 'total' | 'moneyline',
+    point?: number,
+    totalType?: 'Over' | 'Under'
+  ) => {
+    setIsHolding(true);
+    pressTimer.current = setTimeout(async () => {
+      // Calculate stake for 1 unit to-win
+      const stake = calculateStakeForOneUnit(odds);
+      
+      // Create bet description
+      let betDescription = '';
+      if (betType === 'spread') {
+        const sign = point! > 0 ? '+' : '';
+        betDescription = `${team} ${sign}${point}`;
+      } else if (betType === 'total') {
+        betDescription = `${totalType} ${point}`;
+      } else {
+        // Moneyline
+        betDescription = `${team} ML`;
+      }
+      
+      // Create full description
+      const fullDescription = `${game.away_team} @ ${game.home_team}`;
+      
+      try {
+        // Format date in local timezone to avoid UTC conversion issues
+        const eventDate = new Date(game.commence_time);
+        const eventDateString = `${eventDate.getFullYear()}-${String(eventDate.getMonth() + 1).padStart(2, '0')}-${String(eventDate.getDate()).padStart(2, '0')}`;
+        
+        await createBet({
+          date: new Date().toISOString().split('T')[0],
+          eventDate: eventDateString,
+          sport: getSportFromLeague(league),
+          league: getLeagueDisplayName(league),
+          description: fullDescription,
+          awayTeam: game.away_team,
+          homeTeam: game.home_team,
+          team: betType === 'spread' || betType === 'moneyline' ? team : undefined,
+          betType: betType,
+          bet: betDescription,
+          odds: odds,
+          stake: parseFloat(stake.toFixed(2)),
+          status: 'pending',
+          book: bookmaker
+        });
+        
+        showToast(`Bet added: ${betDescription} (${formatOdds(odds)})`, 'success');
+      } catch (error) {
+        console.error('Error creating bet:', error);
+        showToast('Failed to add bet', 'error');
+      }
+      
+      setIsHolding(false);
+    }, 1500); // 1.5 second hold
+  };
+
+  const handlePressEnd = () => {
+    if (pressTimer.current) {
+      clearTimeout(pressTimer.current);
+    }
+    setIsHolding(false);
+  };
 
   // Bookmaker logos mapping with type annotation
   const bookmakerLogos: { [key: string]: string } = {
@@ -33,6 +156,17 @@ export default function OddsTable({ games, view = 'moneyline', compactMode = fal
 
   return (
     <div>
+      {/* Toast Notification */}
+      {toast && (
+        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-300 ease-in-out">
+          <div className={`px-6 py-3 rounded-lg shadow-lg ${
+            toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'
+          } text-white font-medium`}>
+            {toast.message}
+          </div>
+        </div>
+      )}
+
       {games.map(game => {
         // For each team, calculate which bookmakers offer the best odds
         const bestBookmakersByTeam: { [key: string]: string[] } = {};
@@ -251,11 +385,22 @@ export default function OddsTable({ games, view = 'moneyline', compactMode = fal
                         const outcomeData = marketData?.outcomes.find(o => o.name === team);
                         
                         return (
-                          <td key={book} className="px-2 md:px-4 py-3 whitespace-nowrap text-center">
+                          <td 
+                            key={book} 
+                            className="px-2 md:px-4 py-3 whitespace-nowrap text-center cursor-pointer select-none"
+                            onTouchStart={() => outcomeData && 
+                              handlePressStart(game, team, outcomeData.price, book, 'moneyline')}
+                            onTouchEnd={handlePressEnd}
+                            onTouchMove={handlePressEnd}
+                            onMouseDown={() => outcomeData && 
+                              handlePressStart(game, team, outcomeData.price, book, 'moneyline')}
+                            onMouseUp={handlePressEnd}
+                            onMouseLeave={handlePressEnd}
+                          >
                             {outcomeData ? (
                               <div className={`text-xs md:text-sm font-medium ${
                                 isBest ? 'text-green-600 font-bold' : 'text-gray-900'
-                              }`}>
+                              } ${isHolding ? 'opacity-50' : ''}`}>
                                 {formatOdds(outcomeData.price)}
                                 {isBest && (
                                   <span className="ml-1 inline-flex items-center px-1 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
@@ -275,11 +420,22 @@ export default function OddsTable({ games, view = 'moneyline', compactMode = fal
                         const outcomeData = marketData?.outcomes.find(o => o.name === team);
                         
                         return (
-                          <td key={book} className="px-2 md:px-4 py-3 whitespace-nowrap text-center">
+                          <td 
+                            key={book} 
+                            className="px-2 md:px-4 py-3 whitespace-nowrap text-center cursor-pointer select-none"
+                            onTouchStart={() => outcomeData && typeof outcomeData.point !== 'undefined' && 
+                              handlePressStart(game, team, outcomeData.price, book, 'spread', outcomeData.point)}
+                            onTouchEnd={handlePressEnd}
+                            onTouchMove={handlePressEnd}
+                            onMouseDown={() => outcomeData && typeof outcomeData.point !== 'undefined' && 
+                              handlePressStart(game, team, outcomeData.price, book, 'spread', outcomeData.point)}
+                            onMouseUp={handlePressEnd}
+                            onMouseLeave={handlePressEnd}
+                          >
                             {outcomeData && typeof outcomeData.point !== 'undefined' ? (
                               <div className={`text-xs md:text-sm ${
                                 isBest ? 'text-green-600 font-bold' : 'text-gray-900'
-                              }`}>
+                              } ${isHolding ? 'opacity-50' : ''}`}>
                                 {outcomeData.point > 0 ? '+' : ''}{outcomeData.point} ({formatOdds(outcomeData.price)})
                                 {isBest && (
                                   <span className="ml-1 inline-flex items-center px-1 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
@@ -296,16 +452,28 @@ export default function OddsTable({ games, view = 'moneyline', compactMode = fal
                       
                       if (marketKey === 'totals') {
                         const marketData = bookieData?.markets.find(m => m.key === 'totals');
+                        const totalType = index === 0 ? 'Over' : 'Under';
                         const outcomeData = marketData?.outcomes.find(o => 
                           (index === 0 && o.name === 'Over') || (index === 1 && o.name === 'Under')
                         );
                         
                         return (
-                          <td key={book} className="px-2 md:px-4 py-3 whitespace-nowrap text-center">
+                          <td 
+                            key={book} 
+                            className="px-2 md:px-4 py-3 whitespace-nowrap text-center cursor-pointer select-none"
+                            onTouchStart={() => outcomeData && typeof outcomeData.point !== 'undefined' && 
+                              handlePressStart(game, team, outcomeData.price, book, 'total', outcomeData.point, totalType)}
+                            onTouchEnd={handlePressEnd}
+                            onTouchMove={handlePressEnd}
+                            onMouseDown={() => outcomeData && typeof outcomeData.point !== 'undefined' && 
+                              handlePressStart(game, team, outcomeData.price, book, 'total', outcomeData.point, totalType)}
+                            onMouseUp={handlePressEnd}
+                            onMouseLeave={handlePressEnd}
+                          >
                             {outcomeData && typeof outcomeData.point !== 'undefined' ? (
                               <div className={`text-xs md:text-sm ${
                                 isBest ? 'text-green-600 font-bold' : 'text-gray-900'
-                              }`}>
+                              } ${isHolding ? 'opacity-50' : ''}`}>
                                 {index === 0 ? 'O' : 'U'} {outcomeData.point} ({formatOdds(outcomeData.price)})
                                 {isBest && (
                                   <span className="ml-1 inline-flex items-center px-1 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">

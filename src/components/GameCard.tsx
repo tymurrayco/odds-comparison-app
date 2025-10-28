@@ -122,6 +122,7 @@ export default function GameCard({ game }: GameCardProps) {
                   expandedMarket === 'moneyline' ? 'moneyline' : 
                   'totals'}
             compactMode={true}
+            league={game.sport_key}
           />
         </div>
       )}
