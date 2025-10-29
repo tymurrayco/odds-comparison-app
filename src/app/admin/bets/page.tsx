@@ -1,4 +1,4 @@
-// src/app/admin/bets/page.tsx - Mobile-Optimized Version with 24-Hour Indicator
+// src/app/admin/bets/page.tsx - Mobile-Optimized Version with Zapier Integration
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -13,6 +13,20 @@ export default function BetAdminPage() {
   const [showForm, setShowForm] = useState(false); // Start closed on mobile
   const [filter, setFilter] = useState<'all' | 'pending' | 'completed'>('pending');
   const [view, setView] = useState<'form' | 'list'>('list'); // Mobile view toggle
+  const [sendingBetId, setSendingBetId] = useState<string | null>(null);
+  const [sentBets, setSentBets] = useState<Set<string>>(new Set());
+  const [isDesktop, setIsDesktop] = useState(false);
+  
+  // Detect screen size on mount
+  useEffect(() => {
+    const checkScreenSize = () => {
+      setIsDesktop(window.innerWidth >= 640);
+    };
+    
+    checkScreenSize();
+    window.addEventListener('resize', checkScreenSize);
+    return () => window.removeEventListener('resize', checkScreenSize);
+  }, []);
   
   // Format date for display in form (YYYY-MM-DD for input fields)
   const formatDateForInput = (date: Date): string => {
@@ -156,6 +170,44 @@ export default function BetAdminPage() {
     }
   };
   
+  // Send bet to Zapier webhook via API route
+  const handleSendToZapier = async (bet: Bet) => {
+    setSendingBetId(bet.id);
+    
+    try {
+      const response = await fetch('/api/send-to-zapier', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(bet)
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to send');
+      }
+      
+      // Mark as sent
+      setSentBets(prev => new Set([...prev, bet.id]));
+      
+      // Clear the sent indicator after 3 seconds
+      setTimeout(() => {
+        setSentBets(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(bet.id);
+          return newSet;
+        });
+      }, 3000);
+      
+    } catch (error) {
+      console.error('Error sending to Zapier:', error);
+      alert(`Failed to send bet to Zapier. Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setSendingBetId(null);
+    }
+  };
+  
   // Parse teams from description for quick fill
   const parseAndFillTeams = () => {
     const patterns = [
@@ -255,7 +307,7 @@ export default function BetAdminPage() {
       
       <div className="p-4 max-w-7xl mx-auto">
         {/* Entry Form - Mobile Optimized */}
-        {(view === 'form' || (showForm && window.innerWidth >= 640)) && (
+        {(view === 'form' || (showForm && isDesktop)) && (
           <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-lg p-4 mb-6">
             <h2 className="text-base font-semibold mb-4">
               {editingBet ? 'Edit Bet' : 'Add New Bet'}
@@ -531,7 +583,7 @@ export default function BetAdminPage() {
         )}
         
         {/* Bets List - Mobile Optimized */}
-        {(view === 'list' || window.innerWidth >= 640) && (
+        {(view === 'list' || isDesktop) && (
           <div className="bg-white rounded-lg shadow-lg p-4">
             {/* Filter Tabs */}
             <div className="flex gap-2 mb-4 overflow-x-auto">
@@ -609,7 +661,20 @@ export default function BetAdminPage() {
                       <span>{bet.stake}u</span>
                       <span className="text-gray-500">{bet.book}</span>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 items-center">
+                      <button
+                        onClick={() => handleSendToZapier(bet)}
+                        disabled={sendingBetId === bet.id}
+                        className="text-purple-600 font-medium disabled:opacity-50 flex items-center gap-1"
+                      >
+                        {sendingBetId === bet.id ? (
+                          <span className="inline-block w-3 h-3 border-2 border-purple-600 border-t-transparent rounded-full animate-spin"></span>
+                        ) : sentBets.has(bet.id) ? (
+                          <span className="text-green-600">✓</span>
+                        ) : (
+                          '📤'
+                        )}
+                      </button>
                       <button
                         onClick={() => handleEdit(bet)}
                         className="text-blue-600 font-medium"
@@ -694,7 +759,22 @@ export default function BetAdminPage() {
                       </td>
                       <td className="p-2 text-xs">{bet.book}</td>
                       <td className="p-2">
-                        <div className="flex gap-1">
+                        <div className="flex gap-1 items-center">
+                          <button
+                            onClick={() => handleSendToZapier(bet)}
+                            disabled={sendingBetId === bet.id}
+                            className="text-purple-600 hover:text-purple-800 disabled:opacity-50"
+                            title="Send to Zapier"
+                          >
+                            {sendingBetId === bet.id ? (
+                              <span className="inline-block w-3 h-3 border-2 border-purple-600 border-t-transparent rounded-full animate-spin"></span>
+                            ) : sentBets.has(bet.id) ? (
+                              <span className="text-green-600 font-bold">✓</span>
+                            ) : (
+                              '📤'
+                            )}
+                          </button>
+                          <span className="text-gray-400">|</span>
                           <button
                             onClick={() => handleEdit(bet)}
                             className="text-blue-600 hover:text-blue-800"
