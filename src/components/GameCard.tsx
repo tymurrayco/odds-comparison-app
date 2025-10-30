@@ -40,6 +40,12 @@ export default function GameCard({ game }: GameCardProps) {
     return teamName.split(' ')[0];
   };
   
+  // Helper function to get team logo path
+  const getTeamLogo = (teamName: string): string => {
+    const cleanName = teamName.toLowerCase().replace(/\s+/g, '');
+    return `/team-logos/${cleanName}.png`;
+  };
+  
   // Calculate implied scores based on average spread and total
   const calculateImpliedScores = () => {
     if (!game.bookmakers || game.bookmakers.length === 0) return null;
@@ -123,30 +129,62 @@ export default function GameCard({ game }: GameCardProps) {
                 {formattedDate} at {formattedTime} {timeZoneAbbr}
               </p>
               
-              {/* Implied Score with team names - winner always on left */}
+              {/* Implied Score with team logos - winner always on left */}
               {impliedScores && (
                 <div className="flex items-center gap-1.5 text-xs md:text-sm">
                   <span className="text-gray-400">•</span>
-                  <span className="text-gray-600">
-                    Implied: 
+                  <span className="text-gray-600 flex items-center gap-1">
+                    <span>Implied:</span>
                     {impliedScores.awayWinning ? (
                       <>
+                        <img 
+                          src={getTeamLogo(impliedScores.awayTeam)}
+                          alt={getFirstWord(impliedScores.awayTeam)}
+                          className="h-4 w-4 object-contain"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
                         <span className="font-bold">
-                          {' '}{getFirstWord(impliedScores.awayTeam)} {impliedScores.away}
+                          {impliedScores.away}
                         </span>
                         <span> - </span>
+                        <img 
+                          src={getTeamLogo(impliedScores.homeTeam)}
+                          alt={getFirstWord(impliedScores.homeTeam)}
+                          className="h-4 w-4 object-contain"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
                         <span>
-                          {getFirstWord(impliedScores.homeTeam)} {impliedScores.home}
+                          {impliedScores.home}
                         </span>
                       </>
                     ) : (
                       <>
+                        <img 
+                          src={getTeamLogo(impliedScores.homeTeam)}
+                          alt={getFirstWord(impliedScores.homeTeam)}
+                          className="h-4 w-4 object-contain"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
                         <span className="font-bold">
-                          {' '}{getFirstWord(impliedScores.homeTeam)} {impliedScores.home}
+                          {impliedScores.home}
                         </span>
                         <span> - </span>
+                        <img 
+                          src={getTeamLogo(impliedScores.awayTeam)}
+                          alt={getFirstWord(impliedScores.awayTeam)}
+                          className="h-4 w-4 object-contain"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
                         <span>
-                          {getFirstWord(impliedScores.awayTeam)} {impliedScores.away}
+                          {impliedScores.away}
                         </span>
                       </>
                     )}
