@@ -62,6 +62,7 @@ export const LEAGUES = [
   { id: 'americanfootball_nfl', name: 'NFL', icon: '/league-icons/nfl.png', isActive: true },
   { id: 'americanfootball_nfl_preseason', name: 'NFL PreSzn', icon: '/league-icons/nfl.png', isActive: false },
   { id: 'americanfootball_ncaaf', name: 'NCAAF', icon: '/league-icons/ncaaf.png', isActive: true },
+  { id: 'basketball_ncaab', name: 'NCAAB', icon: '/league-icons/ncaab.png', isActive: true },
   { id: 'soccer_epl', name: 'EPL', icon: '/league-icons/epl.png', isActive: true },
   { id: 'soccer_usa_mls', name: 'MLS', icon: '/league-icons/mls.png', isActive: false },
   { id: 'basketball_wnba', name: 'WNBA', icon: '/league-icons/wnba.png', isActive: false },
