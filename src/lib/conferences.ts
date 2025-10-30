@@ -432,7 +432,6 @@ export const CONFERENCES: ConferenceData = {
     
     // Patriot League
     "American Eagles": "Patriot League",
-    "Army Black Knights": "Patriot League",
     "Boston University Terriers": "Patriot League",
     "Bucknell Bison": "Patriot League",
     "Colgate Raiders": "Patriot League",
@@ -440,7 +439,6 @@ export const CONFERENCES: ConferenceData = {
     "Lafayette Leopards": "Patriot League",
     "Lehigh Mountain Hawks": "Patriot League",
     "Loyola Maryland Greyhounds": "Patriot League",
-    "Navy Midshipmen": "Patriot League",
     
     // MAAC
     "Canisius Golden Griffins": "MAAC",
