@@ -6,9 +6,10 @@ import { Game } from '@/lib/api';
 
 interface GameCardProps {
   game: Game;
+  selectedBookmakers?: string[];
 }
 
-export default function GameCard({ game }: GameCardProps) {
+export default function GameCard({ game, selectedBookmakers }: GameCardProps) {
   // Check if this is a soccer sport
   const isSoccer = game.sport_key === 'soccer_epl' || game.sport_key === 'soccer_usa_mls';
   
@@ -259,6 +260,7 @@ export default function GameCard({ game }: GameCardProps) {
                   'totals'}
             compactMode={true}
             league={game.sport_key}
+            selectedBookmakers={selectedBookmakers}
           />
         </div>
       )}

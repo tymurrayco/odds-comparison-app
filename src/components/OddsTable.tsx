@@ -10,7 +10,8 @@ interface OddsTableProps {
   games: Game[];
   view?: 'moneyline' | 'spread' | 'totals' | 'spreads_h1';
   compactMode?: boolean;
-  league?: string; // Add league prop for bet creation
+  league?: string;
+  selectedBookmakers?: string[];
 }
 
 interface OddsItem {
@@ -57,10 +58,15 @@ function getLeagueDisplayName(league: string): string {
   return leagueMap[league] || league.toUpperCase();
 }
 
-export default function OddsTable({ games, view = 'moneyline', compactMode = false, league = 'basketball_nba' }: OddsTableProps) {
+export default function OddsTable({ games, view = 'moneyline', compactMode = false, league = 'basketball_nba', selectedBookmakers }: OddsTableProps) {
   const pressTimer = useRef<NodeJS.Timeout | null>(null);
   const [isHolding, setIsHolding] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  // Use selected bookmakers or default to all
+  const displayBookmakers = selectedBookmakers && selectedBookmakers.length > 0 
+    ? BOOKMAKERS.filter(b => selectedBookmakers.includes(b))
+    : BOOKMAKERS;
 
   if (!games || games.length === 0) {
     return <div className="p-4">No games available</div>;
@@ -168,7 +174,7 @@ export default function OddsTable({ games, view = 'moneyline', compactMode = fal
       )}
 
       {games.map(game => {
-        // For each team, calculate which bookmakers offer the best odds
+        // For each team, calculate which bookmakers offer the best odds (only among displayed bookmakers)
         const bestBookmakersByTeam: { [key: string]: string[] } = {};
         
         // Calculate best bookmakers for moneyline
@@ -177,8 +183,8 @@ export default function OddsTable({ games, view = 'moneyline', compactMode = fal
           [game.away_team, game.home_team].forEach(team => {
             const allOdds: OddsItem[] = [];
             
-            // Collect all odds for this team
-            BOOKMAKERS.forEach(book => {
+            // Collect all odds for this team (only from displayed bookmakers)
+            displayBookmakers.forEach(book => {
               const bookieData = game.bookmakers.find(b => b.title === book);
               if (!bookieData) return;
               
@@ -235,8 +241,8 @@ export default function OddsTable({ games, view = 'moneyline', compactMode = fal
           [game.away_team, game.home_team].forEach(teamName => {
             const allOdds: { bookmaker: string, point: number, price: number }[] = [];
             
-            // Collect all odds for this team
-            BOOKMAKERS.forEach(book => {
+            // Collect all odds for this team (only from displayed bookmakers)
+            displayBookmakers.forEach(book => {
               const bookieData = game.bookmakers.find(b => b.title === book);
               if (!bookieData) return;
               
@@ -290,8 +296,8 @@ export default function OddsTable({ games, view = 'moneyline', compactMode = fal
             const totalType = totalTypes[index];
             const allOdds: { bookmaker: string, point: number, price: number }[] = [];
             
-            // Collect all odds for this total type
-            BOOKMAKERS.forEach(book => {
+            // Collect all odds for this total type (only from displayed bookmakers)
+            displayBookmakers.forEach(book => {
               const bookieData = game.bookmakers.find(b => b.title === book);
               if (!bookieData) return;
               
@@ -344,7 +350,7 @@ export default function OddsTable({ games, view = 'moneyline', compactMode = fal
                 <th className="px-2 md:px-4 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Team
                 </th>
-                {BOOKMAKERS.map(book => (
+                {displayBookmakers.map(book => (
                   <th key={book} className="px-2 md:px-4 py-2 md:py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                     <img src={bookmakerLogos[book]} alt={book} className="h-6 mx-auto" />
                   </th>
@@ -374,7 +380,7 @@ export default function OddsTable({ games, view = 'moneyline', compactMode = fal
                       </div>
                     </td>
                     
-                    {BOOKMAKERS.map(book => {
+                    {displayBookmakers.map(book => {
                       const bookieData = game.bookmakers.find(b => b.title === book);
                       
                       // Check if this is one of the best bookmakers for this team

@@ -5,14 +5,21 @@ import React from 'react';
 interface FuturesTableProps {
   market: FuturesMarket;
   compactMode?: boolean;
-  isMasters?: boolean; // New prop to identify Masters tab
+  isMasters?: boolean;
+  selectedBookmakers?: string[];
 }
 
 export default function FuturesTable({ 
   market, 
   compactMode = false,
-  isMasters = false // Default to false
+  isMasters = false,
+  selectedBookmakers
 }: FuturesTableProps) {
+  // Use selected bookmakers or default to all
+  const displayBookmakers = selectedBookmakers && selectedBookmakers.length > 0 
+    ? BOOKMAKERS.filter(b => selectedBookmakers.includes(b))
+    : BOOKMAKERS;
+
   const formatOdds = (odds: number): string => {
     if (odds > 0) return `+${odds}`;
     return odds.toString();
@@ -118,7 +125,7 @@ export default function FuturesTable({
               <th className="px-2 md:px-4 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Team
               </th>
-              {BOOKMAKERS.map(book => (
+              {displayBookmakers.map(book => (
                 <th key={book} className="px-2 md:px-4 py-2 md:py-3 text-center">
                   <img src={bookmakerLogos[book]} alt={book} className="h-6 mx-auto" />
                 </th>
@@ -127,11 +134,11 @@ export default function FuturesTable({
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {market.teams.map((item, index) => {
-              // Determine best odds
+              // Determine best odds (only among displayed bookmakers)
               let bestOddsValue = -Infinity;
               let bestOddsBooks: string[] = [];
               
-              BOOKMAKERS.forEach(book => {
+              displayBookmakers.forEach(book => {
                 if (item.odds[book] !== undefined) {
                   if (item.odds[book] > bestOddsValue) {
                     bestOddsValue = item.odds[book];
@@ -147,7 +154,7 @@ export default function FuturesTable({
                   <td className="px-2 md:px-4 py-3 whitespace-normal text-xs md:text-sm font-medium text-gray-900">
                     {renderTeamCell(item.team)}
                   </td>
-                  {BOOKMAKERS.map(book => (
+                  {displayBookmakers.map(book => (
                     <td key={book} className="px-2 md:px-4 py-3 whitespace-nowrap text-center">
                       {item.odds[book] !== undefined ? (
                         <div className={`text-xs md:text-sm font-medium ${

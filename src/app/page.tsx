@@ -3,11 +3,12 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { fetchOdds, fetchFutures, Game, FuturesMarket } from '@/lib/api';
+import { fetchOdds, fetchFutures, Game, FuturesMarket, BOOKMAKERS } from '@/lib/api';
 import LeagueNav from '@/components/LeagueNav';
 import GameCard from '@/components/GameCard';
 import FuturesTable from '@/components/FuturesTable';
 import ConferenceFilter from '@/components/ConferenceFilter';
+import BookmakerSelector from '@/components/BookmakerSelector';
 import MyBets from '@/components/MyBets';
 import { getTeamConference } from '@/lib/conferences';
 
@@ -42,6 +43,7 @@ export default function Home() {
   const [apiRequestsRemaining, setApiRequestsRemaining] = useState<string | null>(null);
   const [teamFilter, setTeamFilter] = useState(''); // Team filter state
   const [selectedConferences, setSelectedConferences] = useState<string[]>([]); // Conference filter state
+  const [selectedBookmakers, setSelectedBookmakers] = useState<string[]>([...BOOKMAKERS]); // Bookmaker filter state
   
   // Cache state
   const [gamesCache, setGamesCache] = useState<{ [league: string]: CacheItem<Game[]> }>({});
@@ -58,6 +60,19 @@ export default function Home() {
     const savedLeague = localStorage.getItem('activeLeague');
     if (savedLeague) {
       setActiveLeague(savedLeague);
+    }
+    
+    // Load saved bookmaker selection from localStorage
+    const savedBookmakers = localStorage.getItem('selectedBookmakers');
+    if (savedBookmakers) {
+      try {
+        const parsed = JSON.parse(savedBookmakers);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setSelectedBookmakers(parsed);
+        }
+      } catch (e) {
+        console.error('Error parsing saved bookmakers:', e);
+      }
     }
   }, []);
 
@@ -76,6 +91,13 @@ export default function Home() {
       localStorage.setItem('activeLeague', activeLeague);
     }
   }, [activeLeague, isClient]);
+
+  // Save selected bookmakers to localStorage
+  useEffect(() => {
+    if (isClient) {
+      localStorage.setItem('selectedBookmakers', JSON.stringify(selectedBookmakers));
+    }
+  }, [selectedBookmakers, isClient]);
 
   // Load data from cache or API
   const loadData = useCallback(async function() {
@@ -243,68 +265,80 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
             <h1 className="text-xl font-bold text-blue-600">odds.day</h1>
-            {/* My Bets Tab Button with Press-and-Hold for Admin Access */}
-            <button
-              onMouseDown={(e) => {
-                e.preventDefault();
-                setIsHolding(true);
-                console.log('Starting hold timer...'); // Debug log
-                // Start 2-second timer for admin access
-                pressTimer.current = setTimeout(() => {
-                  console.log('Timer completed! Navigating to admin...'); // Debug log
+            
+            {/* Right side header items */}
+            <div className="flex items-center gap-3">
+              {/* Bookmaker Selector - only show when not in mybets view */}
+              {activeView !== 'mybets' && (
+                <BookmakerSelector
+                  selectedBookmakers={selectedBookmakers}
+                  onSelectionChange={setSelectedBookmakers}
+                />
+              )}
+              
+              {/* My Bets Tab Button with Press-and-Hold for Admin Access */}
+              <button
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setIsHolding(true);
+                  console.log('Starting hold timer...'); // Debug log
+                  // Start 2-second timer for admin access
+                  pressTimer.current = setTimeout(() => {
+                    console.log('Timer completed! Navigating to admin...'); // Debug log
+                    setIsHolding(false);
+                    router.push('/admin/bets');
+                  }, 2000);
+                }}
+                onMouseUp={() => {
+                  console.log('Mouse up, clearing timer'); // Debug log
                   setIsHolding(false);
-                  router.push('/admin/bets');
-                }, 2000);
-              }}
-              onMouseUp={() => {
-                console.log('Mouse up, clearing timer'); // Debug log
-                setIsHolding(false);
-                // If timer exists and hasn't fired yet, do normal toggle
-                if (pressTimer.current) {
-                  clearTimeout(pressTimer.current);
-                  pressTimer.current = null;
-                  setActiveView(activeView === 'mybets' ? 'games' : 'mybets');
-                }
-              }}
-              onMouseLeave={() => {
-                console.log('Mouse left button, clearing timer'); // Debug log
-                setIsHolding(false);
-                // Cancel timer if mouse leaves button
-                if (pressTimer.current) {
-                  clearTimeout(pressTimer.current);
-                  pressTimer.current = null;
-                }
-              }}
-              onTouchStart={(e) => {
-                e.preventDefault();
-                setIsHolding(true);
-                console.log('Touch start, starting timer...'); // Debug log
-                // Start 2-second timer for admin access (mobile)
-                pressTimer.current = setTimeout(() => {
-                  console.log('Touch timer completed! Navigating to admin...'); // Debug log
+                  // If timer exists and hasn't fired yet, do normal toggle
+                  if (pressTimer.current) {
+                    clearTimeout(pressTimer.current);
+                    pressTimer.current = null;
+                    setActiveView(activeView === 'mybets' ? 'games' : 'mybets');
+                  }
+                }}
+                onMouseLeave={() => {
+                  console.log('Mouse left button, clearing timer'); // Debug log
                   setIsHolding(false);
-                  router.push('/admin/bets');
-                }, 2000);
-              }}
-              onTouchEnd={() => {
-                console.log('Touch end, clearing timer'); // Debug log
-                setIsHolding(false);
-                // If timer exists and hasn't fired yet, do normal toggle (mobile)
-                if (pressTimer.current) {
-                  clearTimeout(pressTimer.current);
-                  pressTimer.current = null;
-                  setActiveView(activeView === 'mybets' ? 'games' : 'mybets');
-                }
-              }}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-all select-none ${
-                activeView === 'mybets'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              } ${isHolding ? 'scale-95 ring-2 ring-blue-400' : ''}`}
-              style={{ userSelect: 'none' }}
-            >
-              📊 Bets {isHolding && '...'}
-            </button>
+                  // Cancel timer if mouse leaves button
+                  if (pressTimer.current) {
+                    clearTimeout(pressTimer.current);
+                    pressTimer.current = null;
+                  }
+                }}
+                onTouchStart={(e) => {
+                  e.preventDefault();
+                  setIsHolding(true);
+                  console.log('Touch start, starting timer...'); // Debug log
+                  // Start 2-second timer for admin access (mobile)
+                  pressTimer.current = setTimeout(() => {
+                    console.log('Touch timer completed! Navigating to admin...'); // Debug log
+                    setIsHolding(false);
+                    router.push('/admin/bets');
+                  }, 2000);
+                }}
+                onTouchEnd={() => {
+                  console.log('Touch end, clearing timer'); // Debug log
+                  setIsHolding(false);
+                  // If timer exists and hasn't fired yet, do normal toggle (mobile)
+                  if (pressTimer.current) {
+                    clearTimeout(pressTimer.current);
+                    pressTimer.current = null;
+                    setActiveView(activeView === 'mybets' ? 'games' : 'mybets');
+                  }
+                }}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-all select-none ${
+                  activeView === 'mybets'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                } ${isHolding ? 'scale-95 ring-2 ring-blue-400' : ''}`}
+                style={{ userSelect: 'none' }}
+              >
+                📊 Bets {isHolding && '...'}
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -601,7 +635,11 @@ export default function Home() {
                 ) : (
                   <div>
                     {filteredGames.map(game => (
-                      <GameCard key={game.id} game={game} />
+                      <GameCard 
+                        key={game.id} 
+                        game={game} 
+                        selectedBookmakers={selectedBookmakers}
+                      />
                     ))}
                   </div>
                 )}
@@ -628,6 +666,7 @@ export default function Home() {
                         market={market} 
                         compactMode={true}
                         isMasters={activeLeague === MASTERS_LEAGUE_ID && false} // Force false to prevent name changes
+                        selectedBookmakers={selectedBookmakers}
                       />
                     ))}
                   </div>
