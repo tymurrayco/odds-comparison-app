@@ -54,7 +54,7 @@ export interface ApiResponse<T> {
 }
 
 // List of supported bookmakers
-export const BOOKMAKERS = ['DraftKings', 'FanDuel', 'BetMGM', 'BetRivers'];
+export const BOOKMAKERS = ['DraftKings', 'FanDuel', 'BetMGM', 'BetRivers', 'Caesars', 'BetOnline.ag'];
 
 // List of leagues with isActive flag
 export const LEAGUES = [

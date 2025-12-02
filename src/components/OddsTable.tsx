@@ -149,10 +149,12 @@ export default function OddsTable({ games, view = 'moneyline', compactMode = fal
 
   // Bookmaker logos mapping with type annotation
   const bookmakerLogos: { [key: string]: string } = {
-    'DraftKings': '/bookmaker-logos/draftkings.png',
-    'FanDuel': '/bookmaker-logos/fd.png',
-    'BetMGM': '/bookmaker-logos/betmgm.png',
-    'BetRivers': '/bookmaker-logos/betrivers.png'
+  'DraftKings': '/bookmaker-logos/draftkings.png',
+  'FanDuel': '/bookmaker-logos/fd.png',
+  'BetMGM': '/bookmaker-logos/betmgm.png',
+  'BetRivers': '/bookmaker-logos/betrivers.png',
+  'Caesars': '/bookmaker-logos/caesars.png',
+  'BetOnline.ag': '/bookmaker-logos/betonline.png'
   };
   
   // Map market keys

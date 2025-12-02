@@ -33,10 +33,12 @@ export default function FuturesTable({
 
   // Bookmaker logos mapping with type annotation
   const bookmakerLogos: { [key: string]: string } = {
-    'DraftKings': '/bookmaker-logos/draftkings.png',
-    'FanDuel': '/bookmaker-logos/fd.png',
-    'BetMGM': '/bookmaker-logos/betmgm.png',
-    'BetRivers': '/bookmaker-logos/betrivers.png'
+  'DraftKings': '/bookmaker-logos/draftkings.png',
+  'FanDuel': '/bookmaker-logos/fd.png',
+  'BetMGM': '/bookmaker-logos/betmgm.png',
+  'BetRivers': '/bookmaker-logos/betrivers.png',
+  'Caesars': '/bookmaker-logos/caesars.png',
+  'BetOnline.ag': '/bookmaker-logos/betonline.png'
   };
 
   // Custom CSS for handling Masters mobile display
