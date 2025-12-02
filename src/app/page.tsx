@@ -671,7 +671,7 @@ export default function Home() {
                       <>
                         <h3 className="text-lg font-medium text-gray-900 mb-2">Favorites not loaded</h3>
                         <p className="text-gray-500 mb-4">
-                          Your favorited games aren't in cache yet. Visit their leagues to load them.
+                          Your favorited games aren&apos;t in cache yet. Visit their leagues to load them.
                         </p>
                         <p className="text-xs text-gray-400">
                           You have {favoriteGames.length} game(s) favorited
