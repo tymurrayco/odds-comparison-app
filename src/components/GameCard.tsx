@@ -7,9 +7,11 @@ import { Game } from '@/lib/api';
 interface GameCardProps {
   game: Game;
   selectedBookmakers?: string[];
+  isFavorite?: boolean;
+  onToggleFavorite?: (gameId: string) => void;
 }
 
-export default function GameCard({ game, selectedBookmakers }: GameCardProps) {
+export default function GameCard({ game, selectedBookmakers, isFavorite = false, onToggleFavorite }: GameCardProps) {
   // Check if this is a soccer sport
   const isSoccer = game.sport_key === 'soccer_epl' || game.sport_key === 'soccer_usa_mls';
   
@@ -116,6 +118,21 @@ export default function GameCard({ game, selectedBookmakers }: GameCardProps) {
               <h3 className="text-sm md:text-lg font-semibold text-gray-900 truncate">
                 {game.away_team} @ {game.home_team}
               </h3>
+              {/* Favorite Star Button */}
+              {onToggleFavorite && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleFavorite(game.id);
+                  }}
+                  className={`ml-2 text-lg hover:scale-110 transition-transform ${
+                    isFavorite ? 'text-yellow-500' : 'text-gray-900 hover:text-yellow-400'
+                  }`}
+                  aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+                >
+                  {isFavorite ? '★' : '☆'}
+                </button>
+              )}
               {isLive && (
                 <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
                   <span className="mr-1 w-2 h-2 rounded-full bg-red-600 animate-pulse"></span>

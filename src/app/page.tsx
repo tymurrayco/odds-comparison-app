@@ -44,6 +44,7 @@ export default function Home() {
   const [teamFilter, setTeamFilter] = useState(''); // Team filter state
   const [selectedConferences, setSelectedConferences] = useState<string[]>([]); // Conference filter state
   const [selectedBookmakers, setSelectedBookmakers] = useState<string[]>([...BOOKMAKERS]); // Bookmaker filter state
+  const [favoriteGames, setFavoriteGames] = useState<string[]>([]); // Favorite game IDs
   
   // Cache state
   const [gamesCache, setGamesCache] = useState<{ [league: string]: CacheItem<Game[]> }>({});
@@ -74,6 +75,19 @@ export default function Home() {
         console.error('Error parsing saved bookmakers:', e);
       }
     }
+    
+    // Load saved favorite games from localStorage
+    const savedFavorites = localStorage.getItem('favoriteGames');
+    if (savedFavorites) {
+      try {
+        const parsed = JSON.parse(savedFavorites);
+        if (Array.isArray(parsed)) {
+          setFavoriteGames(parsed);
+        }
+      } catch (e) {
+        console.error('Error parsing saved favorites:', e);
+      }
+    }
   }, []);
 
   // Force futures view when Masters is selected
@@ -99,10 +113,45 @@ export default function Home() {
     }
   }, [selectedBookmakers, isClient]);
 
+  // Save favorite games to localStorage
+  useEffect(() => {
+    if (isClient) {
+      localStorage.setItem('favoriteGames', JSON.stringify(favoriteGames));
+    }
+  }, [favoriteGames, isClient]);
+
+  // Toggle favorite game
+  const toggleFavoriteGame = (gameId: string) => {
+    setFavoriteGames(prev => 
+      prev.includes(gameId) 
+        ? prev.filter(id => id !== gameId)
+        : [...prev, gameId]
+    );
+  };
+
+  // Get all favorited games from cache
+  const favoritedGamesFromCache = useMemo(() => {
+    if (favoriteGames.length === 0) return [];
+    
+    const allCachedGames: Game[] = [];
+    Object.values(gamesCache).forEach(cacheItem => {
+      allCachedGames.push(...cacheItem.data);
+    });
+    
+    // Filter to only favorites
+    return allCachedGames.filter(g => favoriteGames.includes(g.id));
+  }, [favoriteGames, gamesCache]);
+
   // Load data from cache or API
   const loadData = useCallback(async function() {
     // Don't load odds data when viewing My Bets
     if (activeView === 'mybets') {
+      setLoading(false);
+      return;
+    }
+    
+    // For favorites view, we don't need to fetch new data
+    if (activeLeague === 'favorites') {
       setLoading(false);
       return;
     }
@@ -171,8 +220,8 @@ export default function Home() {
 
   // Force reload with fresh data (for refresh button)
   const forceRefresh = useCallback(async function() {
-    // Don't refresh when viewing My Bets
-    if (activeView === 'mybets') {
+    // Don't refresh when viewing My Bets or Favorites
+    if (activeView === 'mybets' || activeLeague === 'favorites') {
       return;
     }
     
@@ -208,12 +257,14 @@ export default function Home() {
     }
   }, [activeLeague, activeView]);
   
-  // Load data when league or view changes (but not for mybets)
+  // Load data when league or view changes (but not for mybets or favorites)
   useEffect(() => {
-    if (activeView !== 'mybets') {
+    if (activeView !== 'mybets' && activeLeague !== 'favorites') {
       loadData();
+    } else if (activeLeague === 'favorites') {
+      setLoading(false);
     }
-  }, [loadData, activeView]);
+  }, [loadData, activeView, activeLeague]);
 
   // Force the effective view for rendering - WITH EXPLICIT TYPE ANNOTATION
   const effectiveView: 'games' | 'futures' | 'mybets' = activeLeague === MASTERS_LEAGUE_ID ? 'futures' : activeView;
@@ -364,10 +415,11 @@ export default function Home() {
               onRefresh={forceRefresh}
               lastUpdated={lastUpdated}
               apiRequestsRemaining={apiRequestsRemaining}
+              favoritesCount={favoriteGames.length}
             />
 
-            {/* UPDATED: Team filter and Conference filter - shown for Games view */}
-            {effectiveView === 'games' && (
+            {/* UPDATED: Team filter and Conference filter - shown for Games view (but not favorites) */}
+            {effectiveView === 'games' && activeLeague !== 'favorites' && (
               <div className="mb-6 space-y-4">
                 <div className="flex flex-col sm:flex-row gap-4">
                   {/* Team filter */}
@@ -536,54 +588,56 @@ export default function Home() {
             )}
 
             {/* Toggle between Games and Futures - Custom version for Masters */}
-            {activeLeague === MASTERS_LEAGUE_ID ? (
-              // Masters only shows Futures tab
-              <div className="bg-white rounded-lg shadow p-2 mb-6 flex justify-center">
-                <div className="inline-flex rounded-md shadow-sm">
-                  <button
-                    type="button"
-                    className="px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white border border-gray-200"
-                  >
-                    Futures
-                  </button>
+            {activeLeague !== 'favorites' && (
+              activeLeague === MASTERS_LEAGUE_ID ? (
+                // Masters only shows Futures tab
+                <div className="bg-white rounded-lg shadow p-2 mb-6 flex justify-center">
+                  <div className="inline-flex rounded-md shadow-sm">
+                    <button
+                      type="button"
+                      className="px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white border border-gray-200"
+                    >
+                      Futures
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ) : (
-              // Other leagues show both tabs
-              <div className="bg-white rounded-lg shadow p-2 mb-6 flex justify-center">
-                <div className="inline-flex rounded-md shadow-sm">
-                  <button
-                    type="button"
-                    className={`px-4 py-2 text-sm font-medium rounded-l-lg ${
-                      activeView === 'games'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-white text-gray-700 hover:bg-gray-50'
-                    } border border-gray-200`}
-                    onClick={() => {
-                      setActiveView('games');
-                      setTeamFilter(''); // Clear filter when switching views
-                      setSelectedConferences([]); // Clear conference filter when switching views
-                    }}
-                  >
-                    Games
-                  </button>
-                  <button
-                    type="button"
-                    className={`px-4 py-2 text-sm font-medium rounded-r-lg ${
-                      activeView === 'futures'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-white text-gray-700 hover:bg-gray-50'
-                    } border border-gray-200 border-l-0`}
-                    onClick={() => {
-                      setActiveView('futures');
-                      setTeamFilter(''); // Clear filter when switching views
-                      setSelectedConferences([]); // Clear conference filter when switching views
-                    }}
-                  >
-                    Futures
-                  </button>
+              ) : (
+                // Other leagues show both tabs
+                <div className="bg-white rounded-lg shadow p-2 mb-6 flex justify-center">
+                  <div className="inline-flex rounded-md shadow-sm">
+                    <button
+                      type="button"
+                      className={`px-4 py-2 text-sm font-medium rounded-l-lg ${
+                        activeView === 'games'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-white text-gray-700 hover:bg-gray-50'
+                      } border border-gray-200`}
+                      onClick={() => {
+                        setActiveView('games');
+                        setTeamFilter(''); // Clear filter when switching views
+                        setSelectedConferences([]); // Clear conference filter when switching views
+                      }}
+                    >
+                      Games
+                    </button>
+                    <button
+                      type="button"
+                      className={`px-4 py-2 text-sm font-medium rounded-r-lg ${
+                        activeView === 'futures'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-white text-gray-700 hover:bg-gray-50'
+                      } border border-gray-200 border-l-0`}
+                      onClick={() => {
+                        setActiveView('futures');
+                        setTeamFilter(''); // Clear filter when switching views
+                        setSelectedConferences([]); // Clear conference filter when switching views
+                      }}
+                    >
+                      Futures
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )
             )}
           </>
         )}
@@ -600,7 +654,49 @@ export default function Home() {
         ) : (
           // Games or Futures Content
           <div>
-            {effectiveView === 'games' ? (
+            {activeLeague === 'favorites' ? (
+              // Favorites View
+              <div>
+                {favoritedGamesFromCache.length === 0 ? (
+                  <div className="bg-white rounded-lg shadow p-6 text-center">
+                    <div className="text-4xl mb-4">⭐</div>
+                    {favoriteGames.length === 0 ? (
+                      <>
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">No favorites yet</h3>
+                        <p className="text-gray-500">
+                          Tap the ☆ star next to any game to add it to your favorites.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">Favorites not loaded</h3>
+                        <p className="text-gray-500 mb-4">
+                          Your favorited games aren't in cache yet. Visit their leagues to load them.
+                        </p>
+                        <p className="text-xs text-gray-400">
+                          You have {favoriteGames.length} game(s) favorited
+                        </p>
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-sm text-gray-600 mb-4">
+                      Showing {favoritedGamesFromCache.length} favorited game{favoritedGamesFromCache.length !== 1 ? 's' : ''}
+                    </p>
+                    {favoritedGamesFromCache.map(game => (
+                      <GameCard 
+                        key={game.id} 
+                        game={game} 
+                        selectedBookmakers={selectedBookmakers}
+                        isFavorite={true}
+                        onToggleFavorite={toggleFavoriteGame}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : effectiveView === 'games' ? (
               <div>
                 {filteredGames.length === 0 ? (
                   <div className="bg-white rounded-lg shadow p-6 text-center">
@@ -615,6 +711,8 @@ export default function Home() {
                         key={game.id} 
                         game={game} 
                         selectedBookmakers={selectedBookmakers}
+                        isFavorite={favoriteGames.includes(game.id)}
+                        onToggleFavorite={toggleFavoriteGame}
                       />
                     ))}
                   </div>

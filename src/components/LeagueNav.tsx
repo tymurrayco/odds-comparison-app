@@ -8,6 +8,7 @@ interface LeagueNavProps {
   onRefresh: () => void;
   lastUpdated: Date;
   apiRequestsRemaining?: string | null;
+  favoritesCount?: number;
 }
 
 export default function LeagueNav({ 
@@ -15,7 +16,8 @@ export default function LeagueNav({
   setActiveLeague, 
   onRefresh, 
   lastUpdated,
-  apiRequestsRemaining
+  apiRequestsRemaining,
+  favoritesCount = 0
 }: LeagueNavProps) {
   const [timeString, setTimeString] = useState<string>('');
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -43,6 +45,21 @@ export default function LeagueNav({
     <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
       <div className="flex flex-col sm:flex-row justify-between mb-2">
         <div className="flex flex-wrap gap-2 mb-2 sm:mb-0">
+          {/* Favorites option */}
+          <button
+            className={`px-4 py-2 rounded-full flex items-center gap-1 ${
+              activeLeague === 'favorites'
+                ? 'bg-yellow-500 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+            onClick={() => setActiveLeague('favorites')}
+          >
+            <span>★</span>
+            {favoritesCount > 0 && (
+              <span className="text-xs">({favoritesCount})</span>
+            )}
+          </button>
+          
           {LEAGUES.filter(league => league.isActive).map(league => (
             <button
               key={league.id}
