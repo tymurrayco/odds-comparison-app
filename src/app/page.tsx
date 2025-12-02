@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { fetchOdds, fetchFutures, Game, FuturesMarket, BOOKMAKERS } from '@/lib/api';
+import { fetchOdds, fetchFutures, Game, FuturesMarket, BOOKMAKERS, LEAGUES } from '@/lib/api';
 import LeagueNav from '@/components/LeagueNav';
 import GameCard from '@/components/GameCard';
 import FuturesTable from '@/components/FuturesTable';
@@ -45,6 +45,7 @@ export default function Home() {
   const [selectedConferences, setSelectedConferences] = useState<string[]>([]); // Conference filter state
   const [selectedBookmakers, setSelectedBookmakers] = useState<string[]>([...BOOKMAKERS]); // Bookmaker filter state
   const [favoriteGames, setFavoriteGames] = useState<string[]>([]); // Favorite game IDs
+  const [favoritesLoading, setFavoritesLoading] = useState(false); // Separate loading state for favorites
   
   // Cache state
   const [gamesCache, setGamesCache] = useState<{ [league: string]: CacheItem<Game[]> }>({});
@@ -144,6 +145,85 @@ export default function Home() {
       .sort((a, b) => new Date(a.commence_time).getTime() - new Date(b.commence_time).getTime());
   }, [favoriteGames, gamesCache]);
 
+  // Load all active leagues for favorites view
+  const loadAllLeaguesForFavorites = useCallback(async () => {
+    if (favoriteGames.length === 0) {
+      setFavoritesLoading(false);
+      return;
+    }
+
+    setFavoritesLoading(true);
+    
+    try {
+      const now = Date.now();
+      // Get all active leagues that support games (not Masters which is futures-only)
+      const activeLeagueIds = LEAGUES
+        .filter(l => l.isActive && l.id !== MASTERS_LEAGUE_ID)
+        .map(l => l.id);
+      
+      // Check which leagues need to be fetched (not cached or cache expired)
+      const leaguesToFetch = activeLeagueIds.filter(leagueId => !isValidCache(gamesCache, leagueId));
+      
+      if (leaguesToFetch.length === 0) {
+        // All leagues are cached, no need to fetch
+        setFavoritesLoading(false);
+        return;
+      }
+      
+      // Fetch all needed leagues in parallel
+      const results = await Promise.all(
+        leaguesToFetch.map(async (leagueId) => {
+          try {
+            const response = await fetchOdds(leagueId);
+            return { 
+              league: leagueId, 
+              data: response.data, 
+              timestamp: now,
+              requestsRemaining: response.requestsRemaining
+            };
+          } catch (error) {
+            console.error(`Error fetching ${leagueId}:`, error);
+            return null;
+          }
+        })
+      );
+      
+      // Update cache with results
+      const validResults = results.filter((r): r is NonNullable<typeof r> => r !== null);
+      if (validResults.length > 0) {
+        setGamesCache(prev => {
+          const newCache = { ...prev };
+          validResults.forEach(result => {
+            newCache[result.league] = { 
+              data: result.data, 
+              timestamp: result.timestamp, 
+              league: result.league 
+            };
+          });
+          return newCache;
+        });
+        
+        // Update API requests remaining with the last result
+        const lastResult = validResults[validResults.length - 1];
+        if (lastResult.requestsRemaining) {
+          setApiRequestsRemaining(lastResult.requestsRemaining);
+        }
+        setLastUpdated(new Date());
+      }
+    } catch (error) {
+      console.error('Error loading favorites:', error);
+    } finally {
+      setFavoritesLoading(false);
+    }
+  }, [favoriteGames.length, gamesCache]);
+
+  // Load favorites when switching to favorites view
+  useEffect(() => {
+    if (activeLeague === 'favorites' && favoriteGames.length > 0) {
+      loadAllLeaguesForFavorites();
+    }
+  }, [activeLeague, loadAllLeaguesForFavorites, favoriteGames.length]);
+
   // Load data from cache or API
   const loadData = useCallback(async function() {
     // Don't load odds data when viewing My Bets
@@ -152,7 +232,7 @@ export default function Home() {
       return;
     }
     
-    // For favorites view, we don't need to fetch new data
+    // For favorites view, we use a separate loading function
     if (activeLeague === 'favorites') {
       setLoading(false);
       return;
@@ -222,8 +302,67 @@ export default function Home() {
 
   // Force reload with fresh data (for refresh button)
   const forceRefresh = useCallback(async function() {
-    // Don't refresh when viewing My Bets or Favorites
-    if (activeView === 'mybets' || activeLeague === 'favorites') {
+    // Don't refresh when viewing My Bets
+    if (activeView === 'mybets') {
+      return;
+    }
+    
+    // For favorites, refresh all active leagues
+    if (activeLeague === 'favorites') {
+      if (favoriteGames.length === 0) return;
+      
+      setFavoritesLoading(true);
+      
+      try {
+        const now = Date.now();
+        const activeLeagueIds = LEAGUES
+          .filter(l => l.isActive && l.id !== MASTERS_LEAGUE_ID)
+          .map(l => l.id);
+        
+        // Fetch all active leagues (force refresh, ignore cache)
+        const results = await Promise.all(
+          activeLeagueIds.map(async (leagueId) => {
+            try {
+              const response = await fetchOdds(leagueId);
+              return { 
+                league: leagueId, 
+                data: response.data, 
+                timestamp: now,
+                requestsRemaining: response.requestsRemaining
+              };
+            } catch (error) {
+              console.error(`Error fetching ${leagueId}:`, error);
+              return null;
+            }
+          })
+        );
+        
+        // Update cache with results
+        const validResults = results.filter((r): r is NonNullable<typeof r> => r !== null);
+        if (validResults.length > 0) {
+          setGamesCache(prev => {
+            const newCache = { ...prev };
+            validResults.forEach(result => {
+              newCache[result.league] = { 
+                data: result.data, 
+                timestamp: result.timestamp, 
+                league: result.league 
+              };
+            });
+            return newCache;
+          });
+          
+          const lastResult = validResults[validResults.length - 1];
+          if (lastResult.requestsRemaining) {
+            setApiRequestsRemaining(lastResult.requestsRemaining);
+          }
+          setLastUpdated(new Date());
+        }
+      } catch (error) {
+        console.error('Error refreshing favorites:', error);
+      } finally {
+        setFavoritesLoading(false);
+      }
       return;
     }
     
@@ -257,7 +396,7 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, [activeLeague, activeView]);
+  }, [activeLeague, activeView, favoriteGames.length]);
   
   // Load data when league or view changes (but not for mybets or favorites)
   useEffect(() => {
@@ -648,7 +787,7 @@ export default function Home() {
         {activeView === 'mybets' ? (
           // My Bets View
           <MyBets />
-        ) : loading ? (
+        ) : loading || (activeLeague === 'favorites' && favoritesLoading) ? (
           // Loading State
           <div className="flex justify-center py-12">
             <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-500"></div>
@@ -659,27 +798,24 @@ export default function Home() {
             {activeLeague === 'favorites' ? (
               // Favorites View
               <div>
-                {favoritedGamesFromCache.length === 0 ? (
+                {favoriteGames.length === 0 ? (
                   <div className="bg-white rounded-lg shadow p-6 text-center">
                     <div className="text-4xl mb-4">⭐</div>
-                    {favoriteGames.length === 0 ? (
-                      <>
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">No favorites yet</h3>
-                        <p className="text-gray-500">
-                          Tap the ☆ star next to any game to add it to your favorites.
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">Favorites not loaded</h3>
-                        <p className="text-gray-500 mb-4">
-                          Your favorited games aren&apos;t in cache yet. Visit their leagues to load them.
-                        </p>
-                        <p className="text-xs text-gray-400">
-                          You have {favoriteGames.length} game(s) favorited
-                        </p>
-                      </>
-                    )}
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No favorites yet</h3>
+                    <p className="text-gray-500">
+                      Tap the ☆ star next to any game to add it to your favorites.
+                    </p>
+                  </div>
+                ) : favoritedGamesFromCache.length === 0 ? (
+                  <div className="bg-white rounded-lg shadow p-6 text-center">
+                    <div className="text-4xl mb-4">📭</div>
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No active favorites</h3>
+                    <p className="text-gray-500 mb-4">
+                      Your favorited games may have ended or are no longer available.
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      You have {favoriteGames.length} game(s) saved
+                    </p>
                   </div>
                 ) : (
                   <div>
