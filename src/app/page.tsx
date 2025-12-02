@@ -420,31 +420,7 @@ export default function Home() {
                     </div>
                   </div>
                   
-                  {/* View toggle for Games/Futures */}
-                  {activeLeague !== MASTERS_LEAGUE_ID && (
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => setActiveView('games')}
-                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                          activeView === 'games'
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
-                      >
-                        Games
-                      </button>
-                      <button
-                        onClick={() => setActiveView('futures')}
-                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                          activeView === 'futures'
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
-                      >
-                        Futures
-                      </button>
-                    </div>
-                  )}
+
                 </div>
                 
                 {/* Conference Filter - only show for supported sports */}
