@@ -329,11 +329,11 @@ export default function Home() {
                     setActiveView(activeView === 'mybets' ? 'games' : 'mybets');
                   }
                 }}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-all select-none ${
-                  activeView === 'mybets'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                } ${isHolding ? 'scale-95 ring-2 ring-blue-400' : ''}`}
+                className={`px-3 py-2 rounded-xl text-sm font-medium transition-all select-none border border-gray-200 shadow-sm ${
+  activeView === 'mybets'
+    ? 'bg-blue-600 text-white'
+    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+} ${isHolding ? 'scale-95 ring-2 ring-blue-400' : ''}`}
                 style={{ userSelect: 'none' }}
               >
                 📊 Bets {isHolding && '...'}
