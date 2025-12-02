@@ -138,8 +138,10 @@ export default function Home() {
       allCachedGames.push(...cacheItem.data);
     });
     
-    // Filter to only favorites
-    return allCachedGames.filter(g => favoriteGames.includes(g.id));
+    // Filter to only favorites and sort chronologically (nearest game first)
+    return allCachedGames
+      .filter(g => favoriteGames.includes(g.id))
+      .sort((a, b) => new Date(a.commence_time).getTime() - new Date(b.commence_time).getTime());
   }, [favoriteGames, gamesCache]);
 
   // Load data from cache or API
