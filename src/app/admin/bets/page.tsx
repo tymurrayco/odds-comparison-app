@@ -74,6 +74,7 @@ export default function BetAdminPage() {
   });
   
   const [formData, setFormData] = useState(getInitialFormState());
+  const [oddsInput, setOddsInput] = useState('-110'); // Separate string state for odds input
   
   // Load bets on mount
   useEffect(() => {
@@ -111,6 +112,7 @@ export default function BetAdminPage() {
       
       // Reset form
       setFormData(getInitialFormState());
+      setOddsInput('-110'); // Reset odds input string
       setEditingBet(null);
       
       // Reload bets and switch to list view on mobile
@@ -144,6 +146,7 @@ export default function BetAdminPage() {
       book: bet.book || 'FanDuel',
       notes: bet.notes || ''
     });
+    setOddsInput(String(bet.odds)); // Sync odds input string
     setEditingBet(bet);
     setView('form');
     setShowForm(true);
@@ -327,7 +330,10 @@ export default function BetAdminPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setFormData({...formData, odds: -110})}
+                  onClick={() => {
+                    setFormData({...formData, odds: -110});
+                    setOddsInput('-110');
+                  }}
                   className="px-3 py-2 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200"
                 >
                   -110
@@ -506,9 +512,29 @@ export default function BetAdminPage() {
                   <div>
                     <label className="block text-xs font-medium mb-1">Odds</label>
                     <input
-                      type="number"
-                      value={formData.odds}
-                      onChange={(e) => setFormData({...formData, odds: parseInt(e.target.value) || 0})}
+                      type="text"
+                      inputMode="numeric"
+                      value={oddsInput}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        // Allow empty, minus sign, or valid number patterns
+                        if (val === '' || val === '-' || /^-?\d+$/.test(val)) {
+                          setOddsInput(val);
+                          // Update formData.odds only when we have a valid number
+                          const parsed = parseInt(val);
+                          if (!isNaN(parsed)) {
+                            setFormData({...formData, odds: parsed});
+                          }
+                        }
+                      }}
+                      onBlur={() => {
+                        // On blur, ensure we have a valid number (default to -110 if invalid)
+                        const parsed = parseInt(oddsInput);
+                        if (isNaN(parsed) || oddsInput === '' || oddsInput === '-') {
+                          setOddsInput('-110');
+                          setFormData({...formData, odds: -110});
+                        }
+                      }}
                       className="w-full px-2 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500"
                       required
                     />
@@ -572,6 +598,7 @@ export default function BetAdminPage() {
                   onClick={() => {
                     setEditingBet(null);
                     setFormData(getInitialFormState());
+                    setOddsInput('-110');
                   }}
                   className="px-4 py-2.5 bg-gray-500 text-white rounded-lg"
                 >
