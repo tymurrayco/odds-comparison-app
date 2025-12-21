@@ -136,15 +136,30 @@ export default function MyBets() {
     }
   };
 
-  const getStatusIcon = (status: BetStatus): string => {
-    switch (status) {
-      case 'won': return '✔';
-      case 'lost': return '✗';
-      case 'push': return '—';
-      case 'pending': return '○';
-      default: return '?';
-    }
-  };
+const getStatusIcon = (status: BetStatus, sport?: string, league?: string): string => {
+  switch (status) {
+    case 'won': return '✔';
+    case 'lost': return '✗';
+    case 'push': return '—';
+    case 'pending': 
+      // Return sport-specific icon for pending bets
+      // Check league first (more reliable), then sport
+      const leagueLower = league?.toLowerCase() || '';
+      const sportLower = sport?.toLowerCase() || '';
+      
+      if (leagueLower.includes('ncaab') || leagueLower.includes('nba') || leagueLower.includes('wnba') || sportLower === 'basketball') return '🏀';
+      if (leagueLower.includes('ncaaf') || leagueLower.includes('nfl') || sportLower === 'football') return '🏈';
+      if (leagueLower.includes('mlb') || sportLower === 'baseball') return '⚾';
+      if (leagueLower.includes('nhl') || sportLower === 'hockey') return '🏒';
+      if (leagueLower.includes('mls') || leagueLower.includes('epl') || sportLower === 'soccer') return '⚽';
+      if (leagueLower.includes('pga') || sportLower === 'golf') return '⛳';
+      if (sportLower === 'tennis') return '🎾';
+      if (leagueLower.includes('ufc') || sportLower === 'mma') return '🥊';
+      
+      return '○';
+    default: return '?';
+  }
+};
 
   const formatOdds = (odds: number): string => {
     if (odds > 0) return `+${odds}`;
@@ -343,7 +358,7 @@ export default function MyBets() {
           <button
             onClick={() => {
               setViewType('futures');
-              setStatusFilter('all');
+              setStatusFilter('pending');
             }}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
               viewType === 'futures'
@@ -487,7 +502,7 @@ export default function MyBets() {
                     <div className="flex items-center gap-2">
                       {/* Status Icon */}
                       <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${getStatusColor(bet.status)}`}>
-                        {getStatusIcon(bet.status)}
+                        {getStatusIcon(bet.status, bet.sport, bet.league)}
                       </div>
 
                       {/* Event Date - Shows prominently - Hidden on mobile for futures */}
