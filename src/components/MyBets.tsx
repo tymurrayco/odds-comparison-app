@@ -22,7 +22,7 @@ export default function MyBets() {
   const [error, setError] = useState<string | null>(null);
   
   // KEPT: All your existing state
-  const [statusFilter, setStatusFilter] = useState<BetStatus | 'all'>('all');
+  const [statusFilter, setStatusFilter] = useState<BetStatus | 'all'>('pending');
   const [expandedBetId, setExpandedBetId] = useState<string | null>(null);
   const [viewType, setViewType] = useState<'games' | 'futures'>('games');
 
