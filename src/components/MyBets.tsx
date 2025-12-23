@@ -414,47 +414,39 @@ const getStatusIcon = (status: BetStatus, sport?: string, league?: string): stri
                     {leagueStats.winRate.toFixed(0)}% Win
                   </span>
                   <span className={`font-medium ${leagueStats.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {leagueStats.profit >= 0 ? '+' : ''}{leagueStats.profit.toFixed(2)} units
-                  </span>
-                  <span className="text-gray-500">
-                    {leagueStats.roi >= 0 ? '+' : ''}{leagueStats.roi.toFixed(1)}% ROI
+                    {leagueStats.profit >= 0 ? '+' : ''}{leagueStats.profit.toFixed(2)}u
                   </span>
                 </div>
-                {leagueStats.pendingBets > 0 && (
-                  <div className="flex items-center gap-1 text-xs">
-                    <span className="text-blue-600">
-                      {leagueStats.pendingBets} pending
-                    </span>
-                    <span className="text-gray-500">
-                      ({leagueStats.pendingStake.toFixed(2)}u)
-                    </span>
-                  </div>
-                )}
+                <span className="text-gray-400">
+                  {leagueStats.pendingBets} pending
+                </span>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* Filter Tabs - KEPT EXACTLY AS IS */}
+      {/* Status Filter Tabs - KEPT EXACTLY AS IS */}
       <div className="bg-white rounded-lg shadow p-2">
-        <div className="flex gap-1 overflow-x-auto">
-          {(['all', 'pending', 'won', 'lost'] as const).map(status => (
+        <div className="flex gap-1 justify-center flex-wrap">
+          {(['all', 'pending', 'won', 'lost', 'push'] as const).map(status => (
             <button
               key={status}
               onClick={() => setStatusFilter(status)}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-colors ${
-                statusFilter === status 
-                  ? status === 'pending' ? 'bg-blue-600 text-white' :
-                    status === 'won' ? 'bg-green-600 text-white' :
-                    status === 'lost' ? 'bg-red-600 text-white' :
-                    'bg-gray-600 text-white'
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                statusFilter === status
+                  ? status === 'all' ? 'bg-gray-700 text-white'
+                    : status === 'won' ? 'bg-green-600 text-white'
+                    : status === 'lost' ? 'bg-red-600 text-white'
+                    : status === 'push' ? 'bg-gray-500 text-white'
+                    : 'bg-blue-600 text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
-              {status.charAt(0).toUpperCase() + status.slice(1)}
-              <span className="ml-1">
-                ({status === 'all' ? currentBets.length :
+              <span className="capitalize">{status}</span>
+              <span className="ml-1 opacity-75">
+                ({status === 'all' ? 
+                  currentBets.length :
                   currentBets.filter(b => b.status === status).length})
               </span>
             </button>
@@ -485,6 +477,7 @@ const getStatusIcon = (status: BetStatus, sport?: string, league?: string): stri
             const teams = parseTeams(bet);
             const futureTeam = bet.betType === 'future' ? bet.team : null;
             const isTeaser = bet.betType === 'teaser';
+            const isParlay = bet.betType === 'parlay';
 
             return (
               <div key={bet.id}>
@@ -524,11 +517,57 @@ const getStatusIcon = (status: BetStatus, sport?: string, league?: string): stri
                         {bet.league}
                       </span>
 
-                      {/* Teams/Description with Logos - Mobile optimized with teaser support */}
+                      {/* Teams/Description with Logos - Mobile optimized with teaser and parlay support */}
                       <div className={`flex items-center gap-1 min-w-0 ${
                         viewType === 'games' ? 'flex-1' : ''
                       }`}>
-                        {viewType === 'games' && teams ? (
+                        {/* PARLAY: Show logos side-by-side without @ symbol */}
+                        {viewType === 'games' && isParlay && teams ? (
+                          <>
+                            {/* Mobile: Show logos only, no separator */}
+                            <div className="flex sm:hidden items-center gap-1">
+                              <img 
+                                src={getTeamLogo(teams.away)}
+                                alt=""
+                                className="h-5 w-5"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                }}
+                              />
+                              <img 
+                                src={getTeamLogo(teams.home)}
+                                alt=""
+                                className="h-5 w-5"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                }}
+                              />
+                            </div>
+                            
+                            {/* Desktop: Show logos with team names separated by comma */}
+                            <div className="hidden sm:flex items-center gap-1">
+                              <img 
+                                src={getTeamLogo(teams.away)}
+                                alt=""
+                                className="h-4 w-4"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                }}
+                              />
+                              <span className="text-sm truncate">{teams.away}</span>
+                              <span className="text-xs text-gray-400">,</span>
+                              <img 
+                                src={getTeamLogo(teams.home)}
+                                alt=""
+                                className="h-4 w-4"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                }}
+                              />
+                              <span className="text-sm truncate">{teams.home}</span>
+                            </div>
+                          </>
+                        ) : viewType === 'games' && teams ? (
                           <>
                             {/* Mobile: Show logos only or with abbreviated names */}
                             <div className="flex sm:hidden items-center gap-1">
@@ -690,10 +729,10 @@ const getStatusIcon = (status: BetStatus, sport?: string, league?: string): stri
                         {viewType === 'games' && teams && (
                           <div className="sm:hidden mb-2 p-2 bg-gray-50 rounded">
                             <span className="font-medium text-gray-800">
-                              {isTeaser ? 'Teaser' : 'Game'}:
+                              {isParlay ? 'Parlay' : isTeaser ? 'Teaser' : 'Game'}:
                             </span>
                             <span className="block mt-1 text-gray-700">
-                              {teams.away} {isTeaser ? '&' : '@'} {teams.home}
+                              {teams.away} {isParlay ? '+' : isTeaser ? '&' : '@'} {teams.home}
                             </span>
                             <div className="mt-2 flex justify-between text-xs">
                               <span className="text-gray-500">League:</span>
