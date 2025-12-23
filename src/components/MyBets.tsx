@@ -555,7 +555,7 @@ const getStatusIcon = (status: BetStatus, sport?: string, league?: string): stri
                                 }}
                               />
                               <span className="text-sm truncate">{teams.away}</span>
-                              <span className="text-xs text-gray-400">,</span>
+                              <span className="text-xs text-gray-400">&</span>
                               <img 
                                 src={getTeamLogo(teams.home)}
                                 alt=""
