@@ -25,6 +25,7 @@ export interface Bet {
   notes?: string;
   book?: string;
   team?: string;
+  parlayTeams?: string[];
 }
 
 // Fetch all bets from Supabase
@@ -59,6 +60,7 @@ export async function fetchBets(): Promise<Bet[]> {
     result: dbBet.result || undefined,
     notes: dbBet.notes || undefined,
     book: dbBet.book || undefined,
+    parlayTeams: dbBet.parlay_teams || undefined,
   }));
 }
 
@@ -81,6 +83,7 @@ export async function createBet(bet: Omit<Bet, 'id'>) {
     result: bet.result || null,
     book: bet.book || null,
     notes: bet.notes || null,
+    parlay_teams: bet.parlayTeams || null,
     deleted: false
   };
 
@@ -117,6 +120,7 @@ export async function updateBet(id: string, updates: Partial<Bet>) {
     result?: string | null;
     book?: string | null;
     notes?: string | null;
+    parlay_teams?: string[] | null;
   }
   
   const dbUpdates: DbUpdate = {};
@@ -138,6 +142,7 @@ export async function updateBet(id: string, updates: Partial<Bet>) {
   if (updates.result !== undefined) dbUpdates.result = updates.result || null;
   if (updates.book !== undefined) dbUpdates.book = updates.book || null;
   if (updates.notes !== undefined) dbUpdates.notes = updates.notes || null;
+  if (updates.parlayTeams !== undefined) dbUpdates.parlay_teams = updates.parlayTeams || null;
 
   const { data, error } = await supabase
     .from('bets')

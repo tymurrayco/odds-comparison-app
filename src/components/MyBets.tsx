@@ -521,9 +521,51 @@ const getStatusIcon = (status: BetStatus, sport?: string, league?: string): stri
                       <div className={`flex items-center gap-1 min-w-0 ${
                         viewType === 'games' ? 'flex-1' : ''
                       }`}>
-                        {/* PARLAY: Show logos side-by-side without @ symbol */}
-                        {viewType === 'games' && isParlay && teams ? (
+                        {/* PARLAY: Show all team logos from parlayTeams array */}
+                        {viewType === 'games' && isParlay && bet.parlayTeams && bet.parlayTeams.length > 0 ? (
                           <>
+                            {/* Mobile: Show all logos with & separators */}
+                            <div className="flex sm:hidden items-center gap-1 flex-wrap">
+                              {bet.parlayTeams.map((team, index) => (
+                                <span key={index} className="flex items-center gap-1">
+                                  <img 
+                                    src={getTeamLogo(team)}
+                                    alt=""
+                                    className="h-5 w-5"
+                                    onError={(e) => {
+                                      e.currentTarget.style.display = 'none';
+                                    }}
+                                  />
+                                  {index < bet.parlayTeams!.length - 1 && (
+                                    <span className="text-xs text-gray-400">&</span>
+                                  )}
+                                </span>
+                              ))}
+                            </div>
+                            
+                            {/* Desktop: Show all logos with team names separated by & */}
+                            <div className="hidden sm:flex items-center gap-1 flex-wrap">
+                              {bet.parlayTeams.map((team, index) => (
+                                <span key={index} className="flex items-center gap-1">
+                                  <img 
+                                    src={getTeamLogo(team)}
+                                    alt=""
+                                    className="h-4 w-4"
+                                    onError={(e) => {
+                                      e.currentTarget.style.display = 'none';
+                                    }}
+                                  />
+                                  <span className="text-sm truncate">{team}</span>
+                                  {index < bet.parlayTeams!.length - 1 && (
+                                    <span className="text-xs text-gray-400">&</span>
+                                  )}
+                                </span>
+                              ))}
+                            </div>
+                          </>
+                        ) : viewType === 'games' && isParlay && teams ? (
+                          <>
+                            {/* Fallback for parlays without parlayTeams array (legacy data) */}
                             {/* Mobile: Show logos with & separator */}
                             <div className="flex sm:hidden items-center gap-1">
                               <img 
@@ -545,7 +587,7 @@ const getStatusIcon = (status: BetStatus, sport?: string, league?: string): stri
                               />
                             </div>
                             
-                            {/* Desktop: Show logos with team names separated by comma */}
+                            {/* Desktop: Show logos with team names separated by & */}
                             <div className="hidden sm:flex items-center gap-1">
                               <img 
                                 src={getTeamLogo(teams.away)}
@@ -712,7 +754,7 @@ const getStatusIcon = (status: BetStatus, sport?: string, league?: string): stri
                     </div>
                   </div>
 
-                  {/* Expanded Details - UPDATED FOR TEASERS */}
+                  {/* Expanded Details - UPDATED FOR TEASERS AND PARLAYS */}
                   {isExpanded && (
                     <div className="px-3 pb-3 pt-0 border-t border-gray-100">
                       <div className="mt-2 space-y-1 text-xs">
@@ -726,14 +768,28 @@ const getStatusIcon = (status: BetStatus, sport?: string, league?: string): stri
                           </div>
                         )}
                         
-                        {/* Show full team names on mobile when expanded */}
-                        {viewType === 'games' && teams && (
+                        {/* Show all parlay teams on mobile when expanded */}
+                        {viewType === 'games' && isParlay && bet.parlayTeams && bet.parlayTeams.length > 0 && (
+                          <div className="sm:hidden mb-2 p-2 bg-gray-50 rounded">
+                            <span className="font-medium text-gray-800">Parlay Teams:</span>
+                            <span className="block mt-1 text-gray-700">
+                              {bet.parlayTeams.join(' & ')}
+                            </span>
+                            <div className="mt-2 flex justify-between text-xs">
+                              <span className="text-gray-500">League:</span>
+                              <span>{bet.league}</span>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Show full team names on mobile when expanded (non-parlay or legacy parlay) */}
+                        {viewType === 'games' && teams && !(isParlay && bet.parlayTeams && bet.parlayTeams.length > 0) && (
                           <div className="sm:hidden mb-2 p-2 bg-gray-50 rounded">
                             <span className="font-medium text-gray-800">
                               {isParlay ? 'Parlay' : isTeaser ? 'Teaser' : 'Game'}:
                             </span>
                             <span className="block mt-1 text-gray-700">
-                              {teams.away} {isParlay ? '+' : isTeaser ? '&' : '@'} {teams.home}
+                              {teams.away} {isParlay ? '&' : isTeaser ? '&' : '@'} {teams.home}
                             </span>
                             <div className="mt-2 flex justify-between text-xs">
                               <span className="text-gray-500">League:</span>

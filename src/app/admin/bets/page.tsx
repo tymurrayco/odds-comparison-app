@@ -17,6 +17,9 @@ export default function BetAdminPage() {
   const [sentBets, setSentBets] = useState<Set<string>>(new Set());
   const [isDesktop, setIsDesktop] = useState(false);
   
+  // State for parlay teams
+  const [parlayTeams, setParlayTeams] = useState<string[]>(['', '']);
+  
   // Detect screen size on mount
   useEffect(() => {
     const checkScreenSize = () => {
@@ -90,18 +93,42 @@ export default function BetAdminPage() {
     }
   };
   
+  // Update description when parlay teams change
+  useEffect(() => {
+    if (formData.betType === 'parlay') {
+      const filledTeams = parlayTeams.filter(t => t.trim() !== '');
+      if (filledTeams.length > 0) {
+        setFormData(prev => ({
+          ...prev,
+          description: filledTeams.join(' & ')
+        }));
+      }
+    }
+  }, [parlayTeams, formData.betType]);
+  
+  // Reset parlay teams when bet type changes away from parlay
+  useEffect(() => {
+    if (formData.betType !== 'parlay') {
+      setParlayTeams(['', '']);
+    }
+  }, [formData.betType]);
+  
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     
     try {
+      // Filter out empty parlay teams
+      const filledParlayTeams = parlayTeams.filter(t => t.trim() !== '');
+      
       const betData = {
         ...formData,
-        awayTeam: formData.awayTeam || undefined,
-        homeTeam: formData.homeTeam || undefined,
+        awayTeam: formData.betType === 'parlay' ? undefined : (formData.awayTeam || undefined),
+        homeTeam: formData.betType === 'parlay' ? undefined : (formData.homeTeam || undefined),
         team: formData.team || undefined,
         result: formData.result || undefined,
-        notes: formData.notes || undefined
+        notes: formData.notes || undefined,
+        parlayTeams: formData.betType === 'parlay' && filledParlayTeams.length > 0 ? filledParlayTeams : undefined
       };
       
       if (editingBet) {
@@ -113,6 +140,7 @@ export default function BetAdminPage() {
       // Reset form
       setFormData(getInitialFormState());
       setOddsInput('-110'); // Reset odds input string
+      setParlayTeams(['', '']); // Reset parlay teams
       setEditingBet(null);
       
       // Reload bets and switch to list view on mobile
@@ -147,6 +175,18 @@ export default function BetAdminPage() {
       notes: bet.notes || ''
     });
     setOddsInput(String(bet.odds)); // Sync odds input string
+    
+    // If editing a parlay, populate parlay teams
+    if (bet.betType === 'parlay' && bet.parlayTeams && bet.parlayTeams.length > 0) {
+      setParlayTeams(bet.parlayTeams);
+    } else if (bet.betType === 'parlay') {
+      // Try to parse from description if no parlayTeams saved
+      const teams = bet.description.split('&').map(t => t.trim()).filter(t => t);
+      setParlayTeams(teams.length >= 2 ? teams : ['', '']);
+    } else {
+      setParlayTeams(['', '']);
+    }
+    
     setEditingBet(bet);
     setView('form');
     setShowForm(true);
@@ -229,6 +269,24 @@ export default function BetAdminPage() {
         });
         break;
       }
+    }
+  };
+  
+  // Parlay team handlers
+  const handleParlayTeamChange = (index: number, value: string) => {
+    const newTeams = [...parlayTeams];
+    newTeams[index] = value;
+    setParlayTeams(newTeams);
+  };
+  
+  const addParlayTeam = () => {
+    setParlayTeams([...parlayTeams, '']);
+  };
+  
+  const removeParlayTeam = (index: number) => {
+    if (parlayTeams.length > 2) {
+      const newTeams = parlayTeams.filter((_, i) => i !== index);
+      setParlayTeams(newTeams);
     }
   };
   
@@ -324,7 +382,7 @@ export default function BetAdminPage() {
                   type="button"
                   onClick={parseAndFillTeams}
                   className="px-3 py-2 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200"
-                  disabled={formData.betType === 'future'}
+                  disabled={formData.betType === 'future' || formData.betType === 'parlay'}
                 >
                   📋 Parse Teams
                 </button>
@@ -431,22 +489,68 @@ export default function BetAdminPage() {
                   </div>
                 </div>
                 
-                {/* Description - Full Width */}
-                <div>
-                  <label className="block text-xs font-medium mb-1">
-                    Description {formData.betType === 'future' ? '' : formData.betType === 'teaser' ? '(e.g., Team & Team)' : '(e.g., Team @ Team)'}
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.description}
-                    onChange={(e) => setFormData({...formData, description: e.target.value})}
-                    placeholder={formData.betType === 'future' ? 'Championship/Award' : formData.betType === 'teaser' ? 'Team & Team' : 'Away @ Home'}
-                    className="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500"
-                    required
-                  />
-                </div>
+                {/* Description - Only show for non-parlay bets */}
+                {formData.betType !== 'parlay' && (
+                  <div>
+                    <label className="block text-xs font-medium mb-1">
+                      Description {formData.betType === 'future' ? '' : formData.betType === 'teaser' ? '(e.g., Team & Team)' : '(e.g., Team @ Team)'}
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.description}
+                      onChange={(e) => setFormData({...formData, description: e.target.value})}
+                      placeholder={formData.betType === 'future' ? 'Championship/Award' : formData.betType === 'teaser' ? 'Team & Team' : 'Away @ Home'}
+                      className="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500"
+                      required
+                    />
+                  </div>
+                )}
                 
-                {/* Teams - Conditional */}
+                {/* Parlay Teams Section */}
+                {formData.betType === 'parlay' && (
+                  <div className="p-3 bg-purple-50 rounded-lg border border-purple-200">
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="text-xs font-medium text-purple-900">Parlay Teams</label>
+                      <button
+                        type="button"
+                        onClick={addParlayTeam}
+                        className="px-2 py-1 bg-purple-600 text-white rounded text-xs hover:bg-purple-700"
+                      >
+                        + Add Team
+                      </button>
+                    </div>
+                    <div className="space-y-2">
+                      {parlayTeams.map((team, index) => (
+                        <div key={index} className="flex gap-2">
+                          <input
+                            type="text"
+                            value={team}
+                            onChange={(e) => handleParlayTeamChange(index, e.target.value)}
+                            placeholder={`Team ${index + 1}`}
+                            className="flex-1 px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-purple-500"
+                          />
+                          {parlayTeams.length > 2 && (
+                            <button
+                              type="button"
+                              onClick={() => removeParlayTeam(index)}
+                              className="px-2 py-1 bg-red-100 text-red-600 rounded text-sm hover:bg-red-200"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    {/* Auto-generated description preview */}
+                    {parlayTeams.filter(t => t.trim()).length > 0 && (
+                      <div className="mt-2 text-xs text-purple-700">
+                        <span className="font-medium">Description:</span> {parlayTeams.filter(t => t.trim()).join(' & ')}
+                      </div>
+                    )}
+                  </div>
+                )}
+                
+                {/* Teams - Conditional (for non-parlay, non-future) */}
                 {formData.betType === 'future' ? (
                   <div>
                     <label className="block text-xs font-medium mb-1">Team/Player</label>
@@ -458,7 +562,7 @@ export default function BetAdminPage() {
                       className="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
-                ) : (
+                ) : formData.betType !== 'parlay' && (
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-medium mb-1">
@@ -499,6 +603,7 @@ export default function BetAdminPage() {
                       formData.betType === 'spread' ? 'Team -3.5' :
                       formData.betType === 'total' ? 'Over 52.5' :
                       formData.betType === 'teaser' ? 'Team1 +7, Team2 -3' :
+                      formData.betType === 'parlay' ? 'Team1 -3, Team2 ML, Team3 +7' :
                       formData.betType === 'future' ? 'To win Championship' :
                       'Bet description'
                     }
@@ -599,6 +704,7 @@ export default function BetAdminPage() {
                     setEditingBet(null);
                     setFormData(getInitialFormState());
                     setOddsInput('-110');
+                    setParlayTeams(['', '']);
                   }}
                   className="px-4 py-2.5 bg-gray-500 text-white rounded-lg"
                 >
