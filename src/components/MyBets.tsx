@@ -524,7 +524,7 @@ const getStatusIcon = (status: BetStatus, sport?: string, league?: string): stri
                         {/* PARLAY: Show logos side-by-side without @ symbol */}
                         {viewType === 'games' && isParlay && teams ? (
                           <>
-                            {/* Mobile: Show logos only, no separator */}
+                            {/* Mobile: Show logos with & separator */}
                             <div className="flex sm:hidden items-center gap-1">
                               <img 
                                 src={getTeamLogo(teams.away)}
@@ -534,6 +534,7 @@ const getStatusIcon = (status: BetStatus, sport?: string, league?: string): stri
                                   e.currentTarget.style.display = 'none';
                                 }}
                               />
+                              <span className="text-xs text-gray-400">&</span>
                               <img 
                                 src={getTeamLogo(teams.home)}
                                 alt=""
