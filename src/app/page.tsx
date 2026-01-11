@@ -641,7 +641,7 @@ export default function Home() {
               onRefresh={forceRefresh}
               lastUpdated={lastUpdated}
               apiRequestsRemaining={apiRequestsRemaining}
-              favoritesCount={favoriteGames.length}
+              favoritesCount={favoritedGamesFromCache.length}
             />
 
             {/* Team filter for Games view */}
