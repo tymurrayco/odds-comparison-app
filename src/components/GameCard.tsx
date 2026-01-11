@@ -116,7 +116,8 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
       <div className="p-3 md:p-4 border-b border-gray-200">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between">
           <div className="mb-2 sm:mb-0">
-            <div className="flex items-center">
+            {/* Team names row */}
+            <div className="flex items-center flex-wrap">
               <h3 className="text-sm md:text-lg font-semibold text-gray-900 truncate">
                 {game.away_team} @ {game.home_team}
               </h3>
@@ -135,60 +136,63 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                   {isFavorite ? '★' : '☆'}
                 </button>
               )}
-              {/* Live indicator with score */}
-              {isLive && liveScore && (
-                <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
-                  <span className="mr-1.5 w-2 h-2 rounded-full bg-red-600 animate-pulse"></span>
-                  <img 
-                    src={getTeamLogo(game.away_team)}
-                    alt=""
-                    className="h-4 w-4 mr-0.5"
-                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                  />
-                  <span className="font-bold">{liveScore.awayScore}</span>
-                  <span className="mx-1">-</span>
-                  <span className="font-bold">{liveScore.homeScore}</span>
-                  <img 
-                    src={getTeamLogo(game.home_team)}
-                    alt=""
-                    className="h-4 w-4 ml-0.5"
-                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                  />
-                  <span className="ml-1.5 text-green-600">{liveScore.statusDetail}</span>
-                </span>
-              )}
-              {/* Final score */}
-              {isCompleted && liveScore && (
-                <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
-                  <img 
-                    src={getTeamLogo(game.away_team)}
-                    alt=""
-                    className="h-4 w-4 mr-0.5"
-                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                  />
-                  <span className="font-bold">{liveScore.awayScore}</span>
-                  <span className="mx-1">-</span>
-                  <span className="font-bold">{liveScore.homeScore}</span>
-                  <img 
-                    src={getTeamLogo(game.home_team)}
-                    alt=""
-                    className="h-4 w-4 ml-0.5"
-                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                  />
-                  <span className="ml-1.5 text-gray-500">Final</span>
-                </span>
-              )}
-              {/* Show LIVE badge without score if game started but no ESPN match */}
-              {!liveScore && now > gameDate && (
-                <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
-                  <span className="mr-1 w-2 h-2 rounded-full bg-red-600 animate-pulse"></span>
-                  LIVE
-                </span>
-              )}
+              {/* Desktop only: Live/Final scores inline with team names */}
+              <div className="hidden md:inline-flex">
+                {/* Live indicator with score */}
+                {isLive && liveScore && (
+                  <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                    <span className="mr-1.5 w-2 h-2 rounded-full bg-red-600 animate-pulse"></span>
+                    <img 
+                      src={getTeamLogo(game.away_team)}
+                      alt=""
+                      className="h-4 w-4 mr-0.5"
+                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                    />
+                    <span className="font-bold">{liveScore.awayScore}</span>
+                    <span className="mx-1">-</span>
+                    <span className="font-bold">{liveScore.homeScore}</span>
+                    <img 
+                      src={getTeamLogo(game.home_team)}
+                      alt=""
+                      className="h-4 w-4 ml-0.5"
+                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                    />
+                    <span className="ml-1.5 text-green-600">{liveScore.statusDetail}</span>
+                  </span>
+                )}
+                {/* Final score */}
+                {isCompleted && liveScore && (
+                  <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
+                    <img 
+                      src={getTeamLogo(game.away_team)}
+                      alt=""
+                      className="h-4 w-4 mr-0.5"
+                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                    />
+                    <span className="font-bold">{liveScore.awayScore}</span>
+                    <span className="mx-1">-</span>
+                    <span className="font-bold">{liveScore.homeScore}</span>
+                    <img 
+                      src={getTeamLogo(game.home_team)}
+                      alt=""
+                      className="h-4 w-4 ml-0.5"
+                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                    />
+                    <span className="ml-1.5 text-gray-500">Final</span>
+                  </span>
+                )}
+                {/* Show LIVE badge without score if game started but no ESPN match */}
+                {!liveScore && now > gameDate && (
+                  <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                    <span className="mr-1 w-2 h-2 rounded-full bg-red-600 animate-pulse"></span>
+                    LIVE
+                  </span>
+                )}
+              </div>
             </div>
             
-            {/* Game time and implied result */}
-            <div className="flex items-center gap-3 flex-wrap">
+            {/* Second row: Game time (pre-game) OR Live/Final + Implied scores (mobile on same line) */}
+            <div className="flex items-center gap-2 flex-wrap mt-1">
               {/* Only show game time if not live/completed */}
               {!isLive && !isCompleted && (
                 <p className="text-xs md:text-sm text-gray-500">
@@ -196,63 +200,110 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                 </p>
               )}
               
-              {/* Implied Score with team logos - winner always on left - always show */}
+              {/* Mobile only: Live/Final scores */}
+              <div className="md:hidden flex items-center">
+                {/* Live indicator with score */}
+                {isLive && liveScore && (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                    <span className="mr-1 w-2 h-2 rounded-full bg-red-600 animate-pulse"></span>
+                    <img 
+                      src={getTeamLogo(game.away_team)}
+                      alt=""
+                      className="h-4 w-4 mr-0.5"
+                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                    />
+                    <span className="font-bold">{liveScore.awayScore}</span>
+                    <span className="mx-0.5">-</span>
+                    <span className="font-bold">{liveScore.homeScore}</span>
+                    <img 
+                      src={getTeamLogo(game.home_team)}
+                      alt=""
+                      className="h-4 w-4 ml-0.5"
+                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                    />
+                    <span className="ml-1 text-green-600">{liveScore.statusDetail}</span>
+                  </span>
+                )}
+                {/* Final score */}
+                {isCompleted && liveScore && (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
+                    <img 
+                      src={getTeamLogo(game.away_team)}
+                      alt=""
+                      className="h-4 w-4 mr-0.5"
+                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                    />
+                    <span className="font-bold">{liveScore.awayScore}</span>
+                    <span className="mx-0.5">-</span>
+                    <span className="font-bold">{liveScore.homeScore}</span>
+                    <img 
+                      src={getTeamLogo(game.home_team)}
+                      alt=""
+                      className="h-4 w-4 ml-0.5"
+                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                    />
+                    <span className="ml-1 text-gray-500">Final</span>
+                  </span>
+                )}
+                {/* Show LIVE badge without score if game started but no ESPN match */}
+                {!liveScore && now > gameDate && (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                    <span className="mr-1 w-2 h-2 rounded-full bg-red-600 animate-pulse"></span>
+                    LIVE
+                  </span>
+                )}
+              </div>
+              
+              {/* Implied Score - always show */}
               {impliedScores && (
-                <div className="flex items-center gap-1.5 text-xs md:text-sm">
-                  {!isLive && !isCompleted && <span className="text-gray-400">•</span>}
-                  <span className="text-gray-600 flex items-center gap-1">
-                    <span>Implied:</span>
+                <div className="flex items-center gap-1 text-xs md:text-sm">
+                  {!isLive && !isCompleted && <span className="text-gray-400 hidden md:inline">•</span>}
+                  {(isLive || isCompleted) && liveScore && <span className="text-gray-400">•</span>}
+                  <span className="text-gray-600 flex items-center gap-0.5">
+                    <span className="text-gray-500">Impl:</span>
                     {impliedScores.awayWinning ? (
                       <>
                         <img 
                           src={getTeamLogo(impliedScores.awayTeam)}
                           alt={getFirstWord(impliedScores.awayTeam)}
-                          className="h-4 w-4 object-contain"
+                          className="h-3.5 w-3.5 object-contain"
                           onError={(e) => {
                             e.currentTarget.style.display = 'none';
                           }}
                         />
-                        <span className="font-bold">
-                          {impliedScores.away}
-                        </span>
-                        <span> - </span>
+                        <span className="font-bold">{impliedScores.away}</span>
+                        <span>-</span>
                         <img 
                           src={getTeamLogo(impliedScores.homeTeam)}
                           alt={getFirstWord(impliedScores.homeTeam)}
-                          className="h-4 w-4 object-contain"
+                          className="h-3.5 w-3.5 object-contain"
                           onError={(e) => {
                             e.currentTarget.style.display = 'none';
                           }}
                         />
-                        <span>
-                          {impliedScores.home}
-                        </span>
+                        <span>{impliedScores.home}</span>
                       </>
                     ) : (
                       <>
                         <img 
                           src={getTeamLogo(impliedScores.homeTeam)}
                           alt={getFirstWord(impliedScores.homeTeam)}
-                          className="h-4 w-4 object-contain"
+                          className="h-3.5 w-3.5 object-contain"
                           onError={(e) => {
                             e.currentTarget.style.display = 'none';
                           }}
                         />
-                        <span className="font-bold">
-                          {impliedScores.home}
-                        </span>
-                        <span> - </span>
+                        <span className="font-bold">{impliedScores.home}</span>
+                        <span>-</span>
                         <img 
                           src={getTeamLogo(impliedScores.awayTeam)}
                           alt={getFirstWord(impliedScores.awayTeam)}
-                          className="h-4 w-4 object-contain"
+                          className="h-3.5 w-3.5 object-contain"
                           onError={(e) => {
                             e.currentTarget.style.display = 'none';
                           }}
                         />
-                        <span>
-                          {impliedScores.away}
-                        </span>
+                        <span>{impliedScores.away}</span>
                       </>
                     )}
                   </span>
