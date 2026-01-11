@@ -287,7 +287,8 @@ export async function generateMetadata({
   };
 }
 
-// The page component just redirects to main page with the game highlighted
+// The page component renders content then redirects client-side
+// This allows crawlers to read meta tags before redirect
 export default async function GamePage({ 
   params 
 }: { 
@@ -300,6 +301,33 @@ export default async function GamePage({
     redirect('/');
   }
   
-  // Redirect to main page with game and league params
-  redirect(`/?game=${id}&league=${game.sport_key}`);
+  const redirectUrl = `/?game=${id}&league=${game.sport_key}`;
+  
+  // Render a page that does client-side redirect
+  // This ensures meta tags are served to crawlers
+  return (
+    <html>
+      <head>
+        <meta httpEquiv="refresh" content={`0;url=${redirectUrl}`} />
+        <script dangerouslySetInnerHTML={{
+          __html: `window.location.href = "${redirectUrl}";`
+        }} />
+      </head>
+      <body style={{ 
+        backgroundColor: '#1e3a5f', 
+        color: 'white', 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        height: '100vh',
+        margin: 0,
+        fontFamily: 'system-ui, sans-serif'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <h1 style={{ marginBottom: '10px' }}>{game.away_team} @ {game.home_team}</h1>
+          <p>Loading game...</p>
+        </div>
+      </body>
+    </html>
+  );
 }
