@@ -174,7 +174,7 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                    view === 'spreads_h1' ? 'spreads_h1' : 'totals';
 
   return (
-    <div>
+    <div className="overflow-x-auto">
       {/* Toast Notification */}
       {toast && (
         <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-300 ease-in-out">
