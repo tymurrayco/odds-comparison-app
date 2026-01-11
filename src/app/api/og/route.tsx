@@ -105,6 +105,18 @@ export async function GET(request: NextRequest) {
             >
               {awayTeam.split(' ').slice(-1)[0]}
             </span>
+            {impliedAway && (
+              <span
+                style={{
+                  color: '#94a3b8',
+                  fontSize: '32px',
+                  fontWeight: 700,
+                  marginTop: '-5px',
+                }}
+              >
+                {Math.round(Number(impliedAway))}
+              </span>
+            )}
           </div>
 
           {/* @ symbol */}
@@ -162,6 +174,18 @@ export async function GET(request: NextRequest) {
             >
               {homeTeam.split(' ').slice(-1)[0]}
             </span>
+            {impliedHome && (
+              <span
+                style={{
+                  color: '#94a3b8',
+                  fontSize: '32px',
+                  fontWeight: 700,
+                  marginTop: '-5px',
+                }}
+              >
+                {Math.round(Number(impliedHome))}
+              </span>
+            )}
           </div>
         </div>
 
@@ -196,39 +220,6 @@ export async function GET(request: NextRequest) {
             )}
           </div>
         )}
-
-        {/* Implied scores */}
-        {impliedAway && impliedHome && (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-              marginTop: '15px',
-            }}
-          >
-            <span style={{ color: '#64748b', fontSize: '18px' }}>Implied:</span>
-            <span style={{ color: '#94a3b8', fontSize: '20px', fontWeight: 600 }}>
-              {awayName} {impliedAway} - {homeName} {impliedHome}
-            </span>
-          </div>
-        )}
-
-        {/* Site branding */}
-        <div
-          style={{
-            position: 'absolute',
-            bottom: '25px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-          }}
-        >
-          <span style={{ color: '#64748b', fontSize: '20px', fontWeight: 600 }}>
-            odds.day
-          </span>
-        </div>
       </div>
     ),
     {
