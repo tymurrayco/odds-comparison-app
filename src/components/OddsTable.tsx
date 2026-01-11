@@ -385,12 +385,8 @@ export default function OddsTable({ games, view = 'moneyline', compactMode = fal
                             e.currentTarget.style.display = 'none';
                           }}
                         />
-                        {/* Show team name only on desktop if compactMode is true */}
-                        {!compactMode ? (
-                          team
-                        ) : (
-                          <span className="sm:inline hidden">{team}</span>
-                        )}
+                        {/* Always show team name only on desktop, logo only on mobile */}
+                        <span className="hidden sm:inline">{team}</span>
                       </div>
                     </td>
                     
