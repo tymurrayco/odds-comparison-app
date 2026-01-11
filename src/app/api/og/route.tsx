@@ -17,8 +17,6 @@ export async function GET(request: NextRequest) {
   const homeLogo = searchParams.get('homeLogo') || '';
   const impliedAway = searchParams.get('impliedAway') || '';
   const impliedHome = searchParams.get('impliedHome') || '';
-  const awayName = searchParams.get('awayName') || awayTeam.split(' ').slice(-1)[0];
-  const homeName = searchParams.get('homeName') || homeTeam.split(' ').slice(-1)[0];
 
   return new ImageResponse(
     (
@@ -73,6 +71,7 @@ export async function GET(request: NextRequest) {
             {awayLogo ? (
               <img
                 src={awayLogo}
+                alt=""
                 width={120}
                 height={120}
                 style={{ objectFit: 'contain' }}
@@ -142,6 +141,7 @@ export async function GET(request: NextRequest) {
             {homeLogo ? (
               <img
                 src={homeLogo}
+                alt=""
                 width={120}
                 height={120}
                 style={{ objectFit: 'contain' }}
