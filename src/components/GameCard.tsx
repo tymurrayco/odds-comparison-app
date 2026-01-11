@@ -260,7 +260,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                   {!isLive && !isCompleted && <span className="text-gray-400 hidden md:inline">•</span>}
                   {(isLive || isCompleted) && liveScore && <span className="text-gray-400">•</span>}
                   <span className="text-gray-600 flex items-center gap-0.5">
-                    <span className="text-gray-500">Impl:</span>
+                    <span className="text-gray-500">Implied:</span>
                     {impliedScores.awayWinning ? (
                       <>
                         <img 
