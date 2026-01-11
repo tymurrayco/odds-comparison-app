@@ -250,7 +250,10 @@ export async function generateMetadata({
     description += ` • O/U ${total}`;
   }
   
-  const title = `${game.away_team} @ ${game.home_team}`;
+  // Use mascot names (last word) for title
+  const awayMascot = game.away_team.split(' ').slice(-1)[0];
+  const homeMascot = game.home_team.split(' ').slice(-1)[0];
+  const title = `${awayMascot} @ ${homeMascot}`;
   
   // Build OG image URL with game info
   const ogImageParams = new URLSearchParams({
