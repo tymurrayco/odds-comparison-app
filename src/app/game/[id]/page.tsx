@@ -138,7 +138,7 @@ function teamsMatch(name1: string, name2: string): boolean {
   return false;
 }
 
-// Fetch ESPN logos for teams
+// Fetch ESPN logos for teams using the teams endpoint (works for any game, not just today's)
 async function getESPNLogos(
   sportKey: string, 
   awayTeam: string, 
@@ -148,12 +148,10 @@ async function getESPNLogos(
     const espnLeague = ESPN_LEAGUE_MAP[sportKey];
     if (!espnLeague) return { awayLogo: null, homeLogo: null };
     
-    let apiUrl = `https://site.api.espn.com/apis/site/v2/sports/${espnLeague.sport}/${espnLeague.league}/scoreboard`;
-    if (espnLeague.league === 'mens-college-basketball' || espnLeague.league === 'college-football') {
-      apiUrl += '?limit=200&groups=50';
-    }
+    // Use teams endpoint to get all team logos
+    const apiUrl = `https://site.api.espn.com/apis/site/v2/sports/${espnLeague.sport}/${espnLeague.league}/teams?limit=200`;
     
-    const response = await fetch(apiUrl, { next: { revalidate: 300 } });
+    const response = await fetch(apiUrl, { next: { revalidate: 86400 } }); // Cache for 24 hours
     if (!response.ok) return { awayLogo: null, homeLogo: null };
     
     const data = await response.json();
@@ -161,41 +159,30 @@ async function getESPNLogos(
     let awayLogo: string | null = null;
     let homeLogo: string | null = null;
     
-    interface ESPNTeam {
+    interface ESPNTeamInfo {
       displayName?: string;
       name?: string;
-      logo?: string;
+      logos?: Array<{ href?: string }>;
     }
     
-    interface ESPNCompetitor {
-      homeAway: string;
-      team?: ESPNTeam;
+    interface ESPNTeamEntry {
+      team?: ESPNTeamInfo;
     }
     
-    interface ESPNCompetition {
-      competitors?: ESPNCompetitor[];
-    }
-    
-    interface ESPNEvent {
-      competitions?: ESPNCompetition[];
-    }
-    
-    if (data.events) {
-      for (const event of data.events as ESPNEvent[]) {
-        const competition = event.competitions?.[0];
-        if (!competition?.competitors) continue;
+    if (data.sports?.[0]?.leagues?.[0]?.teams) {
+      for (const entry of data.sports[0].leagues[0].teams as ESPNTeamEntry[]) {
+        const team = entry.team;
+        if (!team) continue;
         
-        for (const competitor of competition.competitors) {
-          const teamName = competitor.team?.displayName || competitor.team?.name || '';
-          const logo = competitor.team?.logo;
-          
-          if (logo) {
-            if (teamsMatch(teamName, awayTeam)) {
-              awayLogo = logo;
-            }
-            if (teamsMatch(teamName, homeTeam)) {
-              homeLogo = logo;
-            }
+        const teamName = team.displayName || team.name || '';
+        const logo = team.logos?.[0]?.href;
+        
+        if (logo) {
+          if (teamsMatch(teamName, awayTeam) && !awayLogo) {
+            awayLogo = logo;
+          }
+          if (teamsMatch(teamName, homeTeam) && !homeLogo) {
+            homeLogo = logo;
           }
         }
         
