@@ -23,7 +23,7 @@ export default function LeagueNav({
   const [isRefreshing, setIsRefreshing] = useState(false);
   
   useEffect(() => {
-    setTimeString(lastUpdated.toLocaleTimeString());
+    setTimeString(lastUpdated.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }));
   }, [lastUpdated]);
 
   const handleRefresh = async () => {
