@@ -10,9 +10,10 @@ interface GameCardProps {
   isFavorite?: boolean;
   onToggleFavorite?: (gameId: string) => void;
   liveScore?: ESPNGameScore | null;
+  highlightedGameId?: string | null;
 }
 
-export default function GameCard({ game, selectedBookmakers, isFavorite = false, onToggleFavorite, liveScore }: GameCardProps) {
+export default function GameCard({ game, selectedBookmakers, isFavorite = false, onToggleFavorite, liveScore, highlightedGameId }: GameCardProps) {
   // Check if this is a soccer sport
   const isSoccer = game.sport_key === 'soccer_epl' || game.sport_key === 'soccer_usa_mls';
   
@@ -23,6 +24,22 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
   const [expandedMarket, setExpandedMarket] = useState<'moneyline' | 'spread' | 'totals' | 'analysis'>(
     isSoccer ? 'moneyline' : 'spread'
   );
+  
+  // Toast for link copied
+  const [showLinkCopied, setShowLinkCopied] = useState(false);
+  
+  // Check if this game is highlighted from URL
+  const isHighlighted = highlightedGameId === game.id;
+  
+  // Copy game link to clipboard
+  const copyGameLink = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const url = `${window.location.origin}/game/${game.id}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setShowLinkCopied(true);
+      setTimeout(() => setShowLinkCopied(false), 2000);
+    });
+  };
   
   // Format the date and time
   const gameDate = new Date(game.commence_time);
@@ -112,7 +129,18 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
   const impliedScores = calculateImpliedScores();
   
   return (
-    <div className="bg-white rounded-lg shadow-md mb-6 overflow-hidden">
+    <div 
+      id={`game-${game.id}`}
+      className={`relative bg-white rounded-lg shadow-md mb-6 overflow-hidden transition-all duration-500 ${
+        isHighlighted ? 'ring-2 ring-blue-500 ring-offset-2' : ''
+      }`}
+    >
+      {/* Link copied toast */}
+      {showLinkCopied && (
+        <div className="absolute top-2 left-1/2 transform -translate-x-1/2 z-50 px-3 py-1 bg-gray-800 text-white text-xs rounded-full">
+          Link copied!
+        </div>
+      )}
       <div className="p-3 md:p-4 border-b border-gray-200">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between">
           <div className="mb-2 sm:mb-0">
@@ -136,6 +164,17 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                   {isFavorite ? '★' : '☆'}
                 </button>
               )}
+              {/* Copy Link Button */}
+              <button
+                onClick={copyGameLink}
+                className="ml-1 text-gray-400 hover:text-blue-500 hover:scale-110 transition-all"
+                aria-label="Share game"
+                title="Share game"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+              </button>
               {/* Desktop only: Live/Final scores inline with team names */}
               <div className="hidden md:inline-flex">
                 {/* Live indicator with score */}

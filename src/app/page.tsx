@@ -1,8 +1,8 @@
 // src/app/page.tsx
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useCallback, useMemo, useRef, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { 
   fetchOdds, 
   fetchFutures, 
@@ -44,8 +44,10 @@ const isValidCache = <T,>(cache: { [league: string]: CacheItem<T> }, league: str
   return (now - cache[league].timestamp) < CACHE_TIME;
 };
 
-export default function Home() {
+// Wrapper component to handle Suspense for useSearchParams
+function HomeContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const pressTimer = useRef<NodeJS.Timeout | null>(null);
   const [isHolding, setIsHolding] = useState(false);
   
@@ -62,6 +64,7 @@ export default function Home() {
   const [selectedBookmakers, setSelectedBookmakers] = useState<string[]>([...BOOKMAKERS]);
   const [favoriteGames, setFavoriteGames] = useState<string[]>([]);
   const [favoritesLoading, setFavoritesLoading] = useState(false);
+  const [highlightedGameId, setHighlightedGameId] = useState<string | null>(null);
   
   // Props state
   const [propsEvents, setPropsEvents] = useState<PropsEvent[]>([]);
@@ -120,6 +123,38 @@ export default function Home() {
       }
     }
   }, []);
+
+  // Handle URL params for shared game links
+  useEffect(() => {
+    const gameId = searchParams.get('game');
+    const leagueId = searchParams.get('league');
+    
+    if (gameId && leagueId) {
+      // Set the league from URL
+      setActiveLeague(leagueId);
+      setActiveView('games');
+      setHighlightedGameId(gameId);
+    }
+  }, [searchParams]);
+
+  // Scroll to highlighted game once games are loaded
+  useEffect(() => {
+    if (highlightedGameId && !loading && games.length > 0) {
+      // Small delay to ensure DOM is rendered
+      setTimeout(() => {
+        const element = document.getElementById(`game-${highlightedGameId}`);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        // Clear highlight after 3 seconds
+        setTimeout(() => {
+          setHighlightedGameId(null);
+          // Clear URL params without refresh
+          router.replace('/', { scroll: false });
+        }, 3000);
+      }, 100);
+    }
+  }, [highlightedGameId, loading, games, router]);
 
   // Force futures view when Masters is selected, reset props when league changes
   useEffect(() => {
@@ -936,6 +971,7 @@ export default function Home() {
                         isFavorite={true}
                         onToggleFavorite={toggleFavoriteGame}
                         liveScore={matchGameToScore(game, espnScores)}
+                        highlightedGameId={highlightedGameId}
                       />
                     ))}
                   </div>
@@ -959,6 +995,7 @@ export default function Home() {
                         isFavorite={favoriteGames.includes(game.id)}
                         onToggleFavorite={toggleFavoriteGame}
                         liveScore={matchGameToScore(game, espnScores)}
+                        highlightedGameId={highlightedGameId}
                       />
                     ))}
                   </div>
@@ -1130,5 +1167,20 @@ export default function Home() {
         )}
       </div>
     </main>
+  );
+}
+
+// Main export with Suspense wrapper for useSearchParams
+export default function Home() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen bg-gray-100">
+        <div className="flex justify-center items-center h-screen">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        </div>
+      </main>
+    }>
+      <HomeContent />
+    </Suspense>
   );
 }
