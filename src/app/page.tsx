@@ -1,12 +1,25 @@
-// src/app/page.tsx (modified with My Bets tab and Press-and-Hold Admin Access)
+// src/app/page.tsx
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { fetchOdds, fetchFutures, Game, FuturesMarket, BOOKMAKERS, LEAGUES } from '@/lib/api';
+import { 
+  fetchOdds, 
+  fetchFutures, 
+  fetchPropsEvents, 
+  fetchProps, 
+  Game, 
+  FuturesMarket, 
+  PropsEvent, 
+  ProcessedPropsMarket,
+  BOOKMAKERS, 
+  LEAGUES,
+  PROPS_SUPPORTED_LEAGUES 
+} from '@/lib/api';
 import LeagueNav from '@/components/LeagueNav';
 import GameCard from '@/components/GameCard';
 import FuturesTable from '@/components/FuturesTable';
+import PropsTable from '@/components/PropsTable';
 import ConferenceFilter from '@/components/ConferenceFilter';
 import BookmakerSelector from '@/components/BookmakerSelector';
 import MyBets from '@/components/MyBets';
@@ -34,25 +47,36 @@ export default function Home() {
   const [isHolding, setIsHolding] = useState(false);
   
   const [activeLeague, setActiveLeague] = useState('basketball_nba');
-  const [activeView, setActiveView] = useState<'games' | 'futures' | 'mybets'>('games'); // Added 'mybets'
+  const [activeView, setActiveView] = useState<'games' | 'futures' | 'props' | 'mybets'>('games');
   const [games, setGames] = useState<Game[]>([]);
   const [futures, setFutures] = useState<FuturesMarket[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [isClient, setIsClient] = useState(false);
   const [apiRequestsRemaining, setApiRequestsRemaining] = useState<string | null>(null);
-  const [teamFilter, setTeamFilter] = useState(''); // Team filter state
-  const [selectedConferences, setSelectedConferences] = useState<string[]>([]); // Conference filter state
-  const [selectedBookmakers, setSelectedBookmakers] = useState<string[]>([...BOOKMAKERS]); // Bookmaker filter state
-  const [favoriteGames, setFavoriteGames] = useState<string[]>([]); // Favorite game IDs
-  const [favoritesLoading, setFavoritesLoading] = useState(false); // Separate loading state for favorites
+  const [teamFilter, setTeamFilter] = useState('');
+  const [selectedConferences, setSelectedConferences] = useState<string[]>([]);
+  const [selectedBookmakers, setSelectedBookmakers] = useState<string[]>([...BOOKMAKERS]);
+  const [favoriteGames, setFavoriteGames] = useState<string[]>([]);
+  const [favoritesLoading, setFavoritesLoading] = useState(false);
+  
+  // Props state
+  const [propsEvents, setPropsEvents] = useState<PropsEvent[]>([]);
+  const [selectedPropsEvent, setSelectedPropsEvent] = useState<PropsEvent | null>(null);
+  const [propsData, setPropsData] = useState<ProcessedPropsMarket[]>([]);
+  const [propsLoading, setPropsLoading] = useState(false);
+  const [playerFilter, setPlayerFilter] = useState('');
   
   // Cache state
   const [gamesCache, setGamesCache] = useState<{ [league: string]: CacheItem<Game[]> }>({});
   const [futuresCache, setFuturesCache] = useState<{ [league: string]: CacheItem<FuturesMarket[]> }>({});
+  const [propsEventsCache, setPropsEventsCache] = useState<{ [league: string]: CacheItem<PropsEvent[]> }>({});
   
   // Define the Masters league ID correctly
   const MASTERS_LEAGUE_ID = 'golf_masters_tournament_winner';
+
+  // Check if current league supports props
+  const supportsProps = PROPS_SUPPORTED_LEAGUES.includes(activeLeague);
 
   // Set isClient to true when component mounts on client side
   useEffect(() => {
@@ -91,13 +115,20 @@ export default function Home() {
     }
   }, []);
 
-  // Force futures view when Masters is selected
+  // Force futures view when Masters is selected, reset props when league changes
   useEffect(() => {
     if (activeLeague === MASTERS_LEAGUE_ID) {
       setActiveView('futures');
     }
-    setTeamFilter(''); // Clear filter when changing leagues
-    setSelectedConferences([]); // Clear conference filter when changing leagues
+    // If switching to a league that doesn't support props while on props view, switch to games
+    if (activeView === 'props' && !PROPS_SUPPORTED_LEAGUES.includes(activeLeague)) {
+      setActiveView('games');
+    }
+    setTeamFilter('');
+    setSelectedConferences([]);
+    setSelectedPropsEvent(null);
+    setPropsData([]);
+    setPlayerFilter('');
   }, [activeLeague]);
 
   // Save to localStorage when activeLeague changes, but only after hydration
@@ -139,7 +170,6 @@ export default function Home() {
       allCachedGames.push(...cacheItem.data);
     });
     
-    // Filter to only favorites and sort chronologically (nearest game first)
     return allCachedGames
       .filter(g => favoriteGames.includes(g.id))
       .sort((a, b) => new Date(a.commence_time).getTime() - new Date(b.commence_time).getTime());
@@ -156,21 +186,17 @@ export default function Home() {
     
     try {
       const now = Date.now();
-      // Get all active leagues that support games (not Masters which is futures-only)
       const activeLeagueIds = LEAGUES
         .filter(l => l.isActive && l.id !== MASTERS_LEAGUE_ID)
         .map(l => l.id);
       
-      // Check which leagues need to be fetched (not cached or cache expired)
       const leaguesToFetch = activeLeagueIds.filter(leagueId => !isValidCache(gamesCache, leagueId));
       
       if (leaguesToFetch.length === 0) {
-        // All leagues are cached, no need to fetch
         setFavoritesLoading(false);
         return;
       }
       
-      // Fetch all needed leagues in parallel
       const results = await Promise.all(
         leaguesToFetch.map(async (leagueId) => {
           try {
@@ -188,7 +214,6 @@ export default function Home() {
         })
       );
       
-      // Update cache with results
       const validResults = results.filter((r): r is NonNullable<typeof r> => r !== null);
       if (validResults.length > 0) {
         setGamesCache(prev => {
@@ -203,7 +228,6 @@ export default function Home() {
           return newCache;
         });
         
-        // Update API requests remaining with the last result
         const lastResult = validResults[validResults.length - 1];
         if (lastResult.requestsRemaining) {
           setApiRequestsRemaining(lastResult.requestsRemaining);
@@ -224,23 +248,73 @@ export default function Home() {
     }
   }, [activeLeague, loadAllLeaguesForFavorites, favoriteGames.length]);
 
+  // Load props events when switching to props view
+  const loadPropsEvents = useCallback(async () => {
+    if (!supportsProps) return;
+    
+    const now = Date.now();
+    
+    // Check cache first
+    if (isValidCache(propsEventsCache, activeLeague)) {
+      setPropsEvents(propsEventsCache[activeLeague].data);
+      return;
+    }
+    
+    setPropsLoading(true);
+    try {
+      const response = await fetchPropsEvents(activeLeague);
+      setPropsEvents(response.data);
+      setApiRequestsRemaining(response.requestsRemaining);
+      setPropsEventsCache(prev => ({
+        ...prev,
+        [activeLeague]: { data: response.data, timestamp: now, league: activeLeague }
+      }));
+    } catch (error) {
+      console.error('Error loading props events:', error);
+    } finally {
+      setPropsLoading(false);
+    }
+  }, [activeLeague, supportsProps, propsEventsCache]);
+
+  // Load props for selected event
+  const loadPropsForEvent = useCallback(async (event: PropsEvent) => {
+    setPropsLoading(true);
+    setSelectedPropsEvent(event);
+    setPropsData([]);
+    
+    try {
+      const response = await fetchProps(activeLeague, event.id);
+      setPropsData(response.data);
+      setApiRequestsRemaining(response.requestsRemaining);
+      setLastUpdated(new Date());
+    } catch (error) {
+      console.error('Error loading props:', error);
+    } finally {
+      setPropsLoading(false);
+    }
+  }, [activeLeague]);
+
   // Load data from cache or API
   const loadData = useCallback(async function() {
-    // Don't load odds data when viewing My Bets
     if (activeView === 'mybets') {
       setLoading(false);
       return;
     }
     
-    // For favorites view, we use a separate loading function
     if (activeLeague === 'favorites') {
+      setLoading(false);
+      return;
+    }
+    
+    // For props view, load events list
+    if (activeView === 'props') {
+      await loadPropsEvents();
       setLoading(false);
       return;
     }
     
     setLoading(true);
     
-    // Add a small delay to prevent rapid successive calls
     await new Promise(resolve => setTimeout(resolve, 100));
     
     const now = Date.now();
@@ -252,14 +326,11 @@ export default function Home() {
       let gamesLoaded = false;
       let futuresLoaded = false;
       
-      // Load games if needed
       if (needsGames) {
         if (isValidCache(gamesCache, activeLeague)) {
-          // Use cached data
           setGames(gamesCache[activeLeague].data);
           gamesLoaded = true;
         } else {
-          // Fetch fresh data
           const response = await fetchOdds(activeLeague);
           setGames(response.data);
           setApiRequestsRemaining(response.requestsRemaining);
@@ -271,14 +342,11 @@ export default function Home() {
         }
       }
       
-      // Load futures if needed
       if (needsFutures) {
         if (isValidCache(futuresCache, activeLeague)) {
-          // Use cached data
           setFutures(futuresCache[activeLeague].data);
           futuresLoaded = true;
         } else {
-          // Fetch fresh data
           const response = await fetchFutures(activeLeague);
           setFutures(response.data);
           setApiRequestsRemaining(response.requestsRemaining);
@@ -298,28 +366,18 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, [activeLeague, activeView, gamesCache, futuresCache]);
+  }, [activeLeague, activeView, gamesCache, futuresCache, loadPropsEvents]);
 
-  // Force reload with fresh data (for refresh button)
+  // Force refresh (bypass cache)
   const forceRefresh = useCallback(async function() {
-    // Don't refresh when viewing My Bets
-    if (activeView === 'mybets') {
-      return;
-    }
-    
-    // For favorites, refresh all active leagues
     if (activeLeague === 'favorites') {
-      if (favoriteGames.length === 0) return;
-      
       setFavoritesLoading(true);
-      
       try {
         const now = Date.now();
         const activeLeagueIds = LEAGUES
           .filter(l => l.isActive && l.id !== MASTERS_LEAGUE_ID)
           .map(l => l.id);
         
-        // Fetch all active leagues (force refresh, ignore cache)
         const results = await Promise.all(
           activeLeagueIds.map(async (leagueId) => {
             try {
@@ -337,7 +395,6 @@ export default function Home() {
           })
         );
         
-        // Update cache with results
         const validResults = results.filter((r): r is NonNullable<typeof r> => r !== null);
         if (validResults.length > 0) {
           setGamesCache(prev => {
@@ -366,12 +423,39 @@ export default function Home() {
       return;
     }
     
+    // Force refresh props
+    if (activeView === 'props') {
+      setPropsLoading(true);
+      try {
+        const now = Date.now();
+        const response = await fetchPropsEvents(activeLeague);
+        setPropsEvents(response.data);
+        setApiRequestsRemaining(response.requestsRemaining);
+        setPropsEventsCache(prev => ({
+          ...prev,
+          [activeLeague]: { data: response.data, timestamp: now, league: activeLeague }
+        }));
+        
+        // If an event was selected, refresh its props too
+        if (selectedPropsEvent) {
+          const propsResponse = await fetchProps(activeLeague, selectedPropsEvent.id);
+          setPropsData(propsResponse.data);
+        }
+        
+        setLastUpdated(new Date());
+      } catch (error) {
+        console.error('Error refreshing props:', error);
+      } finally {
+        setPropsLoading(false);
+      }
+      return;
+    }
+    
     setLoading(true);
     
     try {
       const now = Date.now();
       
-      // Load based on the current view and league
       if (activeView === 'games' && activeLeague !== MASTERS_LEAGUE_ID) {
         const response = await fetchOdds(activeLeague);
         setGames(response.data);
@@ -396,9 +480,9 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, [activeLeague, activeView, favoriteGames.length]);
+  }, [activeLeague, activeView, selectedPropsEvent]);
   
-  // Load data when league or view changes (but not for mybets or favorites)
+  // Load data when league or view changes
   useEffect(() => {
     if (activeView !== 'mybets' && activeLeague !== 'favorites') {
       loadData();
@@ -407,14 +491,13 @@ export default function Home() {
     }
   }, [loadData, activeView, activeLeague]);
 
-  // Force the effective view for rendering - WITH EXPLICIT TYPE ANNOTATION
-  const effectiveView: 'games' | 'futures' | 'mybets' = activeLeague === MASTERS_LEAGUE_ID ? 'futures' : activeView;
+  // Force the effective view for rendering
+  const effectiveView: 'games' | 'futures' | 'props' | 'mybets' = activeLeague === MASTERS_LEAGUE_ID ? 'futures' : activeView;
 
   // Filter games based on team name AND conferences
   const filteredGames = useMemo(() => {
     let filtered = games;
 
-    // Filter by team name
     if (teamFilter.trim()) {
       const searchTerm = teamFilter.toLowerCase().trim();
       filtered = filtered.filter(game => 
@@ -423,13 +506,11 @@ export default function Home() {
       );
     }
 
-    // Filter by conference if any are selected
     if (selectedConferences.length > 0) {
       filtered = filtered.filter(game => {
         const homeConference = getTeamConference(activeLeague, game.home_team);
         const awayConference = getTeamConference(activeLeague, game.away_team);
         
-        // Show game if either team is in a selected conference
         return (homeConference && selectedConferences.includes(homeConference)) ||
                (awayConference && selectedConferences.includes(awayConference));
       });
@@ -446,10 +527,32 @@ export default function Home() {
       const searchTerm = teamFilter.toLowerCase().trim();
       return team.team.toLowerCase().includes(searchTerm);
     })
-  })).filter(market => market.teams.length > 0); // Only show markets with matching teams
+  })).filter(market => market.teams.length > 0);
+
+  // Filter props events based on team name
+  const filteredPropsEvents = useMemo(() => {
+    if (!teamFilter.trim()) return propsEvents;
+    const searchTerm = teamFilter.toLowerCase().trim();
+    return propsEvents.filter(event => 
+      event.home_team.toLowerCase().includes(searchTerm) || 
+      event.away_team.toLowerCase().includes(searchTerm)
+    );
+  }, [propsEvents, teamFilter]);
 
   // Check if current sport supports conference filtering
   const supportsConferenceFilter = ['americanfootball_ncaaf', 'basketball_ncaab'].includes(activeLeague);
+
+  // Format date/time for props events
+  const formatEventTime = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+      weekday: 'short', 
+      month: 'short', 
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
+    });
+  };
 
   return (
     <main className="min-h-screen bg-blue-50">
@@ -458,9 +561,7 @@ export default function Home() {
           <div className="flex h-16 items-center justify-between">
             <h1 className="text-xl font-bold text-blue-600">odds.day</h1>
             
-            {/* Right side header items */}
             <div className="flex items-center gap-3">
-              {/* Bookmaker Selector - only show when not in mybets view */}
               {activeView !== 'mybets' && (
                 <BookmakerSelector
                   selectedBookmakers={selectedBookmakers}
@@ -468,23 +569,17 @@ export default function Home() {
                 />
               )}
               
-              {/* My Bets Tab Button with Press-and-Hold for Admin Access */}
               <button
                 onMouseDown={(e) => {
                   e.preventDefault();
                   setIsHolding(true);
-                  console.log('Starting hold timer...'); // Debug log
-                  // Start 2-second timer for admin access
                   pressTimer.current = setTimeout(() => {
-                    console.log('Timer completed! Navigating to admin...'); // Debug log
                     setIsHolding(false);
                     router.push('/admin/bets');
                   }, 2000);
                 }}
                 onMouseUp={() => {
-                  console.log('Mouse up, clearing timer'); // Debug log
                   setIsHolding(false);
-                  // If timer exists and hasn't fired yet, do normal toggle
                   if (pressTimer.current) {
                     clearTimeout(pressTimer.current);
                     pressTimer.current = null;
@@ -492,9 +587,7 @@ export default function Home() {
                   }
                 }}
                 onMouseLeave={() => {
-                  console.log('Mouse left button, clearing timer'); // Debug log
                   setIsHolding(false);
-                  // Cancel timer if mouse leaves button
                   if (pressTimer.current) {
                     clearTimeout(pressTimer.current);
                     pressTimer.current = null;
@@ -503,18 +596,13 @@ export default function Home() {
                 onTouchStart={(e) => {
                   e.preventDefault();
                   setIsHolding(true);
-                  console.log('Touch start, starting timer...'); // Debug log
-                  // Start 2-second timer for admin access (mobile)
                   pressTimer.current = setTimeout(() => {
-                    console.log('Touch timer completed! Navigating to admin...'); // Debug log
                     setIsHolding(false);
                     router.push('/admin/bets');
                   }, 2000);
                 }}
                 onTouchEnd={() => {
-                  console.log('Touch end, clearing timer'); // Debug log
                   setIsHolding(false);
-                  // If timer exists and hasn't fired yet, do normal toggle (mobile)
                   if (pressTimer.current) {
                     clearTimeout(pressTimer.current);
                     pressTimer.current = null;
@@ -522,10 +610,10 @@ export default function Home() {
                   }
                 }}
                 className={`px-3 py-2 rounded-xl text-sm font-medium transition-all select-none border border-gray-200 shadow-sm ${
-  activeView === 'mybets'
-    ? 'bg-blue-600 text-white'
-    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-} ${isHolding ? 'scale-95 ring-2 ring-blue-400' : ''}`}
+                  activeView === 'mybets'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                } ${isHolding ? 'scale-95 ring-2 ring-blue-400' : ''}`}
                 style={{ userSelect: 'none' }}
               >
                 📊 Bets {isHolding && '...'}
@@ -536,9 +624,7 @@ export default function Home() {
       </header>
 
       <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
-        {/* Show different navigation based on view */}
         {activeView === 'mybets' ? (
-          // Simple back button when viewing My Bets
           <div className="mb-6">
             <button
               onClick={() => setActiveView('games')}
@@ -549,7 +635,6 @@ export default function Home() {
           </div>
         ) : (
           <>
-            {/* League Navigation */}
             <LeagueNav 
               activeLeague={activeLeague} 
               setActiveLeague={setActiveLeague} 
@@ -559,11 +644,10 @@ export default function Home() {
               favoritesCount={favoriteGames.length}
             />
 
-            {/* UPDATED: Team filter and Conference filter - shown for Games view (but not favorites) */}
+            {/* Team filter for Games view */}
             {effectiveView === 'games' && activeLeague !== 'favorites' && (
               <div className="mb-6 space-y-4">
                 <div className="flex flex-col sm:flex-row gap-4">
-                  {/* Team filter */}
                   <div className="flex-1">
                     <div className="relative">
                       <input
@@ -574,95 +658,52 @@ export default function Home() {
                         className="w-full px-4 py-2 pl-10 pr-4 text-gray-700 bg-white border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                       />
                       <div className="absolute inset-y-0 left-0 flex items-center pl-3">
-                        <svg
-                          className="w-5 h-5 text-gray-400"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                          />
+                        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                         </svg>
                       </div>
                       {teamFilter && (
                         <button
                           onClick={() => setTeamFilter('')}
-                          className="absolute inset-y-0 right-0 flex items-center pr-3"
+                          className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
                         >
-                          <svg
-                            className="w-5 h-5 text-gray-400 hover:text-gray-600"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                            xmlns="http://www.w3.org/2000/svg"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M6 18L18 6M6 6l12 12"
-                            />
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                           </svg>
                         </button>
                       )}
                     </div>
                   </div>
                   
-
+                  {supportsConferenceFilter && (
+                    <ConferenceFilter
+                      activeLeague={activeLeague}
+                      selectedConferences={selectedConferences}
+                      onConferencesChange={setSelectedConferences}
+                    />
+                  )}
                 </div>
-                
-                {/* Conference Filter - only show for supported sports */}
-                {supportsConferenceFilter && (
-                  <ConferenceFilter
-                    activeLeague={activeLeague}
-                    selectedConferences={selectedConferences}
-                    onConferencesChange={setSelectedConferences}
-                  />
-                )}
-                
-                {/* Active Filters Display */}
+
                 {(teamFilter || selectedConferences.length > 0) && (
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex flex-wrap gap-2 items-center">
                     {teamFilter && (
                       <span className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
                         Team: {teamFilter}
-                        <button
-                          onClick={() => setTeamFilter('')}
-                          className="ml-2 hover:text-blue-600"
-                        >
-                          ×
-                        </button>
+                        <button onClick={() => setTeamFilter('')} className="ml-2 hover:text-blue-600">×</button>
                       </span>
                     )}
                     {selectedConferences.map(conf => (
                       <span key={conf} className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-green-100 text-green-800">
                         {conf}
-                        <button
-                          onClick={() => setSelectedConferences(selectedConferences.filter(c => c !== conf))}
-                          className="ml-2 hover:text-green-600"
-                        >
-                          ×
-                        </button>
+                        <button onClick={() => setSelectedConferences(selectedConferences.filter(c => c !== conf))} className="ml-2 hover:text-green-600">×</button>
                       </span>
                     ))}
-                    <button
-                      onClick={() => {
-                        setTeamFilter('');
-                        setSelectedConferences([]);
-                      }}
-                      className="text-sm text-gray-600 hover:text-gray-800"
-                    >
+                    <button onClick={() => { setTeamFilter(''); setSelectedConferences([]); }} className="text-sm text-gray-600 hover:text-gray-800">
                       Clear all filters
                     </button>
                   </div>
                 )}
 
-                {/* Results count */}
                 {(teamFilter || selectedConferences.length > 0) && (
                   <p className="text-sm text-gray-600">
                     Showing {filteredGames.length} of {games.length} games
@@ -683,99 +724,114 @@ export default function Home() {
                     className="w-full px-4 py-2 pl-10 pr-4 text-gray-700 bg-white border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                   />
                   <div className="absolute inset-y-0 left-0 flex items-center pl-3">
-                    <svg
-                      className="w-5 h-5 text-gray-400"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                      />
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
                   </div>
                   {teamFilter && (
                     <button
                       onClick={() => setTeamFilter('')}
-                      className="absolute inset-y-0 right-0 flex items-center pr-3"
+                      className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
                     >
-                      <svg
-                        className="w-5 h-5 text-gray-400 hover:text-gray-600"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M6 18L18 6M6 6l12 12"
-                        />
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                       </svg>
                     </button>
                   )}
                 </div>
-                {teamFilter && (
-                  <p className="mt-2 text-sm text-gray-600">
-                    Showing {filteredFutures.reduce((acc, m) => acc + m.teams.length, 0)} of {futures.reduce((acc, m) => acc + m.teams.length, 0)} entries
-                  </p>
-                )}
               </div>
             )}
 
-            {/* Toggle between Games and Futures - Custom version for Masters */}
+            {/* Props view filters */}
+            {effectiveView === 'props' && (
+              <div className="mb-6 space-y-4">
+                {/* Game filter (when no event selected) or Player filter (when event selected) */}
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder={selectedPropsEvent ? "Filter by player name..." : "Filter by team name..."}
+                    value={selectedPropsEvent ? playerFilter : teamFilter}
+                    onChange={(e) => selectedPropsEvent ? setPlayerFilter(e.target.value) : setTeamFilter(e.target.value)}
+                    className="w-full px-4 py-2 pl-10 pr-4 text-gray-700 bg-white border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  />
+                  <div className="absolute inset-y-0 left-0 flex items-center pl-3">
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </div>
+                  {(selectedPropsEvent ? playerFilter : teamFilter) && (
+                    <button
+                      onClick={() => selectedPropsEvent ? setPlayerFilter('') : setTeamFilter('')}
+                      className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* View Toggle Tabs - Only show when not in favorites */}
             {activeLeague !== 'favorites' && (
               activeLeague === MASTERS_LEAGUE_ID ? (
-                // Masters only shows Futures tab
                 <div className="bg-white rounded-lg shadow p-2 mb-6 flex justify-center">
                   <div className="inline-flex rounded-md shadow-sm">
-                    <button
-                      type="button"
-                      className="px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white border border-gray-200"
-                    >
+                    <button type="button" className="px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white border border-gray-200">
                       Futures
                     </button>
                   </div>
                 </div>
               ) : (
-                // Other leagues show both tabs
                 <div className="bg-white rounded-lg shadow p-2 mb-6 flex justify-center">
                   <div className="inline-flex rounded-md shadow-sm">
                     <button
                       type="button"
                       className={`px-4 py-2 text-sm font-medium rounded-l-lg ${
-                        activeView === 'games'
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-white text-gray-700 hover:bg-gray-50'
+                        activeView === 'games' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
                       } border border-gray-200`}
                       onClick={() => {
                         setActiveView('games');
-                        setTeamFilter(''); // Clear filter when switching views
-                        setSelectedConferences([]); // Clear conference filter when switching views
+                        setTeamFilter('');
+                        setSelectedConferences([]);
+                        setSelectedPropsEvent(null);
+                        setPlayerFilter('');
                       }}
                     >
                       Games
                     </button>
                     <button
                       type="button"
-                      className={`px-4 py-2 text-sm font-medium rounded-r-lg ${
-                        activeView === 'futures'
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-white text-gray-700 hover:bg-gray-50'
+                      className={`px-4 py-2 text-sm font-medium ${
+                        activeView === 'futures' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
                       } border border-gray-200 border-l-0`}
                       onClick={() => {
                         setActiveView('futures');
-                        setTeamFilter(''); // Clear filter when switching views
-                        setSelectedConferences([]); // Clear conference filter when switching views
+                        setTeamFilter('');
+                        setSelectedConferences([]);
+                        setSelectedPropsEvent(null);
+                        setPlayerFilter('');
                       }}
                     >
                       Futures
                     </button>
+                    {supportsProps && (
+                      <button
+                        type="button"
+                        className={`px-4 py-2 text-sm font-medium rounded-r-lg ${
+                          activeView === 'props' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
+                        } border border-gray-200 border-l-0`}
+                        onClick={() => {
+                          setActiveView('props');
+                          setTeamFilter('');
+                          setSelectedConferences([]);
+                          setPlayerFilter('');
+                        }}
+                      >
+                        Props
+                      </button>
+                    )}
                   </div>
                 </div>
               )
@@ -795,37 +851,27 @@ export default function Home() {
 
         {/* Main Content */}
         {activeView === 'mybets' ? (
-          // My Bets View
           <MyBets />
         ) : loading || (activeLeague === 'favorites' && favoritesLoading) ? (
-          // Loading State
           <div className="flex justify-center py-12">
             <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-500"></div>
           </div>
         ) : (
-          // Games or Futures Content
           <div>
             {activeLeague === 'favorites' ? (
-              // Favorites View
               <div>
                 {favoriteGames.length === 0 ? (
                   <div className="bg-white rounded-lg shadow p-6 text-center">
                     <div className="text-4xl mb-4">⭐</div>
                     <h3 className="text-lg font-medium text-gray-900 mb-2">No favorites yet</h3>
-                    <p className="text-gray-500">
-                      Tap the ☆ star next to any game to add it to your favorites.
-                    </p>
+                    <p className="text-gray-500">Tap the ☆ star next to any game to add it to your favorites.</p>
                   </div>
                 ) : favoritedGamesFromCache.length === 0 ? (
                   <div className="bg-white rounded-lg shadow p-6 text-center">
                     <div className="text-4xl mb-4">📭</div>
                     <h3 className="text-lg font-medium text-gray-900 mb-2">No active favorites</h3>
-                    <p className="text-gray-500 mb-4">
-                      Your favorited games may have ended or are no longer available.
-                    </p>
-                    <p className="text-xs text-gray-400">
-                      You have {favoriteGames.length} game(s) saved
-                    </p>
+                    <p className="text-gray-500 mb-4">Your favorited games may have ended or are no longer available.</p>
+                    <p className="text-xs text-gray-400">You have {favoriteGames.length} game(s) saved</p>
                   </div>
                 ) : (
                   <div>
@@ -866,6 +912,113 @@ export default function Home() {
                   </div>
                 )}
               </div>
+            ) : effectiveView === 'props' ? (
+              <div>
+                {propsLoading ? (
+                  <div className="flex justify-center py-12">
+                    <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-500"></div>
+                  </div>
+                ) : selectedPropsEvent ? (
+                  // Show props for selected game
+                  <div>
+                    {/* Clickable game header - click to collapse/go back to game list */}
+                    <div 
+                      className="bg-white rounded-lg shadow p-4 mb-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                      onClick={() => {
+                        setSelectedPropsEvent(null);
+                        setPropsData([]);
+                        setPlayerFilter('');
+                      }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <img 
+                            src={`/team-logos/${selectedPropsEvent.away_team.toLowerCase().replace(/\s+/g, '')}.png`}
+                            alt=""
+                            className="h-8 w-8"
+                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                          />
+                          <span className="font-medium">{selectedPropsEvent.away_team}</span>
+                          <span className="text-gray-400">@</span>
+                          <span className="font-medium">{selectedPropsEvent.home_team}</span>
+                          <img 
+                            src={`/team-logos/${selectedPropsEvent.home_team.toLowerCase().replace(/\s+/g, '')}.png`}
+                            alt=""
+                            className="h-8 w-8"
+                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                          />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-500">{formatEventTime(selectedPropsEvent.commence_time)}</span>
+                          <svg 
+                            className="w-5 h-5 text-gray-400"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+                    <PropsTable 
+                      markets={propsData} 
+                      selectedBookmakers={selectedBookmakers}
+                      playerFilter={playerFilter}
+                    />
+                  </div>
+                ) : (
+                  // Show game selector
+                  <div>
+                    {filteredPropsEvents.length === 0 ? (
+                      <div className="bg-white rounded-lg shadow p-6 text-center">
+                        {teamFilter 
+                          ? `No games found matching "${teamFilter}".`
+                          : 'No games available for player props right now.'}
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <p className="text-sm text-gray-600 mb-4">
+                          Select a game to view player props ({filteredPropsEvents.length} game{filteredPropsEvents.length !== 1 ? 's' : ''} available)
+                        </p>
+                        {filteredPropsEvents.map(event => (
+                          <button
+                            key={event.id}
+                            onClick={() => loadPropsForEvent(event)}
+                            className="w-full bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow text-left"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <img 
+                                  src={`/team-logos/${event.away_team.toLowerCase().replace(/\s+/g, '')}.png`}
+                                  alt=""
+                                  className="h-8 w-8"
+                                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                />
+                                <span className="font-medium">{event.away_team}</span>
+                                <span className="text-gray-400">@</span>
+                                <span className="font-medium">{event.home_team}</span>
+                                <img 
+                                  src={`/team-logos/${event.home_team.toLowerCase().replace(/\s+/g, '')}.png`}
+                                  alt=""
+                                  className="h-8 w-8"
+                                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                />
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm text-gray-500">{formatEventTime(event.commence_time)}</span>
+                                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                </svg>
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             ) : (
               <div>
                 {filteredFutures.length === 0 ? (
@@ -874,20 +1027,12 @@ export default function Home() {
                   </div>
                 ) : (
                   <div>
-                    {/* Banner for Masters on mobile */}
-                    {activeLeague === MASTERS_LEAGUE_ID && (
-                      <div className="sm:hidden bg-blue-50 p-2 text-center border-b border-blue-100 mb-4">
-                        <p className="text-xs text-blue-800 font-medium">
-                          ↔️ Rotate phone horizontally to see golfer names
-                        </p>
-                      </div>
-                    )}
-                    {filteredFutures.map((market, index) => (
+                    {filteredFutures.map(market => (
                       <FuturesTable 
-                        key={index} 
+                        key={market.id} 
                         market={market} 
-                        compactMode={true}
-                        isMasters={activeLeague === MASTERS_LEAGUE_ID && false} // Force false to prevent name changes
+                        compactMode={false}
+                        isMasters={activeLeague === MASTERS_LEAGUE_ID}
                         selectedBookmakers={selectedBookmakers}
                       />
                     ))}
