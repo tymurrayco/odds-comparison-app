@@ -496,13 +496,6 @@ export interface ESPNGameScore {
 }
 
 // Team name matching utilities
-const normalizeTeamName = (name: string): string => {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, '') // Remove special chars
-    .trim();
-};
-
 // Get the mascot (last word) from team name
 const getMascot = (name: string): string => {
   const words = name.trim().split(/\s+/);

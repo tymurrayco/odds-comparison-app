@@ -56,14 +56,35 @@ export async function GET(request: Request) {
     // Parse and simplify the ESPN response
     const scores: ESPNGameScore[] = [];
     
+    interface ESPNCompetitor {
+      homeAway: string;
+      team?: { displayName?: string; name?: string };
+      score?: string;
+    }
+    
+    interface ESPNStatus {
+      period?: number;
+      displayClock?: string;
+      type?: { state?: string; shortDetail?: string; detail?: string };
+    }
+    
+    interface ESPNCompetition {
+      competitors?: ESPNCompetitor[];
+      status?: ESPNStatus;
+    }
+    
+    interface ESPNEvent {
+      competitions?: ESPNCompetition[];
+    }
+    
     if (data.events && Array.isArray(data.events)) {
-      for (const event of data.events) {
+      for (const event of data.events as ESPNEvent[]) {
         const competition = event.competitions?.[0];
         if (!competition) continue;
 
         const competitors = competition.competitors || [];
-        const homeTeam = competitors.find((c: any) => c.homeAway === 'home');
-        const awayTeam = competitors.find((c: any) => c.homeAway === 'away');
+        const homeTeam = competitors.find((c: ESPNCompetitor) => c.homeAway === 'home');
+        const awayTeam = competitors.find((c: ESPNCompetitor) => c.homeAway === 'away');
 
         if (!homeTeam || !awayTeam) continue;
 
@@ -77,7 +98,7 @@ export async function GET(request: Request) {
           awayScore: awayTeam.score || '0',
           period: status.period || 0,
           displayClock: status.displayClock || '',
-          state: statusType.state || 'pre',
+          state: (statusType.state as 'pre' | 'in' | 'post') || 'pre',
           statusDetail: statusType.shortDetail || statusType.detail || '',
         });
       }
