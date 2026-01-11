@@ -931,7 +931,24 @@ export default function Home() {
                       }}
                     >
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
+                        {/* Mobile: logos only */}
+                        <div className="flex md:hidden items-center gap-2">
+                          <img 
+                            src={`/team-logos/${selectedPropsEvent.away_team.toLowerCase().replace(/\s+/g, '')}.png`}
+                            alt={selectedPropsEvent.away_team}
+                            className="h-8 w-8"
+                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                          />
+                          <span className="text-gray-400">@</span>
+                          <img 
+                            src={`/team-logos/${selectedPropsEvent.home_team.toLowerCase().replace(/\s+/g, '')}.png`}
+                            alt={selectedPropsEvent.home_team}
+                            className="h-8 w-8"
+                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                          />
+                        </div>
+                        {/* Desktop: logos + names */}
+                        <div className="hidden md:flex items-center gap-3">
                           <img 
                             src={`/team-logos/${selectedPropsEvent.away_team.toLowerCase().replace(/\s+/g, '')}.png`}
                             alt=""
@@ -949,7 +966,7 @@ export default function Home() {
                           />
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-sm text-gray-500">{formatEventTime(selectedPropsEvent.commence_time)}</span>
+                          <span className="text-xs md:text-sm text-gray-500">{formatEventTime(selectedPropsEvent.commence_time)}</span>
                           <svg 
                             className="w-5 h-5 text-gray-400"
                             fill="none"
@@ -988,7 +1005,24 @@ export default function Home() {
                             className="w-full bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow text-left"
                           >
                             <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3">
+                              {/* Mobile: logos only */}
+                              <div className="flex md:hidden items-center gap-2">
+                                <img 
+                                  src={`/team-logos/${event.away_team.toLowerCase().replace(/\s+/g, '')}.png`}
+                                  alt={event.away_team}
+                                  className="h-8 w-8"
+                                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                />
+                                <span className="text-gray-400">@</span>
+                                <img 
+                                  src={`/team-logos/${event.home_team.toLowerCase().replace(/\s+/g, '')}.png`}
+                                  alt={event.home_team}
+                                  className="h-8 w-8"
+                                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                />
+                              </div>
+                              {/* Desktop: logos + names */}
+                              <div className="hidden md:flex items-center gap-3">
                                 <img 
                                   src={`/team-logos/${event.away_team.toLowerCase().replace(/\s+/g, '')}.png`}
                                   alt=""
@@ -1006,7 +1040,7 @@ export default function Home() {
                                 />
                               </div>
                               <div className="flex items-center gap-2">
-                                <span className="text-sm text-gray-500">{formatEventTime(event.commence_time)}</span>
+                                <span className="text-xs md:text-sm text-gray-500">{formatEventTime(event.commence_time)}</span>
                                 <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                                 </svg>
