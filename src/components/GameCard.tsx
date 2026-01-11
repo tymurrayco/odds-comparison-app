@@ -143,7 +143,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                   <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
                     <span className="mr-1.5 w-2 h-2 rounded-full bg-red-600 animate-pulse"></span>
                     <img 
-                      src={getTeamLogo(game.away_team)}
+                      src={liveScore.awayLogo || getTeamLogo(game.away_team)}
                       alt=""
                       className="h-4 w-4 mr-0.5"
                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
@@ -152,7 +152,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                     <span className="mx-1">-</span>
                     <span className="font-bold">{liveScore.homeScore}</span>
                     <img 
-                      src={getTeamLogo(game.home_team)}
+                      src={liveScore.homeLogo || getTeamLogo(game.home_team)}
                       alt=""
                       className="h-4 w-4 ml-0.5"
                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
@@ -164,7 +164,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                 {isCompleted && liveScore && (
                   <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
                     <img 
-                      src={getTeamLogo(game.away_team)}
+                      src={liveScore.awayLogo || getTeamLogo(game.away_team)}
                       alt=""
                       className="h-4 w-4 mr-0.5"
                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
@@ -173,7 +173,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                     <span className="mx-1">-</span>
                     <span className="font-bold">{liveScore.homeScore}</span>
                     <img 
-                      src={getTeamLogo(game.home_team)}
+                      src={liveScore.homeLogo || getTeamLogo(game.home_team)}
                       alt=""
                       className="h-4 w-4 ml-0.5"
                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
@@ -207,7 +207,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                   <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
                     <span className="mr-1 w-2 h-2 rounded-full bg-red-600 animate-pulse"></span>
                     <img 
-                      src={getTeamLogo(game.away_team)}
+                      src={liveScore.awayLogo || getTeamLogo(game.away_team)}
                       alt=""
                       className="h-4 w-4 mr-0.5"
                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
@@ -216,7 +216,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                     <span className="mx-0.5">-</span>
                     <span className="font-bold">{liveScore.homeScore}</span>
                     <img 
-                      src={getTeamLogo(game.home_team)}
+                      src={liveScore.homeLogo || getTeamLogo(game.home_team)}
                       alt=""
                       className="h-4 w-4 ml-0.5"
                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
@@ -228,7 +228,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                 {isCompleted && liveScore && (
                   <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
                     <img 
-                      src={getTeamLogo(game.away_team)}
+                      src={liveScore.awayLogo || getTeamLogo(game.away_team)}
                       alt=""
                       className="h-4 w-4 mr-0.5"
                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
@@ -237,7 +237,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                     <span className="mx-0.5">-</span>
                     <span className="font-bold">{liveScore.homeScore}</span>
                     <img 
-                      src={getTeamLogo(game.home_team)}
+                      src={liveScore.homeLogo || getTeamLogo(game.home_team)}
                       alt=""
                       className="h-4 w-4 ml-0.5"
                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
@@ -264,7 +264,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                     {impliedScores.awayWinning ? (
                       <>
                         <img 
-                          src={getTeamLogo(impliedScores.awayTeam)}
+                          src={liveScore?.awayLogo || getTeamLogo(impliedScores.awayTeam)}
                           alt={getFirstWord(impliedScores.awayTeam)}
                           className="h-3.5 w-3.5 object-contain"
                           onError={(e) => {
@@ -274,7 +274,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                         <span className="font-bold">{impliedScores.away}</span>
                         <span>-</span>
                         <img 
-                          src={getTeamLogo(impliedScores.homeTeam)}
+                          src={liveScore?.homeLogo || getTeamLogo(impliedScores.homeTeam)}
                           alt={getFirstWord(impliedScores.homeTeam)}
                           className="h-3.5 w-3.5 object-contain"
                           onError={(e) => {
@@ -286,7 +286,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                     ) : (
                       <>
                         <img 
-                          src={getTeamLogo(impliedScores.homeTeam)}
+                          src={liveScore?.homeLogo || getTeamLogo(impliedScores.homeTeam)}
                           alt={getFirstWord(impliedScores.homeTeam)}
                           className="h-3.5 w-3.5 object-contain"
                           onError={(e) => {
@@ -296,7 +296,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                         <span className="font-bold">{impliedScores.home}</span>
                         <span>-</span>
                         <img 
-                          src={getTeamLogo(impliedScores.awayTeam)}
+                          src={liveScore?.awayLogo || getTeamLogo(impliedScores.awayTeam)}
                           alt={getFirstWord(impliedScores.awayTeam)}
                           className="h-3.5 w-3.5 object-contain"
                           onError={(e) => {
@@ -372,6 +372,8 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
           view={expandedMarket === 'analysis' ? 'spread' : expandedMarket} 
           selectedBookmakers={selectedBookmakers}
           league={game.sport_key}
+          awayLogo={liveScore?.awayLogo}
+          homeLogo={liveScore?.homeLogo}
         />
       )}
     </div>

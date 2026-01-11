@@ -489,6 +489,8 @@ export interface ESPNGameScore {
   awayTeam: string;
   homeScore: string;
   awayScore: string;
+  homeLogo: string;
+  awayLogo: string;
   period: number;
   displayClock: string;
   state: 'pre' | 'in' | 'post';

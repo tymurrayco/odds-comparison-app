@@ -11,6 +11,8 @@ interface OddsTableProps {
   view?: 'moneyline' | 'spread' | 'totals' | 'spreads_h1';
   league?: string;
   selectedBookmakers?: string[];
+  awayLogo?: string;
+  homeLogo?: string;
 }
 
 interface OddsItem {
@@ -57,7 +59,7 @@ function getLeagueDisplayName(league: string): string {
   return leagueMap[league] || league.toUpperCase();
 }
 
-export default function OddsTable({ games, view = 'moneyline', league = 'basketball_nba', selectedBookmakers }: OddsTableProps) {
+export default function OddsTable({ games, view = 'moneyline', league = 'basketball_nba', selectedBookmakers, awayLogo, homeLogo }: OddsTableProps) {
   const pressTimer = useRef<NodeJS.Timeout | null>(null);
   const [isHolding, setIsHolding] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -372,12 +374,17 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
             </thead>
             <tbody>
               {[game.away_team, game.home_team].map((team, index) => {
+                // Use ESPN logo if available, otherwise fall back to local
+                const teamLogo = index === 0 
+                  ? (awayLogo || `/team-logos/${team.toLowerCase().replace(/\s+/g, '')}.png`)
+                  : (homeLogo || `/team-logos/${team.toLowerCase().replace(/\s+/g, '')}.png`);
+                
                 return (
                   <tr key={team} className={index === 0 ? "border-b" : ""}>
                     <td className="px-2 md:px-4 py-3 whitespace-nowrap text-xs md:text-sm font-medium text-gray-900 truncate max-w-[120px]">
                       <div className="flex items-center">
                         <img 
-                          src={`/team-logos/${team.toLowerCase().replace(/\s+/g, '')}.png`}
+                          src={teamLogo}
                           alt=""
                           className="h-5 w-5 mr-2"
                           onError={(e) => {

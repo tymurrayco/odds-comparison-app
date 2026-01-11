@@ -19,6 +19,8 @@ export interface ESPNGameScore {
   awayTeam: string;
   homeScore: string;
   awayScore: string;
+  homeLogo: string;
+  awayLogo: string;
   period: number;
   displayClock: string;
   state: 'pre' | 'in' | 'post'; // pre-game, in-progress, completed
@@ -65,7 +67,11 @@ export async function GET(request: Request) {
     
     interface ESPNCompetitor {
       homeAway: string;
-      team?: { displayName?: string; name?: string };
+      team?: { 
+        displayName?: string; 
+        name?: string;
+        logo?: string;
+      };
       score?: string;
     }
     
@@ -103,6 +109,8 @@ export async function GET(request: Request) {
           awayTeam: awayTeam.team?.displayName || awayTeam.team?.name || '',
           homeScore: homeTeam.score || '0',
           awayScore: awayTeam.score || '0',
+          homeLogo: homeTeam.team?.logo || '',
+          awayLogo: awayTeam.team?.logo || '',
           period: status.period || 0,
           displayClock: status.displayClock || '',
           state: (statusType.state as 'pre' | 'in' | 'post') || 'pre',
