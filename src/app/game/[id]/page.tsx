@@ -44,7 +44,7 @@ async function getGame(id: string) {
   }
 }
 
-// Helper to get spread and total from game data
+// Helper to get spread, total, and implied scores from game data
 function getGameLines(game: {
   bookmakers?: Array<{
     markets?: Array<{
@@ -56,9 +56,10 @@ function getGameLines(game: {
     }>;
   }>;
   home_team?: string;
+  away_team?: string;
 }) {
   if (!game.bookmakers || game.bookmakers.length === 0) {
-    return { spread: null, total: null };
+    return { spread: null, total: null, impliedAway: null, impliedHome: null };
   }
   
   const bookmaker = game.bookmakers[0];
@@ -66,11 +67,28 @@ function getGameLines(game: {
   const totalsMarket = bookmaker.markets?.find((m: { key: string }) => m.key === 'totals');
   
   const homeSpread = spreadsMarket?.outcomes?.find((o: { name: string }) => o.name === game.home_team);
-  const total = totalsMarket?.outcomes?.find((o: { name: string }) => o.name === 'Over');
+  const totalOver = totalsMarket?.outcomes?.find((o: { name: string }) => o.name === 'Over');
+  
+  const spread = homeSpread?.point ?? null;
+  const total = totalOver?.point ?? null;
+  
+  // Calculate implied scores
+  let impliedAway: number | null = null;
+  let impliedHome: number | null = null;
+  
+  if (spread !== null && total !== null) {
+    // Home spread is negative means home is favored
+    // Implied home = (total - spread) / 2
+    // Implied away = (total + spread) / 2
+    impliedHome = Math.round(((total - spread) / 2) * 10) / 10;
+    impliedAway = Math.round(((total + spread) / 2) * 10) / 10;
+  }
   
   return {
-    spread: homeSpread?.point,
-    total: total?.point
+    spread,
+    total,
+    impliedAway,
+    impliedHome
   };
 }
 
@@ -208,21 +226,22 @@ export async function generateMetadata({
     };
   }
   
-  const { spread, total } = getGameLines(game);
+  const { spread, total, impliedAway, impliedHome } = getGameLines(game);
   const leagueName = getLeagueName(game.sport_key);
   
-  // Format game time
+  // Format game time in Eastern timezone (most US sports)
   const gameDate = new Date(game.commence_time);
   const formattedDate = gameDate.toLocaleDateString('en-US', { 
     weekday: 'short',
     month: 'short', 
     day: 'numeric',
     hour: 'numeric',
-    minute: '2-digit'
+    minute: '2-digit',
+    timeZone: 'America/New_York'
   });
   
   // Build description with odds info
-  let description = `${leagueName} • ${formattedDate}`;
+  let description = `${leagueName} • ${formattedDate} ET`;
   if (spread !== null && spread !== undefined) {
     const spreadStr = spread > 0 ? `+${spread}` : `${spread}`;
     description += ` • ${game.home_team} ${spreadStr}`;
@@ -238,7 +257,7 @@ export async function generateMetadata({
     away: game.away_team,
     home: game.home_team,
     league: leagueName,
-    time: formattedDate,
+    time: formattedDate + ' ET',
   });
   
   if (spread !== null && spread !== undefined) {
@@ -247,6 +266,14 @@ export async function generateMetadata({
   }
   if (total !== null && total !== undefined) {
     ogImageParams.set('total', `${total}`);
+  }
+  
+  // Add implied scores
+  if (impliedAway !== null && impliedHome !== null) {
+    ogImageParams.set('impliedAway', `${impliedAway}`);
+    ogImageParams.set('impliedHome', `${impliedHome}`);
+    ogImageParams.set('awayName', game.away_team.split(' ').slice(-1)[0]);
+    ogImageParams.set('homeName', game.home_team.split(' ').slice(-1)[0]);
   }
   
   // Add ESPN logos if we can fetch them

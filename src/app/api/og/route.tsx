@@ -15,6 +15,10 @@ export async function GET(request: NextRequest) {
   const time = searchParams.get('time') || '';
   const awayLogo = searchParams.get('awayLogo') || '';
   const homeLogo = searchParams.get('homeLogo') || '';
+  const impliedAway = searchParams.get('impliedAway') || '';
+  const impliedHome = searchParams.get('impliedHome') || '';
+  const awayName = searchParams.get('awayName') || awayTeam.split(' ').slice(-1)[0];
+  const homeName = searchParams.get('homeName') || homeTeam.split(' ').slice(-1)[0];
 
   return new ImageResponse(
     (
@@ -190,6 +194,24 @@ export async function GET(request: NextRequest) {
                 <span style={{ color: '#fff', fontSize: '28px', fontWeight: 700 }}>O/U {total}</span>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Implied scores */}
+        {impliedAway && impliedHome && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              marginTop: '15px',
+            }}
+          >
+            <span style={{ color: '#64748b', fontSize: '18px' }}>Implied:</span>
+            <span style={{ color: '#94a3b8', fontSize: '20px', fontWeight: 600 }}>
+              {awayName} {impliedAway} - {homeName} {impliedHome}
+            </span>
           </div>
         )}
 
