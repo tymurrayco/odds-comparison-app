@@ -39,7 +39,14 @@ export async function GET(request: Request) {
   }
 
   try {
-    const apiUrl = `https://site.api.espn.com/apis/site/v2/sports/${espnLeague.sport}/${espnLeague.league}/scoreboard`;
+    // Build the API URL - add groups=50 for college sports to get all games (not just top 25)
+    let apiUrl = `https://site.api.espn.com/apis/site/v2/sports/${espnLeague.sport}/${espnLeague.league}/scoreboard`;
+    
+    // For college sports, add limit parameter to get more games
+    if (espnLeague.league === 'mens-college-basketball' || espnLeague.league === 'college-football') {
+      apiUrl += '?limit=200&groups=50';
+    }
+    
     console.log('Fetching ESPN scores:', apiUrl);
 
     const response = await fetch(apiUrl, {
@@ -104,7 +111,13 @@ export async function GET(request: Request) {
       }
     }
 
-    return NextResponse.json({ scores });
+    // Log team names for debugging
+    console.log(`ESPN returned ${scores.length} games for ${league}`);
+    if (scores.length > 0) {
+      console.log('Sample teams:', scores.slice(0, 3).map(s => `${s.awayTeam} @ ${s.homeTeam}`));
+    }
+
+    return NextResponse.json({ scores, count: scores.length });
   } catch (error) {
     console.error('Error fetching ESPN scores:', error);
     return NextResponse.json({ error: 'Server error' }, { status: 500 });

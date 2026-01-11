@@ -509,6 +509,37 @@ const getCity = (name: string): string => {
   return words.slice(0, -1).join(' ').toLowerCase();
 };
 
+// Get first word (often the school/city name)
+const getFirstWord = (name: string): string => {
+  const words = name.trim().split(/\s+/);
+  return words[0].toLowerCase();
+};
+
+// Check if two team names likely refer to the same team
+const teamsMatch = (name1: string, name2: string): boolean => {
+  const n1 = name1.toLowerCase();
+  const n2 = name2.toLowerCase();
+  
+  // Exact match
+  if (n1 === n2) return true;
+  
+  // One contains the other
+  if (n1.includes(n2) || n2.includes(n1)) return true;
+  
+  // Mascot match
+  if (getMascot(name1) === getMascot(name2)) return true;
+  
+  // First word match (e.g., "Duke" vs "Duke Blue Devils")
+  if (getFirstWord(name1) === getFirstWord(name2)) return true;
+  
+  // City match
+  const city1 = getCity(name1);
+  const city2 = getCity(name2);
+  if (city1.length > 2 && city2.length > 2 && city1 === city2) return true;
+  
+  return false;
+};
+
 /**
  * Match an odds game to an ESPN game score
  */
@@ -525,20 +556,9 @@ export const matchGameToScore = (
     return null;
   }
 
-  const homeMascot = getMascot(game.home_team);
-  const awayMascot = getMascot(game.away_team);
-  const homeCity = getCity(game.home_team);
-  const awayCity = getCity(game.away_team);
-
   for (const score of scores) {
-    const espnHomeMascot = getMascot(score.homeTeam);
-    const espnAwayMascot = getMascot(score.awayTeam);
-    const espnHomeCity = getCity(score.homeTeam);
-    const espnAwayCity = getCity(score.awayTeam);
-
-    // Match by mascot (most reliable for pro sports)
-    const homeMatch = homeMascot === espnHomeMascot || homeCity === espnHomeCity;
-    const awayMatch = awayMascot === espnAwayMascot || awayCity === espnAwayCity;
+    const homeMatch = teamsMatch(game.home_team, score.homeTeam);
+    const awayMatch = teamsMatch(game.away_team, score.awayTeam);
 
     if (homeMatch && awayMatch) {
       return score;
