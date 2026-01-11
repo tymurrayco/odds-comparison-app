@@ -9,7 +9,6 @@ import { createBet } from '@/lib/betService';
 interface OddsTableProps {
   games: Game[];
   view?: 'moneyline' | 'spread' | 'totals' | 'spreads_h1';
-  compactMode?: boolean;
   league?: string;
   selectedBookmakers?: string[];
 }
@@ -58,7 +57,7 @@ function getLeagueDisplayName(league: string): string {
   return leagueMap[league] || league.toUpperCase();
 }
 
-export default function OddsTable({ games, view = 'moneyline', compactMode = false, league = 'basketball_nba', selectedBookmakers }: OddsTableProps) {
+export default function OddsTable({ games, view = 'moneyline', league = 'basketball_nba', selectedBookmakers }: OddsTableProps) {
   const pressTimer = useRef<NodeJS.Timeout | null>(null);
   const [isHolding, setIsHolding] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
