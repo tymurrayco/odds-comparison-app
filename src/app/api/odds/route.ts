@@ -17,7 +17,8 @@ export async function GET(request: Request) {
   const apiKey = process.env.ODDS_API_KEY;
   
   try {
-    const apiUrl = `https://api.the-odds-api.com/v4/sports/${sport}/odds/?apiKey=${apiKey}&regions=us&markets=h2h,spreads,totals&oddsFormat=american`;
+    // Added includeLinks=true to get deep links to sportsbook betslips
+    const apiUrl = `https://api.the-odds-api.com/v4/sports/${sport}/odds/?apiKey=${apiKey}&regions=us&markets=h2h,spreads,totals&oddsFormat=american&includeLinks=true`;
     console.log('Requesting URL:', apiUrl.replace(apiKey as string, '[REDACTED]'));
     
     const response = await fetch(apiUrl);

@@ -78,6 +78,15 @@ export default function OddsTable({ games, view = 'moneyline', compactMode = fal
     setTimeout(() => setToast(null), 3000);
   };
 
+  // Handle click on FanDuel odds - open deep link
+  const handleFanDuelClick = (link: string | undefined, e: React.MouseEvent) => {
+    if (link) {
+      e.preventDefault();
+      e.stopPropagation();
+      window.open(link, '_blank');
+    }
+  };
+
   // Handle press-and-hold to create bet
   const handlePressStart = (
     game: Game,
@@ -388,14 +397,18 @@ export default function OddsTable({ games, view = 'moneyline', compactMode = fal
                       // Check if this is one of the best bookmakers for this team
                       const isBest = bestBookmakersByTeam[team]?.includes(book) || false;
                       
+                      // Check if this is FanDuel for deep link functionality
+                      const isFanDuel = book === 'FanDuel';
+                      
                       if (marketKey === 'h2h') {
                         const marketData = bookieData?.markets.find(m => m.key === 'h2h');
                         const outcomeData = marketData?.outcomes.find(o => o.name === team);
+                        const deepLink = outcomeData?.link;
                         
                         return (
                           <td 
                             key={book} 
-                            className="px-2 md:px-4 py-3 whitespace-nowrap text-center cursor-pointer select-none"
+                            className={`px-2 md:px-4 py-3 whitespace-nowrap text-center cursor-pointer select-none ${isFanDuel && deepLink ? 'hover:bg-blue-50' : ''}`}
                             onTouchStart={() => outcomeData && 
                               handlePressStart(game, team, outcomeData.price, book, 'moneyline')}
                             onTouchEnd={handlePressEnd}
@@ -404,11 +417,12 @@ export default function OddsTable({ games, view = 'moneyline', compactMode = fal
                               handlePressStart(game, team, outcomeData.price, book, 'moneyline')}
                             onMouseUp={handlePressEnd}
                             onMouseLeave={handlePressEnd}
+                            onClick={(e) => isFanDuel && handleFanDuelClick(deepLink, e)}
                           >
                             {outcomeData ? (
                               <div className={`text-xs md:text-sm font-medium ${
                                 isBest ? 'text-green-600 font-bold' : 'text-gray-900'
-                              } ${isHolding ? 'opacity-50' : ''}`}>
+                              } ${isHolding ? 'opacity-50' : ''} ${isFanDuel && deepLink ? 'underline decoration-dotted underline-offset-2' : ''}`}>
                                 {formatOdds(outcomeData.price)}
                                 {isBest && (
                                   <span className="ml-1 inline-flex items-center px-1 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
@@ -426,11 +440,12 @@ export default function OddsTable({ games, view = 'moneyline', compactMode = fal
                       if (marketKey === 'spreads' || marketKey === 'spreads_h1') {
                         const marketData = bookieData?.markets.find(m => m.key === marketKey);
                         const outcomeData = marketData?.outcomes.find(o => o.name === team);
+                        const deepLink = outcomeData?.link;
                         
                         return (
                           <td 
                             key={book} 
-                            className="px-2 md:px-4 py-3 whitespace-nowrap text-center cursor-pointer select-none"
+                            className={`px-2 md:px-4 py-3 whitespace-nowrap text-center cursor-pointer select-none ${isFanDuel && deepLink ? 'hover:bg-blue-50' : ''}`}
                             onTouchStart={() => outcomeData && typeof outcomeData.point !== 'undefined' && 
                               handlePressStart(game, team, outcomeData.price, book, 'spread', outcomeData.point)}
                             onTouchEnd={handlePressEnd}
@@ -439,11 +454,12 @@ export default function OddsTable({ games, view = 'moneyline', compactMode = fal
                               handlePressStart(game, team, outcomeData.price, book, 'spread', outcomeData.point)}
                             onMouseUp={handlePressEnd}
                             onMouseLeave={handlePressEnd}
+                            onClick={(e) => isFanDuel && handleFanDuelClick(deepLink, e)}
                           >
                             {outcomeData && typeof outcomeData.point !== 'undefined' ? (
                               <div className={`text-xs md:text-sm ${
                                 isBest ? 'text-green-600 font-bold' : 'text-gray-900'
-                              } ${isHolding ? 'opacity-50' : ''}`}>
+                              } ${isHolding ? 'opacity-50' : ''} ${isFanDuel && deepLink ? 'underline decoration-dotted underline-offset-2' : ''}`}>
                                 {outcomeData.point > 0 ? '+' : ''}{outcomeData.point} ({formatOdds(outcomeData.price)})
                                 {isBest && (
                                   <span className="ml-1 inline-flex items-center px-1 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
@@ -464,11 +480,12 @@ export default function OddsTable({ games, view = 'moneyline', compactMode = fal
                         const outcomeData = marketData?.outcomes.find(o => 
                           (index === 0 && o.name === 'Over') || (index === 1 && o.name === 'Under')
                         );
+                        const deepLink = outcomeData?.link;
                         
                         return (
                           <td 
                             key={book} 
-                            className="px-2 md:px-4 py-3 whitespace-nowrap text-center cursor-pointer select-none"
+                            className={`px-2 md:px-4 py-3 whitespace-nowrap text-center cursor-pointer select-none ${isFanDuel && deepLink ? 'hover:bg-blue-50' : ''}`}
                             onTouchStart={() => outcomeData && typeof outcomeData.point !== 'undefined' && 
                               handlePressStart(game, team, outcomeData.price, book, 'total', outcomeData.point, totalType)}
                             onTouchEnd={handlePressEnd}
@@ -477,11 +494,12 @@ export default function OddsTable({ games, view = 'moneyline', compactMode = fal
                               handlePressStart(game, team, outcomeData.price, book, 'total', outcomeData.point, totalType)}
                             onMouseUp={handlePressEnd}
                             onMouseLeave={handlePressEnd}
+                            onClick={(e) => isFanDuel && handleFanDuelClick(deepLink, e)}
                           >
                             {outcomeData && typeof outcomeData.point !== 'undefined' ? (
                               <div className={`text-xs md:text-sm ${
                                 isBest ? 'text-green-600 font-bold' : 'text-gray-900'
-                              } ${isHolding ? 'opacity-50' : ''}`}>
+                              } ${isHolding ? 'opacity-50' : ''} ${isFanDuel && deepLink ? 'underline decoration-dotted underline-offset-2' : ''}`}>
                                 {index === 0 ? 'O' : 'U'} {outcomeData.point} ({formatOdds(outcomeData.price)})
                                 {isBest && (
                                   <span className="ml-1 inline-flex items-center px-1 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">

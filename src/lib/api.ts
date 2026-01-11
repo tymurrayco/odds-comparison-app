@@ -15,12 +15,14 @@ export interface Bookmaker {
   key: string;
   title: string;
   last_update: string;
+  link?: string; // Deep link to event page on sportsbook
   markets: Market[];
 }
 
 export interface Market {
   key: string;
   last_update: string;
+  link?: string; // Deep link to market on sportsbook
   outcomes: Outcome[];
 }
 
@@ -28,6 +30,7 @@ export interface Outcome {
   name: string;
   price: number;
   point?: number;
+  link?: string; // Deep link to add this bet to betslip
 }
 
 export interface FuturesMarket {
