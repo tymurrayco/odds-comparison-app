@@ -7,11 +7,14 @@ import {
   fetchOdds, 
   fetchFutures, 
   fetchPropsEvents, 
-  fetchProps, 
+  fetchProps,
+  fetchESPNScores,
+  matchGameToScore,
   Game, 
   FuturesMarket, 
   PropsEvent, 
   ProcessedPropsMarket,
+  ESPNGameScore,
   BOOKMAKERS, 
   LEAGUES,
   PROPS_SUPPORTED_LEAGUES 
@@ -66,6 +69,9 @@ export default function Home() {
   const [propsData, setPropsData] = useState<ProcessedPropsMarket[]>([]);
   const [propsLoading, setPropsLoading] = useState(false);
   const [playerFilter, setPlayerFilter] = useState('');
+  
+  // ESPN live scores state
+  const [espnScores, setEspnScores] = useState<ESPNGameScore[]>([]);
   
   // Cache state
   const [gamesCache, setGamesCache] = useState<{ [league: string]: CacheItem<Game[]> }>({});
@@ -151,6 +157,30 @@ export default function Home() {
       localStorage.setItem('favoriteGames', JSON.stringify(favoriteGames));
     }
   }, [favoriteGames, isClient]);
+
+  // Refresh ESPN scores every 30 seconds when viewing games with live games
+  useEffect(() => {
+    if (activeView !== 'games' || activeLeague === 'favorites') return;
+    
+    // Check if there are any live games
+    const hasLiveGames = games.some(game => {
+      const gameTime = new Date(game.commence_time).getTime();
+      return gameTime <= Date.now();
+    });
+    
+    if (!hasLiveGames) return;
+    
+    const interval = setInterval(async () => {
+      try {
+        const scores = await fetchESPNScores(activeLeague);
+        setEspnScores(scores);
+      } catch (error) {
+        console.error('Error refreshing ESPN scores:', error);
+      }
+    }, 30000); // 30 seconds
+    
+    return () => clearInterval(interval);
+  }, [activeView, activeLeague, games]);
 
   // Toggle favorite game
   const toggleFavoriteGame = (gameId: string) => {
@@ -360,6 +390,16 @@ export default function Home() {
       
       if (gamesLoaded || futuresLoaded) {
         setLastUpdated(new Date());
+      }
+      
+      // Fetch ESPN scores for live games (only for games view)
+      if (needsGames) {
+        try {
+          const scores = await fetchESPNScores(activeLeague);
+          setEspnScores(scores);
+        } catch (error) {
+          console.error('Error fetching ESPN scores:', error);
+        }
       }
     } catch (error) {
       console.error('Error loading data:', error);
@@ -895,6 +935,7 @@ export default function Home() {
                         selectedBookmakers={selectedBookmakers}
                         isFavorite={true}
                         onToggleFavorite={toggleFavoriteGame}
+                        liveScore={matchGameToScore(game, espnScores)}
                       />
                     ))}
                   </div>
@@ -917,6 +958,7 @@ export default function Home() {
                         selectedBookmakers={selectedBookmakers}
                         isFavorite={favoriteGames.includes(game.id)}
                         onToggleFavorite={toggleFavoriteGame}
+                        liveScore={matchGameToScore(game, espnScores)}
                       />
                     ))}
                   </div>

@@ -482,3 +482,95 @@ export async function refreshData(sport: string): Promise<ApiResponse<Game[]>> {
   // Fetch the latest odds
   return fetchOdds(sport);
 }
+
+// ESPN Live Scores types and functions
+export interface ESPNGameScore {
+  homeTeam: string;
+  awayTeam: string;
+  homeScore: string;
+  awayScore: string;
+  period: number;
+  displayClock: string;
+  state: 'pre' | 'in' | 'post';
+  statusDetail: string;
+}
+
+// Team name matching utilities
+const normalizeTeamName = (name: string): string => {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, '') // Remove special chars
+    .trim();
+};
+
+// Get the mascot (last word) from team name
+const getMascot = (name: string): string => {
+  const words = name.trim().split(/\s+/);
+  return words[words.length - 1].toLowerCase();
+};
+
+// Get city/location (all words except last) from team name
+const getCity = (name: string): string => {
+  const words = name.trim().split(/\s+/);
+  if (words.length <= 1) return name.toLowerCase();
+  return words.slice(0, -1).join(' ').toLowerCase();
+};
+
+/**
+ * Match an odds game to an ESPN game score
+ */
+export const matchGameToScore = (
+  game: Game,
+  scores: ESPNGameScore[]
+): ESPNGameScore | null => {
+  const gameTime = new Date(game.commence_time).getTime();
+  const now = Date.now();
+  
+  // Only try to match games that have started or are within 3 hours of starting
+  const threeHours = 3 * 60 * 60 * 1000;
+  if (gameTime > now + threeHours) {
+    return null;
+  }
+
+  const homeMascot = getMascot(game.home_team);
+  const awayMascot = getMascot(game.away_team);
+  const homeCity = getCity(game.home_team);
+  const awayCity = getCity(game.away_team);
+
+  for (const score of scores) {
+    const espnHomeMascot = getMascot(score.homeTeam);
+    const espnAwayMascot = getMascot(score.awayTeam);
+    const espnHomeCity = getCity(score.homeTeam);
+    const espnAwayCity = getCity(score.awayTeam);
+
+    // Match by mascot (most reliable for pro sports)
+    const homeMatch = homeMascot === espnHomeMascot || homeCity === espnHomeCity;
+    const awayMatch = awayMascot === espnAwayMascot || awayCity === espnAwayCity;
+
+    if (homeMatch && awayMatch) {
+      return score;
+    }
+  }
+
+  return null;
+};
+
+/**
+ * Fetch live scores from ESPN
+ */
+export async function fetchESPNScores(league: string): Promise<ESPNGameScore[]> {
+  try {
+    const response = await fetch(`/api/espn?league=${league}`);
+    
+    if (!response.ok) {
+      console.error('ESPN API error:', response.status);
+      return [];
+    }
+
+    const data = await response.json();
+    return data.scores || [];
+  } catch (error) {
+    console.error('Error fetching ESPN scores:', error);
+    return [];
+  }
+}

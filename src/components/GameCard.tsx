@@ -2,16 +2,17 @@
 import { useState } from 'react';
 import OddsTable from './OddsTable';
 import TeamAnalysis from './TeamAnalysis';
-import { Game } from '@/lib/api';
+import { Game, ESPNGameScore } from '@/lib/api';
 
 interface GameCardProps {
   game: Game;
   selectedBookmakers?: string[];
   isFavorite?: boolean;
   onToggleFavorite?: (gameId: string) => void;
+  liveScore?: ESPNGameScore | null;
 }
 
-export default function GameCard({ game, selectedBookmakers, isFavorite = false, onToggleFavorite }: GameCardProps) {
+export default function GameCard({ game, selectedBookmakers, isFavorite = false, onToggleFavorite, liveScore }: GameCardProps) {
   // Check if this is a soccer sport
   const isSoccer = game.sport_key === 'soccer_epl' || game.sport_key === 'soccer_usa_mls';
   
@@ -34,9 +35,10 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
   
   const formattedTime = gameDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
   
-  // Check if game is live
+  // Check if game is live (started but not completed)
   const now = new Date();
-  const isLive = now > gameDate;
+  const isLive = now > gameDate && liveScore?.state === 'in';
+  const isCompleted = liveScore?.state === 'post';
   
   // Helper function to get first word of team name
   const getFirstWord = (teamName: string): string => {
@@ -133,7 +135,51 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                   {isFavorite ? '★' : '☆'}
                 </button>
               )}
-              {isLive && (
+              {/* Live indicator with score */}
+              {isLive && liveScore && (
+                <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                  <span className="mr-1.5 w-2 h-2 rounded-full bg-red-600 animate-pulse"></span>
+                  <img 
+                    src={getTeamLogo(game.away_team)}
+                    alt=""
+                    className="h-4 w-4 mr-0.5"
+                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                  />
+                  <span className="font-bold">{liveScore.awayScore}</span>
+                  <span className="mx-1">-</span>
+                  <span className="font-bold">{liveScore.homeScore}</span>
+                  <img 
+                    src={getTeamLogo(game.home_team)}
+                    alt=""
+                    className="h-4 w-4 ml-0.5"
+                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                  />
+                  <span className="ml-1.5 text-green-600">{liveScore.statusDetail}</span>
+                </span>
+              )}
+              {/* Final score */}
+              {isCompleted && liveScore && (
+                <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
+                  <img 
+                    src={getTeamLogo(game.away_team)}
+                    alt=""
+                    className="h-4 w-4 mr-0.5"
+                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                  />
+                  <span className="font-bold">{liveScore.awayScore}</span>
+                  <span className="mx-1">-</span>
+                  <span className="font-bold">{liveScore.homeScore}</span>
+                  <img 
+                    src={getTeamLogo(game.home_team)}
+                    alt=""
+                    className="h-4 w-4 ml-0.5"
+                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                  />
+                  <span className="ml-1.5 text-gray-500">Final</span>
+                </span>
+              )}
+              {/* Show LIVE badge without score if game started but no ESPN match */}
+              {!liveScore && now > gameDate && (
                 <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
                   <span className="mr-1 w-2 h-2 rounded-full bg-red-600 animate-pulse"></span>
                   LIVE
@@ -143,14 +189,17 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
             
             {/* Game time and implied result */}
             <div className="flex items-center gap-3 flex-wrap">
-              <p className="text-xs md:text-sm text-gray-500">
-                {formattedDate} at {formattedTime} {timeZoneAbbr}
-              </p>
+              {/* Only show game time if not live/completed */}
+              {!isLive && !isCompleted && (
+                <p className="text-xs md:text-sm text-gray-500">
+                  {formattedDate} at {formattedTime} {timeZoneAbbr}
+                </p>
+              )}
               
-              {/* Implied Score with team logos - winner always on left */}
+              {/* Implied Score with team logos - winner always on left - always show */}
               {impliedScores && (
                 <div className="flex items-center gap-1.5 text-xs md:text-sm">
-                  <span className="text-gray-400">•</span>
+                  {!isLive && !isCompleted && <span className="text-gray-400">•</span>}
                   <span className="text-gray-600 flex items-center gap-1">
                     <span>Implied:</span>
                     {impliedScores.awayWinning ? (
@@ -232,7 +281,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
               }`}
               onClick={() => setExpandedMarket('moneyline')}
             >
-              Moneyline
+              {isSoccer ? '1X2' : 'ML'}
             </button>
             <button 
               className={`px-2 md:px-3 py-1 text-xs md:text-sm rounded-md ${
@@ -242,44 +291,37 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
               }`}
               onClick={() => setExpandedMarket('totals')}
             >
-              Totals
+              O/U
             </button>
-            {/* Only show Analysis tab for NCAAF games */}
+            {/* Analysis button - only for NCAAF */}
             {isNCAAF && (
               <button 
                 className={`px-2 md:px-3 py-1 text-xs md:text-sm rounded-md ${
                   expandedMarket === 'analysis' 
-                    ? 'bg-blue-600 text-white' 
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    ? 'bg-purple-600 text-white' 
+                    : 'bg-purple-50 text-purple-700 hover:bg-purple-100'
                 }`}
                 onClick={() => setExpandedMarket('analysis')}
               >
-                Analysis
+                📊
               </button>
             )}
           </div>
         </div>
       </div>
       
-      {/* Content area based on selected tab */}
+      {/* Show TeamAnalysis if analysis is selected */}
       {expandedMarket === 'analysis' && isNCAAF ? (
-        <TeamAnalysis 
-          awayTeam={game.away_team}
-          homeTeam={game.home_team}
-        />
-      ) : (
-        /* Odds table for other tabs */
-        <div className="overflow-x-auto">
-          <OddsTable 
-            games={[game]}
-            view={expandedMarket === 'spread' ? 'spread' : 
-                  expandedMarket === 'moneyline' ? 'moneyline' : 
-                  'totals'}
-            compactMode={true}
-            league={game.sport_key}
-            selectedBookmakers={selectedBookmakers}
-          />
+        <div className="p-4">
+          <TeamAnalysis awayTeam={game.away_team} homeTeam={game.home_team} />
         </div>
+      ) : (
+        <OddsTable 
+          games={[game]} 
+          view={expandedMarket === 'analysis' ? 'spread' : expandedMarket} 
+          selectedBookmakers={selectedBookmakers}
+          league={game.sport_key}
+        />
       )}
     </div>
   );
