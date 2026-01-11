@@ -86,64 +86,6 @@ const PROP_MARKETS: { [key: string]: string[] } = {
   ]
 };
 
-// Human-readable names for prop markets
-export const PROP_MARKET_NAMES: { [key: string]: string } = {
-  // Basketball
-  'player_points': 'Points',
-  'player_rebounds': 'Rebounds',
-  'player_assists': 'Assists',
-  'player_threes': '3-Pointers Made',
-  'player_points_rebounds_assists': 'Pts + Reb + Ast',
-  'player_points_rebounds': 'Pts + Reb',
-  'player_points_assists': 'Pts + Ast',
-  'player_rebounds_assists': 'Reb + Ast',
-  'player_steals': 'Steals',
-  'player_blocks': 'Blocks',
-  'player_turnovers': 'Turnovers',
-  'player_double_double': 'Double Double',
-  'player_triple_double': 'Triple Double',
-  // Football
-  'player_pass_tds': 'Pass TDs',
-  'player_pass_yds': 'Pass Yards',
-  'player_pass_completions': 'Completions',
-  'player_pass_attempts': 'Pass Attempts',
-  'player_pass_interceptions': 'Interceptions',
-  'player_rush_yds': 'Rush Yards',
-  'player_rush_attempts': 'Rush Attempts',
-  'player_rush_longest': 'Longest Rush',
-  'player_receptions': 'Receptions',
-  'player_reception_yds': 'Receiving Yards',
-  'player_reception_longest': 'Longest Reception',
-  'player_kicking_points': 'Kicking Points',
-  'player_field_goals': 'Field Goals',
-  'player_tackles_assists': 'Tackles + Assists',
-  'player_anytime_td': 'Anytime TD',
-  // Hockey
-  'player_power_play_points': 'Power Play Points',
-  'player_blocked_shots': 'Blocked Shots',
-  'player_shots_on_goal': 'Shots on Goal',
-  'player_goals': 'Goals',
-  'player_total_saves': 'Saves (Goalie)',
-  // Baseball
-  'batter_home_runs': 'Home Runs',
-  'batter_hits': 'Hits',
-  'batter_total_bases': 'Total Bases',
-  'batter_rbis': 'RBIs',
-  'batter_runs_scored': 'Runs Scored',
-  'batter_hits_runs_rbis': 'Hits + Runs + RBIs',
-  'batter_singles': 'Singles',
-  'batter_doubles': 'Doubles',
-  'batter_triples': 'Triples',
-  'batter_walks': 'Walks',
-  'batter_strikeouts': 'Strikeouts',
-  'batter_stolen_bases': 'Stolen Bases',
-  'pitcher_strikeouts': 'Pitcher Strikeouts',
-  'pitcher_hits_allowed': 'Hits Allowed',
-  'pitcher_walks': 'Pitcher Walks',
-  'pitcher_earned_runs': 'Earned Runs',
-  'pitcher_outs': 'Outs Recorded'
-};
-
 export async function GET(request: Request) {
   console.log('Props API route called');
   
