@@ -61,7 +61,6 @@ export default function PropsTable({
 }: PropsTableProps) {
   const [expandedMarkets, setExpandedMarkets] = useState<{ [key: string]: boolean }>({});
   const pressTimer = useRef<NodeJS.Timeout | null>(null);
-  const [isHolding, setIsHolding] = useState(false);
   const [holdingKey, setHoldingKey] = useState<string | null>(null); // Track which cell is being held
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   
@@ -93,7 +92,6 @@ export default function PropsTable({
   ) => {
     if (!event) return; // Need event context to create bet
     
-    setIsHolding(true);
     setHoldingKey(cellKey);
     
     pressTimer.current = setTimeout(async () => {
@@ -135,7 +133,6 @@ export default function PropsTable({
         showToast('Failed to add bet', 'error');
       }
       
-      setIsHolding(false);
       setHoldingKey(null);
     }, 1500); // 1.5 second hold
   };
@@ -144,7 +141,6 @@ export default function PropsTable({
     if (pressTimer.current) {
       clearTimeout(pressTimer.current);
     }
-    setIsHolding(false);
     setHoldingKey(null);
   };
 

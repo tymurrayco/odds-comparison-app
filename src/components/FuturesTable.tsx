@@ -57,14 +57,7 @@ function getLeagueDisplayName(league: string): string {
 }
 
 // Helper function to get a readable market title for the bet description
-function getMarketDescription(marketTitle: string, league: string): string {
-  // Common futures market titles from the API
-  const marketDescriptions: { [key: string]: string } = {
-    'outrights': 'Championship Winner',
-    'championship_winner': 'Championship Winner',
-    'winner': 'Winner'
-  };
-  
+function getMarketDescription(league: string): string {
   const leagueNames: { [key: string]: string } = {
     'basketball_nba': 'NBA',
     'americanfootball_nfl': 'Super Bowl',
@@ -88,7 +81,6 @@ export default function FuturesTable({
   league = 'basketball_nba'
 }: FuturesTableProps) {
   const pressTimer = useRef<NodeJS.Timeout | null>(null);
-  const [isHolding, setIsHolding] = useState(false);
   const [holdingKey, setHoldingKey] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
@@ -115,7 +107,6 @@ export default function FuturesTable({
     bookmaker: string,
     cellKey: string
   ) => {
-    setIsHolding(true);
     setHoldingKey(cellKey);
     
     pressTimer.current = setTimeout(async () => {
@@ -123,7 +114,7 @@ export default function FuturesTable({
       const stake = calculateStakeForOneUnit(odds);
       
       // Create bet description (e.g., "NBA Winner" or "Super Bowl Winner")
-      const marketDescription = getMarketDescription(market.title, league);
+      const marketDescription = getMarketDescription(league);
       
       // The bet field shows what was bet on (e.g., "Kansas City Chiefs +450")
       const betString = `${team} ${formatOdds(odds)}`;
@@ -157,7 +148,6 @@ export default function FuturesTable({
         showToast('Failed to add bet', 'error');
       }
       
-      setIsHolding(false);
       setHoldingKey(null);
     }, 1500); // 1.5 second hold
   };
@@ -166,7 +156,6 @@ export default function FuturesTable({
     if (pressTimer.current) {
       clearTimeout(pressTimer.current);
     }
-    setIsHolding(false);
     setHoldingKey(null);
   };
 
