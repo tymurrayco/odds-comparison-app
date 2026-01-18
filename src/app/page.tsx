@@ -1154,12 +1154,13 @@ function HomeContent() {
                   <div>
                     {filteredFutures.map(market => (
                       <FuturesTable 
-                        key={market.id} 
-                        market={market} 
-                        compactMode={false}
-                        isMasters={activeLeague === MASTERS_LEAGUE_ID}
-                        selectedBookmakers={selectedBookmakers}
-                      />
+  key={market.id} 
+  market={market} 
+  compactMode={false}
+  isMasters={activeLeague === MASTERS_LEAGUE_ID}
+  selectedBookmakers={selectedBookmakers}
+  league={activeLeague}
+/>
                     ))}
                   </div>
                 )}

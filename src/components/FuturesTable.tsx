@@ -1,20 +1,97 @@
 // src/components/FuturesTable.tsx
+'use client';
+
 import { FuturesMarket, BOOKMAKERS } from '@/lib/api';
-import React from 'react';
+import { createBet } from '@/lib/betService';
+import React, { useState, useRef } from 'react';
 
 interface FuturesTableProps {
   market: FuturesMarket;
   compactMode?: boolean;
   isMasters?: boolean;
   selectedBookmakers?: string[];
+  league?: string; // The active league for creating bets
+}
+
+// Helper function to calculate stake for 1 unit to-win
+function calculateStakeForOneUnit(odds: number): number {
+  if (odds > 0) {
+    // Underdog: stake = 100 / odds to win 1 unit
+    return 100 / odds;
+  } else {
+    // Favorite: stake = |odds| / 100 to win 1 unit
+    return Math.abs(odds) / 100;
+  }
+}
+
+// Helper function to map league ID to sport name
+function getSportFromLeague(league: string): string {
+  if (league.includes('nba') || league.includes('basketball')) return 'Basketball';
+  if (league.includes('nfl') || league.includes('americanfootball_nfl')) return 'Football';
+  if (league.includes('ncaaf') || league.includes('americanfootball_ncaaf')) return 'Football';
+  if (league.includes('ncaab')) return 'Basketball';
+  if (league.includes('nhl') || league.includes('icehockey')) return 'Hockey';
+  if (league.includes('mlb') || league.includes('baseball')) return 'Baseball';
+  if (league.includes('mls') || league.includes('soccer')) return 'Soccer';
+  if (league.includes('epl')) return 'Soccer';
+  if (league.includes('wnba')) return 'Basketball';
+  if (league.includes('golf') || league.includes('masters')) return 'Golf';
+  return 'Other';
+}
+
+// Helper function to get league display name
+function getLeagueDisplayName(league: string): string {
+  const leagueMap: { [key: string]: string } = {
+    'basketball_nba': 'NBA',
+    'americanfootball_nfl': 'NFL',
+    'americanfootball_ncaaf': 'NCAAF',
+    'basketball_ncaab': 'NCAAB',
+    'icehockey_nhl': 'NHL',
+    'baseball_mlb': 'MLB',
+    'soccer_usa_mls': 'MLS',
+    'soccer_epl': 'EPL',
+    'basketball_wnba': 'WNBA',
+    'golf_masters_tournament_winner': 'PGA'
+  };
+  return leagueMap[league] || league.toUpperCase();
+}
+
+// Helper function to get a readable market title for the bet description
+function getMarketDescription(marketTitle: string, league: string): string {
+  // Common futures market titles from the API
+  const marketDescriptions: { [key: string]: string } = {
+    'outrights': 'Championship Winner',
+    'championship_winner': 'Championship Winner',
+    'winner': 'Winner'
+  };
+  
+  const leagueNames: { [key: string]: string } = {
+    'basketball_nba': 'NBA',
+    'americanfootball_nfl': 'Super Bowl',
+    'americanfootball_ncaaf': 'CFP',
+    'basketball_ncaab': 'March Madness',
+    'icehockey_nhl': 'Stanley Cup',
+    'baseball_mlb': 'World Series',
+    'soccer_epl': 'EPL',
+    'golf_masters_tournament_winner': 'Masters'
+  };
+  
+  const leagueName = leagueNames[league] || getLeagueDisplayName(league);
+  return `${leagueName} Winner`;
 }
 
 export default function FuturesTable({ 
   market, 
   compactMode = false,
   isMasters = false,
-  selectedBookmakers
+  selectedBookmakers,
+  league = 'basketball_nba'
 }: FuturesTableProps) {
+  const pressTimer = useRef<NodeJS.Timeout | null>(null);
+  const [isHolding, setIsHolding] = useState(false);
+  const [holdingKey, setHoldingKey] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
   // Use selected bookmakers or default to all
   const displayBookmakers = selectedBookmakers && selectedBookmakers.length > 0 
     ? BOOKMAKERS.filter(b => selectedBookmakers.includes(b))
@@ -23,6 +100,74 @@ export default function FuturesTable({
   const formatOdds = (odds: number): string => {
     if (odds > 0) return `+${odds}`;
     return odds.toString();
+  };
+
+  // Show toast notification
+  const showToast = (message: string, type: 'success' | 'error') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  // Handle press-and-hold to create futures bet
+  const handlePressStart = (
+    team: string,
+    odds: number,
+    bookmaker: string,
+    cellKey: string
+  ) => {
+    setIsHolding(true);
+    setHoldingKey(cellKey);
+    
+    pressTimer.current = setTimeout(async () => {
+      // Calculate stake for 1 unit to-win
+      const stake = calculateStakeForOneUnit(odds);
+      
+      // Create bet description (e.g., "NBA Winner" or "Super Bowl Winner")
+      const marketDescription = getMarketDescription(market.title, league);
+      
+      // The bet field shows what was bet on (e.g., "Kansas City Chiefs +450")
+      const betString = `${team} ${formatOdds(odds)}`;
+      
+      try {
+        // For futures, event date is typically end of season - use a far future date
+        // or we can use today's date as the bet placement date
+        const today = new Date();
+        const eventDateString = `${today.getFullYear()}-12-31`; // End of year as placeholder
+        
+        await createBet({
+          date: today.toISOString().split('T')[0],
+          eventDate: eventDateString,
+          sport: getSportFromLeague(league),
+          league: getLeagueDisplayName(league),
+          description: marketDescription,
+          awayTeam: undefined,
+          homeTeam: undefined,
+          team: team, // The team/player being bet on
+          betType: 'future',
+          bet: betString,
+          odds: odds,
+          stake: parseFloat(stake.toFixed(2)),
+          status: 'pending',
+          book: bookmaker
+        });
+        
+        showToast(`Future added: ${team} ${formatOdds(odds)}`, 'success');
+      } catch (error) {
+        console.error('Error creating bet:', error);
+        showToast('Failed to add bet', 'error');
+      }
+      
+      setIsHolding(false);
+      setHoldingKey(null);
+    }, 1500); // 1.5 second hold
+  };
+
+  const handlePressEnd = () => {
+    if (pressTimer.current) {
+      clearTimeout(pressTimer.current);
+    }
+    setIsHolding(false);
+    setHoldingKey(null);
   };
 
   // Function to get last name from full name
@@ -106,6 +251,19 @@ export default function FuturesTable({
 
   return (
     <div className="bg-white rounded-lg shadow-md mb-6 overflow-hidden">
+      {/* Toast Notification */}
+      {toast && (
+        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-300 ease-in-out">
+          <div className={`px-6 py-3 rounded-lg shadow-lg ${
+            toast.type === 'success' 
+              ? 'bg-green-500 text-white' 
+              : 'bg-red-500 text-white'
+          }`}>
+            {toast.message}
+          </div>
+        </div>
+      )}
+
       {/* Banner notice for Masters on mobile */}
       {isMasters && (
         <div className="sm:hidden bg-blue-50 p-2 text-center border-b border-blue-100">
@@ -156,24 +314,39 @@ export default function FuturesTable({
                   <td className="px-2 md:px-4 py-3 whitespace-normal text-xs md:text-sm font-medium text-gray-900">
                     {renderTeamCell(item.team)}
                   </td>
-                  {displayBookmakers.map(book => (
-                    <td key={book} className="px-2 md:px-4 py-3 whitespace-nowrap text-center">
-                      {item.odds[book] !== undefined ? (
-                        <div className={`text-xs md:text-sm font-medium ${
-                          bestOddsBooks.includes(book) ? 'text-green-600 font-bold' : 'text-gray-900'
-                        }`}>
-                          {formatOdds(item.odds[book])}
-                          {bestOddsBooks.includes(book) && (
-                            <span className="ml-1 inline-flex items-center px-1 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                              Best
-                            </span>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-xs md:text-sm text-gray-500">-</span>
-                      )}
-                    </td>
-                  ))}
+                  {displayBookmakers.map(book => {
+                    const cellKey = `${item.team}-${book}`;
+                    const isThisCellHolding = holdingKey === cellKey;
+                    const hasOdds = item.odds[book] !== undefined;
+                    
+                    return (
+                      <td 
+                        key={book} 
+                        className={`px-2 md:px-4 py-3 whitespace-nowrap text-center cursor-pointer select-none ${isThisCellHolding ? 'bg-blue-50' : ''}`}
+                        onTouchStart={() => hasOdds && handlePressStart(item.team, item.odds[book], book, cellKey)}
+                        onTouchEnd={handlePressEnd}
+                        onTouchMove={handlePressEnd}
+                        onMouseDown={() => hasOdds && handlePressStart(item.team, item.odds[book], book, cellKey)}
+                        onMouseUp={handlePressEnd}
+                        onMouseLeave={handlePressEnd}
+                      >
+                        {hasOdds ? (
+                          <div className={`text-xs md:text-sm font-medium ${
+                            bestOddsBooks.includes(book) ? 'text-green-600 font-bold' : 'text-gray-900'
+                          } ${isThisCellHolding ? 'opacity-50' : ''}`}>
+                            {formatOdds(item.odds[book])}
+                            {bestOddsBooks.includes(book) && (
+                              <span className="ml-1 inline-flex items-center px-1 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                Best
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-xs md:text-sm text-gray-500">-</span>
+                        )}
+                      </td>
+                    );
+                  })}
                 </tr>
               );
             })}
