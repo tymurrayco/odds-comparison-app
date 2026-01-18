@@ -54,6 +54,7 @@ function getLeagueDisplayName(league: string): string {
     'baseball_mlb': 'MLB',
     'soccer_usa_mls': 'MLS',
     'soccer_epl': 'EPL',
+    'basketball_ncaab': 'NCAAB',
     'basketball_wnba': 'WNBA'
   };
   return leagueMap[league] || league.toUpperCase();
