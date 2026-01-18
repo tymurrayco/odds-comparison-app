@@ -136,30 +136,28 @@ export default function MyBets() {
     }
   };
 
-const getStatusIcon = (status: BetStatus, sport?: string, league?: string): string => {
-  switch (status) {
-    case 'won': return '✔';
-    case 'lost': return '✗';
-    case 'push': return '—';
-    case 'pending': 
-      // Return sport-specific icon for pending bets
-      // Check league first (more reliable), then sport
-      const leagueLower = league?.toLowerCase() || '';
-      const sportLower = sport?.toLowerCase() || '';
-      
-      if (leagueLower.includes('ncaab') || leagueLower.includes('nba') || leagueLower.includes('wnba') || sportLower === 'basketball') return '🏀';
-      if (leagueLower.includes('ncaaf') || leagueLower.includes('nfl') || sportLower === 'football') return '🏈';
-      if (leagueLower.includes('mlb') || sportLower === 'baseball') return '⚾';
-      if (leagueLower.includes('nhl') || sportLower === 'hockey') return '🏒';
-      if (leagueLower.includes('mls') || leagueLower.includes('epl') || sportLower === 'soccer') return '⚽';
-      if (leagueLower.includes('pga') || sportLower === 'golf') return '⛳';
-      if (sportLower === 'tennis') return '🎾';
-      if (leagueLower.includes('ufc') || sportLower === 'mma') return '🥊';
-      
-      return '○';
-    default: return '?';
-  }
-};
+  // UPDATED: Simplified to only use league for icon selection
+  const getStatusIcon = (status: BetStatus, sport?: string, league?: string): string => {
+    switch (status) {
+      case 'won': return '✔';
+      case 'lost': return '✗';
+      case 'push': return '—';
+      case 'pending': 
+        const leagueLower = league?.toLowerCase() || '';
+        
+        // Use league only - it's the most reliable
+        if (leagueLower.includes('nhl')) return '🏒';
+        if (leagueLower.includes('ncaab') || leagueLower.includes('nba') || leagueLower.includes('wnba')) return '🏀';
+        if (leagueLower.includes('ncaaf') || leagueLower.includes('nfl')) return '🏈';
+        if (leagueLower.includes('mlb')) return '⚾';
+        if (leagueLower.includes('mls') || leagueLower.includes('epl')) return '⚽';
+        if (leagueLower.includes('pga')) return '⛳';
+        if (leagueLower.includes('ufc')) return '🥊';
+        
+        return '○';
+      default: return '?';
+    }
+  };
 
   const formatOdds = (odds: number): string => {
     if (odds > 0) return `+${odds}`;
@@ -698,7 +696,7 @@ const getStatusIcon = (status: BetStatus, sport?: string, league?: string): stri
                       </span>
 
                       {/* The Bet/Description - Different fields for mobile futures */}
-                      <span className={`text-sm font-bold text-blue-600 truncate ${
+                      <span className={`text-xs font-medium ${
                         viewType === 'futures' 
                           ? 'flex-1 text-left sm:text-right' 
                           : 'min-w-[60px] sm:min-w-[80px] text-right'
