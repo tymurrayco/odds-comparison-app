@@ -1,21 +1,69 @@
 // src/components/PropsTable.tsx
 'use client';
 
-import React, { useState } from 'react';
-import { ProcessedPropsMarket, ProcessedProp, BOOKMAKERS } from '@/lib/api';
+import React, { useState, useRef } from 'react';
+import { ProcessedPropsMarket, ProcessedProp, PropsEvent, BOOKMAKERS } from '@/lib/api';
+import { createBet } from '@/lib/betService';
 
 interface PropsTableProps {
   markets: ProcessedPropsMarket[];
   selectedBookmakers?: string[];
   playerFilter?: string;
+  event?: PropsEvent; // The selected game/event for context
+  league?: string; // The active league
+}
+
+// Helper function to calculate stake for 1 unit to-win
+function calculateStakeForOneUnit(odds: number): number {
+  if (odds > 0) {
+    // Underdog: stake = 100 / odds to win 1 unit
+    return 100 / odds;
+  } else {
+    // Favorite: stake = |odds| / 100 to win 1 unit
+    return Math.abs(odds) / 100;
+  }
+}
+
+// Helper function to map league ID to sport name
+function getSportFromLeague(league: string): string {
+  if (league.includes('nba') || league.includes('basketball')) return 'Basketball';
+  if (league.includes('nfl') || league.includes('americanfootball_nfl')) return 'Football';
+  if (league.includes('ncaaf') || league.includes('americanfootball_ncaaf')) return 'Football';
+  if (league.includes('nhl') || league.includes('icehockey')) return 'Hockey';
+  if (league.includes('mlb') || league.includes('baseball')) return 'Baseball';
+  if (league.includes('mls') || league.includes('soccer')) return 'Soccer';
+  if (league.includes('epl') || league.includes('soccer')) return 'Soccer';
+  if (league.includes('wnba')) return 'Basketball';
+  return 'Other';
+}
+
+// Helper function to get league display name
+function getLeagueDisplayName(league: string): string {
+  const leagueMap: { [key: string]: string } = {
+    'basketball_nba': 'NBA',
+    'americanfootball_nfl': 'NFL',
+    'americanfootball_ncaaf': 'NCAAF',
+    'icehockey_nhl': 'NHL',
+    'baseball_mlb': 'MLB',
+    'soccer_usa_mls': 'MLS',
+    'soccer_epl': 'EPL',
+    'basketball_wnba': 'WNBA'
+  };
+  return leagueMap[league] || league.toUpperCase();
 }
 
 export default function PropsTable({ 
   markets, 
   selectedBookmakers,
-  playerFilter = ''
+  playerFilter = '',
+  event,
+  league = 'basketball_nba'
 }: PropsTableProps) {
   const [expandedMarkets, setExpandedMarkets] = useState<{ [key: string]: boolean }>({});
+  const pressTimer = useRef<NodeJS.Timeout | null>(null);
+  const [isHolding, setIsHolding] = useState(false);
+  const [holdingKey, setHoldingKey] = useState<string | null>(null); // Track which cell is being held
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   
   // Use selected bookmakers or default to all
   const displayBookmakers = selectedBookmakers && selectedBookmakers.length > 0 
@@ -26,6 +74,78 @@ export default function PropsTable({
     if (odds === null) return '-';
     if (odds > 0) return `+${odds}`;
     return odds.toString();
+  };
+
+  // Show toast notification
+  const showToast = (message: string, type: 'success' | 'error') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  // Handle press-and-hold to create prop bet
+  const handlePressStart = (
+    prop: ProcessedProp,
+    bookmaker: string,
+    line: number,
+    odds: number,
+    overUnder: 'Over' | 'Under',
+    cellKey: string
+  ) => {
+    if (!event) return; // Need event context to create bet
+    
+    setIsHolding(true);
+    setHoldingKey(cellKey);
+    
+    pressTimer.current = setTimeout(async () => {
+      // Calculate stake for 1 unit to-win
+      const stake = calculateStakeForOneUnit(odds);
+      
+      // Create bet description: "Player Name Over/Under Line (Market)"
+      // e.g., "Anthony Davis Over 24.5 Points"
+      const betDescription = `${prop.playerName} ${overUnder} ${line} ${prop.marketName}`;
+      
+      // Create full description (game matchup)
+      const fullDescription = `${event.away_team} @ ${event.home_team}`;
+      
+      try {
+        // Format date in local timezone to avoid UTC conversion issues
+        const eventDate = new Date(event.commence_time);
+        const eventDateString = `${eventDate.getFullYear()}-${String(eventDate.getMonth() + 1).padStart(2, '0')}-${String(eventDate.getDate()).padStart(2, '0')}`;
+        
+        await createBet({
+          date: new Date().toISOString().split('T')[0],
+          eventDate: eventDateString,
+          sport: getSportFromLeague(league),
+          league: getLeagueDisplayName(league),
+          description: fullDescription,
+          awayTeam: event.away_team,
+          homeTeam: event.home_team,
+          team: undefined, // Props don't have a specific team selection
+          betType: 'prop',
+          bet: betDescription,
+          odds: odds,
+          stake: parseFloat(stake.toFixed(2)),
+          status: 'pending',
+          book: bookmaker
+        });
+        
+        showToast(`Bet added: ${betDescription} (${formatOdds(odds)})`, 'success');
+      } catch (error) {
+        console.error('Error creating bet:', error);
+        showToast('Failed to add bet', 'error');
+      }
+      
+      setIsHolding(false);
+      setHoldingKey(null);
+    }, 1500); // 1.5 second hold
+  };
+
+  const handlePressEnd = () => {
+    if (pressTimer.current) {
+      clearTimeout(pressTimer.current);
+    }
+    setIsHolding(false);
+    setHoldingKey(null);
   };
 
   // Bookmaker logos mapping
@@ -111,6 +231,19 @@ export default function PropsTable({
 
   return (
     <div className="space-y-4">
+      {/* Toast Notification */}
+      {toast && (
+        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-300 ease-in-out">
+          <div className={`px-6 py-3 rounded-lg shadow-lg ${
+            toast.type === 'success' 
+              ? 'bg-green-500 text-white' 
+              : 'bg-red-500 text-white'
+          }`}>
+            {toast.message}
+          </div>
+        </div>
+      )}
+
       {filteredMarkets.map((market) => {
         // Default to collapsed (false) if not set, otherwise use the stored value
         const isExpanded = expandedMarkets[market.marketKey] ?? false;
@@ -170,6 +303,8 @@ export default function PropsTable({
                             const isOverBest = bestOver.includes(book);
                             const isUnderBest = bestUnder.includes(book);
                             const hasData = odds && (odds.over !== null || odds.under !== null);
+                            const cellKey = `${prop.playerName}-${book}-${market.marketKey}`;
+                            const isThisCellHolding = holdingKey === cellKey || holdingKey === `${cellKey}-over` || holdingKey === `${cellKey}-under`;
                             
                             return (
                               <td 
@@ -177,18 +312,40 @@ export default function PropsTable({
                                 className="px-1 md:px-3 py-2 md:py-3 whitespace-nowrap text-center border-r border-gray-100 last:border-r-0"
                               >
                                 {hasData ? (
-                                  <div className="flex flex-col items-center gap-0.5">
+                                  <div className={`flex flex-col items-center gap-0.5 ${isThisCellHolding ? 'opacity-50' : ''}`}>
                                     {/* Line */}
                                     <span className="text-[10px] md:text-xs font-semibold text-gray-700">
                                       {odds.line}
                                     </span>
-                                    {/* Over/Under odds */}
+                                    {/* Over/Under odds - each clickable separately */}
                                     <div className="flex gap-1 text-[10px] md:text-xs">
-                                      <span className={`${isOverBest ? 'text-green-600 font-bold' : 'text-gray-600'}`}>
+                                      {/* Over button */}
+                                      <span 
+                                        className={`cursor-pointer select-none ${isOverBest ? 'text-green-600 font-bold' : 'text-gray-600'} ${holdingKey === `${cellKey}-over` ? 'ring-2 ring-blue-400 rounded' : ''}`}
+                                        onTouchStart={() => odds.over !== null && odds.line !== undefined && 
+                                          handlePressStart(prop, book, odds.line!, odds.over, 'Over', `${cellKey}-over`)}
+                                        onTouchEnd={handlePressEnd}
+                                        onTouchMove={handlePressEnd}
+                                        onMouseDown={() => odds.over !== null && odds.line !== undefined && 
+                                          handlePressStart(prop, book, odds.line!, odds.over, 'Over', `${cellKey}-over`)}
+                                        onMouseUp={handlePressEnd}
+                                        onMouseLeave={handlePressEnd}
+                                      >
                                         o{formatOdds(odds.over)}
                                       </span>
                                       <span className="text-gray-300">/</span>
-                                      <span className={`${isUnderBest ? 'text-green-600 font-bold' : 'text-gray-600'}`}>
+                                      {/* Under button */}
+                                      <span 
+                                        className={`cursor-pointer select-none ${isUnderBest ? 'text-green-600 font-bold' : 'text-gray-600'} ${holdingKey === `${cellKey}-under` ? 'ring-2 ring-blue-400 rounded' : ''}`}
+                                        onTouchStart={() => odds.under !== null && odds.line !== undefined && 
+                                          handlePressStart(prop, book, odds.line!, odds.under, 'Under', `${cellKey}-under`)}
+                                        onTouchEnd={handlePressEnd}
+                                        onTouchMove={handlePressEnd}
+                                        onMouseDown={() => odds.under !== null && odds.line !== undefined && 
+                                          handlePressStart(prop, book, odds.line!, odds.under, 'Under', `${cellKey}-under`)}
+                                        onMouseUp={handlePressEnd}
+                                        onMouseLeave={handlePressEnd}
+                                      >
                                         u{formatOdds(odds.under)}
                                       </span>
                                     </div>

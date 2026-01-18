@@ -1068,10 +1068,12 @@ function HomeContent() {
                       </div>
                     </div>
                     <PropsTable 
-                      markets={propsData} 
-                      selectedBookmakers={selectedBookmakers}
-                      playerFilter={playerFilter}
-                    />
+  markets={propsData} 
+  selectedBookmakers={selectedBookmakers}
+  playerFilter={playerFilter}
+  event={selectedPropsEvent}
+  league={activeLeague}
+/>
                   </div>
                 ) : (
                   // Show game selector
