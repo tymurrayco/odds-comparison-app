@@ -432,18 +432,18 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                 
                 return (
                   <tr key={team} className={index === 0 ? "border-b" : ""}>
-                    <td className={`px-2 md:px-4 py-3 whitespace-nowrap text-xs md:text-sm font-medium text-gray-900 truncate ${restData ? 'max-w-[150px]' : 'max-w-[120px]'}`}>
+                    <td className={`px-2 md:px-4 py-3 text-xs md:text-sm font-medium text-gray-900 ${restData ? 'min-w-[70px]' : 'max-w-[120px] truncate whitespace-nowrap'}`}>
                       <div className="flex items-center">
                         <img 
                           src={teamLogo}
                           alt=""
-                          className={`h-5 w-5 mr-2 ${restData ? 'flex-shrink-0' : ''}`}
+                          className="h-5 w-5 mr-1.5 flex-shrink-0"
                           onError={(e) => {
                             e.currentTarget.style.display = 'none';
                           }}
                         />
                         {/* Always show team name only on desktop, logo only on mobile */}
-                        <span className="hidden sm:inline">{team}</span>
+                        <span className="hidden sm:inline truncate">{team}</span>
                         {/* Rest badge - show on both mobile and desktop */}
                         {restBadge}
                       </div>
