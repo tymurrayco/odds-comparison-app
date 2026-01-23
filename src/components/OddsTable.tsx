@@ -432,12 +432,12 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                 
                 return (
                   <tr key={team} className={index === 0 ? "border-b" : ""}>
-                    <td className="px-2 md:px-4 py-3 whitespace-nowrap text-xs md:text-sm font-medium text-gray-900 truncate max-w-[120px]">
+                    <td className={`px-2 md:px-4 py-3 whitespace-nowrap text-xs md:text-sm font-medium text-gray-900 truncate ${restData ? 'max-w-[150px]' : 'max-w-[120px]'}`}>
                       <div className="flex items-center">
                         <img 
                           src={teamLogo}
                           alt=""
-                          className="h-5 w-5 mr-2"
+                          className={`h-5 w-5 mr-2 ${restData ? 'flex-shrink-0' : ''}`}
                           onError={(e) => {
                             e.currentTarget.style.display = 'none';
                           }}
