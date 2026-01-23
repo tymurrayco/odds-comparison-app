@@ -5,6 +5,7 @@ import { useRef, useState } from 'react';
 import { Game, BOOKMAKERS } from '@/lib/api';
 import { formatOdds } from '@/lib/utils';
 import { createBet } from '@/lib/betService';
+import { GameRestData, TeamRestInfo } from '@/lib/nhlRest';
 
 interface OddsTableProps {
   games: Game[];
@@ -13,6 +14,7 @@ interface OddsTableProps {
   selectedBookmakers?: string[];
   awayLogo?: string;
   homeLogo?: string;
+  restData?: GameRestData | null;
 }
 
 interface OddsItem {
@@ -60,7 +62,44 @@ function getLeagueDisplayName(league: string): string {
   return leagueMap[league] || league.toUpperCase();
 }
 
-export default function OddsTable({ games, view = 'moneyline', league = 'basketball_nba', selectedBookmakers, awayLogo, homeLogo }: OddsTableProps) {
+// Rest badge component for NHL
+function RestBadge({ label, type }: { label: string; type: 'fatigue' | 'advantage' | 'warning' }) {
+  const colorClasses = {
+    fatigue: 'bg-orange-100 text-orange-700',
+    advantage: 'bg-emerald-100 text-emerald-700',
+    warning: 'bg-amber-100 text-amber-700'
+  };
+  
+  return (
+    <span className={`ml-1.5 px-1.5 py-0.5 text-[10px] font-medium rounded ${colorClasses[type]}`}>
+      {label}
+    </span>
+  );
+}
+
+// Get badges for a team based on rest data
+function getTeamRestBadges(teamRest: TeamRestInfo, hasAdvantage: boolean, advantageDays: number): React.ReactNode {
+  // Priority 1: B2B (most critical)
+  if (teamRest.isB2B) {
+    return <RestBadge label="B2B" type="fatigue" />;
+  }
+  // Priority 2: 3-in-4
+  if (teamRest.is3in4) {
+    return <RestBadge label="3in4" type="fatigue" />;
+  }
+  // Priority 3: 4-in-6
+  if (teamRest.is4in6) {
+    return <RestBadge label="4in6" type="warning" />;
+  }
+  // Priority 4: Rest advantage (only if 2+ days and this team has the advantage)
+  if (hasAdvantage && advantageDays >= 2) {
+    return <RestBadge label={`${advantageDays}RA`} type="advantage" />;
+  }
+  
+  return null;
+}
+
+export default function OddsTable({ games, view = 'moneyline', league = 'basketball_nba', selectedBookmakers, awayLogo, homeLogo, restData }: OddsTableProps) {
   const pressTimer = useRef<NodeJS.Timeout | null>(null);
   const [isHolding, setIsHolding] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -380,6 +419,17 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                   ? (awayLogo || `/team-logos/${team.toLowerCase().replace(/\s+/g, '')}.png`)
                   : (homeLogo || `/team-logos/${team.toLowerCase().replace(/\s+/g, '')}.png`);
                 
+                // Get rest badge for this team (NHL only)
+                const teamRestInfo = restData 
+                  ? (index === 0 ? restData.awayRest : restData.homeRest)
+                  : null;
+                const hasRestAdvantage = restData 
+                  ? (index === 0 ? restData.restAdvantage === 'away' : restData.restAdvantage === 'home')
+                  : false;
+                const restBadge = teamRestInfo 
+                  ? getTeamRestBadges(teamRestInfo, hasRestAdvantage, restData?.restAdvantageDays || 0)
+                  : null;
+                
                 return (
                   <tr key={team} className={index === 0 ? "border-b" : ""}>
                     <td className="px-2 md:px-4 py-3 whitespace-nowrap text-xs md:text-sm font-medium text-gray-900 truncate max-w-[120px]">
@@ -394,6 +444,8 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                         />
                         {/* Always show team name only on desktop, logo only on mobile */}
                         <span className="hidden sm:inline">{team}</span>
+                        {/* Rest badge - show on both mobile and desktop */}
+                        {restBadge}
                       </div>
                     </td>
                     

@@ -3,6 +3,7 @@ import { useState } from 'react';
 import OddsTable from './OddsTable';
 import TeamAnalysis from './TeamAnalysis';
 import { Game, ESPNGameScore } from '@/lib/api';
+import { GameRestData } from '@/lib/nhlRest';
 
 interface GameCardProps {
   game: Game;
@@ -11,9 +12,10 @@ interface GameCardProps {
   onToggleFavorite?: (gameId: string) => void;
   liveScore?: ESPNGameScore | null;
   highlightedGameId?: string | null;
+  restData?: GameRestData | null;
 }
 
-export default function GameCard({ game, selectedBookmakers, isFavorite = false, onToggleFavorite, liveScore, highlightedGameId }: GameCardProps) {
+export default function GameCard({ game, selectedBookmakers, isFavorite = false, onToggleFavorite, liveScore, highlightedGameId, restData }: GameCardProps) {
   // Check if this is a soccer sport
   const isSoccer = game.sport_key === 'soccer_epl' || game.sport_key === 'soccer_usa_mls';
   
@@ -413,6 +415,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
           league={game.sport_key}
           awayLogo={liveScore?.awayLogo}
           homeLogo={liveScore?.homeLogo}
+          restData={restData}
         />
       )}
     </div>

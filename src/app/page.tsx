@@ -19,6 +19,7 @@ import {
   LEAGUES,
   PROPS_SUPPORTED_LEAGUES 
 } from '@/lib/api';
+import { fetchNHLRestData, matchGameToRestData, GameRestData } from '@/lib/nhlRest';
 import LeagueNav from '@/components/LeagueNav';
 import GameCard from '@/components/GameCard';
 import FuturesTable from '@/components/FuturesTable';
@@ -75,6 +76,9 @@ function HomeContent() {
   
   // ESPN live scores state
   const [espnScores, setEspnScores] = useState<ESPNGameScore[]>([]);
+  
+  // NHL rest data state
+  const [nhlRestData, setNhlRestData] = useState<GameRestData[]>([]);
   
   // Cache state
   const [gamesCache, setGamesCache] = useState<{ [league: string]: CacheItem<Game[]> }>({});
@@ -435,6 +439,18 @@ function HomeContent() {
         } catch (error) {
           console.error('Error fetching ESPN scores:', error);
         }
+        
+        // Fetch NHL rest data (only for NHL)
+        if (activeLeague === 'icehockey_nhl') {
+          try {
+            const restData = await fetchNHLRestData();
+            setNhlRestData(restData);
+          } catch (error) {
+            console.error('Error fetching NHL rest data:', error);
+          }
+        } else {
+          setNhlRestData([]); // Clear rest data for non-NHL leagues
+        }
       }
     } catch (error) {
       console.error('Error loading data:', error);
@@ -539,6 +555,16 @@ function HomeContent() {
           ...prev,
           [activeLeague]: { data: response.data, timestamp: now, league: activeLeague }
         }));
+        
+        // Also refresh NHL rest data on force refresh
+        if (activeLeague === 'icehockey_nhl') {
+          try {
+            const restData = await fetchNHLRestData();
+            setNhlRestData(restData);
+          } catch (error) {
+            console.error('Error fetching NHL rest data:', error);
+          }
+        }
       } else {
         const response = await fetchFutures(activeLeague);
         setFutures(response.data);
@@ -931,6 +957,29 @@ function HomeContent() {
                 </p>
               </>
             )}
+            
+            {/* NHL Rest Badges Key - only show for NHL */}
+            {activeView === 'games' && activeLeague === 'icehockey_nhl' && nhlRestData.length > 0 && (
+              <div className="flex flex-wrap items-center justify-center gap-3 text-xs text-gray-600 mb-4">
+                <span className="text-gray-500">Rest Key:</span>
+                <span className="inline-flex items-center gap-1">
+                  <span className="px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded font-medium">B2B</span>
+                  <span>Back-to-back</span>
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <span className="px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded font-medium">3in4</span>
+                  <span>3 games in 4 days</span>
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded font-medium">4in6</span>
+                  <span>4 games in 6 days</span>
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded font-medium">2RA</span>
+                  <span>2+ day rest advantage</span>
+                </span>
+              </div>
+            )}
           </>
         )}
 
@@ -972,6 +1021,7 @@ function HomeContent() {
                         onToggleFavorite={toggleFavoriteGame}
                         liveScore={matchGameToScore(game, espnScores)}
                         highlightedGameId={highlightedGameId}
+                        restData={game.sport_key === 'icehockey_nhl' ? matchGameToRestData(game.home_team, game.away_team, nhlRestData) : null}
                       />
                     ))}
                   </div>
@@ -996,6 +1046,7 @@ function HomeContent() {
                         onToggleFavorite={toggleFavoriteGame}
                         liveScore={matchGameToScore(game, espnScores)}
                         highlightedGameId={highlightedGameId}
+                        restData={activeLeague === 'icehockey_nhl' ? matchGameToRestData(game.home_team, game.away_team, nhlRestData) : null}
                       />
                     ))}
                   </div>
@@ -1068,12 +1119,12 @@ function HomeContent() {
                       </div>
                     </div>
                     <PropsTable 
-  markets={propsData} 
-  selectedBookmakers={selectedBookmakers}
-  playerFilter={playerFilter}
-  event={selectedPropsEvent}
-  league={activeLeague}
-/>
+                      markets={propsData} 
+                      selectedBookmakers={selectedBookmakers}
+                      playerFilter={playerFilter}
+                      event={selectedPropsEvent}
+                      league={activeLeague}
+                    />
                   </div>
                 ) : (
                   // Show game selector
@@ -1154,13 +1205,13 @@ function HomeContent() {
                   <div>
                     {filteredFutures.map(market => (
                       <FuturesTable 
-  key={market.id} 
-  market={market} 
-  compactMode={false}
-  isMasters={activeLeague === MASTERS_LEAGUE_ID}
-  selectedBookmakers={selectedBookmakers}
-  league={activeLeague}
-/>
+                        key={market.id} 
+                        market={market} 
+                        compactMode={false}
+                        isMasters={activeLeague === MASTERS_LEAGUE_ID}
+                        selectedBookmakers={selectedBookmakers}
+                        league={activeLeague}
+                      />
                     ))}
                   </div>
                 )}
