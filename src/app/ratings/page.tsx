@@ -113,7 +113,7 @@ export default function RatingsPage() {
   const [sortBy, setSortBy] = useState<'rating' | 'name' | 'games' | 'change'>('rating');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [expandedTeams, setExpandedTeams] = useState<Set<string>>(new Set());
-  const [logFilter, setLogFilter] = useState<'all' | 'success' | 'failed'>('all');
+  const [logFilter, setLogFilter] = useState<'all' | 'success' | 'failed'>('failed');
   const [teamLogos, setTeamLogos] = useState<Record<string, string>>({});
   
   // Load existing ratings on mount
@@ -842,11 +842,12 @@ export default function RatingsPage() {
                                                       src={oppLogo} 
                                                       alt={details.opponent}
                                                       className="w-5 h-5 object-contain"
+                                                      title={details.opponent}
                                                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
                                                     />
                                                   ) : null;
                                                 })()}
-                                                <span className="text-gray-900">{details.opponent}</span>
+                                                <span className="text-gray-900 hidden sm:inline">{details.opponent}</span>
                                                 {adj.isNeutralSite && <span className="text-xs text-amber-600">(N)</span>}
                                               </div>
                                             </td>
