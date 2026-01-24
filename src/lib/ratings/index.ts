@@ -15,8 +15,6 @@ export * from './constants';
 // Team name mapping utilities
 export {
   TEAM_NAME_MAPPINGS,
-  buildOddsApiToKenpomMap,
-  buildKenpomToOddsApiMap,
   oddsApiToKenpom,
   kenpomToOddsApi,
   normalizeTeamName,
