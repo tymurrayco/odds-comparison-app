@@ -547,15 +547,25 @@ export async function saveMatchingLog(log: MatchingLog, season: number = 2026): 
 
 /**
  * Load matching logs for a season
+ * By default only loads failed matches (actionable items)
+ * Set onlyFailed=false to load all logs
  */
-export async function loadMatchingLogs(season: number = 2026): Promise<MatchingLog[]> {
+export async function loadMatchingLogs(season: number = 2026, onlyFailed: boolean = true): Promise<MatchingLog[]> {
   const supabase = getSupabaseClient();
   
-  const { data, error } = await supabase
+  let query = supabase
     .from('ncaab_matching_logs')
     .select('*')
-    .eq('season', season)
-    .order('game_date', { ascending: false });
+    .eq('season', season);
+  
+  // Only fetch failed matches by default (the ones you can act on)
+  if (onlyFailed) {
+    query = query.neq('status', 'success');
+  }
+  
+  const { data, error } = await query
+    .order('game_date', { ascending: false })
+    .limit(1000);
   
   if (error) {
     console.error('[Supabase] Error loading matching logs:', error);
