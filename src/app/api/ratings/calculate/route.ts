@@ -5,7 +5,6 @@ import {
   KenPomRating, 
   RatingsConfig, 
   RatingsSnapshot,
-  TeamRating,
   GameAdjustment,
   ClosingLineSource,
   OddsAPIGame,
@@ -19,7 +18,6 @@ import {
   NCAAB_SPORT_KEY,
 } from '@/lib/ratings/constants';
 import {
-  initializeRatings,
   processGame,
   extractClosingSpread,
   createSnapshot,
@@ -28,7 +26,6 @@ import { fuzzyMatchTeam, findTeamByName } from '@/lib/ratings/team-mapping';
 import { HistoricalGame } from '../games/route';
 import {
   loadRatings,
-  saveRatings,
   saveRating,
   initializeRatingsFromKenpom,
   getProcessedGameIds,
@@ -304,7 +301,6 @@ export async function POST(request: NextRequest) {
         try {
           // Check cache first
           let closingSpread: number | null = null;
-          let closingSource = config.closingSource;
           let bookmakers: string[] = [];
           
           const cached = await getCachedClosingLine(game.id);

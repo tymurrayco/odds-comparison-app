@@ -16,12 +16,11 @@ import {
   RatingsConfig,
   ClosingLineSource,
   ClosingLineResult,
-  ProjectionResult,
   KenPomRating,
   OddsAPIGame,
 } from './types';
 import { DEFAULT_RATINGS_CONFIG, RATINGS_DECIMAL_PLACES, SPREAD_DECIMAL_PLACES } from './constants';
-import { findTeamByName, oddsApiToKenpom } from './team-mapping';
+import { findTeamByName } from './team-mapping';
 
 // ============================================
 // Rating Initialization
@@ -32,7 +31,7 @@ import { findTeamByName, oddsApiToKenpom } from './team-mapping';
  */
 export function initializeRatings(
   kenpomRatings: KenPomRating[],
-  season: number
+  _season: number
 ): Map<string, TeamRating> {
   const ratings = new Map<string, TeamRating>();
   const now = new Date().toISOString();

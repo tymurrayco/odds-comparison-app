@@ -1,7 +1,6 @@
 // src/app/api/ratings/kenpom/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
-import { KenPomRating, KenPomArchiveRating, KenPomTeam } from '@/lib/ratings/types';
 import { KENPOM_API_BASE_URL } from '@/lib/ratings/constants';
 
 /**

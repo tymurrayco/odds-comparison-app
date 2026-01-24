@@ -3,6 +3,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
 import { 
   RatingsSnapshot, 
   GameAdjustment, 
@@ -78,7 +79,6 @@ export default function RatingsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<RatingsSnapshot | null>(null);
-  const [lastCalculated, setLastCalculated] = useState<string | null>(null);
   const [syncRange, setSyncRange] = useState<{ firstGameDate: string | null; lastGameDate: string | null } | null>(null);
   
   // Matching logs state
@@ -126,14 +126,13 @@ export default function RatingsPage() {
       
       if (data.success && data.data) {
         setSnapshot(data.data);
-        setLastCalculated(data.lastCalculated || null);
         setSyncRange(data.syncRange || null);
         if (data.config) {
           setHca(data.config.hca);
           setClosingSource(data.config.closingSource);
         }
       }
-    } catch (err) {
+    } catch {
       console.log('No cached ratings available');
     }
   };
@@ -180,6 +179,7 @@ export default function RatingsPage() {
     if (activeTab === 'overrides' && overrides.length === 0) {
       loadOverrides();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
   
   const calculateRatings = async () => {
@@ -212,7 +212,7 @@ export default function RatingsPage() {
       }
       
       setSnapshot(data.data || null);
-      setLastCalculated(data.lastCalculated || null);
+      setSyncRange(data.syncRange || null);
       
       // Reload matching logs after calculation
       await loadMatchingLogs();
@@ -423,8 +423,6 @@ export default function RatingsPage() {
     });
   };
 
-  const getSeasonDisplay = (endYear: number) => `${endYear - 1}-${String(endYear).slice(2)}`;
-
   const getTeamGameDetails = (adj: GameAdjustment, teamName: string) => {
     const isHome = adj.homeTeam === teamName;
     return {
@@ -468,7 +466,7 @@ export default function RatingsPage() {
               <h1 className="text-2xl font-bold text-gray-900">Power Ratings</h1>
               <p className="text-sm text-gray-500">Market-adjusted NCAAB power ratings</p>
             </div>
-            <a href="/" className="text-blue-600 hover:text-blue-700 text-sm font-medium">← Back to Odds</a>
+            <Link href="/" className="text-blue-600 hover:text-blue-700 text-sm font-medium">← Back to Odds</Link>
           </div>
         </div>
       </header>
@@ -993,7 +991,7 @@ export default function RatingsPage() {
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-12 text-center mt-6">
             <div className="text-6xl mb-4">📊</div>
             <h2 className="text-xl font-semibold mb-2 text-gray-900">No Ratings Calculated Yet</h2>
-            <p className="text-gray-500 mb-6">Click "Calculate Ratings" to generate market-adjusted power ratings.</p>
+            <p className="text-gray-500 mb-6">Click &ldquo;Calculate Ratings&rdquo; to generate market-adjusted power ratings.</p>
           </div>
         )}
       </main>
@@ -1068,7 +1066,7 @@ export default function RatingsPage() {
                   </div>
                 )}
                 {kenpomSearch && kenpomSearch.length >= 1 && filteredKenpomTeams.length === 0 && kenpomTeams.length > 0 && (
-                  <p className="mt-1 text-sm text-orange-600">No teams found matching "{kenpomSearch}"</p>
+                  <p className="mt-1 text-sm text-orange-600">No teams found matching &ldquo;{kenpomSearch}&rdquo;</p>
                 )}
                 {newOverride.kenpomName && !showKenpomDropdown && (
                   <p className="mt-1 text-sm text-green-600">✓ Selected: {newOverride.kenpomName}</p>

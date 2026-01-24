@@ -5,7 +5,6 @@ import { OddsAPIGame, HistoricalOddsResponse, ClosingLineSource } from '@/lib/ra
 import { 
   ODDS_API_BASE_URL, 
   NCAAB_SPORT_KEY, 
-  PINNACLE_BOOKMAKER,
   US_AVERAGE_BOOKMAKER_KEYS,
   DEFAULT_RATINGS_CONFIG,
 } from '@/lib/ratings/constants';
