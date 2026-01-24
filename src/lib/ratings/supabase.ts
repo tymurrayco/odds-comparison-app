@@ -648,6 +648,7 @@ export interface TeamOverride {
   id?: number;
   sourceName: string;
   kenpomName: string;
+  espnName?: string;  // ESPN display name for logo lookup
   source: string;
   notes?: string;
   createdAt?: string;
@@ -674,6 +675,7 @@ export async function loadTeamOverrides(): Promise<TeamOverride[]> {
     id: row.id,
     sourceName: row.source_name,
     kenpomName: row.kenpom_name,
+    espnName: row.espn_name,
     source: row.source,
     notes: row.notes,
     createdAt: row.created_at,
@@ -692,6 +694,7 @@ export async function addTeamOverride(override: TeamOverride): Promise<TeamOverr
     .upsert({
       source_name: override.sourceName,
       kenpom_name: override.kenpomName,
+      espn_name: override.espnName || null,
       source: override.source || 'manual',
       notes: override.notes,
     }, {
@@ -709,6 +712,7 @@ export async function addTeamOverride(override: TeamOverride): Promise<TeamOverr
     id: data.id,
     sourceName: data.source_name,
     kenpomName: data.kenpom_name,
+    espnName: data.espn_name,
     source: data.source,
     notes: data.notes,
     createdAt: data.created_at,
@@ -725,6 +729,7 @@ export async function updateTeamOverride(id: number, override: Partial<TeamOverr
   const updates: Record<string, unknown> = {};
   if (override.sourceName) updates.source_name = override.sourceName;
   if (override.kenpomName) updates.kenpom_name = override.kenpomName;
+  if (override.espnName !== undefined) updates.espn_name = override.espnName || null;
   if (override.source) updates.source = override.source;
   if (override.notes !== undefined) updates.notes = override.notes;
   

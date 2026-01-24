@@ -89,6 +89,7 @@ export async function POST(request: NextRequest) {
     const override: TeamOverride = {
       sourceName,
       kenpomName,
+      espnName: body.espnName?.trim() || undefined,
       source: body.source || 'manual',
       notes: body.notes?.trim(),
     };
@@ -342,6 +343,7 @@ export async function PUT(request: NextRequest) {
     const success = await updateTeamOverride(body.id, {
       sourceName: body.sourceName?.trim(),
       kenpomName: body.kenpomName?.trim(),
+      espnName: body.espnName?.trim(),
       source: body.source,
       notes: body.notes?.trim(),
     });

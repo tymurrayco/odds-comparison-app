@@ -92,7 +92,7 @@ export default function RatingsPage() {
   const [overridesLoading, setOverridesLoading] = useState(false);
   const [showOverrideModal, setShowOverrideModal] = useState(false);
   const [editingOverride, setEditingOverride] = useState<TeamOverride | null>(null);
-  const [newOverride, setNewOverride] = useState({ sourceName: '', kenpomName: '', notes: '' });
+  const [newOverride, setNewOverride] = useState({ sourceName: '', kenpomName: '', espnName: '', notes: '' });
   const [overrideError, setOverrideError] = useState<string | null>(null);
   const [kenpomSearch, setKenpomSearch] = useState('');
   const [showKenpomDropdown, setShowKenpomDropdown] = useState(false);
@@ -113,12 +113,69 @@ export default function RatingsPage() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [expandedTeams, setExpandedTeams] = useState<Set<string>>(new Set());
   const [logFilter, setLogFilter] = useState<'all' | 'success' | 'failed'>('all');
+  const [teamLogos, setTeamLogos] = useState<Record<string, string>>({});
   
   // Load existing ratings on mount
   useEffect(() => {
     loadRatings();
+    loadTeamLogos();
   }, []);
   
+  const [espnNameMap, setEspnNameMap] = useState<Record<string, string>>({});
+  
+  const loadTeamLogos = async () => {
+    try {
+      const response = await fetch('/api/ratings/team-logos');
+      const data = await response.json();
+      if (data.success && data.logos) {
+        setTeamLogos(data.logos);
+        if (data.espnNameMap) {
+          setEspnNameMap(data.espnNameMap);
+        }
+      }
+    } catch {
+      console.log('Failed to load team logos');
+    }
+  };
+  
+  // Helper to get logo URL for a team name
+  const getTeamLogo = (teamName: string): string | null => {
+    const normalized = teamName.toLowerCase();
+    
+    // First check if we have an ESPN name override for this team
+    const espnName = espnNameMap[normalized];
+    if (espnName && teamLogos[espnName]) {
+      return teamLogos[espnName];
+    }
+    
+    // Try exact match
+    if (teamLogos[normalized]) return teamLogos[normalized];
+    
+    // Try without periods (KenPom uses "St." but ESPN uses "St")
+    const noPeriods = normalized.replace(/\./g, '');
+    if (teamLogos[noPeriods]) return teamLogos[noPeriods];
+    
+    // Try with "State" instead of "St." / "St"
+    const withState = noPeriods.replace(/\bst\b/g, 'state');
+    if (teamLogos[withState]) return teamLogos[withState];
+    
+    // Try without common suffixes
+    const words = noPeriods.split(' ');
+    if (words.length > 1) {
+      // Try just first word (e.g., "Duke" from "Duke Blue Devils")
+      // But NOT for state schools (would match Ohio instead of Ohio St.)
+      if (!words.includes('st') && !words.includes('state')) {
+        if (teamLogos[words[0]]) return teamLogos[words[0]];
+      }
+      
+      // Try first two words
+      const twoWords = words.slice(0, 2).join(' ');
+      if (teamLogos[twoWords]) return teamLogos[twoWords];
+    }
+    
+    return null;
+  };
+
   const loadRatings = async () => {
     try {
       const response = await fetch('/api/ratings/calculate');
@@ -238,7 +295,7 @@ export default function RatingsPage() {
   // Override management
   const openAddOverrideModal = async (sourceName?: string) => {
     setEditingOverride(null);
-    setNewOverride({ sourceName: sourceName || '', kenpomName: '', notes: '' });
+    setNewOverride({ sourceName: sourceName || '', kenpomName: '', espnName: '', notes: '' });
     setKenpomSearch('');
     setShowKenpomDropdown(false);
     setOverrideError(null);
@@ -262,7 +319,8 @@ export default function RatingsPage() {
     setEditingOverride(override);
     setNewOverride({ 
       sourceName: override.sourceName, 
-      kenpomName: override.kenpomName, 
+      kenpomName: override.kenpomName,
+      espnName: override.espnName || '',
       notes: override.notes || '' 
     });
     setKenpomSearch(override.kenpomName);
@@ -694,21 +752,27 @@ export default function RatingsPage() {
                 <table className="w-full">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase w-8"></th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Rank</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase cursor-pointer" onClick={() => toggleSort('name')}>
-                        Team {sortBy === 'name' && (sortDir === 'desc' ? '↓' : '↑')}
+                      <th className="px-2 sm:px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase w-12 sm:w-16">#</th>
+                      <th className="px-2 sm:px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase cursor-pointer" onClick={() => toggleSort('name')}>
+                        <span className="hidden sm:inline">Team {sortBy === 'name' && (sortDir === 'desc' ? '↓' : '↑')}</span>
+                        <span className="sm:hidden">Team</span>
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Conf</th>
-                      <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase cursor-pointer" onClick={() => toggleSort('rating')}>
-                        Rating {sortBy === 'rating' && (sortDir === 'desc' ? '↓' : '↑')}
+                      <th className="px-2 sm:px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase hidden sm:table-cell">Conf</th>
+                      <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase cursor-pointer" onClick={() => toggleSort('rating')}>
+                        <span className="hidden sm:inline">Rating</span>
+                        <span className="sm:hidden">Rtg</span>
+                        {sortBy === 'rating' && (sortDir === 'desc' ? ' ↓' : ' ↑')}
                       </th>
-                      <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Initial</th>
-                      <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase cursor-pointer" onClick={() => toggleSort('change')}>
-                        Change {sortBy === 'change' && (sortDir === 'desc' ? '↓' : '↑')}
+                      <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase hidden sm:table-cell">Initial</th>
+                      <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase cursor-pointer" onClick={() => toggleSort('change')}>
+                        <span className="hidden sm:inline">Change</span>
+                        <span className="sm:hidden">+/-</span>
+                        {sortBy === 'change' && (sortDir === 'desc' ? ' ↓' : ' ↑')}
                       </th>
-                      <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase cursor-pointer" onClick={() => toggleSort('games')}>
-                        Games {sortBy === 'games' && (sortDir === 'desc' ? '↓' : '↑')}
+                      <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase cursor-pointer" onClick={() => toggleSort('games')}>
+                        <span className="hidden sm:inline">Games</span>
+                        <span className="sm:hidden">G</span>
+                        {sortBy === 'games' && (sortDir === 'desc' ? ' ↓' : ' ↑')}
                       </th>
                     </tr>
                   </thead>
@@ -719,6 +783,7 @@ export default function RatingsPage() {
                       const isExpanded = expandedTeams.has(team.teamName);
                       const teamGames = teamAdjustmentsMap.get(team.teamName) || [];
                       const hasGames = teamGames.length > 0;
+                      const logoUrl = getTeamLogo(team.teamName);
                       
                       return (
                         <React.Fragment key={team.teamName}>
@@ -726,29 +791,45 @@ export default function RatingsPage() {
                             className={`hover:bg-gray-50 transition-colors ${hasGames ? 'cursor-pointer' : ''} ${isExpanded ? 'bg-blue-50' : ''}`}
                             onClick={() => hasGames && toggleTeamExpanded(team.teamName)}
                           >
-                            <td className="px-4 py-3 text-sm text-gray-400">
-                              {hasGames && <span className={`inline-block transition-transform ${isExpanded ? 'rotate-90' : ''}`}>▶</span>}
+                            <td className="px-2 sm:px-4 py-3 text-sm text-gray-500">{rank}</td>
+                            <td className="px-2 sm:px-4 py-3">
+                              <div className="flex items-center gap-1 sm:gap-2">
+                                {logoUrl ? (
+                                  <img 
+                                    src={logoUrl} 
+                                    alt={team.teamName}
+                                    className="w-6 h-6 object-contain flex-shrink-0"
+                                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                  />
+                                ) : (
+                                  <div className="w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center text-xs text-gray-500 flex-shrink-0">
+                                    {team.teamName.charAt(0)}
+                                  </div>
+                                )}
+                                <span className="font-medium text-gray-900 hidden sm:inline">{team.teamName}</span>
+                                {hasGames && (
+                                  <span className={`text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`}>▶</span>
+                                )}
+                              </div>
                             </td>
-                            <td className="px-4 py-3 text-sm text-gray-500">{rank}</td>
-                            <td className="px-4 py-3 font-medium text-gray-900">{team.teamName}</td>
-                            <td className="px-4 py-3 text-sm text-gray-500">{team.conference || '-'}</td>
-                            <td className="px-4 py-3 text-right">
+                            <td className="px-2 sm:px-4 py-3 text-sm text-gray-500 hidden sm:table-cell">{team.conference || '-'}</td>
+                            <td className="px-2 sm:px-4 py-3 text-right">
                               <span className={`font-mono font-semibold ${team.rating >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                 {formatRating(team.rating)}
                               </span>
                             </td>
-                            <td className="px-4 py-3 text-right text-sm text-gray-400 font-mono">{formatRating(team.initialRating)}</td>
-                            <td className="px-4 py-3 text-right">
+                            <td className="px-2 sm:px-4 py-3 text-right text-sm text-gray-400 font-mono hidden sm:table-cell">{formatRating(team.initialRating)}</td>
+                            <td className="px-2 sm:px-4 py-3 text-right">
                               <span className={`text-sm font-mono ${change > 0 ? 'text-green-600' : change < 0 ? 'text-red-600' : 'text-gray-400'}`}>
                                 {change > 0 ? '+' : ''}{change.toFixed(2)}
                               </span>
                             </td>
-                            <td className="px-4 py-3 text-right text-sm text-gray-500">{team.gamesProcessed}</td>
+                            <td className="px-2 sm:px-4 py-3 text-right text-sm text-gray-500">{team.gamesProcessed}</td>
                           </tr>
                           
                           {isExpanded && hasGames && (
                             <tr>
-                              <td colSpan={8} className="bg-gray-50 px-4 py-0">
+                              <td colSpan={7} className="bg-gray-50 px-4 py-0">
                                 <div className="py-3 pl-8 pr-4">
                                   <table className="w-full text-sm">
                                     <thead>
@@ -769,9 +850,22 @@ export default function RatingsPage() {
                                           <tr key={adj.gameId} className="hover:bg-gray-100">
                                             <td className="py-2 text-gray-600">{new Date(adj.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</td>
                                             <td className="py-2">
-                                              <span className="text-gray-500 mr-1">{details.location}</span>
-                                              <span className="text-gray-900">{details.opponent}</span>
-                                              {adj.isNeutralSite && <span className="ml-1 text-xs text-amber-600">(N)</span>}
+                                              <div className="flex items-center gap-2">
+                                                <span className="text-gray-500">{details.location}</span>
+                                                {(() => {
+                                                  const oppLogo = getTeamLogo(details.opponent);
+                                                  return oppLogo ? (
+                                                    <img 
+                                                      src={oppLogo} 
+                                                      alt={details.opponent}
+                                                      className="w-5 h-5 object-contain"
+                                                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                                    />
+                                                  ) : null;
+                                                })()}
+                                                <span className="text-gray-900">{details.opponent}</span>
+                                                {adj.isNeutralSite && <span className="text-xs text-amber-600">(N)</span>}
+                                              </div>
                                             </td>
                                             <td className="py-2 text-right font-mono text-gray-500">{formatSpread(adj.projectedSpread)}</td>
                                             <td className="py-2 text-right font-mono text-gray-700">{formatSpread(adj.closingSpread)}</td>
@@ -949,7 +1043,7 @@ export default function RatingsPage() {
                         <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Source Name</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">→</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">KenPom Name</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Source</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">ESPN Name</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Notes</th>
                         <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Actions</th>
                       </tr>
@@ -960,7 +1054,7 @@ export default function RatingsPage() {
                           <td className="px-4 py-3 font-medium text-gray-900">{override.sourceName}</td>
                           <td className="px-4 py-3 text-gray-400">→</td>
                           <td className="px-4 py-3 text-green-700 font-medium">{override.kenpomName}</td>
-                          <td className="px-4 py-3 text-sm text-gray-500">{override.source}</td>
+                          <td className="px-4 py-3 text-sm text-blue-600">{override.espnName || '—'}</td>
                           <td className="px-4 py-3 text-sm text-gray-500">{override.notes || '—'}</td>
                           <td className="px-4 py-3 text-center">
                             <button
@@ -1084,6 +1178,22 @@ export default function RatingsPage() {
                   placeholder="e.g., Common abbreviation"
                   className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-900"
                 />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  ESPN Name (for logo lookup, optional)
+                </label>
+                <input
+                  type="text"
+                  value={newOverride.espnName}
+                  onChange={(e) => setNewOverride({ ...newOverride, espnName: e.target.value })}
+                  placeholder="e.g., UConn, NC State, Ole Miss"
+                  className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-900"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Only needed if logo doesn&apos;t show. Use ESPN&apos;s display name.
+                </p>
               </div>
             </div>
             
