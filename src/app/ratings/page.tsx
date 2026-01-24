@@ -531,104 +531,38 @@ export default function RatingsPage() {
       </header>
       
       <main className="max-w-7xl mx-auto px-4 py-6">
-        {/* Configuration Panel */}
-        <div className="bg-white rounded-xl p-6 mb-6 border border-gray-200 shadow-sm">
-          <h2 className="text-lg font-semibold mb-4 text-gray-900">Configuration</h2>
+        {/* Initial Configuration - Display Only */}
+        <div className="bg-white rounded-xl p-6 mb-4 border border-gray-200 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">Initial Configuration</h2>
+            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">2025-26 Season</span>
+          </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Home Court Advantage</label>
-              <input
-                type="number"
-                value={hca}
-                onChange={(e) => setHca(parseFloat(e.target.value) || 0)}
-                step="0.5"
-                min="0"
-                max="10"
-                className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <p className="text-xs text-gray-500 mt-1">Points added to home team projection</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-gray-50 rounded-lg p-4">
+              <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Initial Ratings Source</div>
+              <div className="text-lg font-semibold text-gray-900">KenPom Final AdjEM</div>
+              <div className="text-sm text-gray-600 mt-1">End of 2024-25 season (Apr 7, 2025)</div>
             </div>
             
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Closing Line Source</label>
-              <div className="flex rounded-lg overflow-hidden border border-gray-300">
-                {CLOSING_LINE_SOURCES.map((source) => (
-                  <button
-                    key={source.value}
-                    onClick={() => setClosingSource(source.value)}
-                    className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
-                      closingSource === source.value ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    {source.label}
-                  </button>
-                ))}
+            <div className="bg-gray-50 rounded-lg p-4">
+              <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Home Court Advantage</div>
+              <div className="text-lg font-semibold text-gray-900">{hca} points</div>
+              <div className="text-sm text-gray-600 mt-1">Added to home team projection</div>
+            </div>
+            
+            <div className="bg-gray-50 rounded-lg p-4">
+              <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Closing Line Source</div>
+              <div className="text-lg font-semibold text-gray-900">
+                {CLOSING_LINE_SOURCES.find(s => s.value === closingSource)?.label || closingSource}
               </div>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Max Games</label>
-              <input
-                type="number"
-                value={maxGames}
-                onChange={(e) => setMaxGames(parseInt(e.target.value) || 100)}
-                min="1"
-                max="500"
-                className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <p className="text-xs text-gray-500 mt-1">Maximum games to process per sync</p>
+              <div className="text-sm text-gray-600 mt-1">
+                {CLOSING_LINE_SOURCES.find(s => s.value === closingSource)?.description}
+              </div>
             </div>
           </div>
           
-          {/* Date Range Sync */}
-          <div className="border-t border-gray-200 pt-4 mt-4">
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">Date Range Sync</h3>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
-                <input
-                  type="date"
-                  value={syncStartDate}
-                  onChange={(e) => setSyncStartDate(e.target.value)}
-                  className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
-                <input
-                  type="date"
-                  value={syncEndDate}
-                  onChange={(e) => setSyncEndDate(e.target.value)}
-                  className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div className="flex items-end">
-                <button
-                  onClick={calculateRatings}
-                  disabled={loading}
-                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white font-medium py-2 px-4 rounded-lg transition-colors text-sm"
-                >
-                  {loading ? 'Syncing...' : 'Sync Games'}
-                </button>
-              </div>
-              <div className="flex items-end">
-                <button
-                  onClick={() => {
-                    setSyncStartDate('');
-                    setSyncEndDate('');
-                  }}
-                  className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-lg transition-colors text-sm"
-                >
-                  Clear Dates
-                </button>
-              </div>
-            </div>
-            <p className="text-xs text-gray-500 mt-2">
-              Leave dates empty to sync all unprocessed games. Season starts Nov 4, 2025.
-            </p>
-          </div>
-          
+          {/* Current Status */}
           {(syncRange?.lastGameDate || snapshot) && (
             <div className="mt-4 pt-4 border-t border-gray-200">
               <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
@@ -641,16 +575,6 @@ export default function RatingsPage() {
                         day: 'numeric',
                         year: 'numeric'
                       })}
-                    </span>
-                  </div>
-                )}
-                {syncRange?.firstGameDate && syncRange?.lastGameDate && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-500">Date range:</span>
-                    <span className="text-gray-700">
-                      {new Date(syncRange.firstGameDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                      {' → '}
-                      {new Date(syncRange.lastGameDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                     </span>
                   </div>
                 )}
@@ -669,6 +593,73 @@ export default function RatingsPage() {
               </div>
             </div>
           )}
+        </div>
+
+        {/* Date Range Sync Panel */}
+        <div className="bg-white rounded-xl p-6 mb-6 border border-gray-200 shadow-sm">
+          <h2 className="text-lg font-semibold mb-4 text-gray-900">Sync Games</h2>
+          
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
+              <input
+                type="date"
+                value={syncStartDate}
+                onChange={(e) => setSyncStartDate(e.target.value)}
+                className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
+              <input
+                type="date"
+                value={syncEndDate}
+                onChange={(e) => setSyncEndDate(e.target.value)}
+                className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Max Games</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={maxGames}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/\D/g, '');
+                  setMaxGames(val === '' ? 0 : parseInt(val, 10));
+                }}
+                onBlur={() => {
+                  if (maxGames < 1) setMaxGames(1);
+                  else if (maxGames > 500) setMaxGames(500);
+                  else if (!maxGames) setMaxGames(100);
+                }}
+                className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div className="flex items-end">
+              <button
+                onClick={calculateRatings}
+                disabled={loading}
+                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white font-medium py-2 px-4 rounded-lg transition-colors text-sm"
+              >
+                {loading ? 'Syncing...' : 'Sync Games'}
+              </button>
+            </div>
+            <div className="flex items-end">
+              <button
+                onClick={() => {
+                  setSyncStartDate('');
+                  setSyncEndDate('');
+                }}
+                className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-lg transition-colors text-sm"
+              >
+                Clear Dates
+              </button>
+            </div>
+          </div>
+          <p className="text-xs text-gray-500 mt-3">
+            Leave dates empty to sync all unprocessed games. Season starts Nov 4, 2025.
+          </p>
           
           {error && (
             <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
@@ -699,7 +690,7 @@ export default function RatingsPage() {
                   activeTab === 'ratings' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Team Ratings
+                Ratings {snapshot && `(${snapshot.ratings.length})`}
               </button>
               <button
                 onClick={() => setActiveTab('matching')}
@@ -707,14 +698,7 @@ export default function RatingsPage() {
                   activeTab === 'matching' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Matching Log
-                {matchingStats && (
-                  <span className={`ml-2 px-2 py-0.5 text-xs rounded-full ${
-                    matchingStats.success === matchingStats.total ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'
-                  }`}>
-                    {matchingStats.success}/{matchingStats.total}
-                  </span>
-                )}
+                Matching Logs {matchingStats && `(${matchingStats.total})`}
               </button>
               <button
                 onClick={() => setActiveTab('overrides')}
@@ -722,30 +706,21 @@ export default function RatingsPage() {
                   activeTab === 'overrides' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Team Overrides
-                {overrides.length > 0 && (
-                  <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700">
-                    {overrides.length}
-                  </span>
-                )}
+                Name Overrides {overrides.length > 0 && `(${overrides.length})`}
               </button>
             </nav>
           </div>
-
+          
           {/* Ratings Tab */}
-          {activeTab === 'ratings' && snapshot && snapshot.ratings.length > 0 && (
+          {activeTab === 'ratings' && snapshot && (
             <>
-              <div className="p-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900">Team Ratings</h2>
-                  <p className="text-sm text-gray-500">Click a team to see game details</p>
-                </div>
+              <div className="p-4 border-b border-gray-200">
                 <input
                   type="text"
-                  placeholder="Search teams..."
+                  placeholder="Search teams or conferences..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="bg-white border border-gray-300 rounded-lg px-4 py-2 text-sm w-64"
+                  className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               
@@ -837,7 +812,7 @@ export default function RatingsPage() {
                                       <tr className="text-xs text-gray-500 uppercase">
                                         <th className="text-left py-2">Date</th>
                                         <th className="text-left py-2">Opponent</th>
-                                        <th className="text-right py-2">Proj</th>
+                                        <th className="text-left py-2">Projection Formula</th>
                                         <th className="text-right py-2">Close</th>
                                         <th className="text-right py-2">Before</th>
                                         <th className="text-right py-2">After</th>
@@ -847,6 +822,13 @@ export default function RatingsPage() {
                                     <tbody className="divide-y divide-gray-200">
                                       {teamGames.map((adj) => {
                                         const details = getTeamGameDetails(adj, team.teamName);
+                                        // Calculate the formula from this team's perspective
+                                        const teamRating = details.ratingBefore;
+                                        const oppRating = details.isHome ? adj.awayRatingBefore : adj.homeRatingBefore;
+                                        const hcaApplied = adj.isNeutralSite ? 0 : (details.isHome ? hca : -hca);
+                                        // Spread from team's perspective (negative = team favored)
+                                        const teamSpread = details.isHome ? adj.projectedSpread : -adj.projectedSpread;
+                                        
                                         return (
                                           <tr key={adj.gameId} className="hover:bg-gray-100">
                                             <td className="py-2 text-gray-600">{new Date(adj.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</td>
@@ -868,7 +850,21 @@ export default function RatingsPage() {
                                                 {adj.isNeutralSite && <span className="text-xs text-amber-600">(N)</span>}
                                               </div>
                                             </td>
-                                            <td className="py-2 text-right font-mono text-gray-500">{formatSpread(adj.projectedSpread)}</td>
+                                            <td className="py-2 font-mono text-xs text-gray-600">
+                                              <span className="text-gray-900">{teamRating.toFixed(1)}</span>
+                                              <span className="text-gray-400"> − </span>
+                                              <span className="text-gray-500">{oppRating.toFixed(1)}</span>
+                                              {hcaApplied !== 0 && (
+                                                <>
+                                                  <span className="text-gray-400"> {hcaApplied > 0 ? '+' : '−'} </span>
+                                                  <span className={hcaApplied > 0 ? 'text-green-600' : 'text-red-600'}>{Math.abs(hcaApplied).toFixed(1)}</span>
+                                                </>
+                                              )}
+                                              <span className="text-gray-400"> = </span>
+                                              <span className={`font-medium ${teamSpread < 0 ? 'text-green-700' : teamSpread > 0 ? 'text-red-700' : 'text-gray-700'}`}>
+                                                {teamSpread > 0 ? '+' : ''}{teamSpread.toFixed(1)}
+                                              </span>
+                                            </td>
                                             <td className="py-2 text-right font-mono text-gray-700">{formatSpread(adj.closingSpread)}</td>
                                             <td className="py-2 text-right font-mono text-gray-500">{details.ratingBefore.toFixed(2)}</td>
                                             <td className="py-2 text-right font-mono text-gray-700">{details.ratingAfter.toFixed(2)}</td>
@@ -1086,7 +1082,7 @@ export default function RatingsPage() {
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-12 text-center mt-6">
             <div className="text-6xl mb-4">📊</div>
             <h2 className="text-xl font-semibold mb-2 text-gray-900">No Ratings Calculated Yet</h2>
-            <p className="text-gray-500 mb-6">Click &ldquo;Calculate Ratings&rdquo; to generate market-adjusted power ratings.</p>
+            <p className="text-gray-500 mb-6">Click &ldquo;Sync Games&rdquo; to generate market-adjusted power ratings.</p>
           </div>
         )}
       </main>
