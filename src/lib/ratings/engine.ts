@@ -16,6 +16,7 @@ import {
   RatingsConfig,
   ClosingLineSource,
   ClosingLineResult,
+  ProjectionResult,
   KenPomRating,
   OddsAPIGame,
 } from './types';
