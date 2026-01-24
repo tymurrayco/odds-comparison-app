@@ -15,6 +15,7 @@ import {
 import { processGame } from '@/lib/ratings/engine';
 import { findTeamByName } from '@/lib/ratings/team-mapping';
 import { DEFAULT_RATINGS_CONFIG } from '@/lib/ratings/constants';
+import { TeamRating } from '@/lib/ratings/types';
 
 /**
  * Team Overrides API
@@ -125,7 +126,7 @@ export async function POST(request: NextRequest) {
 async function processAffectedGames(
   sourceName: string, 
   kenpomName: string,
-  ratings: Map<string, { teamName: string; rating: number; initialRating: number; gamesProcessed: number; conference?: string; lastUpdated: string }>
+  ratings: Map<string, TeamRating>
 ): Promise<{ processed: number; updated: number }> {
   const supabase = getSupabaseClient();
   const season = 2026;
