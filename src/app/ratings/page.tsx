@@ -43,6 +43,7 @@ interface TeamOverride {
   id?: number;
   sourceName: string;
   kenpomName: string;
+  espnName?: string;
   source: string;
   notes?: string;
 }
