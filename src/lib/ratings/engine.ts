@@ -30,8 +30,7 @@ import { findTeamByName } from './team-mapping';
  * Initialize ratings from KenPom data
  */
 export function initializeRatings(
-  kenpomRatings: KenPomRating[],
-  _season: number
+  kenpomRatings: KenPomRating[]
 ): Map<string, TeamRating> {
   const ratings = new Map<string, TeamRating>();
   const now = new Date().toISOString();
