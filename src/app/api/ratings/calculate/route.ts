@@ -42,6 +42,8 @@ import {
   getMatchingLogStats,
   MatchingLog,
   buildOverrideMap,
+  buildOddsApiOverrideMap,
+  saveOddsApiTeams,
 } from '@/lib/ratings/supabase';
 
 /**
@@ -137,6 +139,11 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
+    
+    // Check for recalculate action first
+    if (body.action === 'recalculate') {
+      return await handleRecalculate(request, body);
+    }
     
     const config: RatingsConfig = {
       ...DEFAULT_RATINGS_CONFIG,
@@ -253,7 +260,8 @@ export async function POST(request: NextRequest) {
     
     // Load team overrides for matching
     const overrideMap = await buildOverrideMap();
-    console.log(`[Calculate Ratings] Loaded ${overrideMap.size} team overrides`);
+    const oddsApiOverrideMap = await buildOddsApiOverrideMap();
+    console.log(`[Calculate Ratings] Loaded ${overrideMap.size} team overrides, ${oddsApiOverrideMap.size} Odds API mappings`);
     
     const oddsApiKey = process.env.ODDS_API_KEY;
     const newAdjustments: GameAdjustment[] = [];
@@ -283,7 +291,23 @@ export async function POST(request: NextRequest) {
       // Limit to maxGames new games
       const gamesToProcess = newGames.slice(0, maxGames);
       
-      for (const game of gamesToProcess) {
+      // Collect all team names we see from Odds API across all games
+      const allSeenOddsApiTeams: Set<string> = new Set();
+      
+      // Cache Odds API responses by timestamp to avoid redundant calls
+      const pinnacleCache: Map<string, OddsAPIGame[]> = new Map();
+      const usCache: Map<string, OddsAPIGame[]> = new Map();
+      
+      console.log(`[Calculate Ratings] Processing ${gamesToProcess.length} games...`);
+      
+      for (let i = 0; i < gamesToProcess.length; i++) {
+        const game = gamesToProcess[i];
+        
+        // Progress log every 10 games
+        if (i % 10 === 0) {
+          console.log(`[Calculate Ratings] Processing game ${i + 1}/${gamesToProcess.length}: ${game.homeTeam} vs ${game.awayTeam}`);
+        }
+        
         const matchingLog: MatchingLog = {
           gameId: game.id,
           gameDate: game.date,
@@ -309,35 +333,93 @@ export async function POST(request: NextRequest) {
             closingSpread = cached.closing_spread;
             bookmakers = cached.bookmakers || [];
           } else {
-            // Fetch from Odds API
+            // Fetch from Odds API - Try Pinnacle first, fall back to US books
             const gameTime = new Date(game.date);
             const closingTime = new Date(gameTime.getTime() - 5 * 60 * 1000);
             const closingTimeStr = closingTime.toISOString().replace('.000Z', 'Z');
             
-            const regions = config.closingSource === 'pinnacle' ? 'eu' : 'us';
-            const bookmakersParam = config.closingSource === 'pinnacle' 
-              ? 'pinnacle' 
-              : US_AVERAGE_BOOKMAKER_KEYS.join(',');
+            // Preferred US books for fallback (DraftKings, FanDuel, BetMGM, BetRivers)
+            const FALLBACK_US_BOOKS = ['draftkings', 'fanduel', 'betmgm', 'betrivers'];
             
-            const oddsUrl = `${ODDS_API_BASE_URL}/historical/sports/${NCAAB_SPORT_KEY}/odds?` +
-              `apiKey=${oddsApiKey}&regions=${regions}&markets=spreads&oddsFormat=american` +
-              `&date=${closingTimeStr}&bookmakers=${bookmakersParam}`;
+            let matchingOddsGame: OddsAPIGame | null = null;
+            let closingLine: { spread: number | null; bookmakers: string[] } = { spread: null, bookmakers: [] };
+            let usedSource: string = config.closingSource;
             
-            const oddsResponse = await fetch(oddsUrl);
+            // Step 1: Try Pinnacle first - use cache if available
+            let pinnacleGames: OddsAPIGame[] | undefined = pinnacleCache.get(closingTimeStr);
             
-            if (!oddsResponse.ok) {
-              matchingLog.status = 'no_odds';
-              matchingLog.skipReason = `Odds API error: ${oddsResponse.status}`;
-              await saveMatchingLog(matchingLog, config.season);
-              gamesSkipped++;
-              continue;
+            if (pinnacleGames === undefined) {
+              const pinnacleUrl = `${ODDS_API_BASE_URL}/historical/sports/${NCAAB_SPORT_KEY}/odds?` +
+                `apiKey=${oddsApiKey}&regions=eu&markets=spreads&oddsFormat=american` +
+                `&date=${closingTimeStr}&bookmakers=pinnacle`;
+              
+              const pinnacleResponse = await fetch(pinnacleUrl);
+              
+              if (pinnacleResponse.ok) {
+                const pinnacleData = await pinnacleResponse.json();
+                pinnacleGames = pinnacleData.data || [];
+                pinnacleCache.set(closingTimeStr, pinnacleGames);
+                
+                // Capture team names
+                for (const g of pinnacleGames) {
+                  allSeenOddsApiTeams.add(g.home_team);
+                  allSeenOddsApiTeams.add(g.away_team);
+                }
+              } else {
+                pinnacleGames = [];
+                pinnacleCache.set(closingTimeStr, pinnacleGames);
+              }
             }
             
-            const oddsData = await oddsResponse.json();
-            const oddsGames: OddsAPIGame[] = oddsData.data || [];
+            if (pinnacleGames && pinnacleGames.length > 0) {
+              matchingOddsGame = findMatchingGame(game, pinnacleGames, oddsApiOverrideMap);
+              
+              if (matchingOddsGame) {
+                closingLine = extractClosingSpread(matchingOddsGame, 'pinnacle', ['pinnacle']);
+                if (closingLine.spread !== null) {
+                  usedSource = 'pinnacle';
+                }
+              }
+            }
             
-            // Find matching game
-            const matchingOddsGame = findMatchingGame(game, oddsGames);
+            // Step 2: Fall back to US books if Pinnacle didn't have a spread
+            if (closingLine.spread === null) {
+              let usGames: OddsAPIGame[] | undefined = usCache.get(closingTimeStr);
+              
+              if (usGames === undefined) {
+                const usUrl = `${ODDS_API_BASE_URL}/historical/sports/${NCAAB_SPORT_KEY}/odds?` +
+                  `apiKey=${oddsApiKey}&regions=us&markets=spreads&oddsFormat=american` +
+                  `&date=${closingTimeStr}&bookmakers=${FALLBACK_US_BOOKS.join(',')}`;
+                
+                const usResponse = await fetch(usUrl);
+                
+                if (!usResponse.ok) {
+                  usGames = [];
+                  usCache.set(closingTimeStr, usGames);
+                } else {
+                  const usData = await usResponse.json();
+                  usGames = usData.data || [];
+                  usCache.set(closingTimeStr, usGames);
+                  
+                  // Capture team names
+                  for (const g of usGames) {
+                    allSeenOddsApiTeams.add(g.home_team);
+                    allSeenOddsApiTeams.add(g.away_team);
+                  }
+                }
+              }
+              
+              if (usGames && usGames.length > 0) {
+                matchingOddsGame = findMatchingGame(game, usGames, oddsApiOverrideMap);
+                
+                if (matchingOddsGame) {
+                  closingLine = extractClosingSpread(matchingOddsGame, 'us_average', FALLBACK_US_BOOKS);
+                  if (closingLine.spread !== null) {
+                    usedSource = 'us_average';
+                  }
+                }
+              }
+            }
             
             if (!matchingOddsGame) {
               matchingLog.status = 'no_odds';
@@ -346,13 +428,6 @@ export async function POST(request: NextRequest) {
               gamesSkipped++;
               continue;
             }
-            
-            // Extract spread
-            const closingLine = extractClosingSpread(
-              matchingOddsGame,
-              config.closingSource,
-              US_AVERAGE_BOOKMAKER_KEYS
-            );
             
             if (closingLine.spread === null) {
               matchingLog.status = 'no_spread';
@@ -365,7 +440,7 @@ export async function POST(request: NextRequest) {
             closingSpread = closingLine.spread;
             bookmakers = closingLine.bookmakers;
             
-            // Cache it
+            // Cache it (note: usedSource tracks whether Pinnacle or US average was used)
             await cacheClosingLine(
               game.id,
               matchingOddsGame.id,
@@ -373,7 +448,7 @@ export async function POST(request: NextRequest) {
               game.homeTeam,
               game.awayTeam,
               closingSpread,
-              config.closingSource,
+              usedSource,
               bookmakers
             );
           }
@@ -468,6 +543,12 @@ export async function POST(request: NextRequest) {
           gamesSkipped++;
         }
       }
+      
+      // Save all Odds API team names we've seen (batch operation at end)
+      if (allSeenOddsApiTeams.size > 0) {
+        console.log(`[Calculate Ratings] Saving ${allSeenOddsApiTeams.size} Odds API team names`);
+        await saveOddsApiTeams([...allSeenOddsApiTeams]);
+      }
     }
     
     console.log(`[Calculate Ratings] Finished: ${gamesProcessed} new games processed, ${gamesSkipped} skipped`);
@@ -523,19 +604,46 @@ function getBaseUrl(request: NextRequest): string {
 
 /**
  * Find matching game in Odds API data
+ * Checks both normal and swapped home/away (for neutral site games)
+ * Uses override map for team name translations
  */
-function findMatchingGame(espnGame: HistoricalGame, oddsGames: OddsAPIGame[]): OddsAPIGame | null {
+function findMatchingGame(
+  espnGame: HistoricalGame, 
+  oddsGames: OddsAPIGame[],
+  oddsApiOverrideMap?: Map<string, string>
+): OddsAPIGame | null {
   const espnHome = espnGame.homeTeam.toLowerCase();
   const espnAway = espnGame.awayTeam.toLowerCase();
+  
+  // Get override names if they exist
+  const overrideHome = oddsApiOverrideMap?.get(espnHome);
+  const overrideAway = oddsApiOverrideMap?.get(espnAway);
   
   for (const oddsGame of oddsGames) {
     const oddsHome = oddsGame.home_team.toLowerCase();
     const oddsAway = oddsGame.away_team.toLowerCase();
     
-    const homeMatch = teamsMatch(espnHome, oddsHome);
-    const awayMatch = teamsMatch(espnAway, oddsAway);
+    // Check normal orientation (with override support)
+    const homeMatch = teamsMatch(espnHome, oddsHome) || 
+                      (overrideHome && teamsMatch(overrideHome, oddsHome));
+    const awayMatch = teamsMatch(espnAway, oddsAway) || 
+                      (overrideAway && teamsMatch(overrideAway, oddsAway));
     
     if (homeMatch && awayMatch) {
+      if (overrideHome || overrideAway) {
+        console.log(`[findMatchingGame] Matched via override: ESPN ${espnGame.homeTeam} vs ${espnGame.awayTeam}`);
+      }
+      return oddsGame;
+    }
+    
+    // Check swapped orientation (common for neutral site tournaments)
+    const swappedHomeMatch = teamsMatch(espnHome, oddsAway) || 
+                             (overrideHome && teamsMatch(overrideHome, oddsAway));
+    const swappedAwayMatch = teamsMatch(espnAway, oddsHome) || 
+                             (overrideAway && teamsMatch(overrideAway, oddsHome));
+    
+    if (swappedHomeMatch && swappedAwayMatch) {
+      console.log(`[findMatchingGame] Found swapped match: ESPN ${espnGame.homeTeam} vs ${espnGame.awayTeam} -> Odds API ${oddsGame.away_team} vs ${oddsGame.home_team}`);
       return oddsGame;
     }
   }
@@ -547,19 +655,152 @@ function findMatchingGame(espnGame: HistoricalGame, oddsGames: OddsAPIGame[]): O
  * Check if two team names match (fuzzy)
  */
 function teamsMatch(name1: string, name2: string): boolean {
-  if (name1 === name2) return true;
-  if (name1.includes(name2) || name2.includes(name1)) return true;
+  // Normalize common variations
+  const normalize = (name: string) => {
+    return name
+      .replace(/\bst\b/g, 'state')           // "Oklahoma St" -> "Oklahoma State"
+      .replace(/\bcsu\b/g, 'cal state')      // "CSU Northridge" -> "Cal State Northridge"
+      .replace(/\buc\b/g, 'california')      // "UC Santa Barbara" -> "California Santa Barbara"
+      .replace(/\busc\b/g, 'southern california') // Normalize USC
+      .replace(/\bsmu\b/g, 'southern methodist')  // SMU -> Southern Methodist
+      .replace(/\btcu\b/g, 'texas christian')     // TCU -> Texas Christian
+      .replace(/\buab\b/g, 'alabama birmingham')  // UAB
+      .replace(/\bucf\b/g, 'central florida')     // UCF
+      .replace(/\bvcu\b/g, 'virginia commonwealth') // VCU
+      .replace(/\butep\b/g, 'texas el paso')      // UTEP
+      .replace(/\butsa\b/g, 'texas san antonio')  // UTSA
+      .replace(/\bunlv\b/g, 'nevada las vegas')   // UNLV
+      .replace(/\bstate state\b/g, 'state')  // Fix double "state state" if it happens
+      .replace(/'/g, '')                     // Remove apostrophes: Hawai'i -> Hawaii
+      .trim();
+  };
   
-  const first1 = name1.split(' ')[0];
-  const first2 = name2.split(' ')[0];
+  const n1 = normalize(name1);
+  const n2 = normalize(name2);
+  
+  if (n1 === n2) return true;
+  if (n1.includes(n2) || n2.includes(n1)) return true;
+  
+  const first1 = n1.split(' ')[0];
+  const first2 = n2.split(' ')[0];
   if (first1.length > 3 && first1 === first2) return true;
   
   // Remove mascots and compare
-  const clean1 = name1.replace(/(wildcats|bulldogs|tigers|bears|eagles|cardinals|blue devils|tar heels|wolverines|buckeyes|spartans|hoosiers|boilermakers|hawkeyes|jayhawks|longhorns|sooners|aggies|crimson tide|volunteers|gators|rebels|commodores|gamecocks|razorbacks|cavaliers|hokies|hurricanes|seminoles|yellow jackets|demon deacons|fighting irish|orange|panthers|wolfpack|terrapins|scarlet knights|nittany lions|golden gophers|cornhuskers|badgers|illini|cougars|huskies|ducks|beavers|trojans|bruins|sun devils|buffaloes|utes|aztecs|lobos|broncos|rams|falcons|knights|owls|monarchs|dukes|spiders|flyers|billikens|explorers|hawks|gaels|toreros|waves|pilots|lions|bearcats|musketeers|red storm|friars|hoyas|blue demons|golden eagles|pirates|johnnies|racers|lumberjacks|bonnies)$/g, '').trim();
-  const clean2 = name2.replace(/(wildcats|bulldogs|tigers|bears|eagles|cardinals|blue devils|tar heels|wolverines|buckeyes|spartans|hoosiers|boilermakers|hawkeyes|jayhawks|longhorns|sooners|aggies|crimson tide|volunteers|gators|rebels|commodores|gamecocks|razorbacks|cavaliers|hokies|hurricanes|seminoles|yellow jackets|demon deacons|fighting irish|orange|panthers|wolfpack|terrapins|scarlet knights|nittany lions|golden gophers|cornhuskers|badgers|illini|cougars|huskies|ducks|beavers|trojans|bruins|sun devils|buffaloes|utes|aztecs|lobos|broncos|rams|falcons|knights|owls|monarchs|dukes|spiders|flyers|billikens|explorers|hawks|gaels|toreros|waves|pilots|lions|bearcats|musketeers|red storm|friars|hoyas|blue demons|golden eagles|pirates|johnnies|racers|lumberjacks|bonnies)$/g, '').trim();
+  const mascotPattern = /(wildcats|bulldogs|tigers|bears|eagles|cardinals|blue devils|tar heels|wolverines|buckeyes|spartans|hoosiers|boilermakers|hawkeyes|jayhawks|longhorns|sooners|aggies|crimson tide|volunteers|gators|rebels|commodores|gamecocks|razorbacks|cavaliers|hokies|hurricanes|seminoles|yellow jackets|demon deacons|fighting irish|orange|panthers|wolfpack|terrapins|scarlet knights|nittany lions|golden gophers|cornhuskers|badgers|illini|cougars|huskies|ducks|beavers|trojans|bruins|sun devils|buffaloes|utes|aztecs|lobos|broncos|rams|falcons|knights|owls|monarchs|dukes|spiders|flyers|billikens|explorers|hawks|gaels|toreros|waves|pilots|lions|bearcats|musketeers|red storm|friars|hoyas|blue demons|golden eagles|pirates|johnnies|racers|lumberjacks|bonnies|cowboys|shockers|matadors|vandals|bengals|rainbow warriors|fighting hawks|redhawks|red wolves|bison|colonels|seawolves|dolphins|lancers|mountain hawks|gauchos|leopards|warriors|thunderbirds|bobcats)$/g;
+  
+  const clean1 = n1.replace(mascotPattern, '').trim();
+  const clean2 = n2.replace(mascotPattern, '').trim();
   
   if (clean1 === clean2) return true;
   if (clean1.includes(clean2) || clean2.includes(clean1)) return true;
   
   return false;
+}
+
+/**
+ * Handle recalculate action - replays all game adjustments to recalculate ratings
+ * This is useful when you've added new team mappings and want to reprocess
+ * without re-fetching from Odds API
+ */
+async function handleRecalculate(request: NextRequest, body: Record<string, unknown>) {
+  const season = (body.season as number) || 2026;
+  const hca = (body.hca as number) || DEFAULT_RATINGS_CONFIG.hca;
+  
+  console.log(`[Recalculate] Starting recalculation for season ${season}`);
+  
+  // Step 1: Load all existing adjustments (sorted by date)
+  const adjustments = await loadAdjustments(season);
+  
+  if (adjustments.length === 0) {
+    return NextResponse.json({
+      success: false,
+      error: 'No game adjustments found to recalculate',
+    });
+  }
+  
+  console.log(`[Recalculate] Found ${adjustments.length} game adjustments to replay`);
+  
+  // Step 2: Load current ratings and reset to initial values
+  const ratings = await loadRatings(season);
+  
+  console.log(`[Recalculate] Resetting ${ratings.size} ratings to initial values`);
+  
+  for (const [, rating] of ratings) {
+    rating.rating = rating.initialRating;
+    rating.gamesProcessed = 0;
+  }
+  
+  // Step 3: Replay each adjustment in chronological order and update records
+  let gamesProcessed = 0;
+  const updatedAdjustments: GameAdjustment[] = [];
+  
+  for (const adj of adjustments) {
+    const homeRating = ratings.get(adj.homeTeam);
+    const awayRating = ratings.get(adj.awayTeam);
+    
+    if (!homeRating || !awayRating) {
+      console.warn(`[Recalculate] Skipping game ${adj.gameId}: team not found (${adj.homeTeam} vs ${adj.awayTeam})`);
+      continue;
+    }
+    
+    // Capture before ratings
+    const homeRatingBefore = homeRating.rating;
+    const awayRatingBefore = awayRating.rating;
+    
+    // Calculate projected spread based on current ratings
+    const projectedSpread = awayRating.rating - homeRating.rating - (adj.isNeutralSite ? 0 : hca);
+    
+    // Calculate difference and adjustment
+    const difference = adj.closingSpread - projectedSpread;
+    const adjustment = difference / 2; // Half the difference applied to each team
+    
+    // Apply adjustments to ratings
+    // When closing spread is LESS favorable to away team than projected,
+    // away team rating should DECREASE and home team rating should INCREASE
+    homeRating.rating -= adjustment;
+    awayRating.rating += adjustment;
+    homeRating.gamesProcessed++;
+    awayRating.gamesProcessed++;
+    
+    // Create updated adjustment record with new before/after values
+    updatedAdjustments.push({
+      gameId: adj.gameId,
+      date: adj.date,
+      homeTeam: adj.homeTeam,
+      awayTeam: adj.awayTeam,
+      isNeutralSite: adj.isNeutralSite,
+      projectedSpread,
+      closingSpread: adj.closingSpread,
+      closingSource: adj.closingSource,
+      difference,
+      adjustment,
+      homeRatingBefore,
+      homeRatingAfter: homeRating.rating,
+      awayRatingBefore,
+      awayRatingAfter: awayRating.rating,
+    });
+    
+    gamesProcessed++;
+  }
+  
+  console.log(`[Recalculate] Replayed ${gamesProcessed} games, saving updates...`);
+  
+  // Step 4: Save all updated ratings to Supabase
+  for (const [, rating] of ratings) {
+    await saveRating(rating, season);
+  }
+  
+  // Step 5: Save all updated adjustment records
+  console.log(`[Recalculate] Updating ${updatedAdjustments.length} adjustment records...`);
+  for (const adj of updatedAdjustments) {
+    await saveGameAdjustment(adj, season);
+  }
+  
+  console.log(`[Recalculate] Complete!`);
+  
+  return NextResponse.json({
+    success: true,
+    message: `Recalculated ratings from ${gamesProcessed} games`,
+    gamesProcessed,
+  });
 }

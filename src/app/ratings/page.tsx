@@ -44,6 +44,7 @@ interface TeamOverride {
   sourceName: string;
   kenpomName: string;
   espnName?: string;
+  oddsApiName?: string;
   source: string;
   notes?: string;
 }
@@ -86,17 +87,21 @@ export default function RatingsPage() {
   const [matchingLogs, setMatchingLogs] = useState<MatchingLog[]>([]);
   const [matchingStats, setMatchingStats] = useState<MatchingStats | null>(null);
   const [logsLoading, setLogsLoading] = useState(false);
+  const [nonD1GameIds, setNonD1GameIds] = useState<Set<string>>(new Set());
   
   // Overrides state
   const [overrides, setOverrides] = useState<TeamOverride[]>([]);
   const [kenpomTeams, setKenpomTeams] = useState<string[]>([]);
+  const [oddsApiTeams, setOddsApiTeams] = useState<string[]>([]);
   const [overridesLoading, setOverridesLoading] = useState(false);
   const [showOverrideModal, setShowOverrideModal] = useState(false);
   const [editingOverride, setEditingOverride] = useState<TeamOverride | null>(null);
-  const [newOverride, setNewOverride] = useState({ sourceName: '', kenpomName: '', espnName: '', notes: '' });
+  const [newOverride, setNewOverride] = useState({ sourceName: '', kenpomName: '', espnName: '', oddsApiName: '', notes: '' });
   const [overrideError, setOverrideError] = useState<string | null>(null);
   const [kenpomSearch, setKenpomSearch] = useState('');
   const [showKenpomDropdown, setShowKenpomDropdown] = useState(false);
+  const [oddsApiSearch, setOddsApiSearch] = useState('');
+  const [showOddsApiDropdown, setShowOddsApiDropdown] = useState(false);
   
   // Config state
   const [hca, setHca] = useState(DEFAULT_RATINGS_CONFIG.hca);
@@ -110,7 +115,7 @@ export default function RatingsPage() {
   // View state
   const [activeTab, setActiveTab] = useState<TabType>('ratings');
   const [searchTerm, setSearchTerm] = useState('');
-  const [sortBy, setSortBy] = useState<'rating' | 'name' | 'games' | 'change'>('rating');
+  const [sortBy, setSortBy] = useState<'rating' | 'name' | 'games' | 'change' | 'initial'>('rating');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [expandedTeams, setExpandedTeams] = useState<Set<string>>(new Set());
   const [logFilter, setLogFilter] = useState<'all' | 'success' | 'failed'>('failed');
@@ -198,12 +203,22 @@ export default function RatingsPage() {
   const loadMatchingLogs = async () => {
     setLogsLoading(true);
     try {
-      const response = await fetch('/api/ratings/calculate?logs=true');
-      const data: CalculateResponse = await response.json();
+      // Load matching logs and non-D1 games in parallel
+      const [logsResponse, nonD1Response] = await Promise.all([
+        fetch('/api/ratings/calculate?logs=true'),
+        fetch('/api/ratings/non-d1'),
+      ]);
       
-      if (data.success) {
-        setMatchingLogs(data.matchingLogs || []);
-        setMatchingStats(data.matchingStats || null);
+      const logsData: CalculateResponse = await logsResponse.json();
+      const nonD1Data = await nonD1Response.json();
+      
+      if (logsData.success) {
+        setMatchingLogs(logsData.matchingLogs || []);
+        setMatchingStats(logsData.matchingStats || null);
+      }
+      
+      if (nonD1Data.success) {
+        setNonD1GameIds(new Set(nonD1Data.gameIds || []));
       }
     } catch (err) {
       console.error('Failed to load matching logs:', err);
@@ -226,6 +241,35 @@ export default function RatingsPage() {
       console.error('Failed to load overrides:', err);
     } finally {
       setOverridesLoading(false);
+    }
+  };
+
+  const markAsNonD1 = async (log: MatchingLog) => {
+    try {
+      const response = await fetch('/api/ratings/non-d1', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          gameId: log.gameId,
+          espnHome: log.espnHome,
+          espnAway: log.espnAway,
+          gameDate: log.gameDate,
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        // Add to local set immediately for UI update
+        setNonD1GameIds(prev => new Set([...prev, log.gameId]));
+        setSuccessMessage(`Marked as non-D1: ${log.espnHome} vs ${log.espnAway}`);
+        setTimeout(() => setSuccessMessage(null), 5000);
+      } else {
+        setError(data.error || 'Failed to mark as non-D1');
+      }
+    } catch (err) {
+      console.error('Failed to mark as non-D1:', err);
+      setError('Failed to mark as non-D1');
     }
   };
 
@@ -291,28 +335,69 @@ export default function RatingsPage() {
     }
   };
 
+  const recalculateRatings = async () => {
+    if (!confirm('This will reset all team ratings to initial KenPom values and replay all game adjustments. Continue?')) {
+      return;
+    }
+    
+    setLoading(true);
+    setError(null);
+    setSuccessMessage(null);
+    
+    try {
+      const response = await fetch('/api/ratings/calculate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'recalculate',
+          hca,
+          season: 2026,
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (!data.success) {
+        setError(data.error || 'Failed to recalculate ratings');
+        return;
+      }
+      
+      // Reload ratings
+      await loadRatings();
+      
+      setSuccessMessage(`Recalculation complete! ${data.gamesProcessed} games replayed.`);
+      setTimeout(() => setSuccessMessage(null), 10000);
+      
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Override management
-  const openAddOverrideModal = async (sourceName?: string) => {
+  const openAddOverrideModal = async (sourceName?: string, oddsApiName?: string) => {
     setEditingOverride(null);
-    setNewOverride({ sourceName: sourceName || '', kenpomName: '', espnName: '', notes: '' });
+    setNewOverride({ sourceName: sourceName || '', kenpomName: '', espnName: '', oddsApiName: oddsApiName || '', notes: '' });
     setKenpomSearch('');
     setShowKenpomDropdown(false);
+    setOddsApiSearch('');
+    setShowOddsApiDropdown(false);
     setOverrideError(null);
     setShowOverrideModal(true);
     
-    // Ensure kenpomTeams are loaded
-    if (kenpomTeams.length === 0) {
-      try {
-        const response = await fetch('/api/ratings/overrides');
-        const data = await response.json();
-        if (data.success) {
-          setKenpomTeams(data.kenpomTeams || []);
-        }
-      } catch (err) {
-        console.error('Failed to load kenpom teams:', err);
+    // Ensure kenpomTeams and oddsApiTeams are loaded
+    try {
+      const response = await fetch('/api/ratings/overrides');
+      const data = await response.json();
+      if (data.success) {
+        if (data.kenpomTeams) setKenpomTeams(data.kenpomTeams);
+        if (data.oddsApiTeams) setOddsApiTeams(data.oddsApiTeams);
       }
+    } catch (err) {
+      console.error('Failed to load teams:', err);
     }
   };
 
@@ -322,10 +407,13 @@ export default function RatingsPage() {
       sourceName: override.sourceName, 
       kenpomName: override.kenpomName,
       espnName: override.espnName || '',
+      oddsApiName: override.oddsApiName || '',
       notes: override.notes || '' 
     });
     setKenpomSearch(override.kenpomName);
     setShowKenpomDropdown(false);
+    setOddsApiSearch(override.oddsApiName || '');
+    setShowOddsApiDropdown(false);
     setOverrideError(null);
     setShowOverrideModal(true);
   };
@@ -416,6 +504,24 @@ export default function RatingsPage() {
     return [...startsWithMatches, ...containsMatches].slice(0, 15);
   }, [kenpomTeams, kenpomSearch]);
 
+  // Filtered Odds API teams for autocomplete
+  const filteredOddsApiTeams = useMemo(() => {
+    if (!oddsApiSearch || oddsApiSearch.length < 1) return [];
+    const search = oddsApiSearch.toLowerCase().trim();
+    
+    // Prioritize teams that START with the search term
+    const startsWithMatches = oddsApiTeams.filter(t => 
+      t.toLowerCase().startsWith(search)
+    );
+    
+    // Then teams that CONTAIN the search term (but don't start with it)
+    const containsMatches = oddsApiTeams.filter(t => 
+      !t.toLowerCase().startsWith(search) && t.toLowerCase().includes(search)
+    );
+    
+    return [...startsWithMatches, ...containsMatches].slice(0, 15);
+  }, [oddsApiTeams, oddsApiSearch]);
+
   // Build a map of team -> their adjustments
   const teamAdjustmentsMap = useMemo(() => {
     const map = new Map<string, GameAdjustment[]>();
@@ -447,6 +553,7 @@ export default function RatingsPage() {
         case 'name': comparison = a.teamName.localeCompare(b.teamName); break;
         case 'games': comparison = b.gamesProcessed - a.gamesProcessed; break;
         case 'change': comparison = (b.rating - b.initialRating) - (a.rating - a.initialRating); break;
+        case 'initial': comparison = b.initialRating - a.initialRating; break;
       }
       return sortDir === 'desc' ? comparison : -comparison;
     }) || [];
@@ -454,6 +561,10 @@ export default function RatingsPage() {
   // Filter matching logs
   const filteredLogs = useMemo(() => {
     let logs = matchingLogs;
+    
+    // Filter out games marked as non-D1
+    logs = logs.filter(l => !nonD1GameIds.has(l.gameId));
+    
     if (logFilter === 'success') logs = logs.filter(l => l.status === 'success');
     else if (logFilter === 'failed') logs = logs.filter(l => l.status !== 'success');
     if (searchTerm) {
@@ -466,7 +577,7 @@ export default function RatingsPage() {
       );
     }
     return logs;
-  }, [matchingLogs, logFilter, searchTerm]);
+  }, [matchingLogs, logFilter, searchTerm, nonD1GameIds]);
   
   const toggleSort = (column: typeof sortBy) => {
     if (sortBy === column) setSortDir(sortDir === 'desc' ? 'asc' : 'desc');
@@ -516,7 +627,7 @@ export default function RatingsPage() {
   };
   
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900">
+    <div className="min-h-screen bg-blue-50 text-gray-900">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-4">
@@ -656,9 +767,19 @@ export default function RatingsPage() {
                 Clear Dates
               </button>
             </div>
+            <div className="flex items-end">
+              <button
+                onClick={recalculateRatings}
+                disabled={loading}
+                className="w-full bg-amber-500 hover:bg-amber-600 disabled:bg-gray-300 text-white font-medium py-2 px-4 rounded-lg transition-colors text-sm"
+                title="Reset ratings to initial values and replay all game adjustments"
+              >
+                {loading ? 'Processing...' : 'Recalculate'}
+              </button>
+            </div>
           </div>
           <p className="text-xs text-gray-500 mt-3">
-            Leave dates empty to sync all unprocessed games. Season starts Nov 4, 2025.
+            Leave dates empty to sync all unprocessed games. &quot;Recalculate&quot; replays existing games without re-fetching odds.
           </p>
           
           {error && (
@@ -724,28 +845,30 @@ export default function RatingsPage() {
                 />
               </div>
               
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
                 <table className="w-full">
-                  <thead className="bg-gray-50">
+                  <thead className="bg-blue-50 sticky top-0 z-10">
                     <tr>
-                      <th className="px-2 sm:px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase w-12 sm:w-16">#</th>
-                      <th className="px-2 sm:px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase cursor-pointer" onClick={() => toggleSort('name')}>
+                      <th className="px-2 sm:px-4 py-3 text-left text-xs font-semibold text-blue-800 uppercase w-12 sm:w-16">#</th>
+                      <th className="px-2 sm:px-4 py-3 text-left text-xs font-semibold text-blue-800 uppercase cursor-pointer" onClick={() => toggleSort('name')}>
                         <span className="hidden sm:inline">Team {sortBy === 'name' && (sortDir === 'desc' ? '↓' : '↑')}</span>
                         <span className="sm:hidden">Team</span>
                       </th>
-                      <th className="px-2 sm:px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase hidden sm:table-cell">Conf</th>
-                      <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase cursor-pointer" onClick={() => toggleSort('rating')}>
+                      <th className="px-2 sm:px-4 py-3 text-left text-xs font-semibold text-blue-800 uppercase hidden sm:table-cell">Conf</th>
+                      <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-blue-800 uppercase cursor-pointer" onClick={() => toggleSort('rating')}>
                         <span className="hidden sm:inline">Rating</span>
                         <span className="sm:hidden">Rtg</span>
                         {sortBy === 'rating' && (sortDir === 'desc' ? ' ↓' : ' ↑')}
                       </th>
-                      <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase hidden sm:table-cell">Initial</th>
-                      <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase cursor-pointer" onClick={() => toggleSort('change')}>
+                      <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-blue-800 uppercase hidden sm:table-cell cursor-pointer" onClick={() => toggleSort('initial')}>
+                        Initial{sortBy === 'initial' && (sortDir === 'desc' ? ' ↓' : ' ↑')}
+                      </th>
+                      <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-blue-800 uppercase cursor-pointer" onClick={() => toggleSort('change')}>
                         <span className="hidden sm:inline">Change</span>
                         <span className="sm:hidden">+/-</span>
                         {sortBy === 'change' && (sortDir === 'desc' ? ' ↓' : ' ↑')}
                       </th>
-                      <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase cursor-pointer" onClick={() => toggleSort('games')}>
+                      <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-blue-800 uppercase cursor-pointer" onClick={() => toggleSort('games')}>
                         <span className="hidden sm:inline">Games</span>
                         <span className="sm:hidden">G</span>
                         {sortBy === 'games' && (sortDir === 'desc' ? ' ↓' : ' ↑')}
@@ -1001,6 +1124,41 @@ export default function RatingsPage() {
                                 Add Override
                               </button>
                             )}
+                            {log.status === 'no_odds' && (
+                              <div className="flex flex-col gap-1">
+                                <div className="flex gap-2 text-xs">
+                                  <button
+                                    onClick={() => openAddOverrideModal(log.espnHome, '')}
+                                    className="text-orange-600 hover:text-orange-800 font-medium"
+                                    title={`Map: ${log.espnHome}`}
+                                  >
+                                    Map Home
+                                  </button>
+                                  <span className="text-gray-400">|</span>
+                                  <button
+                                    onClick={() => openAddOverrideModal(log.espnAway, '')}
+                                    className="text-orange-600 hover:text-orange-800 font-medium"
+                                    title={`Map: ${log.espnAway}`}
+                                  >
+                                    Map Away
+                                  </button>
+                                </div>
+                                <button
+                                  onClick={() => markAsNonD1(log)}
+                                  className="text-gray-500 hover:text-gray-700 text-xs"
+                                >
+                                  Mark Non-D1
+                                </button>
+                              </div>
+                            )}
+                            {log.status === 'no_spread' && (
+                              <button
+                                onClick={() => markAsNonD1(log)}
+                                className="text-gray-500 hover:text-gray-700 text-xs"
+                              >
+                                Mark Non-D1
+                              </button>
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -1042,6 +1200,7 @@ export default function RatingsPage() {
                         <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">→</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">KenPom Name</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">ESPN Name</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Odds API Name</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Notes</th>
                         <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Actions</th>
                       </tr>
@@ -1053,6 +1212,7 @@ export default function RatingsPage() {
                           <td className="px-4 py-3 text-gray-400">→</td>
                           <td className="px-4 py-3 text-green-700 font-medium">{override.kenpomName}</td>
                           <td className="px-4 py-3 text-sm text-blue-600">{override.espnName || '—'}</td>
+                          <td className="px-4 py-3 text-sm text-orange-600">{override.oddsApiName || '—'}</td>
                           <td className="px-4 py-3 text-sm text-gray-500">{override.notes || '—'}</td>
                           <td className="px-4 py-3 text-center">
                             <button
@@ -1191,6 +1351,58 @@ export default function RatingsPage() {
                 />
                 <p className="mt-1 text-xs text-gray-500">
                   Only needed if logo doesn&apos;t show. Use ESPN&apos;s display name.
+                </p>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Odds API Name (for game matching, optional)
+                </label>
+                <input
+                  type="text"
+                  value={oddsApiSearch}
+                  onChange={(e) => {
+                    setOddsApiSearch(e.target.value);
+                    setNewOverride({ ...newOverride, oddsApiName: e.target.value });
+                    setShowOddsApiDropdown(true);
+                  }}
+                  onFocus={() => setShowOddsApiDropdown(true)}
+                  placeholder="Type to search (e.g., CSU Northridge, Oklahoma St)..."
+                  className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-900"
+                  autoComplete="off"
+                />
+                {oddsApiTeams.length === 0 && oddsApiSearch && (
+                  <p className="mt-1 text-sm text-gray-500">No Odds API teams loaded yet. Run a sync first to populate.</p>
+                )}
+                {showOddsApiDropdown && filteredOddsApiTeams.length > 0 && (
+                  <div className="mt-1 border border-gray-200 rounded-lg max-h-48 overflow-y-auto bg-white shadow-lg">
+                    {filteredOddsApiTeams.map((team) => (
+                      <button
+                        key={team}
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setOddsApiSearch(team);
+                          setNewOverride({ ...newOverride, oddsApiName: team });
+                          setShowOddsApiDropdown(false);
+                        }}
+                        className={`w-full text-left px-3 py-2 text-sm hover:bg-orange-50 border-b border-gray-100 last:border-b-0 ${
+                          newOverride.oddsApiName === team ? 'bg-orange-100 text-orange-700 font-medium' : 'text-gray-700'
+                        }`}
+                      >
+                        {team}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {oddsApiSearch && oddsApiSearch.length >= 1 && filteredOddsApiTeams.length === 0 && oddsApiTeams.length > 0 && (
+                  <p className="mt-1 text-sm text-orange-600">No teams found matching &ldquo;{oddsApiSearch}&rdquo;</p>
+                )}
+                {newOverride.oddsApiName && !showOddsApiDropdown && (
+                  <p className="mt-1 text-sm text-green-600">✓ Selected: {newOverride.oddsApiName}</p>
+                )}
+                <p className="mt-1 text-xs text-gray-500">
+                  Use if games fail with &quot;No Odds&quot;. Select the matching team from Odds API.
                 </p>
               </div>
             </div>

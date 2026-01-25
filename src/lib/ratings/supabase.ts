@@ -315,33 +315,58 @@ export async function saveGameAdjustment(adjustment: GameAdjustment, season: num
 export async function loadAdjustments(season: number = 2026): Promise<GameAdjustment[]> {
   const supabase = getSupabaseClient();
   
-  const { data, error } = await supabase
-    .from('ncaab_game_adjustments')
-    .select('*')
-    .eq('season', season)
-    .order('game_date', { ascending: true });
+  // Supabase has a default max of 1000 rows per request
+  // Use pagination to get all adjustments
+  const allAdjustments: GameAdjustment[] = [];
+  const pageSize = 1000;
+  let offset = 0;
+  let hasMore = true;
   
-  if (error) {
-    console.error('[Supabase] Error loading adjustments:', error);
-    return [];
+  while (hasMore) {
+    const { data, error } = await supabase
+      .from('ncaab_game_adjustments')
+      .select('*')
+      .eq('season', season)
+      .order('game_date', { ascending: true })
+      .range(offset, offset + pageSize - 1);
+    
+    if (error) {
+      console.error('[Supabase] Error loading adjustments:', error);
+      break;
+    }
+    
+    if (!data || data.length === 0) {
+      hasMore = false;
+    } else {
+      const mapped = data.map(row => ({
+        gameId: row.game_id,
+        date: row.game_date,
+        homeTeam: row.home_team,
+        awayTeam: row.away_team,
+        isNeutralSite: row.is_neutral_site,
+        projectedSpread: row.projected_spread,
+        closingSpread: row.closing_spread,
+        closingSource: row.closing_source as ClosingLineSource,
+        difference: row.difference,
+        adjustment: row.adjustment,
+        homeRatingBefore: row.home_rating_before,
+        homeRatingAfter: row.home_rating_after,
+        awayRatingBefore: row.away_rating_before,
+        awayRatingAfter: row.away_rating_after,
+      }));
+      
+      allAdjustments.push(...mapped);
+      offset += pageSize;
+      
+      // If we got less than pageSize, we've reached the end
+      if (data.length < pageSize) {
+        hasMore = false;
+      }
+    }
   }
   
-  return (data || []).map(row => ({
-    gameId: row.game_id,
-    date: row.game_date,
-    homeTeam: row.home_team,
-    awayTeam: row.away_team,
-    isNeutralSite: row.is_neutral_site,
-    projectedSpread: row.projected_spread,
-    closingSpread: row.closing_spread,
-    closingSource: row.closing_source as ClosingLineSource,
-    difference: row.difference,
-    adjustment: row.adjustment,
-    homeRatingBefore: row.home_rating_before,
-    homeRatingAfter: row.home_rating_after,
-    awayRatingBefore: row.away_rating_before,
-    awayRatingAfter: row.away_rating_after,
-  }));
+  console.log(`[Supabase] Loaded ${allAdjustments.length} adjustments for season ${season}`);
+  return allAdjustments;
 }
 
 // ============================================
@@ -561,11 +586,13 @@ export async function loadMatchingLogs(season: number = 2026, onlyFailed: boolea
   // Only fetch failed matches by default (the ones you can act on)
   if (onlyFailed) {
     query = query.neq('status', 'success');
+  } else {
+    // Only limit when fetching all logs (success + failed)
+    query = query.limit(2000);
   }
   
   const { data, error } = await query
-    .order('game_date', { ascending: false })
-    .limit(1000);
+    .order('game_date', { ascending: false });
   
   if (error) {
     console.error('[Supabase] Error loading matching logs:', error);
@@ -658,7 +685,8 @@ export interface TeamOverride {
   id?: number;
   sourceName: string;
   kenpomName: string;
-  espnName?: string;  // ESPN display name for logo lookup
+  espnName?: string;      // ESPN display name for logo lookup
+  oddsApiName?: string;   // Odds API team name for game matching
   source: string;
   notes?: string;
   createdAt?: string;
@@ -686,6 +714,7 @@ export async function loadTeamOverrides(): Promise<TeamOverride[]> {
     sourceName: row.source_name,
     kenpomName: row.kenpom_name,
     espnName: row.espn_name,
+    oddsApiName: row.odds_api_name,
     source: row.source,
     notes: row.notes,
     createdAt: row.created_at,
@@ -705,6 +734,7 @@ export async function addTeamOverride(override: TeamOverride): Promise<TeamOverr
       source_name: override.sourceName,
       kenpom_name: override.kenpomName,
       espn_name: override.espnName || null,
+      odds_api_name: override.oddsApiName || null,
       source: override.source || 'manual',
       notes: override.notes,
     }, {
@@ -723,6 +753,7 @@ export async function addTeamOverride(override: TeamOverride): Promise<TeamOverr
     sourceName: data.source_name,
     kenpomName: data.kenpom_name,
     espnName: data.espn_name,
+    oddsApiName: data.odds_api_name,
     source: data.source,
     notes: data.notes,
     createdAt: data.created_at,
@@ -739,9 +770,11 @@ export async function updateTeamOverride(id: number, override: Partial<TeamOverr
   const updates: Record<string, unknown> = {};
   if (override.sourceName) updates.source_name = override.sourceName;
   if (override.kenpomName) updates.kenpom_name = override.kenpomName;
-  if (override.espnName !== undefined) updates.espn_name = override.espnName || null;
+  // Only update optional fields if they have a truthy value (don't overwrite with empty/null)
+  if (override.espnName) updates.espn_name = override.espnName;
+  if (override.oddsApiName) updates.odds_api_name = override.oddsApiName;
   if (override.source) updates.source = override.source;
-  if (override.notes !== undefined) updates.notes = override.notes;
+  if (override.notes) updates.notes = override.notes;
   
   const { error } = await supabase
     .from('ncaab_team_overrides')
@@ -787,4 +820,180 @@ export async function buildOverrideMap(): Promise<Map<string, string>> {
   }
   
   return map;
+}
+
+/**
+ * Build Odds API override lookup map
+ * Returns a map where keys are ESPN names (lowercase) and values are Odds API names
+ */
+export async function buildOddsApiOverrideMap(): Promise<Map<string, string>> {
+  const overrides = await loadTeamOverrides();
+  const map = new Map<string, string>();
+  
+  for (const override of overrides) {
+    // Map ESPN name (or source_name) to Odds API name
+    if (override.oddsApiName) {
+      // Use source_name as the key (ESPN name)
+      map.set(override.sourceName.toLowerCase(), override.oddsApiName.toLowerCase());
+      // Also map espn_name if different
+      if (override.espnName && override.espnName.toLowerCase() !== override.sourceName.toLowerCase()) {
+        map.set(override.espnName.toLowerCase(), override.oddsApiName.toLowerCase());
+      }
+    }
+  }
+  
+  return map;
+}
+
+// ============================================
+// Odds API Teams Reference Table
+// ============================================
+
+/**
+ * Save or update Odds API team names (batch upsert)
+ */
+export async function saveOddsApiTeams(teamNames: string[]): Promise<void> {
+  if (teamNames.length === 0) return;
+  
+  const supabase = getSupabaseClient();
+  const uniqueNames = [...new Set(teamNames)];
+  
+  // Batch upsert all teams at once
+  const teamsToUpsert = uniqueNames.map(teamName => ({
+    team_name: teamName,
+    last_seen_at: new Date().toISOString(),
+  }));
+  
+  const { error } = await supabase
+    .from('ncaab_odds_api_teams')
+    .upsert(teamsToUpsert, {
+      onConflict: 'team_name',
+    });
+  
+  if (error) {
+    console.error('[Supabase] Error saving Odds API teams:', error);
+  }
+}
+
+/**
+ * Load all Odds API team names
+ */
+export async function loadOddsApiTeams(): Promise<string[]> {
+  const supabase = getSupabaseClient();
+  
+  const { data, error } = await supabase
+    .from('ncaab_odds_api_teams')
+    .select('team_name')
+    .order('team_name');
+  
+  if (error) {
+    console.error('[Supabase] Error loading Odds API teams:', error);
+    return [];
+  }
+  
+  return (data || []).map(row => row.team_name);
+}
+
+// ============================================
+// Non-D1 Games Tracking
+// ============================================
+
+export interface NonD1Game {
+  id?: number;
+  gameId: string;
+  espnHome: string;
+  espnAway: string;
+  gameDate: string;
+  notes?: string;
+  createdAt?: string;
+}
+
+/**
+ * Mark a game as non-D1 matchup
+ */
+export async function markGameAsNonD1(game: NonD1Game): Promise<boolean> {
+  const supabase = getSupabaseClient();
+  
+  const { error } = await supabase
+    .from('ncaab_non_d1_games')
+    .upsert({
+      game_id: game.gameId,
+      espn_home: game.espnHome,
+      espn_away: game.espnAway,
+      game_date: game.gameDate,
+      notes: game.notes || null,
+    }, {
+      onConflict: 'game_id',
+    });
+  
+  if (error) {
+    console.error('[Supabase] Error marking game as non-D1:', error);
+    return false;
+  }
+  
+  return true;
+}
+
+/**
+ * Load all non-D1 game IDs
+ */
+export async function loadNonD1GameIds(): Promise<Set<string>> {
+  const supabase = getSupabaseClient();
+  
+  const { data, error } = await supabase
+    .from('ncaab_non_d1_games')
+    .select('game_id');
+  
+  if (error) {
+    console.error('[Supabase] Error loading non-D1 games:', error);
+    return new Set();
+  }
+  
+  return new Set((data || []).map(row => row.game_id));
+}
+
+/**
+ * Load all non-D1 games with details
+ */
+export async function loadNonD1Games(): Promise<NonD1Game[]> {
+  const supabase = getSupabaseClient();
+  
+  const { data, error } = await supabase
+    .from('ncaab_non_d1_games')
+    .select('*')
+    .order('game_date', { ascending: false });
+  
+  if (error) {
+    console.error('[Supabase] Error loading non-D1 games:', error);
+    return [];
+  }
+  
+  return (data || []).map(row => ({
+    id: row.id,
+    gameId: row.game_id,
+    espnHome: row.espn_home,
+    espnAway: row.espn_away,
+    gameDate: row.game_date,
+    notes: row.notes,
+    createdAt: row.created_at,
+  }));
+}
+
+/**
+ * Remove a game from non-D1 list
+ */
+export async function removeNonD1Game(gameId: string): Promise<boolean> {
+  const supabase = getSupabaseClient();
+  
+  const { error } = await supabase
+    .from('ncaab_non_d1_games')
+    .delete()
+    .eq('game_id', gameId);
+  
+  if (error) {
+    console.error('[Supabase] Error removing non-D1 game:', error);
+    return false;
+  }
+  
+  return true;
 }
