@@ -133,7 +133,15 @@ async function fetchGamesForDate(date: Date): Promise<{ homeTeam: string; awayTe
 
 export async function GET() {
   try {
-    const today = new Date();
+    // Use US Eastern time for "today" since NHL schedules are in ET
+    // This prevents timezone issues where server (UTC) thinks games have happened
+    // but they haven't started yet in US timezones
+    const nowUTC = new Date();
+    const easternOffset = -5; // EST is UTC-5 (use -4 for EDT if needed)
+    const nowEastern = new Date(nowUTC.getTime() + (easternOffset * 60 * 60 * 1000));
+    
+    // Use Eastern date as "today"
+    const today = new Date(nowEastern.getFullYear(), nowEastern.getMonth(), nowEastern.getDate());
     const todayStr = getDateString(today);
     
     // Fetch games for past 6 days + today + next 7 days (14 days total)
