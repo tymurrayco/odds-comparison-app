@@ -670,6 +670,16 @@ function HomeContent() {
                 />
               )}
               
+              {/* Ratings Button - Only show for NCAAB */}
+              {activeLeague === 'basketball_ncaab' && (
+                <button
+                  onClick={() => router.push('/ratings')}
+                  className="px-3 py-2 rounded-xl text-sm font-medium transition-all select-none border border-gray-200 shadow-sm bg-purple-100 text-purple-700 hover:bg-purple-200"
+                >
+                  📈 Ratings
+                </button>
+              )}
+              
               <button
                 onMouseDown={(e) => {
                   e.preventDefault();

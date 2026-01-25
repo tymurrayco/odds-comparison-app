@@ -124,6 +124,8 @@ export default function RatingsPage() {
     spreadBookmaker: string | null;
     isToday: boolean;
     isTomorrow: boolean;
+    hasStarted: boolean;
+    isFrozen: boolean;
   }
   const [scheduleGames, setScheduleGames] = useState<ScheduleGame[]>([]);
   const [scheduleLoading, setScheduleLoading] = useState(false);
@@ -1599,6 +1601,7 @@ export default function RatingsPage() {
                               {game.spread !== null ? (
                                 <span className={`font-mono text-xs sm:text-sm font-semibold ${game.spread < 0 ? 'text-green-600' : game.spread > 0 ? 'text-red-600' : 'text-gray-600'}`}>
                                   {game.spread > 0 ? '+' : ''}{game.spread}
+                                  {game.isFrozen && <span className="ml-1 text-gray-400" title="Closing line (game started)">🔒</span>}
                                 </span>
                               ) : (
                                 <span className="text-gray-400">—</span>
