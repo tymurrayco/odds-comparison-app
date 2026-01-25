@@ -125,13 +125,7 @@ export async function GET(request: Request) {
     // Today's date string in user's timezone (e.g., "01/25/2026")
     const todayStr = `${String(month).padStart(2, '0')}/${String(day).padStart(2, '0')}/${year}`;
     
-    // Tomorrow's date - add 1 to day and format directly (handles month rollover)
-    const tomorrowDay = day + 1;
-    const tomorrowMonth = month;
-    const tomorrowYear = year;
-    
-    // Create a proper tomorrow date by using a date that's definitely tomorrow in any timezone
-    // We use noon UTC to avoid any timezone edge cases
+    // Tomorrow's date - use noon UTC to avoid any timezone edge cases
     const tomorrowDate = new Date(Date.UTC(year, month - 1, day + 1, 12, 0, 0));
     const tomorrowStr = getCalendarDay(tomorrowDate);
     
