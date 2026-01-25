@@ -284,7 +284,9 @@ export default function RatingsPage() {
   const loadSchedule = async () => {
     setScheduleLoading(true);
     try {
-      const response = await fetch('/api/ratings/schedule');
+      // Get user's timezone and pass it to the API
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const response = await fetch(`/api/ratings/schedule?timezone=${encodeURIComponent(timezone)}`);
       const data = await response.json();
       
       if (data.success) {

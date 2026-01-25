@@ -52,7 +52,7 @@ export interface ScheduleGame {
   isTomorrow: boolean;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const apiKey = process.env.ODDS_API_KEY;
   
   if (!apiKey) {
@@ -61,6 +61,10 @@ export async function GET() {
       { status: 500 }
     );
   }
+  
+  // Get timezone from query param, default to America/New_York
+  const { searchParams } = new URL(request.url);
+  const timezone = searchParams.get('timezone') || 'America/New_York';
   
   try {
     // Fetch upcoming games with spreads and totals from Pinnacle first, then US books
@@ -76,7 +80,7 @@ export async function GET() {
     console.log('[Schedule] Fetching upcoming NCAAB games...');
     
     const response = await fetch(url, {
-      next: { revalidate: 300 } // Cache for 5 minutes
+      cache: 'no-store' // Don't cache - always fetch fresh data
     });
     
     if (!response.ok) {
@@ -90,18 +94,44 @@ export async function GET() {
     
     const games: OddsGame[] = await response.json();
     
-    // Get today and tomorrow dates
+    // Get today and tomorrow dates in user's timezone
+    // This ensures "today" and "tomorrow" match what the user sees locally
     const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const dayAfterTomorrow = new Date(tomorrow);
-    dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 1);
     
-    // Filter games for today and tomorrow first
+    // Format current date in user's timezone to get the calendar day
+    const userFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    const userDateStr = userFormatter.format(now);
+    const [month, day, year] = userDateStr.split('/').map(Number);
+    
+    // Helper to check if a UTC date falls on a specific calendar day in the user's timezone
+    const getCalendarDay = (date: Date): string => {
+      return new Intl.DateTimeFormat('en-US', {
+        timeZone: timezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(date);
+    };
+    
+    // Today's date string in user's timezone (e.g., "01/25/2026")
+    const todayStr = `${String(month).padStart(2, '0')}/${String(day).padStart(2, '0')}/${year}`;
+    
+    // Tomorrow's date
+    const tomorrowDate = new Date(year, month - 1, day + 1);
+    const tomorrowStr = getCalendarDay(tomorrowDate);
+    
+    console.log('[Schedule] Timezone:', timezone, 'Today:', todayStr, 'Tomorrow:', tomorrowStr);
+    
+    // Filter games for today and tomorrow by comparing calendar days in user's timezone
     const filteredGames = games.filter(game => {
       const gameDate = new Date(game.commence_time);
-      return gameDate >= today && gameDate < dayAfterTomorrow;
+      const gameDayStr = getCalendarDay(gameDate);
+      return gameDayStr === todayStr || gameDayStr === tomorrowStr;
     });
     
     // Helper function to get spread: Pinnacle first, then US average
@@ -277,8 +307,9 @@ export async function GET() {
     const scheduleGames: ScheduleGame[] = filteredGames
       .map(game => {
         const gameDate = new Date(game.commence_time);
-        const isToday = gameDate >= today && gameDate < tomorrow;
-        const isTomorrow = gameDate >= tomorrow && gameDate < dayAfterTomorrow;
+        const gameDayStr = getCalendarDay(gameDate);
+        const isToday = gameDayStr === todayStr;
+        const isTomorrow = gameDayStr === tomorrowStr;
         
         // Get spread using Pinnacle first, then US average
         const { spread, total, spreadBookmaker } = getSpreadAndTotal(game);
@@ -314,6 +345,10 @@ export async function GET() {
       tomorrowCount: scheduleGames.filter(g => g.isTomorrow).length,
       requestsRemaining,
       requestsUsed,
+    }, {
+      headers: {
+        'Cache-Control': 'no-store, max-age=0',
+      }
     });
     
   } catch (error) {
