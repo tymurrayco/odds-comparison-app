@@ -285,8 +285,10 @@ export default function RatingsPage() {
     setScheduleLoading(true);
     try {
       // Get user's timezone and pass it to the API
+      // Add timestamp to bust Vercel edge cache
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      const response = await fetch(`/api/ratings/schedule?timezone=${encodeURIComponent(timezone)}`);
+      const cacheBuster = Date.now();
+      const response = await fetch(`/api/ratings/schedule?timezone=${encodeURIComponent(timezone)}&_t=${cacheBuster}`);
       const data = await response.json();
       
       if (data.success) {
@@ -1436,7 +1438,7 @@ export default function RatingsPage() {
                         <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Proj</th>
                         <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Open</th>
                         <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase"><span className="hidden sm:inline">Current</span><span className="sm:hidden">Curr</span></th>
-                        <th className="px-1 sm:px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase"></th>
+                        <th className="px-1 sm:px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">v. Proj</th>
                         <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Delta</th>
                         <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Total</th>
                       </tr>

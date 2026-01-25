@@ -3,6 +3,10 @@
 import { NextResponse } from 'next/server';
 import { ODDS_API_BASE_URL, NCAAB_SPORT_KEY } from '@/lib/ratings/constants';
 
+// Force dynamic rendering - disable Vercel edge caching
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 /**
  * Schedule API Route
  * 
