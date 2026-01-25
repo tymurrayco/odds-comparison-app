@@ -74,7 +74,7 @@ interface CalculateResponse {
   matchingStats?: MatchingStats;
 }
 
-type TabType = 'ratings' | 'matching' | 'overrides';
+type TabType = 'ratings' | 'hypotheticals' | 'matching' | 'overrides';
 
 export default function RatingsPage() {
   // State
@@ -102,6 +102,15 @@ export default function RatingsPage() {
   const [showKenpomDropdown, setShowKenpomDropdown] = useState(false);
   const [oddsApiSearch, setOddsApiSearch] = useState('');
   const [showOddsApiDropdown, setShowOddsApiDropdown] = useState(false);
+  
+  // Matchups state
+  const [homeTeam, setHomeTeam] = useState<string>('');
+  const [awayTeam, setAwayTeam] = useState<string>('');
+  const [isNeutralSite, setIsNeutralSite] = useState(false);
+  const [homeTeamSearch, setHomeTeamSearch] = useState('');
+  const [awayTeamSearch, setAwayTeamSearch] = useState('');
+  const [showHomeDropdown, setShowHomeDropdown] = useState(false);
+  const [showAwayDropdown, setShowAwayDropdown] = useState(false);
   
   // Config state
   const [hca, setHca] = useState(DEFAULT_RATINGS_CONFIG.hca);
@@ -522,6 +531,67 @@ export default function RatingsPage() {
     return [...startsWithMatches, ...containsMatches].slice(0, 15);
   }, [oddsApiTeams, oddsApiSearch]);
 
+  // Get sorted team list for matchups dropdowns
+  const sortedTeams = useMemo(() => {
+    if (!snapshot) return [];
+    return [...snapshot.ratings].sort((a, b) => a.teamName.localeCompare(b.teamName));
+  }, [snapshot]);
+
+  // Filter teams for home dropdown
+  const filteredHomeTeams = useMemo(() => {
+    if (!homeTeamSearch) return sortedTeams.slice(0, 20);
+    const search = homeTeamSearch.toLowerCase();
+    return sortedTeams.filter(t => 
+      t.teamName.toLowerCase().includes(search)
+    ).slice(0, 20);
+  }, [sortedTeams, homeTeamSearch]);
+
+  // Filter teams for away dropdown
+  const filteredAwayTeams = useMemo(() => {
+    if (!awayTeamSearch) return sortedTeams.slice(0, 20);
+    const search = awayTeamSearch.toLowerCase();
+    return sortedTeams.filter(t => 
+      t.teamName.toLowerCase().includes(search)
+    ).slice(0, 20);
+  }, [sortedTeams, awayTeamSearch]);
+
+  // Calculate projected spread for matchup
+  const matchupProjection = useMemo(() => {
+    if (!snapshot || !homeTeam || !awayTeam) return null;
+    
+    const homeRating = snapshot.ratings.find(r => r.teamName === homeTeam);
+    const awayRating = snapshot.ratings.find(r => r.teamName === awayTeam);
+    
+    if (!homeRating || !awayRating) return null;
+    
+    const hcaToApply = isNeutralSite ? 0 : hca;
+    // Spread = -(HomeRating - AwayRating + HCA)
+    // Negative spread means home team is favored
+    const projectedSpread = -((homeRating.rating - awayRating.rating) + hcaToApply);
+    
+    return {
+      homeTeam,
+      awayTeam,
+      homeRating: homeRating.rating,
+      awayRating: awayRating.rating,
+      homeConference: homeRating.conference,
+      awayConference: awayRating.conference,
+      projectedSpread,
+      hcaApplied: hcaToApply,
+      isNeutralSite,
+    };
+  }, [snapshot, homeTeam, awayTeam, isNeutralSite, hca]);
+
+  // Swap home and away teams in matchup
+  const swapTeams = () => {
+    const tempTeam = homeTeam;
+    const tempSearch = homeTeamSearch;
+    setHomeTeam(awayTeam);
+    setHomeTeamSearch(awayTeamSearch);
+    setAwayTeam(tempTeam);
+    setAwayTeamSearch(tempSearch);
+  };
+
   // Build a map of team -> their adjustments
   const teamAdjustmentsMap = useMemo(() => {
     const map = new Map<string, GameAdjustment[]>();
@@ -814,6 +884,14 @@ export default function RatingsPage() {
                 Ratings {snapshot && `(${snapshot.ratings.length})`}
               </button>
               <button
+                onClick={() => setActiveTab('hypotheticals')}
+                className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === 'hypotheticals' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Hypotheticals
+              </button>
+              <button
                 onClick={() => setActiveTab('matching')}
                 className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
                   activeTab === 'matching' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -1011,6 +1089,220 @@ export default function RatingsPage() {
                 </table>
               </div>
             </>
+          )}
+
+          {/* Hypotheticals Tab */}
+          {activeTab === 'hypotheticals' && (
+            <div className="p-6">
+              <div className="max-w-2xl mx-auto">
+                <h2 className="text-lg font-semibold text-gray-900 mb-4">Hypothetical Matchup Calculator</h2>
+                <p className="text-sm text-gray-500 mb-6">Select two teams to see the projected spread based on current power ratings.</p>
+                
+                {!snapshot ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <p>No ratings available. Sync games first to use the hypothetical matchup calculator.</p>
+                  </div>
+                ) : (
+                  <>
+                    {/* Team Selection */}
+                    <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-4 items-end mb-6">
+                      {/* Away Team */}
+                      <div className="relative">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Away Team</label>
+                        <input
+                          type="text"
+                          value={awayTeamSearch}
+                          onChange={(e) => {
+                            setAwayTeamSearch(e.target.value);
+                            setShowAwayDropdown(true);
+                            if (!e.target.value) setAwayTeam('');
+                          }}
+                          onFocus={() => setShowAwayDropdown(true)}
+                          onBlur={() => setTimeout(() => setShowAwayDropdown(false), 200)}
+                          placeholder="Search team..."
+                          className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        {showAwayDropdown && filteredAwayTeams.length > 0 && (
+                          <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                            {filteredAwayTeams.map(team => (
+                              <button
+                                key={team.teamName}
+                                onMouseDown={() => {
+                                  setAwayTeam(team.teamName);
+                                  setAwayTeamSearch(team.teamName);
+                                  setShowAwayDropdown(false);
+                                }}
+                                className="w-full px-4 py-2 text-left hover:bg-blue-50 text-sm flex justify-between items-center"
+                              >
+                                <span>{team.teamName}</span>
+                                <span className="text-gray-400 text-xs">{formatRating(team.rating)}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Swap Button */}
+                      <div className="flex justify-center">
+                        <button
+                          onClick={swapTeams}
+                          className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
+                          title="Swap teams"
+                        >
+                          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                          </svg>
+                        </button>
+                      </div>
+
+                      {/* Home Team */}
+                      <div className="relative">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Home Team</label>
+                        <input
+                          type="text"
+                          value={homeTeamSearch}
+                          onChange={(e) => {
+                            setHomeTeamSearch(e.target.value);
+                            setShowHomeDropdown(true);
+                            if (!e.target.value) setHomeTeam('');
+                          }}
+                          onFocus={() => setShowHomeDropdown(true)}
+                          onBlur={() => setTimeout(() => setShowHomeDropdown(false), 200)}
+                          placeholder="Search team..."
+                          className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        {showHomeDropdown && filteredHomeTeams.length > 0 && (
+                          <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                            {filteredHomeTeams.map(team => (
+                              <button
+                                key={team.teamName}
+                                onMouseDown={() => {
+                                  setHomeTeam(team.teamName);
+                                  setHomeTeamSearch(team.teamName);
+                                  setShowHomeDropdown(false);
+                                }}
+                                className="w-full px-4 py-2 text-left hover:bg-blue-50 text-sm flex justify-between items-center"
+                              >
+                                <span>{team.teamName}</span>
+                                <span className="text-gray-400 text-xs">{formatRating(team.rating)}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Neutral Site Checkbox */}
+                    <div className="flex items-center justify-center mb-6">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={isNeutralSite}
+                          onChange={(e) => setIsNeutralSite(e.target.checked)}
+                          className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <span className="text-sm text-gray-700">Neutral Site</span>
+                      </label>
+                    </div>
+
+                    {/* Projection Result */}
+                    {matchupProjection && (
+                      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-200">
+                        <div className="grid grid-cols-3 gap-4 items-center mb-6">
+                          {/* Away Team */}
+                          <div className="text-center">
+                            {(() => {
+                              const awayLogo = getTeamLogo(matchupProjection.awayTeam);
+                              return awayLogo ? (
+                                <img 
+                                  src={awayLogo} 
+                                  alt={matchupProjection.awayTeam}
+                                  className="w-16 h-16 object-contain mx-auto mb-2"
+                                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                />
+                              ) : (
+                                <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center text-2xl text-gray-500 mx-auto mb-2">
+                                  {matchupProjection.awayTeam.charAt(0)}
+                                </div>
+                              );
+                            })()}
+                            <div className="text-lg font-bold text-gray-900">{matchupProjection.awayTeam}</div>
+                            <div className="text-xs text-gray-500">{matchupProjection.awayConference || 'Unknown'}</div>
+                            <div className="text-sm font-mono text-gray-600 mt-1">
+                              {formatRating(matchupProjection.awayRating)}
+                            </div>
+                          </div>
+
+                          {/* @ Symbol */}
+                          <div className="text-center text-2xl text-gray-400 font-light">
+                            @
+                          </div>
+
+                          {/* Home Team */}
+                          <div className="text-center">
+                            {(() => {
+                              const homeLogo = getTeamLogo(matchupProjection.homeTeam);
+                              return homeLogo ? (
+                                <img 
+                                  src={homeLogo} 
+                                  alt={matchupProjection.homeTeam}
+                                  className="w-16 h-16 object-contain mx-auto mb-2"
+                                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                />
+                              ) : (
+                                <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center text-2xl text-gray-500 mx-auto mb-2">
+                                  {matchupProjection.homeTeam.charAt(0)}
+                                </div>
+                              );
+                            })()}
+                            <div className="text-lg font-bold text-gray-900">{matchupProjection.homeTeam}</div>
+                            <div className="text-xs text-gray-500">{matchupProjection.homeConference || 'Unknown'}</div>
+                            <div className="text-sm font-mono text-gray-600 mt-1">
+                              {formatRating(matchupProjection.homeRating)}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Projected Spread */}
+                        <div className="text-center border-t border-blue-200 pt-4">
+                          <div className="text-sm text-gray-500 mb-1">Projected Spread</div>
+                          <div className={`text-4xl font-bold ${
+                            matchupProjection.projectedSpread < 0 ? 'text-green-600' : 
+                            matchupProjection.projectedSpread > 0 ? 'text-red-600' : 'text-gray-600'
+                          }`}>
+                            {matchupProjection.homeTeam} {matchupProjection.projectedSpread === 0 ? 'PK' : `${matchupProjection.projectedSpread > 0 ? '+' : ''}${Math.round(matchupProjection.projectedSpread * 100) / 100}`}
+                          </div>
+                          <div className="text-xs text-gray-400 mt-2">
+                            {isNeutralSite ? 'Neutral site (no HCA)' : `Includes ${hca} pts HCA`}
+                          </div>
+                        </div>
+
+                        {/* Calculation Breakdown */}
+                        <div className="mt-4 pt-4 border-t border-blue-200 text-xs text-gray-500 text-center font-mono">
+                          Home Rating ({formatRating(matchupProjection.homeRating)}) - Away Rating ({formatRating(matchupProjection.awayRating)})
+                          {!isNeutralSite && <> + HCA ({hca})</>} = {Math.round((matchupProjection.homeRating - matchupProjection.awayRating + matchupProjection.hcaApplied) * 100) / 100} → 
+                          <span className="font-semibold"> Spread: {matchupProjection.projectedSpread === 0 ? 'PK' : `${matchupProjection.projectedSpread > 0 ? '+' : ''}${Math.round(matchupProjection.projectedSpread * 100) / 100}`}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Empty state when no teams selected */}
+                    {!matchupProjection && (homeTeam || awayTeam) && (
+                      <div className="bg-gray-50 rounded-xl p-8 text-center text-gray-500 border border-gray-200">
+                        Select both teams to see the projected spread.
+                      </div>
+                    )}
+
+                    {!matchupProjection && !homeTeam && !awayTeam && (
+                      <div className="bg-gray-50 rounded-xl p-8 text-center text-gray-500 border border-gray-200">
+                        <div className="text-4xl mb-3">🏀</div>
+                        <p>Search and select teams above to calculate a projected spread.</p>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
           )}
 
           {/* Matching Log Tab */}
