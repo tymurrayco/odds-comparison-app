@@ -342,7 +342,7 @@ export async function POST(request: NextRequest) {
             
             let matchingOddsGame: OddsAPIGame | null = null;
             let closingLine: { spread: number | null; bookmakers: string[] } = { spread: null, bookmakers: [] };
-            let usedSource: string = config.closingSource;
+            let usedSource: ClosingLineSource = config.closingSource;
             
             // Step 1: Try Pinnacle first - use cache if available
             let pinnacleGames: OddsAPIGame[] | undefined = pinnacleCache.get(closingTimeStr);
