@@ -356,17 +356,18 @@ export async function POST(request: NextRequest) {
               
               if (pinnacleResponse.ok) {
                 const pinnacleData = await pinnacleResponse.json();
-                pinnacleGames = pinnacleData.data || [];
-                pinnacleCache.set(closingTimeStr, pinnacleGames);
+                const fetchedGames: OddsAPIGame[] = pinnacleData.data || [];
+                pinnacleGames = fetchedGames;
+                pinnacleCache.set(closingTimeStr, fetchedGames);
                 
                 // Capture team names
-                for (const g of pinnacleGames) {
+                for (const g of fetchedGames) {
                   allSeenOddsApiTeams.add(g.home_team);
                   allSeenOddsApiTeams.add(g.away_team);
                 }
               } else {
                 pinnacleGames = [];
-                pinnacleCache.set(closingTimeStr, pinnacleGames);
+                pinnacleCache.set(closingTimeStr, []);
               }
             }
             
@@ -394,14 +395,15 @@ export async function POST(request: NextRequest) {
                 
                 if (!usResponse.ok) {
                   usGames = [];
-                  usCache.set(closingTimeStr, usGames);
+                  usCache.set(closingTimeStr, []);
                 } else {
                   const usData = await usResponse.json();
-                  usGames = usData.data || [];
-                  usCache.set(closingTimeStr, usGames);
+                  const fetchedUsGames: OddsAPIGame[] = usData.data || [];
+                  usGames = fetchedUsGames;
+                  usCache.set(closingTimeStr, fetchedUsGames);
                   
                   // Capture team names
-                  for (const g of usGames) {
+                  for (const g of fetchedUsGames) {
                     allSeenOddsApiTeams.add(g.home_team);
                     allSeenOddsApiTeams.add(g.away_team);
                   }
