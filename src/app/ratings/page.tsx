@@ -74,7 +74,7 @@ interface CalculateResponse {
   matchingStats?: MatchingStats;
 }
 
-type TabType = 'ratings' | 'hypotheticals' | 'matching' | 'overrides';
+type TabType = 'ratings' | 'hypotheticals' | 'schedule' | 'matching' | 'overrides';
 
 export default function RatingsPage() {
   // State
@@ -111,6 +111,23 @@ export default function RatingsPage() {
   const [awayTeamSearch, setAwayTeamSearch] = useState('');
   const [showHomeDropdown, setShowHomeDropdown] = useState(false);
   const [showAwayDropdown, setShowAwayDropdown] = useState(false);
+  
+  // Schedule state
+  interface ScheduleGame {
+    id: string;
+    commenceTime: string;
+    homeTeam: string;
+    awayTeam: string;
+    spread: number | null;
+    openingSpread: number | null;
+    total: number | null;
+    spreadBookmaker: string | null;
+    isToday: boolean;
+    isTomorrow: boolean;
+  }
+  const [scheduleGames, setScheduleGames] = useState<ScheduleGame[]>([]);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [scheduleFilter, setScheduleFilter] = useState<'all' | 'today' | 'tomorrow'>('all');
   
   // Config state
   const [hca, setHca] = useState(DEFAULT_RATINGS_CONFIG.hca);
@@ -253,6 +270,22 @@ export default function RatingsPage() {
     }
   };
 
+  const loadSchedule = async () => {
+    setScheduleLoading(true);
+    try {
+      const response = await fetch('/api/ratings/schedule');
+      const data = await response.json();
+      
+      if (data.success) {
+        setScheduleGames(data.games || []);
+      }
+    } catch (err) {
+      console.error('Failed to load schedule:', err);
+    } finally {
+      setScheduleLoading(false);
+    }
+  };
+
   const markAsNonD1 = async (log: MatchingLog) => {
     try {
       const response = await fetch('/api/ratings/non-d1', {
@@ -289,6 +322,15 @@ export default function RatingsPage() {
     }
     if (activeTab === 'overrides' && overrides.length === 0) {
       loadOverrides();
+    }
+    if (activeTab === 'schedule') {
+      if (scheduleGames.length === 0) {
+        loadSchedule();
+      }
+      // Also load overrides for team name mapping if not already loaded
+      if (overrides.length === 0) {
+        loadOverrides();
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
@@ -660,6 +702,13 @@ export default function RatingsPage() {
     }
     return logs;
   }, [matchingLogs, logFilter, searchTerm, nonD1GameIds]);
+
+  // Filter schedule games
+  const filteredScheduleGames = useMemo(() => {
+    if (scheduleFilter === 'today') return scheduleGames.filter(g => g.isToday);
+    if (scheduleFilter === 'tomorrow') return scheduleGames.filter(g => g.isTomorrow);
+    return scheduleGames;
+  }, [scheduleGames, scheduleFilter]);
   
   const toggleSort = (column: typeof sortBy) => {
     if (sortBy === column) setSortDir(sortDir === 'desc' ? 'asc' : 'desc');
@@ -902,6 +951,14 @@ export default function RatingsPage() {
                 }`}
               >
                 Hypotheticals
+              </button>
+              <button
+                onClick={() => setActiveTab('schedule')}
+                className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === 'schedule' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Schedule {scheduleGames.length > 0 && `(${scheduleGames.length})`}
               </button>
               <button
                 onClick={() => setActiveTab('matching')}
@@ -1317,6 +1374,275 @@ export default function RatingsPage() {
                 )}
               </div>
             </div>
+          )}
+
+          {/* Schedule Tab */}
+          {activeTab === 'schedule' && (
+            <>
+              <div className="p-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600">Filter:</span>
+                  <div className="flex rounded-lg overflow-hidden border border-gray-300">
+                    {(['all', 'today', 'tomorrow'] as const).map((filter) => (
+                      <button
+                        key={filter}
+                        onClick={() => setScheduleFilter(filter)}
+                        className={`px-3 py-1 text-sm font-medium capitalize ${scheduleFilter === filter ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+                      >
+                        {filter} {filter === 'today' && scheduleGames.filter(g => g.isToday).length > 0 && `(${scheduleGames.filter(g => g.isToday).length})`}
+                        {filter === 'tomorrow' && scheduleGames.filter(g => g.isTomorrow).length > 0 && `(${scheduleGames.filter(g => g.isTomorrow).length})`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <button
+                  onClick={loadSchedule}
+                  disabled={scheduleLoading}
+                  className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+                >
+                  {scheduleLoading ? 'Loading...' : 'Refresh'}
+                </button>
+              </div>
+
+              {scheduleLoading ? (
+                <div className="p-8 text-center text-gray-500">Loading schedule...</div>
+              ) : filteredScheduleGames.length === 0 ? (
+                <div className="p-8 text-center text-gray-500">
+                  <div className="text-4xl mb-3">📅</div>
+                  <p>No games found for {scheduleFilter === 'all' ? 'today or tomorrow' : scheduleFilter}.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Time</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase"><span className="hidden sm:inline">Away</span></th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase"></th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase"><span className="hidden sm:inline">Home</span></th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Proj</th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Open</th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Current</th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase"></th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Delta</th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {filteredScheduleGames.map((game) => {
+                        const gameDate = new Date(game.commenceTime);
+                        const timeStr = gameDate.toLocaleTimeString('en-US', { 
+                          hour: 'numeric', 
+                          minute: '2-digit',
+                          hour12: true 
+                        });
+                        const dayStr = game.isToday ? 'Today' : 'Tomorrow';
+                        
+                        // Find team rating using overrides for Odds API name mapping
+                        const findTeamRating = (oddsApiTeamName: string) => {
+                          if (!snapshot?.ratings) return null;
+                          
+                          const searchLower = oddsApiTeamName.toLowerCase();
+                          
+                          // 1. Check if there's an override with this oddsApiName
+                          const overrideByOddsApi = overrides.find(o => 
+                            o.oddsApiName?.toLowerCase() === searchLower
+                          );
+                          if (overrideByOddsApi) {
+                            return snapshot.ratings.find(r => r.teamName === overrideByOddsApi.kenpomName);
+                          }
+                          
+                          // 2. Check if there's an override with this sourceName (ESPN name might match Odds API)
+                          const overrideBySource = overrides.find(o => 
+                            o.sourceName.toLowerCase() === searchLower
+                          );
+                          if (overrideBySource) {
+                            return snapshot.ratings.find(r => r.teamName === overrideBySource.kenpomName);
+                          }
+                          
+                          // 3. Try exact match on teamName in ratings
+                          let rating = snapshot.ratings.find(r => r.teamName === oddsApiTeamName);
+                          if (rating) return rating;
+                          
+                          // 4. Case-insensitive exact match on ratings teamName
+                          rating = snapshot.ratings.find(r => 
+                            r.teamName.toLowerCase() === searchLower
+                          );
+                          if (rating) return rating;
+                          
+                          // 5. Try matching by checking if ratings teamName is contained at START of Odds API name
+                          // This handles "Duke Blue Devils" -> "Duke", "Oregon Ducks" -> "Oregon"
+                          rating = snapshot.ratings.find(r => {
+                            const ratingLower = r.teamName.toLowerCase();
+                            // Check if Odds API name starts with the rating name followed by space
+                            return searchLower.startsWith(ratingLower + ' ') || searchLower === ratingLower;
+                          });
+                          if (rating) return rating;
+                          
+                          // 6. Try stripping last word (mascot) from Odds API name and matching
+                          const words = oddsApiTeamName.split(' ');
+                          if (words.length > 1) {
+                            // Try progressively removing words from the end
+                            for (let i = words.length - 1; i >= 1; i--) {
+                              const withoutMascot = words.slice(0, i).join(' ');
+                              rating = snapshot.ratings.find(r => 
+                                r.teamName.toLowerCase() === withoutMascot.toLowerCase()
+                              );
+                              if (rating) return rating;
+                            }
+                          }
+                          
+                          // 7. No match found
+                          return null;
+                        };
+                        
+                        const homeRating = findTeamRating(game.homeTeam);
+                        const awayRating = findTeamRating(game.awayTeam);
+                        
+                        let projectedSpread: number | null = null;
+                        if (homeRating && awayRating) {
+                          // Spread = -(HomeRating - AwayRating + HCA)
+                          projectedSpread = -((homeRating.rating - awayRating.rating) + hca);
+                          projectedSpread = Math.round(projectedSpread * 100) / 100;
+                        }
+                        
+                        // Calculate delta (absolute difference)
+                        let delta: number | null = null;
+                        if (projectedSpread !== null && game.spread !== null) {
+                          delta = Math.abs(projectedSpread - game.spread);
+                          delta = Math.round(delta * 100) / 100;
+                        }
+                        
+                        return (
+                          <tr key={game.id} className="hover:bg-gray-50">
+                            <td className="px-4 py-3">
+                              <div className="text-sm font-medium text-gray-900">{timeStr}</div>
+                              <div className="text-xs text-gray-500">{dayStr}</div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                {(() => {
+                                  const awayLogo = getTeamLogo(game.awayTeam);
+                                  return awayLogo ? (
+                                    <img 
+                                      src={awayLogo} 
+                                      alt={game.awayTeam}
+                                      className="w-6 h-6 object-contain"
+                                      title={game.awayTeam}
+                                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                    />
+                                  ) : (
+                                    <div className="w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center text-xs text-gray-500" title={game.awayTeam}>
+                                      {game.awayTeam.charAt(0)}
+                                    </div>
+                                  );
+                                })()}
+                                <span className="text-sm font-medium text-gray-900 hidden sm:inline">{game.awayTeam}</span>
+                                {!awayRating && <span className="text-xs text-red-400">?</span>}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-center text-gray-400">@</td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                {(() => {
+                                  const homeLogo = getTeamLogo(game.homeTeam);
+                                  return homeLogo ? (
+                                    <img 
+                                      src={homeLogo} 
+                                      alt={game.homeTeam}
+                                      className="w-6 h-6 object-contain"
+                                      title={game.homeTeam}
+                                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                    />
+                                  ) : (
+                                    <div className="w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center text-xs text-gray-500" title={game.homeTeam}>
+                                      {game.homeTeam.charAt(0)}
+                                    </div>
+                                  );
+                                })()}
+                                <span className="text-sm font-medium text-gray-900 hidden sm:inline">{game.homeTeam}</span>
+                                {!homeRating && <span className="text-xs text-red-400">?</span>}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              {projectedSpread !== null ? (
+                                <span className={`font-mono font-semibold ${projectedSpread < 0 ? 'text-green-600' : projectedSpread > 0 ? 'text-red-600' : 'text-gray-600'}`}>
+                                  {projectedSpread > 0 ? '+' : ''}{projectedSpread}
+                                </span>
+                              ) : (
+                                <span className="text-gray-400">—</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              {game.openingSpread !== null ? (
+                                <span className={`font-mono font-semibold ${game.openingSpread < 0 ? 'text-green-600' : game.openingSpread > 0 ? 'text-red-600' : 'text-gray-600'}`}>
+                                  {game.openingSpread > 0 ? '+' : ''}{game.openingSpread}
+                                </span>
+                              ) : (
+                                <span className="text-gray-400">—</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              {game.spread !== null ? (
+                                <span className={`font-mono font-semibold ${game.spread < 0 ? 'text-green-600' : game.spread > 0 ? 'text-red-600' : 'text-gray-600'}`}>
+                                  {game.spread > 0 ? '+' : ''}{game.spread}
+                                </span>
+                              ) : (
+                                <span className="text-gray-400">—</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              {(() => {
+                                // Movement indicator: is line moving toward or away from our projection?
+                                if (projectedSpread === null || game.openingSpread === null || game.spread === null) {
+                                  return <span className="text-gray-300">—</span>;
+                                }
+                                
+                                // No movement
+                                if (game.openingSpread === game.spread) {
+                                  return <span className="text-gray-400">—</span>;
+                                }
+                                
+                                // Calculate if movement is toward our projection
+                                const openDiff = Math.abs(projectedSpread - game.openingSpread);
+                                const currentDiff = Math.abs(projectedSpread - game.spread);
+                                
+                                if (currentDiff < openDiff) {
+                                  // Moving toward our projection - good!
+                                  return <span className="text-green-600 font-bold">+</span>;
+                                } else {
+                                  // Moving away from our projection - bad
+                                  return <span className="text-red-600 font-bold">−</span>;
+                                }
+                              })()}
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              {delta !== null ? (
+                                <span className={`font-mono font-semibold px-2 py-1 rounded ${delta >= 3 ? 'bg-green-100' : 'bg-gray-100'}`}>
+                                  {delta}
+                                </span>
+                              ) : (
+                                <span className="text-gray-400">—</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              {game.total !== null ? (
+                                <span className="font-mono text-gray-700">{game.total}</span>
+                              ) : (
+                                <span className="text-gray-400">—</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  <div className="px-4 py-2 text-xs text-gray-600 border-t border-gray-100 bg-blue-50">
+                    Open & Current spreads sourced from Pinnacle, with DraftKings/FanDuel/BetMGM/BetRivers average as fallback.
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           {/* Matching Log Tab */}
