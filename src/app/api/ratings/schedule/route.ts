@@ -1,6 +1,6 @@
 // src/app/api/ratings/schedule/route.ts
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { ODDS_API_BASE_URL, NCAAB_SPORT_KEY } from '@/lib/ratings/constants';
 
 /**
@@ -52,7 +52,7 @@ export interface ScheduleGame {
   isTomorrow: boolean;
 }
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   const apiKey = process.env.ODDS_API_KEY;
   
   if (!apiKey) {
