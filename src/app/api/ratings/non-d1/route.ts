@@ -4,7 +4,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   markGameAsNonD1,
   loadNonD1GameIds,
-  loadNonD1Games,
   removeNonD1Game,
 } from '@/lib/ratings/supabase';
 
