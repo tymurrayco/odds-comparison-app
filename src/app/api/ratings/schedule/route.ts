@@ -347,6 +347,14 @@ export async function GET(request: Request) {
       games: scheduleGames,
       todayCount: scheduleGames.filter(g => g.isToday).length,
       tomorrowCount: scheduleGames.filter(g => g.isTomorrow).length,
+      totalFromApi: games.length,
+      filteredCount: filteredGames.length,
+      debug: {
+        timezone,
+        todayStr,
+        tomorrowStr,
+        serverTime: new Date().toISOString(),
+      },
       requestsRemaining,
       requestsUsed,
     }, {
