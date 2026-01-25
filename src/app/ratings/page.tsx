@@ -609,6 +609,18 @@ export default function RatingsPage() {
     }
     return map;
   }, [snapshot?.adjustments]);
+
+  // Build a map of team -> their initial rank (based on initialRating)
+  const initialRankMap = useMemo(() => {
+    const map = new Map<string, number>();
+    if (snapshot?.ratings) {
+      const sortedByInitial = [...snapshot.ratings].sort((a, b) => b.initialRating - a.initialRating);
+      sortedByInitial.forEach((team, index) => {
+        map.set(team.teamName, index + 1);
+      });
+    }
+    return map;
+  }, [snapshot?.ratings]);
   
   // Filter and sort ratings
   const filteredRatings = snapshot?.ratings
@@ -995,7 +1007,9 @@ export default function RatingsPage() {
                                 {formatRating(team.rating)}
                               </span>
                             </td>
-                            <td className="px-2 sm:px-4 py-3 text-right text-sm text-gray-400 font-mono hidden sm:table-cell">{formatRating(team.initialRating)}</td>
+                            <td className="px-2 sm:px-4 py-3 text-right text-sm text-gray-900 font-mono hidden sm:table-cell">
+                              {formatRating(team.initialRating)} <span className="text-gray-500">(#{initialRankMap.get(team.teamName)})</span>
+                            </td>
                             <td className="px-2 sm:px-4 py-3 text-right">
                               <span className={`text-sm font-mono ${change > 0 ? 'text-green-600' : change < 0 ? 'text-red-600' : 'text-gray-400'}`}>
                                 {change > 0 ? '+' : ''}{change.toFixed(2)}
