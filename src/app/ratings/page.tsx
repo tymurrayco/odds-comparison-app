@@ -194,7 +194,18 @@ export default function RatingsPage() {
     // Try without common suffixes
     const words = noPeriods.split(' ');
     if (words.length > 1) {
-      // Try just first word (e.g., "Duke" from "Duke Blue Devils")
+      // Try progressively removing words from the end (to strip mascots)
+      // e.g., "duke blue devils" -> "duke blue" -> "duke"
+      for (let i = words.length - 1; i >= 1; i--) {
+        const partial = words.slice(0, i).join(' ');
+        if (teamLogos[partial]) return teamLogos[partial];
+        
+        // Also try with "state" substitution
+        const partialWithState = partial.replace(/\bst\b/g, 'state');
+        if (teamLogos[partialWithState]) return teamLogos[partialWithState];
+      }
+      
+      // Try just first word for non-state schools
       // But NOT for state schools (would match Ohio instead of Ohio St.)
       if (!words.includes('st') && !words.includes('state')) {
         if (teamLogos[words[0]]) return teamLogos[words[0]];
@@ -1416,16 +1427,16 @@ export default function RatingsPage() {
                   <table className="w-full">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Time</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase"><span className="hidden sm:inline">Away</span></th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase"></th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase"><span className="hidden sm:inline">Home</span></th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Proj</th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Open</th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Current</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase"></th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Delta</th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Total</th>
+                        <th className="px-2 sm:px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Time</th>
+                        <th className="px-2 sm:px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase"><span className="hidden sm:inline">Away</span></th>
+                        <th className="px-1 sm:px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase"></th>
+                        <th className="px-2 sm:px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase"><span className="hidden sm:inline">Home</span></th>
+                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Proj</th>
+                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Open</th>
+                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase"><span className="hidden sm:inline">Current</span><span className="sm:hidden">Curr</span></th>
+                        <th className="px-1 sm:px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase"></th>
+                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Delta</th>
+                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Total</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -1515,24 +1526,24 @@ export default function RatingsPage() {
                         
                         return (
                           <tr key={game.id} className="hover:bg-gray-50">
-                            <td className="px-4 py-3">
-                              <div className="text-sm font-medium text-gray-900">{timeStr}</div>
+                            <td className="px-2 sm:px-4 py-3">
+                              <div className="text-xs sm:text-sm font-medium text-gray-900">{timeStr}</div>
                               <div className="text-xs text-gray-500">{dayStr}</div>
                             </td>
-                            <td className="px-4 py-3">
-                              <div className="flex items-center gap-2">
+                            <td className="px-2 sm:px-4 py-3">
+                              <div className="flex items-center gap-1 sm:gap-2">
                                 {(() => {
                                   const awayLogo = getTeamLogo(game.awayTeam);
                                   return awayLogo ? (
                                     <img 
                                       src={awayLogo} 
                                       alt={game.awayTeam}
-                                      className="w-6 h-6 object-contain"
+                                      className="w-5 h-5 sm:w-6 sm:h-6 object-contain flex-shrink-0"
                                       title={game.awayTeam}
                                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
                                     />
                                   ) : (
-                                    <div className="w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center text-xs text-gray-500" title={game.awayTeam}>
+                                    <div className="w-5 h-5 sm:w-6 sm:h-6 bg-gray-200 rounded-full flex items-center justify-center text-xs text-gray-500 flex-shrink-0" title={game.awayTeam}>
                                       {game.awayTeam.charAt(0)}
                                     </div>
                                   );
@@ -1541,21 +1552,21 @@ export default function RatingsPage() {
                                 {!awayRating && <span className="text-xs text-red-400">?</span>}
                               </div>
                             </td>
-                            <td className="px-4 py-3 text-center text-gray-400">@</td>
-                            <td className="px-4 py-3">
-                              <div className="flex items-center gap-2">
+                            <td className="px-1 sm:px-4 py-3 text-center text-gray-400">@</td>
+                            <td className="px-2 sm:px-4 py-3">
+                              <div className="flex items-center gap-1 sm:gap-2">
                                 {(() => {
                                   const homeLogo = getTeamLogo(game.homeTeam);
                                   return homeLogo ? (
                                     <img 
                                       src={homeLogo} 
                                       alt={game.homeTeam}
-                                      className="w-6 h-6 object-contain"
+                                      className="w-5 h-5 sm:w-6 sm:h-6 object-contain flex-shrink-0"
                                       title={game.homeTeam}
                                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
                                     />
                                   ) : (
-                                    <div className="w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center text-xs text-gray-500" title={game.homeTeam}>
+                                    <div className="w-5 h-5 sm:w-6 sm:h-6 bg-gray-200 rounded-full flex items-center justify-center text-xs text-gray-500 flex-shrink-0" title={game.homeTeam}>
                                       {game.homeTeam.charAt(0)}
                                     </div>
                                   );
@@ -1564,34 +1575,34 @@ export default function RatingsPage() {
                                 {!homeRating && <span className="text-xs text-red-400">?</span>}
                               </div>
                             </td>
-                            <td className="px-4 py-3 text-right">
+                            <td className="px-2 sm:px-4 py-3 text-right">
                               {projectedSpread !== null ? (
-                                <span className={`font-mono font-semibold ${projectedSpread < 0 ? 'text-green-600' : projectedSpread > 0 ? 'text-red-600' : 'text-gray-600'}`}>
+                                <span className={`font-mono text-xs sm:text-sm font-semibold ${projectedSpread < 0 ? 'text-green-600' : projectedSpread > 0 ? 'text-red-600' : 'text-gray-600'}`}>
                                   {projectedSpread > 0 ? '+' : ''}{projectedSpread}
                                 </span>
                               ) : (
                                 <span className="text-gray-400">—</span>
                               )}
                             </td>
-                            <td className="px-4 py-3 text-right">
+                            <td className="px-2 sm:px-4 py-3 text-right">
                               {game.openingSpread !== null ? (
-                                <span className={`font-mono font-semibold ${game.openingSpread < 0 ? 'text-green-600' : game.openingSpread > 0 ? 'text-red-600' : 'text-gray-600'}`}>
+                                <span className={`font-mono text-xs sm:text-sm font-semibold ${game.openingSpread < 0 ? 'text-green-600' : game.openingSpread > 0 ? 'text-red-600' : 'text-gray-600'}`}>
                                   {game.openingSpread > 0 ? '+' : ''}{game.openingSpread}
                                 </span>
                               ) : (
                                 <span className="text-gray-400">—</span>
                               )}
                             </td>
-                            <td className="px-4 py-3 text-right">
+                            <td className="px-2 sm:px-4 py-3 text-right">
                               {game.spread !== null ? (
-                                <span className={`font-mono font-semibold ${game.spread < 0 ? 'text-green-600' : game.spread > 0 ? 'text-red-600' : 'text-gray-600'}`}>
+                                <span className={`font-mono text-xs sm:text-sm font-semibold ${game.spread < 0 ? 'text-green-600' : game.spread > 0 ? 'text-red-600' : 'text-gray-600'}`}>
                                   {game.spread > 0 ? '+' : ''}{game.spread}
                                 </span>
                               ) : (
                                 <span className="text-gray-400">—</span>
                               )}
                             </td>
-                            <td className="px-4 py-3 text-center">
+                            <td className="px-1 sm:px-4 py-3 text-center">
                               {(() => {
                                 // Movement indicator: is line moving toward or away from our projection?
                                 if (projectedSpread === null || game.openingSpread === null || game.spread === null) {
@@ -1616,18 +1627,18 @@ export default function RatingsPage() {
                                 }
                               })()}
                             </td>
-                            <td className="px-4 py-3 text-right">
+                            <td className="px-2 sm:px-4 py-3 text-right">
                               {delta !== null ? (
-                                <span className={`font-mono font-semibold px-2 py-1 rounded ${delta >= 3 ? 'bg-green-100' : 'bg-gray-100'}`}>
+                                <span className={`font-mono text-xs sm:text-sm font-semibold px-1 sm:px-2 py-1 rounded ${delta >= 3 ? 'bg-green-100' : 'bg-gray-100'}`}>
                                   {delta}
                                 </span>
                               ) : (
                                 <span className="text-gray-400">—</span>
                               )}
                             </td>
-                            <td className="px-4 py-3 text-right">
+                            <td className="px-2 sm:px-4 py-3 text-right">
                               {game.total !== null ? (
-                                <span className="font-mono text-gray-700">{game.total}</span>
+                                <span className="font-mono text-xs sm:text-sm text-gray-700">{game.total}</span>
                               ) : (
                                 <span className="text-gray-400">—</span>
                               )}
