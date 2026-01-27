@@ -15,6 +15,7 @@ import {
   SEASON_DATES,
   ODDS_API_BASE_URL,
   NCAAB_SPORT_KEY,
+  KENPOM_API_BASE_URL,
 } from '@/lib/ratings/constants';
 import {
   processGame,
@@ -22,7 +23,6 @@ import {
   createSnapshot,
 } from '@/lib/ratings/engine';
 import { fuzzyMatchTeam, findTeamByName } from '@/lib/ratings/team-mapping';
-import { HistoricalGame } from '../games/route';
 import {
   loadRatings,
   saveRating,
@@ -62,6 +62,252 @@ import {
  *   maxGames?: number (default: 100)
  * }
  */
+
+// ============================================================================
+// ESPN Games Fetching (inline to avoid internal HTTP calls)
+// ============================================================================
+
+interface ESPNCompetitor {
+  homeAway: 'home' | 'away';
+  team?: {
+    displayName?: string;
+    name?: string;
+    abbreviation?: string;
+  };
+  score?: string;
+  winner?: boolean;
+}
+
+interface ESPNVenue {
+  fullName?: string;
+  city?: string;
+  state?: string;
+  neutral?: boolean;
+}
+
+interface ESPNCompetition {
+  id: string;
+  date: string;
+  competitors?: ESPNCompetitor[];
+  venue?: ESPNVenue;
+  neutralSite?: boolean;
+  conferenceCompetition?: boolean;
+  status?: {
+    type?: {
+      state?: string;
+      completed?: boolean;
+    };
+  };
+}
+
+interface ESPNEvent {
+  id: string;
+  date: string;
+  name?: string;
+  competitions?: ESPNCompetition[];
+}
+
+interface ESPNResponse {
+  events?: ESPNEvent[];
+}
+
+export interface HistoricalGame {
+  id: string;
+  date: string;
+  homeTeam: string;
+  awayTeam: string;
+  homeTeamAbbr?: string;
+  awayTeamAbbr?: string;
+  homeScore?: number;
+  awayScore?: number;
+  isCompleted: boolean;
+  isNeutralSite: boolean;
+  venue?: string;
+}
+
+// Format date for ESPN API (YYYYMMDD)
+function formatDateForESPN(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}${month}${day}`;
+}
+
+// Parse date string (YYYY-MM-DD) to Date object
+function parseDate(dateStr: string): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
+// Fetch games for a specific date from ESPN
+async function fetchGamesForDate(date: Date): Promise<HistoricalGame[]> {
+  const dateStr = formatDateForESPN(date);
+  const apiUrl = `https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard?dates=${dateStr}&limit=200&groups=50`;
+  
+  try {
+    const response = await fetch(apiUrl, { 
+      next: { revalidate: 3600 } // Cache for 1 hour
+    });
+    
+    if (!response.ok) {
+      console.error(`[Historical Games] ESPN API error for date ${dateStr}:`, response.status);
+      return [];
+    }
+    
+    const data: ESPNResponse = await response.json();
+    const games: HistoricalGame[] = [];
+    
+    if (data.events && Array.isArray(data.events)) {
+      for (const event of data.events) {
+        const competition = event.competitions?.[0];
+        if (!competition) continue;
+        
+        const competitors = competition.competitors || [];
+        const homeTeam = competitors.find(c => c.homeAway === 'home');
+        const awayTeam = competitors.find(c => c.homeAway === 'away');
+        
+        if (!homeTeam || !awayTeam) continue;
+        
+        const isCompleted = competition.status?.type?.completed === true ||
+                           competition.status?.type?.state === 'post';
+        
+        // Determine if neutral site
+        const isNeutralSite = competition.neutralSite === true || 
+                             competition.venue?.neutral === true;
+        
+        games.push({
+          id: event.id,
+          date: competition.date || event.date,
+          homeTeam: homeTeam.team?.displayName || homeTeam.team?.name || 'Unknown',
+          awayTeam: awayTeam.team?.displayName || awayTeam.team?.name || 'Unknown',
+          homeTeamAbbr: homeTeam.team?.abbreviation,
+          awayTeamAbbr: awayTeam.team?.abbreviation,
+          homeScore: homeTeam.score ? parseInt(homeTeam.score) : undefined,
+          awayScore: awayTeam.score ? parseInt(awayTeam.score) : undefined,
+          isCompleted,
+          isNeutralSite,
+          venue: competition.venue?.fullName,
+        });
+      }
+    }
+    
+    return games;
+  } catch (error) {
+    console.error(`[Historical Games] Error fetching date ${dateStr}:`, error);
+    return [];
+  }
+}
+
+// Fetch historical games directly (replaces internal API call)
+async function fetchHistoricalGames(
+  startDateStr: string, 
+  endDateStr: string, 
+  limit: number
+): Promise<{ success: boolean; games: HistoricalGame[]; error?: string }> {
+  const startDate = parseDate(startDateStr);
+  const endDate = parseDate(endDateStr);
+  
+  // Validate dates
+  if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+    return { success: false, games: [], error: 'Invalid date format' };
+  }
+  
+  // Don't allow more than 120 days of data at once
+  const maxDays = 120;
+  const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+  
+  if (daysDiff > maxDays) {
+    return { success: false, games: [], error: `Date range too large. Maximum is ${maxDays} days.` };
+  }
+  
+  console.log(`[Historical Games] Fetching games from ${startDateStr} to ${endDateStr}`);
+  
+  try {
+    const allGames: HistoricalGame[] = [];
+    const currentDate = new Date(startDate);
+    let daysProcessed = 0;
+    
+    // Iterate through each day
+    while (currentDate <= endDate && allGames.length < limit) {
+      const dayGames = await fetchGamesForDate(currentDate);
+      
+      // Only add completed games
+      const completedGames = dayGames.filter(g => g.isCompleted);
+      allGames.push(...completedGames);
+      
+      daysProcessed++;
+      currentDate.setDate(currentDate.getDate() + 1);
+      
+      // Small delay to avoid rate limiting
+      if (daysProcessed % 10 === 0) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    }
+    
+    // Sort by date (oldest first for chronological processing)
+    allGames.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    
+    // Apply limit
+    const limitedGames = allGames.slice(0, limit);
+    
+    console.log(`[Historical Games] Found ${limitedGames.length} completed games over ${daysProcessed} days`);
+    
+    return { success: true, games: limitedGames };
+    
+  } catch (error) {
+    console.error('[Historical Games] Error:', error);
+    return { success: false, games: [], error: 'Failed to fetch historical games' };
+  }
+}
+
+// ============================================================================
+// KenPom Fetching (inline to avoid internal HTTP calls)
+// ============================================================================
+
+async function fetchKenPomArchive(date: string): Promise<{ success: boolean; data?: KenPomRating[]; error?: string }> {
+  const apiKey = process.env.KENPOM_API_KEY;
+  
+  if (!apiKey) {
+    return { success: false, error: 'KenPom API key not configured' };
+  }
+  
+  try {
+    const params = new URLSearchParams();
+    params.set('d', date);
+    
+    const url = `${KENPOM_API_BASE_URL}?endpoint=archive&${params.toString()}`;
+    
+    console.log(`[KenPom API] Fetching archive for date: ${date}`);
+    
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      cache: 'no-store',
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[KenPom API] Error ${response.status}:`, errorText);
+      return { success: false, error: `KenPom API error: ${response.status}` };
+    }
+    
+    const data = await response.json();
+    
+    console.log(`[KenPom API] Success: ${Array.isArray(data) ? data.length : 0} teams`);
+    
+    return { success: true, data };
+    
+  } catch (error) {
+    console.error('[KenPom API] Error:', error);
+    return { success: false, error: 'Failed to fetch KenPom data' };
+  }
+}
+
+// ============================================================================
+// Main Route Handlers
+// ============================================================================
 
 export async function GET(request: NextRequest) {
   try {
@@ -167,24 +413,19 @@ export async function POST(request: NextRequest) {
     if (ratings.size === 0 || forceRefresh) {
       console.log('[Calculate Ratings] Initializing ratings from KenPom...');
       
-      // Fetch from KenPom
-      const kenpomResponse = await fetch(
-        `${getBaseUrl(request)}/api/ratings/kenpom?type=archive&date=${FINAL_RATINGS_DATE[config.previousSeason]}`,
-        { cache: 'no-store' }
-      );
+      // Fetch from KenPom directly (no internal HTTP call)
+      const kenpomResult = await fetchKenPomArchive(FINAL_RATINGS_DATE[config.previousSeason]);
       
-      if (!kenpomResponse.ok) {
-        const error = await kenpomResponse.json();
+      if (!kenpomResult.success || !kenpomResult.data) {
         return NextResponse.json({
           success: false,
-          error: `Failed to fetch KenPom ratings: ${error.error || kenpomResponse.status}`,
+          error: `Failed to fetch KenPom ratings: ${kenpomResult.error}`,
         }, { status: 500 });
       }
       
-      const kenpomData = await kenpomResponse.json();
-      const kenpomRatings: KenPomRating[] = kenpomData.data;
+      const kenpomRatings: KenPomRating[] = kenpomResult.data;
       
-      if (!kenpomRatings || kenpomRatings.length === 0) {
+      if (kenpomRatings.length === 0) {
         return NextResponse.json({
           success: false,
           error: 'No KenPom ratings returned',
@@ -205,7 +446,7 @@ export async function POST(request: NextRequest) {
     const processedGameIds = await getProcessedGameIds(config.season);
     console.log(`[Calculate Ratings] ${processedGameIds.size} games already processed`);
     
-    // Step 3: Fetch completed games from ESPN
+    // Step 3: Fetch completed games from ESPN directly (no internal HTTP call)
     const seasonStart = SEASON_DATES[config.season].start;
     const today = new Date().toISOString().split('T')[0];
     
@@ -213,13 +454,14 @@ export async function POST(request: NextRequest) {
     const queryStartDate = startDate || seasonStart;
     const queryEndDate = endDate || today;
     
-    const gamesResponse = await fetch(
-      `${getBaseUrl(request)}/api/ratings/games?startDate=${queryStartDate}&endDate=${queryEndDate}&limit=${maxGames + processedGameIds.size}`,
-      { cache: 'no-store' }
+    const gamesResult = await fetchHistoricalGames(
+      queryStartDate, 
+      queryEndDate, 
+      maxGames + processedGameIds.size
     );
     
-    if (!gamesResponse.ok) {
-      console.warn('[Calculate Ratings] Failed to fetch games from ESPN');
+    if (!gamesResult.success) {
+      console.warn('[Calculate Ratings] Failed to fetch games from ESPN:', gamesResult.error);
       // Return current state
       const adjustments = await loadAdjustments(config.season);
       const snapshot = createSnapshot(ratings, adjustments, config);
@@ -230,12 +472,19 @@ export async function POST(request: NextRequest) {
       });
     }
     
-    const gamesData = await gamesResponse.json();
-    const allGames: HistoricalGame[] = gamesData.games || [];
+    const allGames: HistoricalGame[] = gamesResult.games;
     
     // Filter to only unprocessed games
     const newGames = allGames.filter(g => !processedGameIds.has(g.id));
-    console.log(`[Calculate Ratings] ${newGames.length} new games to process`);
+    console.log(`[Calculate Ratings] ${allGames.length} total games from ESPN, ${processedGameIds.size} already processed, ${newGames.length} new games to process`);
+    
+    // Debug: Log first few processed IDs and first few game IDs to verify matching
+    if (processedGameIds.size > 0 && allGames.length > 0) {
+      const sampleProcessed = Array.from(processedGameIds).slice(0, 3);
+      const sampleGames = allGames.slice(0, 3).map(g => g.id);
+      console.log(`[Calculate Ratings] Sample processed IDs: ${sampleProcessed.join(', ')}`);
+      console.log(`[Calculate Ratings] Sample ESPN game IDs: ${sampleGames.join(', ')}`);
+    }
     
     if (newGames.length === 0) {
       // No new games - return current state
@@ -302,6 +551,13 @@ export async function POST(request: NextRequest) {
       for (let i = 0; i < gamesToProcess.length; i++) {
         const game = gamesToProcess[i];
         
+        // SAFEGUARD: Double-check this game hasn't been processed already
+        // This prevents reprocessing if there's any ID mismatch issue
+        if (processedGameIds.has(game.id)) {
+          console.log(`[Calculate Ratings] SKIPPING already processed game ${game.id}: ${game.homeTeam} vs ${game.awayTeam}`);
+          continue;
+        }
+        
         // Progress log every 10 games
         if (i % 10 === 0) {
           console.log(`[Calculate Ratings] Processing game ${i + 1}/${gamesToProcess.length}: ${game.homeTeam} vs ${game.awayTeam}`);
@@ -337,6 +593,12 @@ export async function POST(request: NextRequest) {
             const closingTime = new Date(gameTime.getTime() - 5 * 60 * 1000);
             const closingTimeStr = closingTime.toISOString().replace('.000Z', 'Z');
             
+            // OPTIMIZATION: Round to nearest hour for cache key to reduce API calls
+            // Games within the same hour will share the same API response
+            const cacheKeyTime = new Date(closingTime);
+            cacheKeyTime.setMinutes(0, 0, 0); // Round down to hour
+            const cacheKey = cacheKeyTime.toISOString().replace('.000Z', 'Z');
+            
             // Preferred US books for fallback (DraftKings, FanDuel, BetMGM, BetRivers)
             const FALLBACK_US_BOOKS = ['draftkings', 'fanduel', 'betmgm', 'betrivers'];
             
@@ -345,7 +607,7 @@ export async function POST(request: NextRequest) {
             let usedSource: ClosingLineSource = config.closingSource;
             
             // Step 1: Try Pinnacle first - use cache if available
-            let pinnacleGames: OddsAPIGame[] | undefined = pinnacleCache.get(closingTimeStr);
+            let pinnacleGames: OddsAPIGame[] | undefined = pinnacleCache.get(cacheKey);
             
             if (pinnacleGames === undefined) {
               const pinnacleUrl = `${ODDS_API_BASE_URL}/historical/sports/${NCAAB_SPORT_KEY}/odds?` +
@@ -358,7 +620,7 @@ export async function POST(request: NextRequest) {
                 const pinnacleData = await pinnacleResponse.json();
                 const fetchedGames: OddsAPIGame[] = pinnacleData.data || [];
                 pinnacleGames = fetchedGames;
-                pinnacleCache.set(closingTimeStr, fetchedGames);
+                pinnacleCache.set(cacheKey, fetchedGames);
                 
                 // Capture team names
                 for (const g of fetchedGames) {
@@ -367,7 +629,7 @@ export async function POST(request: NextRequest) {
                 }
               } else {
                 pinnacleGames = [];
-                pinnacleCache.set(closingTimeStr, []);
+                pinnacleCache.set(cacheKey, []);
               }
             }
             
@@ -384,7 +646,7 @@ export async function POST(request: NextRequest) {
             
             // Step 2: Fall back to US books if Pinnacle didn't have a spread
             if (closingLine.spread === null) {
-              let usGames: OddsAPIGame[] | undefined = usCache.get(closingTimeStr);
+              let usGames: OddsAPIGame[] | undefined = usCache.get(cacheKey);
               
               if (usGames === undefined) {
                 const usUrl = `${ODDS_API_BASE_URL}/historical/sports/${NCAAB_SPORT_KEY}/odds?` +
@@ -395,12 +657,12 @@ export async function POST(request: NextRequest) {
                 
                 if (!usResponse.ok) {
                   usGames = [];
-                  usCache.set(closingTimeStr, []);
+                  usCache.set(cacheKey, []);
                 } else {
                   const usData = await usResponse.json();
                   const fetchedUsGames: OddsAPIGame[] = usData.data || [];
                   usGames = fetchedUsGames;
-                  usCache.set(closingTimeStr, fetchedUsGames);
+                  usCache.set(cacheKey, fetchedUsGames);
                   
                   // Capture team names
                   for (const g of fetchedUsGames) {
@@ -510,6 +772,9 @@ export async function POST(request: NextRequest) {
           );
           
           if (adjustment) {
+            // CRITICAL: Add game to processedGameIds to prevent reprocessing within same batch
+            processedGameIds.add(game.id);
+            
             // Save adjustment to Supabase
             await saveGameAdjustment(adjustment, config.season);
             
@@ -592,15 +857,6 @@ export async function POST(request: NextRequest) {
       error: error instanceof Error ? error.message : 'Failed to calculate ratings',
     }, { status: 500 });
   }
-}
-
-/**
- * Get base URL for internal API calls
- */
-function getBaseUrl(request: NextRequest): string {
-  const host = request.headers.get('host') || 'localhost:3000';
-  const protocol = host.includes('localhost') ? 'http' : 'https';
-  return `${protocol}://${host}`;
 }
 
 /**
