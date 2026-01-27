@@ -1530,13 +1530,37 @@ export default function RatingsPage() {
                           delta = Math.round(delta * 100) / 100;
                         }
                         
+                        // Determine which team to highlight when line moves against projection
+                        // If line moves against projection (red "-"), highlight the team getting value
+                        let highlightAway = false;
+                        let highlightHome = false;
+                        
+                        if (projectedSpread !== null && game.openingSpread !== null && game.spread !== null) {
+                          const openDiff = Math.abs(projectedSpread - game.openingSpread);
+                          const currentDiff = Math.abs(projectedSpread - game.spread);
+                          
+                          // Only highlight when moving AWAY from projection (the "-" case)
+                          if (currentDiff > openDiff && game.openingSpread !== game.spread) {
+                            // Line moved away from projection - determine which team benefits
+                            // If spread becomes less negative (e.g., -10 to -8), market moving toward home team
+                            // If spread becomes more negative (e.g., -10 to -12), market moving toward away team
+                            if (game.spread > game.openingSpread) {
+                              // Line moved more positive = home team value
+                              highlightHome = true;
+                            } else {
+                              // Line moved more negative = away team value  
+                              highlightAway = true;
+                            }
+                          }
+                        }
+                        
                         return (
                           <tr key={game.id} className="hover:bg-gray-50">
                             <td className="px-2 sm:px-4 py-3">
                               <div className="text-xs sm:text-sm font-medium text-gray-900">{timeStr}</div>
                               <div className="text-xs text-gray-500">{dayStr}</div>
                             </td>
-                            <td className="px-1 sm:px-4 py-3">
+                            <td className={`px-1 sm:px-4 py-3 ${highlightAway ? 'bg-green-100' : ''}`}>
                               <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2">
                                 {(() => {
                                   const awayLogo = getTeamLogo(game.awayTeam);
@@ -1558,7 +1582,7 @@ export default function RatingsPage() {
                               </div>
                             </td>
                             <td className="px-1 py-3 text-center text-gray-400">@</td>
-                            <td className="px-1 sm:px-4 py-3">
+                            <td className={`px-1 sm:px-4 py-3 ${highlightHome ? 'bg-green-100' : ''}`}>
                               <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2">
                                 {(() => {
                                   const homeLogo = getTeamLogo(game.homeTeam);
