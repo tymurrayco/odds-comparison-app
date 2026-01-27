@@ -1629,9 +1629,20 @@ export default function RatingsPage() {
                             </td>
                             <td className="px-2 sm:px-4 py-3 text-right">
                               {game.openingSpread !== null ? (
-                                <span className={`font-mono text-xs sm:text-sm font-semibold ${game.openingSpread < 0 ? 'text-green-600' : game.openingSpread > 0 ? 'text-red-600' : 'text-gray-600'}`}>
-                                  {game.openingSpread > 0 ? '+' : ''}{game.openingSpread}
-                                </span>
+                                <div className="relative inline-flex items-center">
+                                  {/* Small logo stamp showing which team the opening spread references */}
+                                  {game.openingSpread !== 0 && getTeamLogo(game.homeTeam) && (
+                                    <img 
+                                      src={getTeamLogo(game.homeTeam)!}
+                                      alt=""
+                                      className="absolute -bottom-2 -right-3 w-4 h-4 object-contain"
+                                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                    />
+                                  )}
+                                  <span className={`font-mono text-xs sm:text-sm font-semibold ${game.openingSpread < 0 ? 'text-green-600' : game.openingSpread > 0 ? 'text-red-600' : 'text-gray-600'}`}>
+                                    {game.openingSpread > 0 ? '+' : ''}{game.openingSpread}
+                                  </span>
+                                </div>
                               ) : (
                                 <span className="text-gray-400">—</span>
                               )}
