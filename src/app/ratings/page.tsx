@@ -1566,6 +1566,7 @@ export default function RatingsPage() {
                         };
                         
                         // Determine which team to highlight based on line movement direction
+                        // Highlight goes on the team the line is moving TOWARD
                         // Green = moving TOWARD our projection (good)
                         // Red = moving AWAY from our projection (bad)
                         let highlightAwayClass = '';
@@ -1578,16 +1579,18 @@ export default function RatingsPage() {
                           
                           // Determine if line is moving toward or away from projection
                           const movingToward = currentDiff < openDiff;
+                          const highlightClass = movingToward ? getGreenHighlightClass(lineMovement) : getRedHighlightClass(lineMovement);
                           
-                          // Determine which team the movement favors
-                          // If spread becomes more positive (e.g., -10 to -8), movement favors home team
-                          // If spread becomes more negative (e.g., -10 to -12), movement favors away team
-                          if (game.spread > game.openingSpread) {
-                            // Line moved more positive = home team getting more value
-                            highlightHomeClass = movingToward ? getGreenHighlightClass(lineMovement) : getRedHighlightClass(lineMovement);
+                          // Determine which team the line is moving TOWARD and highlight that team
+                          // If spread gets more negative (e.g., -10.5 to -12), line moving toward HOME team
+                          // If spread gets more positive (e.g., -10.5 to -8), line moving toward AWAY team
+                          // Color is green if this movement is toward our projection, red if away
+                          if (game.spread < game.openingSpread) {
+                            // Line moved more negative = moving toward home team
+                            highlightHomeClass = highlightClass;
                           } else {
-                            // Line moved more negative = away team getting more value
-                            highlightAwayClass = movingToward ? getGreenHighlightClass(lineMovement) : getRedHighlightClass(lineMovement);
+                            // Line moved more positive = moving toward away team
+                            highlightAwayClass = highlightClass;
                           }
                         }
                         
