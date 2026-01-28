@@ -1421,6 +1421,20 @@ export default function RatingsPage() {
                 </button>
               </div>
 
+              {/* Legend/Key for line movement colors */}
+              <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 flex flex-wrap items-center gap-4 text-xs">
+                <span className="text-gray-600 font-medium">Line Movement:</span>
+                <div className="flex items-center gap-1">
+                  <div className="w-4 h-4 bg-green-200 rounded"></div>
+                  <span className="text-gray-600">Toward projection</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-4 h-4 bg-red-200 rounded"></div>
+                  <span className="text-gray-600">Against projection</span>
+                </div>
+                <span className="text-gray-400 hidden sm:inline">| Intensity = magnitude of move</span>
+              </div>
+
               {scheduleLoading ? (
                 <div className="p-8 text-center text-gray-500">Loading schedule...</div>
               ) : filteredScheduleGames.length === 0 ? (
@@ -1530,42 +1544,50 @@ export default function RatingsPage() {
                           delta = Math.round(delta * 100) / 100;
                         }
                         
-                        // Helper function to get graduated green background based on line movement
-                        const getMovementHighlightClass = (movement: number): string => {
+                        // Helper function to get graduated background based on line movement
+                        const getGreenHighlightClass = (movement: number): string => {
                           if (movement < 0.5) return ''; // No highlight for less than 0.5 point move
-                          if (movement < 1) return 'bg-green-50'; // 0.5-1: very light green
-                          if (movement < 2) return 'bg-green-100'; // 1-2: light green
-                          if (movement < 3) return 'bg-green-200'; // 2-3: medium green
-                          if (movement < 4) return 'bg-green-300'; // 3-4: stronger green
-                          if (movement < 5) return 'bg-green-400'; // 4-5: dark green
-                          return 'bg-green-500'; // 5+: solid green
+                          if (movement < 1) return 'bg-green-50'; // 0.5-1: very light
+                          if (movement < 2) return 'bg-green-100'; // 1-2: light
+                          if (movement < 3) return 'bg-green-200'; // 2-3: medium
+                          if (movement < 4) return 'bg-green-300'; // 3-4: stronger
+                          if (movement < 5) return 'bg-green-400'; // 4-5: dark
+                          return 'bg-green-500'; // 5+: solid
                         };
                         
-                        // Determine which team to highlight when line moves against projection
-                        // If line moves against projection (red "-"), highlight the team getting value
+                        const getRedHighlightClass = (movement: number): string => {
+                          if (movement < 0.5) return ''; // No highlight for less than 0.5 point move
+                          if (movement < 1) return 'bg-red-50'; // 0.5-1: very light
+                          if (movement < 2) return 'bg-red-100'; // 1-2: light
+                          if (movement < 3) return 'bg-red-200'; // 2-3: medium
+                          if (movement < 4) return 'bg-red-300'; // 3-4: stronger
+                          if (movement < 5) return 'bg-red-400'; // 4-5: dark
+                          return 'bg-red-500'; // 5+: solid
+                        };
+                        
+                        // Determine which team to highlight based on line movement direction
+                        // Green = moving TOWARD our projection (good)
+                        // Red = moving AWAY from our projection (bad)
                         let highlightAwayClass = '';
                         let highlightHomeClass = '';
                         
-                        if (projectedSpread !== null && game.openingSpread !== null && game.spread !== null) {
+                        if (projectedSpread !== null && game.openingSpread !== null && game.spread !== null && game.openingSpread !== game.spread) {
                           const openDiff = Math.abs(projectedSpread - game.openingSpread);
                           const currentDiff = Math.abs(projectedSpread - game.spread);
+                          const lineMovement = Math.abs(game.spread - game.openingSpread);
                           
-                          // Only highlight when moving AWAY from projection (the "-" case)
-                          if (currentDiff > openDiff && game.openingSpread !== game.spread) {
-                            // Calculate the magnitude of line movement
-                            const lineMovement = Math.abs(game.spread - game.openingSpread);
-                            const highlightClass = getMovementHighlightClass(lineMovement);
-                            
-                            // Line moved away from projection - determine which team benefits
-                            // If spread becomes less negative (e.g., -10 to -8), market moving toward home team
-                            // If spread becomes more negative (e.g., -10 to -12), market moving toward away team
-                            if (game.spread > game.openingSpread) {
-                              // Line moved more positive = home team value
-                              highlightHomeClass = highlightClass;
-                            } else {
-                              // Line moved more negative = away team value  
-                              highlightAwayClass = highlightClass;
-                            }
+                          // Determine if line is moving toward or away from projection
+                          const movingToward = currentDiff < openDiff;
+                          
+                          // Determine which team the movement favors
+                          // If spread becomes more positive (e.g., -10 to -8), movement favors home team
+                          // If spread becomes more negative (e.g., -10 to -12), movement favors away team
+                          if (game.spread > game.openingSpread) {
+                            // Line moved more positive = home team getting more value
+                            highlightHomeClass = movingToward ? getGreenHighlightClass(lineMovement) : getRedHighlightClass(lineMovement);
+                          } else {
+                            // Line moved more negative = away team getting more value
+                            highlightAwayClass = movingToward ? getGreenHighlightClass(lineMovement) : getRedHighlightClass(lineMovement);
                           }
                         }
                         
