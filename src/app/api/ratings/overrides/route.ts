@@ -9,25 +9,27 @@ import {
   deleteTeamOverride,
   TeamOverride,
   loadOddsApiTeams,
+  loadTorvikTeams,
 } from '@/lib/ratings/supabase';
 
 export async function GET() {
   try {
-    // Load overrides
-    const overrides = await loadTeamOverrides();
+    // Load overrides and all team lists in parallel
+    const [overrides, ratings, oddsApiTeams, torvikTeams] = await Promise.all([
+      loadTeamOverrides(),
+      loadRatings(2026),
+      loadOddsApiTeams(),
+      loadTorvikTeams(),
+    ]);
     
-    // Load KenPom team names from ratings
-    const ratings = await loadRatings(2026);
     const kenpomTeams = Array.from(ratings.keys()).sort();
-    
-    // Load Odds API team names
-    const oddsApiTeams = await loadOddsApiTeams();
     
     return NextResponse.json({
       success: true,
       overrides,
       kenpomTeams,
       oddsApiTeams,
+      torvikTeams,
     });
   } catch (error) {
     console.error('[Overrides API] Error:', error);
@@ -55,6 +57,7 @@ export async function POST(request: NextRequest) {
       kenpomName: body.kenpomName,
       espnName: body.espnName || undefined,
       oddsApiName: body.oddsApiName || undefined,
+      torvikName: body.torvikName || undefined,
       source: body.source || 'manual',
       notes: body.notes || undefined,
     };
@@ -101,6 +104,7 @@ export async function PUT(request: NextRequest) {
       kenpomName: body.kenpomName,
       espnName: body.espnName || undefined,
       oddsApiName: body.oddsApiName || undefined,
+      torvikName: body.torvikName || undefined,
       source: body.source || 'manual',
       notes: body.notes || undefined,
     };
@@ -143,7 +147,7 @@ export async function DELETE(request: NextRequest) {
         { status: 500 }
       );
     }
-    
+
     return NextResponse.json({ success: true, deleted: true });
   } catch (error) {
     console.error('[Overrides API] DELETE Error:', error);

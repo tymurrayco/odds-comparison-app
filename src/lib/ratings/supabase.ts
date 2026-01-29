@@ -687,6 +687,7 @@ export interface TeamOverride {
   kenpomName: string;
   espnName?: string;      // ESPN display name for logo lookup
   oddsApiName?: string;   // Odds API team name for game matching
+  torvikName?: string;    // Barttorvik team name for BT schedule matching
   source: string;
   notes?: string;
   createdAt?: string;
@@ -715,6 +716,7 @@ export async function loadTeamOverrides(): Promise<TeamOverride[]> {
     kenpomName: row.kenpom_name,
     espnName: row.espn_name,
     oddsApiName: row.odds_api_name,
+    torvikName: row.torvik_name,
     source: row.source,
     notes: row.notes,
     createdAt: row.created_at,
@@ -735,6 +737,7 @@ export async function addTeamOverride(override: TeamOverride): Promise<TeamOverr
       kenpom_name: override.kenpomName,
       espn_name: override.espnName || null,
       odds_api_name: override.oddsApiName || null,
+      torvik_name: override.torvikName || null,
       source: override.source || 'manual',
       notes: override.notes,
     }, {
@@ -754,6 +757,7 @@ export async function addTeamOverride(override: TeamOverride): Promise<TeamOverr
     kenpomName: data.kenpom_name,
     espnName: data.espn_name,
     oddsApiName: data.odds_api_name,
+    torvikName: data.torvik_name,
     source: data.source,
     notes: data.notes,
     createdAt: data.created_at,
@@ -773,6 +777,7 @@ export async function updateTeamOverride(id: number, override: Partial<TeamOverr
   // Only update optional fields if they have a truthy value (don't overwrite with empty/null)
   if (override.espnName) updates.espn_name = override.espnName;
   if (override.oddsApiName) updates.odds_api_name = override.oddsApiName;
+  if (override.torvikName) updates.torvik_name = override.torvikName;
   if (override.source) updates.source = override.source;
   if (override.notes) updates.notes = override.notes;
   
@@ -996,4 +1001,164 @@ export async function removeNonD1Game(gameId: string): Promise<boolean> {
   }
   
   return true;
+}
+
+// ============================================
+// Torvik Teams Reference Table
+// ============================================
+
+/**
+ * Save or update Torvik team names (batch upsert)
+ */
+export async function saveTorvikTeams(teams: Array<{ name: string; conference?: string }>): Promise<void> {
+  if (teams.length === 0) return;
+  
+  const supabase = getSupabaseClient();
+  
+  const teamsToUpsert = teams.map(team => ({
+    team_name: team.name,
+    conference: team.conference || null,
+    last_seen_at: new Date().toISOString(),
+  }));
+  
+  // Batch in chunks of 100
+  const chunkSize = 100;
+  for (let i = 0; i < teamsToUpsert.length; i += chunkSize) {
+    const chunk = teamsToUpsert.slice(i, i + chunkSize);
+    
+    const { error } = await supabase
+      .from('ncaab_torvik_teams')
+      .upsert(chunk, {
+        onConflict: 'team_name',
+      });
+    
+    if (error) {
+      console.error('[Supabase] Error saving Torvik teams:', error);
+    }
+  }
+  
+  console.log(`[Supabase] Saved ${teams.length} Torvik teams`);
+}
+
+/**
+ * Load all Torvik team names
+ */
+export async function loadTorvikTeams(): Promise<string[]> {
+  const supabase = getSupabaseClient();
+  
+  const { data, error } = await supabase
+    .from('ncaab_torvik_teams')
+    .select('team_name')
+    .order('team_name');
+  
+  if (error) {
+    console.error('[Supabase] Error loading Torvik teams:', error);
+    return [];
+  }
+  
+  return (data || []).map(row => row.team_name);
+}
+
+// ============================================
+// Barttorvik Schedule
+// ============================================
+
+export interface BTScheduleGame {
+  id?: number;
+  gameDate: string;
+  gameTime?: string;
+  awayTeam: string;
+  homeTeam: string;
+  predictedSpread?: number;
+  predictedTotal?: number;
+  awayWinProb?: number;
+  homeWinProb?: number;
+}
+
+/**
+ * Save BT schedule games (upsert by date + teams)
+ */
+export async function saveBTSchedule(games: BTScheduleGame[]): Promise<void> {
+  if (games.length === 0) return;
+  
+  const supabase = getSupabaseClient();
+  
+  const gamesToUpsert = games.map(game => ({
+    game_date: game.gameDate,
+    game_time: game.gameTime || null,
+    away_team: game.awayTeam,
+    home_team: game.homeTeam,
+    predicted_spread: game.predictedSpread ?? null,
+    predicted_total: game.predictedTotal ?? null,
+    away_win_prob: game.awayWinProb ?? null,
+    home_win_prob: game.homeWinProb ?? null,
+  }));
+  
+  const { error } = await supabase
+    .from('ncaab_bt_schedule')
+    .upsert(gamesToUpsert, {
+      onConflict: 'game_date,away_team,home_team',
+    });
+  
+  if (error) {
+    console.error('[Supabase] Error saving BT schedule:', error);
+  } else {
+    console.log(`[Supabase] Saved ${games.length} BT schedule games`);
+  }
+}
+
+/**
+ * Load BT schedule games for a specific date (or today/tomorrow)
+ */
+export async function loadBTSchedule(date?: string): Promise<BTScheduleGame[]> {
+  const supabase = getSupabaseClient();
+  
+  // If no date specified, get today and tomorrow
+  let query = supabase
+    .from('ncaab_bt_schedule')
+    .select('*')
+    .order('game_time');
+  
+  if (date) {
+    query = query.eq('game_date', date);
+  } else {
+    // Get today and tomorrow in US Eastern time
+    const now = new Date();
+    const eastern = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    
+    // Format as YYYY-MM-DD without using toISOString (which converts to UTC)
+    const formatDate = (d: Date) => {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+    
+    const today = formatDate(eastern);
+    const tomorrow = new Date(eastern);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = formatDate(tomorrow);
+    
+    console.log(`[Supabase] Loading BT schedule for ${today} and ${tomorrowStr}`);
+    query = query.in('game_date', [today, tomorrowStr]);
+  }
+  
+  const { data, error } = await query;
+  
+  if (error) {
+    console.error('[Supabase] Error loading BT schedule:', error);
+    return [];
+  }
+  
+  return (data || []).map(row => ({
+    id: row.id,
+    gameDate: row.game_date,
+    gameTime: row.game_time,
+    awayTeam: row.away_team,
+    homeTeam: row.home_team,
+    predictedSpread: row.predicted_spread,
+    predictedTotal: row.predicted_total,
+    awayWinProb: row.away_win_prob,
+    homeWinProb: row.home_win_prob,
+  }));
 }

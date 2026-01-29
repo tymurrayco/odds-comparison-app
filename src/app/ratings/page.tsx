@@ -45,6 +45,7 @@ interface TeamOverride {
   kenpomName: string;
   espnName?: string;
   oddsApiName?: string;
+  torvikName?: string;
   source: string;
   notes?: string;
 }
@@ -74,7 +75,39 @@ interface CalculateResponse {
   matchingStats?: MatchingStats;
 }
 
-type TabType = 'ratings' | 'hypotheticals' | 'schedule' | 'matching' | 'overrides';
+// Barttorvik interfaces
+interface BTGame {
+  date: string;
+  time: string;
+  away_team: string;
+  home_team: string;
+  away_rank?: number;
+  home_rank?: number;
+  spread?: number;
+  total?: number;
+  away_score?: number;
+  home_score?: number;
+  status: 'scheduled' | 'in_progress' | 'final';
+  venue?: string;
+  neutral?: boolean;
+  predicted_spread?: number;
+  predicted_total?: number;
+  away_win_prob?: number;
+  home_win_prob?: number;
+}
+
+interface BTRating {
+  rank: number;
+  team: string;
+  conf: string;
+  record: string;
+  adj_o: number;
+  adj_d: number;
+  adj_t: number;
+  barthag: number;
+}
+
+type TabType = 'ratings' | 'hypotheticals' | 'schedule' | 'matching' | 'overrides' | 'barttorvik';
 
 export default function RatingsPage() {
   // State
@@ -93,15 +126,29 @@ export default function RatingsPage() {
   const [overrides, setOverrides] = useState<TeamOverride[]>([]);
   const [kenpomTeams, setKenpomTeams] = useState<string[]>([]);
   const [oddsApiTeams, setOddsApiTeams] = useState<string[]>([]);
+  const [torvikTeams, setTorvikTeams] = useState<string[]>([]);
   const [overridesLoading, setOverridesLoading] = useState(false);
   const [showOverrideModal, setShowOverrideModal] = useState(false);
   const [editingOverride, setEditingOverride] = useState<TeamOverride | null>(null);
-  const [newOverride, setNewOverride] = useState({ sourceName: '', kenpomName: '', espnName: '', oddsApiName: '', notes: '' });
+  const [newOverride, setNewOverride] = useState({ sourceName: '', kenpomName: '', espnName: '', oddsApiName: '', torvikName: '', notes: '' });
   const [overrideError, setOverrideError] = useState<string | null>(null);
   const [kenpomSearch, setKenpomSearch] = useState('');
   const [showKenpomDropdown, setShowKenpomDropdown] = useState(false);
   const [oddsApiSearch, setOddsApiSearch] = useState('');
   const [showOddsApiDropdown, setShowOddsApiDropdown] = useState(false);
+  const [inlineEditId, setInlineEditId] = useState<number | null>(null);
+  const [inlineOddsApiSearch, setInlineOddsApiSearch] = useState('');
+  const [showInlineOddsApiDropdown, setShowInlineOddsApiDropdown] = useState(false);
+  const [inlineTorvikSearch, setInlineTorvikSearch] = useState('');
+  const [showInlineTorvikDropdown, setShowInlineTorvikDropdown] = useState(false);
+  
+  // Refs for inline editing (avoids re-renders on typing)
+  const inlineSourceNameRef = React.useRef<HTMLInputElement>(null);
+  const inlineKenpomNameRef = React.useRef<HTMLInputElement>(null);
+  const inlineEspnNameRef = React.useRef<HTMLInputElement>(null);
+  const inlineOddsApiRef = React.useRef<HTMLInputElement>(null);
+  const inlineTorvikRef = React.useRef<HTMLInputElement>(null);
+  const inlineNotesRef = React.useRef<HTMLInputElement>(null);
   
   // Matchups state
   const [homeTeam, setHomeTeam] = useState<string>('');
@@ -130,6 +177,15 @@ export default function RatingsPage() {
   const [scheduleGames, setScheduleGames] = useState<ScheduleGame[]>([]);
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [scheduleFilter, setScheduleFilter] = useState<'all' | 'today' | 'tomorrow'>('all');
+  
+  // Barttorvik state
+  const [btGames, setBtGames] = useState<BTGame[]>([]);
+  const [btRatings, setBtRatings] = useState<BTRating[]>([]);
+  const [btLoading, setBtLoading] = useState(false);
+  const [btError, setBtError] = useState<string | null>(null);
+  const [btView, setBtView] = useState<'schedule' | 'ratings'>('schedule');
+  const [btSearchTerm, setBtSearchTerm] = useState('');
+  const [btScheduleLoaded, setBtScheduleLoaded] = useState(false);
   
   // Config state
   const [hca, setHca] = useState(DEFAULT_RATINGS_CONFIG.hca);
@@ -275,6 +331,8 @@ export default function RatingsPage() {
       if (data.success) {
         setOverrides(data.overrides || []);
         setKenpomTeams(data.kenpomTeams || []);
+        setOddsApiTeams(data.oddsApiTeams || []);
+        setTorvikTeams(data.torvikTeams || []);
       }
     } catch (err) {
       console.error('Failed to load overrides:', err);
@@ -300,6 +358,234 @@ export default function RatingsPage() {
       console.error('Failed to load schedule:', err);
     } finally {
       setScheduleLoading(false);
+    }
+  };
+
+  // Helper to normalize team names for matching
+  const normalizeTeamName = (name: string): string => {
+    // Common mascot/suffix removals
+    const mascotsAndSuffixes = [
+      'hoosiers', 'boilermakers', 'wildcats', 'commodores', 'crimson tide',
+      'tigers', 'cavaliers', 'fighting irish', 'flyers', 'rams', 'huskies',
+      'friars', 'flames', 'sycamores', 'cardinals', 'billikens', 'revolutionaries',
+      'hokies', 'yellow jackets', 'mountaineers', 'golden eagles', 'bluejays',
+      'spartans', 'broncos', 'ramblers', 'hawks', 'redhawks', 'minutemen',
+      'bulldogs', 'bears', 'eagles', 'lions', 'panthers', 'devils', 'blue devils',
+      'tar heels', 'wolfpack', 'seminoles', 'hurricanes', 'orange', 'cardinal',
+      'bruins', 'trojans', 'ducks', 'beavers', 'cougars', 'utes', 'buffaloes',
+      'jayhawks', 'cyclones', 'longhorns', 'sooners', 'cowboys', 'horned frogs',
+      'red raiders', 'aggies', 'razorbacks', 'rebels', 'volunteers', 'gamecocks',
+      'gators', 'dawgs', 'bulldogs', 'yellow jackets', 'demon deacons', 'hokies',
+      'owls', 'pirates', 'gaels', 'zags', 'gonzaga bulldogs', 'shockers',
+      'musketeers', 'bearcats', 'explorers', 'bonnies', 'dukes', 'colonials',
+      'spiders', 'hatters', 'mean green', 'roadrunners', 'miners', 'aztecs',
+      'falcons', 'rockets', 'chippewas', 'huskies', 'bulls', 'thundering herd',
+      'bobcats', 'redhawks', 'golden flashes', 'zips', 'penguins'
+    ];
+    
+    let normalized = name.toLowerCase();
+    
+    // Remove mascots
+    for (const mascot of mascotsAndSuffixes) {
+      normalized = normalized.replace(mascot, '');
+    }
+    
+    return normalized
+      .replace(/[^a-z0-9\s]/g, '') // Remove special chars but keep spaces initially
+      .replace(/\s+/g, ' ')        // Normalize spaces
+      .trim()
+      .replace(/\s/g, '')          // Now remove spaces
+      .replace(/state/g, 'st')
+      .replace(/university/g, '')
+      .replace(/college/g, '')
+      .replace(/northern/g, 'n')
+      .replace(/southern/g, 's')
+      .replace(/eastern/g, 'e')
+      .replace(/western/g, 'w');
+  };
+
+  // Load Barttorvik data
+  const loadBarttorvik = async () => {
+    setBtLoading(true);
+    setBtError(null);
+    
+    try {
+      // Load BT data, market odds, and team overrides
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const cacheBuster = Date.now();
+      
+      const [scheduleRes, ratingsRes, oddsRes, overridesRes] = await Promise.all([
+        fetch('/api/ratings/barttorvik?type=schedule'),
+        fetch('/api/ratings/barttorvik?type=ratings'),
+        fetch(`/api/ratings/schedule?timezone=${encodeURIComponent(timezone)}&_t=${cacheBuster}`),
+        fetch('/api/ratings/overrides')
+      ]);
+      
+      const scheduleData = await scheduleRes.json();
+      const ratingsData = await ratingsRes.json();
+      const oddsData = await oddsRes.json();
+      const overridesData = await overridesRes.json();
+      
+      // Build lookup maps from overrides
+      // torvik_name -> odds_api_name mapping
+      const torvikToOddsApi: Record<string, string> = {};
+      // Also build reverse: odds_api_name -> normalized for matching
+      const oddsApiNormalized: Record<string, string> = {};
+      
+      if (overridesData.success && overridesData.overrides) {
+        for (const override of overridesData.overrides) {
+          if (override.torvik_name && override.odds_api_name) {
+            torvikToOddsApi[override.torvik_name.toLowerCase()] = override.odds_api_name;
+          }
+          if (override.odds_api_name) {
+            oddsApiNormalized[override.odds_api_name.toLowerCase()] = normalizeTeamName(override.odds_api_name);
+          }
+        }
+      }
+      
+      // Get market odds from the schedule
+      const marketGames = oddsData.success ? (oddsData.games || []) : scheduleGames;
+      
+      // Also update scheduleGames if we got new data
+      if (oddsData.success && oddsData.games) {
+        setScheduleGames(oddsData.games);
+      }
+      
+      if (scheduleData.success) {
+        const btGamesData = scheduleData.data || [];
+        
+        // Match BT games with market lines
+        const matchedGames = btGamesData.map((btGame: BTGame) => {
+          // First check if there's an override for this Torvik name
+          const homeOddsApiName = torvikToOddsApi[btGame.home_team.toLowerCase()];
+          const awayOddsApiName = torvikToOddsApi[btGame.away_team.toLowerCase()];
+          
+          // Normalize names (use override if available, otherwise normalize Torvik name)
+          const btHomeNorm = homeOddsApiName 
+            ? normalizeTeamName(homeOddsApiName) 
+            : normalizeTeamName(btGame.home_team);
+          const btAwayNorm = awayOddsApiName 
+            ? normalizeTeamName(awayOddsApiName) 
+            : normalizeTeamName(btGame.away_team);
+          
+          const matchedMarket = marketGames.find((market: ScheduleGame) => {
+            const marketHomeNorm = normalizeTeamName(market.homeTeam);
+            const marketAwayNorm = normalizeTeamName(market.awayTeam);
+            
+            // Direct match via override
+            if (homeOddsApiName && market.homeTeam.toLowerCase().includes(homeOddsApiName.toLowerCase())) {
+              if (awayOddsApiName && market.awayTeam.toLowerCase().includes(awayOddsApiName.toLowerCase())) {
+                return true;
+              }
+            }
+            
+            // Match if both teams match (accounting for name variations)
+            const homeMatch = btHomeNorm.includes(marketHomeNorm) || 
+                             marketHomeNorm.includes(btHomeNorm) ||
+                             btHomeNorm === marketHomeNorm;
+            const awayMatch = btAwayNorm.includes(marketAwayNorm) || 
+                             marketAwayNorm.includes(btAwayNorm) ||
+                             btAwayNorm === marketAwayNorm;
+            
+            return homeMatch && awayMatch;
+          });
+          
+          if (matchedMarket) {
+            return {
+              ...btGame,
+              spread: matchedMarket.spread,
+              total: matchedMarket.total,
+            };
+          }
+          
+          return btGame;
+        });
+        
+        setBtGames(matchedGames);
+        
+        // Count matches for debugging
+        const matchCount = matchedGames.filter((g: BTGame) => g.spread != null).length;
+        console.log(`Matched ${matchCount}/${matchedGames.length} BT games with market lines`);
+      }
+      
+      if (ratingsData.success) {
+        setBtRatings(ratingsData.data || []);
+      }
+      
+      // Show note if using mock data
+      if (scheduleData.note || ratingsData.note) {
+        setBtError(scheduleData.note || ratingsData.note);
+      }
+    } catch (err) {
+      console.error('Failed to load Barttorvik data:', err);
+      setBtError('Failed to load Barttorvik data');
+    } finally {
+      setBtLoading(false);
+    }
+  };
+
+  // Sync Torvik team names to database (one-time operation)
+  const syncTorvikTeams = async () => {
+    setBtLoading(true);
+    setBtError(null);
+    
+    try {
+      const response = await fetch('/api/ratings/barttorvik?type=ratings&syncTeams=true&refresh=true');
+      const data = await response.json();
+      
+      if (data.success) {
+        setBtRatings(data.data || []);
+        setSuccessMessage(`Synced ${data.teamsSynced || 0} Torvik team names to database`);
+        setTimeout(() => setSuccessMessage(null), 5000);
+        
+        // Reload overrides to get the new team list
+        loadOverrides();
+      } else {
+        setBtError(data.error || 'Failed to sync teams');
+      }
+    } catch (err) {
+      console.error('Failed to sync Torvik teams:', err);
+      setBtError('Failed to sync Torvik teams');
+    } finally {
+      setBtLoading(false);
+    }
+  };
+
+  // Load BT schedule from Supabase (fast, for Schedule tab)
+  const loadBTScheduleFromSupabase = async () => {
+    try {
+      const response = await fetch('/api/ratings/bt-schedule');
+      const data = await response.json();
+      
+      if (data.success && data.data) {
+        // Convert Supabase format to BTGame format
+        const games: BTGame[] = data.data.map((g: { 
+          gameDate: string; 
+          gameTime?: string; 
+          awayTeam: string; 
+          homeTeam: string; 
+          predictedSpread?: number; 
+          predictedTotal?: number; 
+          awayWinProb?: number; 
+          homeWinProb?: number; 
+        }) => ({
+          date: g.gameDate,
+          time: g.gameTime || '',
+          away_team: g.awayTeam,
+          home_team: g.homeTeam,
+          status: 'scheduled' as const,
+          predicted_spread: g.predictedSpread,
+          predicted_total: g.predictedTotal,
+          away_win_prob: g.awayWinProb,
+          home_win_prob: g.homeWinProb,
+        }));
+        
+        setBtGames(games);
+        setBtScheduleLoaded(true);
+        console.log(`Loaded ${games.length} BT games from Supabase`);
+      }
+    } catch (err) {
+      console.error('Failed to load BT schedule from Supabase:', err);
     }
   };
 
@@ -348,6 +634,13 @@ export default function RatingsPage() {
       if (overrides.length === 0) {
         loadOverrides();
       }
+      // Load BT schedule from Supabase if not already loaded
+      if (!btScheduleLoaded && btGames.length === 0) {
+        loadBTScheduleFromSupabase();
+      }
+    }
+    if (activeTab === 'barttorvik' && btGames.length === 0 && btRatings.length === 0) {
+      loadBarttorvik();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
@@ -448,7 +741,7 @@ export default function RatingsPage() {
   // Override management
   const openAddOverrideModal = async (sourceName?: string, oddsApiName?: string) => {
     setEditingOverride(null);
-    setNewOverride({ sourceName: sourceName || '', kenpomName: '', espnName: '', oddsApiName: oddsApiName || '', notes: '' });
+    setNewOverride({ sourceName: sourceName || '', kenpomName: '', espnName: '', oddsApiName: oddsApiName || '', torvikName: '', notes: '' });
     setKenpomSearch('');
     setShowKenpomDropdown(false);
     setOddsApiSearch('');
@@ -476,6 +769,7 @@ export default function RatingsPage() {
       kenpomName: override.kenpomName,
       espnName: override.espnName || '',
       oddsApiName: override.oddsApiName || '',
+      torvikName: override.torvikName || '',
       notes: override.notes || '' 
     });
     setKenpomSearch(override.kenpomName);
@@ -553,6 +847,114 @@ export default function RatingsPage() {
       console.error('Failed to delete override:', err);
     }
   };
+
+  // Start inline editing
+  const startInlineEdit = async (override: TeamOverride) => {
+    setInlineEditId(override.id!);
+    setInlineOddsApiSearch(override.oddsApiName || '');
+    setShowInlineOddsApiDropdown(false);
+    setInlineTorvikSearch(override.torvikName || '');
+    setShowInlineTorvikDropdown(false);
+    
+    // Load team lists if not already loaded
+    if (oddsApiTeams.length === 0 || torvikTeams.length === 0) {
+      try {
+        const response = await fetch('/api/ratings/overrides');
+        const data = await response.json();
+        if (data.success) {
+          if (data.oddsApiTeams) setOddsApiTeams(data.oddsApiTeams);
+          if (data.torvikTeams) setTorvikTeams(data.torvikTeams);
+        }
+      } catch (err) {
+        console.error('Failed to load teams:', err);
+      }
+    }
+    
+    // Set ref values after render
+    setTimeout(() => {
+      if (inlineSourceNameRef.current) inlineSourceNameRef.current.value = override.sourceName;
+      if (inlineKenpomNameRef.current) inlineKenpomNameRef.current.value = override.kenpomName;
+      if (inlineEspnNameRef.current) inlineEspnNameRef.current.value = override.espnName || '';
+      if (inlineOddsApiRef.current) inlineOddsApiRef.current.value = override.oddsApiName || '';
+      if (inlineTorvikRef.current) inlineTorvikRef.current.value = override.torvikName || '';
+      if (inlineNotesRef.current) inlineNotesRef.current.value = override.notes || '';
+    }, 0);
+  };
+
+  // Cancel inline editing
+  const cancelInlineEdit = () => {
+    setInlineEditId(null);
+    setInlineOddsApiSearch('');
+    setShowInlineOddsApiDropdown(false);
+    setInlineTorvikSearch('');
+    setShowInlineTorvikDropdown(false);
+  };
+
+  // Save inline edit
+  const saveInlineEdit = async () => {
+    if (!inlineEditId) return;
+    
+    const sourceName = inlineSourceNameRef.current?.value || '';
+    const kenpomName = inlineKenpomNameRef.current?.value || '';
+    
+    if (!sourceName || !kenpomName) return;
+
+    const editValues = {
+      sourceName,
+      kenpomName,
+      espnName: inlineEspnNameRef.current?.value || '',
+      oddsApiName: inlineOddsApiRef.current?.value || '',
+      torvikName: inlineTorvikRef.current?.value || '',
+      notes: inlineNotesRef.current?.value || '',
+    };
+
+    try {
+      const response = await fetch('/api/ratings/overrides', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: inlineEditId,
+          ...editValues,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Update local state immediately
+        setOverrides(prev => prev.map(o => 
+          o.id === inlineEditId 
+            ? { ...o, ...editValues } as TeamOverride
+            : o
+        ));
+        setInlineEditId(null);
+        setInlineOddsApiSearch('');
+        setShowInlineOddsApiDropdown(false);
+        setInlineTorvikSearch('');
+        setShowInlineTorvikDropdown(false);
+      }
+    } catch (err) {
+      console.error('Failed to save inline edit:', err);
+    }
+  };
+
+  // Filtered Odds API teams for inline edit dropdown
+  const filteredInlineOddsApiTeams = useMemo(() => {
+    if (!inlineOddsApiSearch || inlineOddsApiSearch.length < 1) return [];
+    const search = inlineOddsApiSearch.toLowerCase().trim();
+    return oddsApiTeams
+      .filter(t => t.toLowerCase().includes(search))
+      .slice(0, 8);
+  }, [inlineOddsApiSearch, oddsApiTeams]);
+
+  // Filtered Torvik teams for inline edit dropdown
+  const filteredInlineTorvikTeams = useMemo(() => {
+    if (!inlineTorvikSearch || inlineTorvikSearch.length < 1) return [];
+    const search = inlineTorvikSearch.toLowerCase().trim();
+    return torvikTeams
+      .filter(t => t.toLowerCase().includes(search))
+      .slice(0, 8);
+  }, [inlineTorvikSearch, torvikTeams]);
 
   // Filtered KenPom teams for autocomplete
   const filteredKenpomTeams = useMemo(() => {
@@ -992,6 +1394,14 @@ export default function RatingsPage() {
                 }`}
               >
                 Name Overrides {overrides.length > 0 && `(${overrides.length})`}
+              </button>
+              <button
+                onClick={() => setActiveTab('barttorvik')}
+                className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === 'barttorvik' ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                BT {btGames.length > 0 && `(${btGames.length})`}
               </button>
             </nav>
           </div>
@@ -1447,10 +1857,11 @@ export default function RatingsPage() {
                   <table className="w-full">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-2 sm:px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase whitespace-nowrap">Time</th>
+                        <th className="px-1 sm:px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase whitespace-nowrap w-8 sm:w-auto">Time</th>
                         <th className="px-1 sm:px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase min-w-[60px] sm:min-w-[120px]">Away</th>
-                        <th className="px-1 py-3 text-center text-xs font-semibold text-gray-600 uppercase w-6"></th>
+                        <th className="px-1 py-3 text-center text-xs font-semibold text-gray-600 uppercase w-6 hidden sm:table-cell"></th>
                         <th className="px-1 sm:px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase min-w-[60px] sm:min-w-[120px]">Home</th>
+                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-purple-600 uppercase whitespace-nowrap">BT</th>
                         <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase whitespace-nowrap">Proj</th>
                         <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase whitespace-nowrap">Open</th>
                         <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase whitespace-nowrap">Curr</th>
@@ -1467,6 +1878,8 @@ export default function RatingsPage() {
                           minute: '2-digit',
                           hour12: true 
                         });
+                        // Mobile: remove AM/PM
+                        const timeStrMobile = timeStr.replace(/ ?[AP]M$/i, '');
                         const dayStr = game.isToday ? 'Today' : 'Tomorrow';
                         
                         // Find team rating using overrides for Odds API name mapping
@@ -1544,6 +1957,49 @@ export default function RatingsPage() {
                           delta = Math.round(delta * 100) / 100;
                         }
                         
+                        // Find matching BT game for Barttorvik projected spread
+                        const findBTGame = (): BTGame | null => {
+                          if (btGames.length === 0) return null;
+                          
+                          // Helper to normalize team name for matching
+                          const normalize = (name: string) => {
+                            return name.toLowerCase()
+                              .replace(/\s+(bulldogs|wildcats|tigers|bears|eagles|hawks|cardinals|blue devils|hoosiers|boilermakers|wolverines|buckeyes|spartans|badgers|gophers|hawkeyes|fighting irish|crimson tide|volunteers|razorbacks|rebels|aggies|longhorns|sooners|cowboys|horned frogs|jayhawks|cyclones|mountaineers|red raiders|golden eagles|panthers|cougars|huskies|ducks|beavers|bruins|trojans|sun devils|utes|buffaloes|aztecs|wolf pack|lobos|owls|mean green|roadrunners|miners|mustangs|golden hurricane|shockers|bearcats|red storm|pirates|blue demons|billikens|musketeers|explorers|gaels|zags|toreros|matadors|anteaters|gauchos|highlanders|tritons|49ers|beach|titans|broncos|waves|pilots|lions|leopards|big green|crimson|elis|quakers|orange|hokies|cavaliers|tar heels|wolfpack|demon deacons|yellow jackets|seminoles|hurricanes|fighting illini|cornhuskers|nittany lions|terrapins|scarlet knights|hoyas|friars|bluejays|johnnies|red foxes|rams|bonnies|dukes|flyers|colonials|spiders|phoenix|redhawks|penguins|golden flashes|rockets|chippewas|bulls|thundering herd|bobcats|red hawks|zips|falcons)$/i, '')
+                              .replace(/\(.*\)/g, '')
+                              .replace(/st\./g, 'state')
+                              .replace(/\s+/g, ' ')
+                              .trim();
+                          };
+                          
+                          const homeNorm = normalize(game.homeTeam);
+                          const awayNorm = normalize(game.awayTeam);
+                          
+                          // Check overrides first: oddsApiName -> torvikName
+                          const homeOverride = overrides.find(o => o.oddsApiName?.toLowerCase() === game.homeTeam.toLowerCase());
+                          const awayOverride = overrides.find(o => o.oddsApiName?.toLowerCase() === game.awayTeam.toLowerCase());
+                          
+                          const homeTorvikName = homeOverride?.torvikName?.toLowerCase();
+                          const awayTorvikName = awayOverride?.torvikName?.toLowerCase();
+                          
+                          return btGames.find(bt => {
+                            const btHome = bt.home_team.toLowerCase();
+                            const btAway = bt.away_team.toLowerCase();
+                            
+                            // Match using overrides if available
+                            const homeMatch = homeTorvikName 
+                              ? btHome === homeTorvikName 
+                              : (btHome === homeNorm || normalize(bt.home_team) === homeNorm);
+                            const awayMatch = awayTorvikName 
+                              ? btAway === awayTorvikName 
+                              : (btAway === awayNorm || normalize(bt.away_team) === awayNorm);
+                            
+                            return homeMatch && awayMatch;
+                          }) || null;
+                        };
+                        
+                        const btGame = findBTGame();
+                        const btSpread = btGame?.predicted_spread ?? null;
+                        
                         // Helper function to get graduated background based on line movement
                         const getGreenHighlightClass = (movement: number): string => {
                           if (movement < 0.5) return ''; // No highlight for less than 0.5 point move
@@ -1596,8 +2052,11 @@ export default function RatingsPage() {
                         
                         return (
                           <tr key={game.id} className="hover:bg-gray-50">
-                            <td className="px-2 sm:px-4 py-3">
-                              <div className="text-xs sm:text-sm font-medium text-gray-900">{timeStr}</div>
+                            <td className="px-1 sm:px-4 py-3">
+                              <div className="text-xs sm:text-sm font-medium text-gray-900">
+                                <span className="sm:hidden">{timeStrMobile}</span>
+                                <span className="hidden sm:inline">{timeStr}</span>
+                              </div>
                               <div className="text-xs text-gray-500">{dayStr}</div>
                             </td>
                             <td className={`px-1 sm:px-4 py-3 ${highlightAwayClass}`}>
@@ -1621,7 +2080,7 @@ export default function RatingsPage() {
                                 {!awayRating && <span className="text-xs text-red-400 hidden sm:inline">?</span>}
                               </div>
                             </td>
-                            <td className="px-1 py-3 text-center text-gray-400">@</td>
+                            <td className="px-1 py-3 text-center text-gray-400 hidden sm:table-cell">@</td>
                             <td className={`px-1 sm:px-4 py-3 ${highlightHomeClass}`}>
                               <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2">
                                 {(() => {
@@ -1642,6 +2101,15 @@ export default function RatingsPage() {
                                 <span className="text-sm font-medium text-gray-900 hidden sm:inline">{game.homeTeam}</span>
                                 {!homeRating && <span className="text-xs text-red-400 hidden sm:inline">?</span>}
                               </div>
+                            </td>
+                            <td className="px-2 sm:px-4 py-3 text-right">
+                              {btSpread !== null ? (
+                                <span className={`font-mono text-xs sm:text-sm font-semibold ${btSpread < 0 ? 'text-purple-600' : btSpread > 0 ? 'text-purple-600' : 'text-gray-600'}`}>
+                                  {btSpread > 0 ? '+' : ''}{btSpread.toFixed(1)}
+                                </span>
+                              ) : (
+                                <span className="text-gray-400">—</span>
+                              )}
                             </td>
                             <td className="px-2 sm:px-4 py-3 text-right">
                               {projectedSpread !== null ? (
@@ -1898,7 +2366,7 @@ export default function RatingsPage() {
               <div className="p-4 border-b border-gray-200 flex justify-between items-center">
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900">Team Name Overrides</h2>
-                  <p className="text-sm text-gray-500">Manual mappings from ESPN/OddsAPI names to KenPom names</p>
+                  <p className="text-sm text-gray-500">Manual mappings for team names across data sources</p>
                 </div>
                 <button
                   onClick={() => openAddOverrideModal()}
@@ -1916,46 +2384,422 @@ export default function RatingsPage() {
                 </div>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full">
+                  <table className="w-full text-sm">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Source Name</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">→</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">KenPom Name</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">ESPN Name</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Odds API Name</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Notes</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Actions</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Source</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">KenPom</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">ESPN</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Odds API</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-purple-600 uppercase">Torvik</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Notes</th>
+                        <th className="px-3 py-2 text-center text-xs font-semibold text-gray-600 uppercase w-28">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {overrides.map((override) => (
-                        <tr key={override.id} className="hover:bg-gray-50">
-                          <td className="px-4 py-3 font-medium text-gray-900">{override.sourceName}</td>
-                          <td className="px-4 py-3 text-gray-400">→</td>
-                          <td className="px-4 py-3 text-green-700 font-medium">{override.kenpomName}</td>
-                          <td className="px-4 py-3 text-sm text-blue-600">{override.espnName || '—'}</td>
-                          <td className="px-4 py-3 text-sm text-orange-600">{override.oddsApiName || '—'}</td>
-                          <td className="px-4 py-3 text-sm text-gray-500">{override.notes || '—'}</td>
-                          <td className="px-4 py-3 text-center">
-                            <button
-                              onClick={() => openEditOverrideModal(override)}
-                              className="text-blue-600 hover:text-blue-800 text-sm font-medium mr-3"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              onClick={() => deleteOverride(override.id!)}
-                              className="text-red-600 hover:text-red-800 text-sm font-medium"
-                            >
-                              Delete
-                            </button>
-                          </td>
+                        <tr key={override.id} className={inlineEditId === override.id ? 'bg-blue-50' : 'hover:bg-gray-50'}>
+                          {inlineEditId === override.id ? (
+                            <>
+                              <td className="px-2 py-1">
+                                <input
+                                  ref={inlineSourceNameRef}
+                                  type="text"
+                                  defaultValue={override.sourceName}
+                                  className="w-full border border-gray-300 rounded px-2 py-1 text-sm bg-white"
+                                />
+                              </td>
+                              <td className="px-2 py-1">
+                                <input
+                                  ref={inlineKenpomNameRef}
+                                  type="text"
+                                  defaultValue={override.kenpomName}
+                                  className="w-full border border-gray-300 rounded px-2 py-1 text-sm bg-white"
+                                />
+                              </td>
+                              <td className="px-2 py-1">
+                                <input
+                                  ref={inlineEspnNameRef}
+                                  type="text"
+                                  defaultValue={override.espnName || ''}
+                                  className="w-full border border-gray-300 rounded px-2 py-1 text-sm bg-white"
+                                  placeholder="—"
+                                />
+                              </td>
+                              <td className="px-2 py-1 relative">
+                                <input
+                                  ref={inlineOddsApiRef}
+                                  type="text"
+                                  defaultValue={override.oddsApiName || ''}
+                                  onChange={(e) => {
+                                    setInlineOddsApiSearch(e.target.value);
+                                    setShowInlineOddsApiDropdown(e.target.value.length > 0);
+                                  }}
+                                  onFocus={(e) => {
+                                    setInlineOddsApiSearch(e.target.value);
+                                    setShowInlineOddsApiDropdown(e.target.value.length > 0);
+                                  }}
+                                  onBlur={() => setTimeout(() => setShowInlineOddsApiDropdown(false), 150)}
+                                  className="w-full border border-orange-300 rounded px-2 py-1 text-sm bg-white"
+                                  placeholder="Type to search..."
+                                />
+                                {showInlineOddsApiDropdown && filteredInlineOddsApiTeams.length > 0 && (
+                                  <div className="absolute z-10 mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                                    {filteredInlineOddsApiTeams.map((team) => (
+                                      <button
+                                        key={team}
+                                        type="button"
+                                        onMouseDown={(e) => {
+                                          e.preventDefault();
+                                          if (inlineOddsApiRef.current) {
+                                            inlineOddsApiRef.current.value = team;
+                                          }
+                                          setInlineOddsApiSearch(team);
+                                          setShowInlineOddsApiDropdown(false);
+                                        }}
+                                        className="w-full text-left px-3 py-1.5 text-sm hover:bg-orange-50 border-b border-gray-100 last:border-b-0"
+                                      >
+                                        {team}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="px-2 py-1 relative">
+                                <input
+                                  ref={inlineTorvikRef}
+                                  type="text"
+                                  defaultValue={override.torvikName || ''}
+                                  onChange={(e) => {
+                                    setInlineTorvikSearch(e.target.value);
+                                    setShowInlineTorvikDropdown(e.target.value.length > 0);
+                                  }}
+                                  onFocus={(e) => {
+                                    setInlineTorvikSearch(e.target.value);
+                                    setShowInlineTorvikDropdown(e.target.value.length > 0);
+                                  }}
+                                  onBlur={() => setTimeout(() => setShowInlineTorvikDropdown(false), 150)}
+                                  className="w-full border border-purple-300 rounded px-2 py-1 text-sm bg-white"
+                                  placeholder="Type to search..."
+                                />
+                                {showInlineTorvikDropdown && filteredInlineTorvikTeams.length > 0 && (
+                                  <div className="absolute z-10 mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                                    {filteredInlineTorvikTeams.map((team) => (
+                                      <button
+                                        key={team}
+                                        type="button"
+                                        onMouseDown={(e) => {
+                                          e.preventDefault();
+                                          if (inlineTorvikRef.current) {
+                                            inlineTorvikRef.current.value = team;
+                                          }
+                                          setInlineTorvikSearch(team);
+                                          setShowInlineTorvikDropdown(false);
+                                        }}
+                                        className="w-full text-left px-3 py-1.5 text-sm hover:bg-purple-50 border-b border-gray-100 last:border-b-0"
+                                      >
+                                        {team}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="px-2 py-1">
+                                <input
+                                  ref={inlineNotesRef}
+                                  type="text"
+                                  defaultValue={override.notes || ''}
+                                  className="w-full border border-gray-300 rounded px-2 py-1 text-sm bg-white"
+                                  placeholder="—"
+                                />
+                              </td>
+                              <td className="px-2 py-1 text-center whitespace-nowrap">
+                                <button
+                                  onClick={saveInlineEdit}
+                                  className="text-green-600 hover:text-green-800 text-xs font-medium mr-2"
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  onClick={cancelInlineEdit}
+                                  className="text-gray-500 hover:text-gray-700 text-xs font-medium"
+                                >
+                                  Cancel
+                                </button>
+                              </td>
+                            </>
+                          ) : (
+                            <>
+                              <td className="px-3 py-2 font-medium text-gray-900">{override.sourceName}</td>
+                              <td className="px-3 py-2 text-green-700 font-medium">{override.kenpomName}</td>
+                              <td className="px-3 py-2 text-blue-600">{override.espnName || <span className="text-gray-300">—</span>}</td>
+                              <td className="px-3 py-2 text-orange-600">{override.oddsApiName || <span className="text-gray-300">—</span>}</td>
+                              <td className="px-3 py-2 text-purple-600 font-medium">{override.torvikName || <span className="text-gray-300">—</span>}</td>
+                              <td className="px-3 py-2 text-gray-500 truncate max-w-32">{override.notes || <span className="text-gray-300">—</span>}</td>
+                              <td className="px-3 py-2 text-center whitespace-nowrap">
+                                <button
+                                  onClick={() => startInlineEdit(override)}
+                                  className="text-blue-600 hover:text-blue-800 text-xs font-medium mr-2"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={() => deleteOverride(override.id!)}
+                                  className="text-red-600 hover:text-red-800 text-xs font-medium"
+                                >
+                                  Delete
+                                </button>
+                              </td>
+                            </>
+                          )}
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
+              )}
+            </>
+          )}
+
+          {/* Barttorvik Tab */}
+          {activeTab === 'barttorvik' && (
+            <>
+              {/* Sub-tabs and controls */}
+              <div className="p-4 border-b border-gray-200 bg-purple-50">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-600 font-medium">View:</span>
+                    <div className="flex rounded-lg overflow-hidden border border-purple-300">
+                      <button
+                        onClick={() => setBtView('schedule')}
+                        className={`px-4 py-1.5 text-sm font-medium transition-colors ${
+                          btView === 'schedule' 
+                            ? 'bg-purple-600 text-white' 
+                            : 'bg-white text-purple-700 hover:bg-purple-50'
+                        }`}
+                      >
+                        Schedule
+                      </button>
+                      <button
+                        onClick={() => setBtView('ratings')}
+                        className={`px-4 py-1.5 text-sm font-medium transition-colors ${
+                          btView === 'ratings' 
+                            ? 'bg-purple-600 text-white' 
+                            : 'bg-white text-purple-700 hover:bg-purple-50'
+                        }`}
+                      >
+                        T-Rank
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder="Search teams..."
+                      value={btSearchTerm}
+                      onChange={(e) => setBtSearchTerm(e.target.value)}
+                      className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-sm w-48"
+                    />
+                    <button
+                      onClick={loadBarttorvik}
+                      disabled={btLoading}
+                      className="px-4 py-1.5 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-300 text-white text-sm font-medium rounded-lg transition-colors"
+                    >
+                      {btLoading ? 'Loading...' : 'Refresh'}
+                    </button>
+                    <button
+                      onClick={syncTorvikTeams}
+                      disabled={btLoading}
+                      className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 disabled:bg-gray-100 text-gray-700 text-sm font-medium rounded-lg transition-colors border border-gray-300"
+                      title="Save all Torvik team names to database (run once)"
+                    >
+                      Sync Teams
+                    </button>
+                  </div>
+                </div>
+                
+                {btError && (
+                  <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                    <p className="text-amber-700 text-sm">ℹ️ {btError}</p>
+                  </div>
+                )}
+              </div>
+
+              {btLoading ? (
+                <div className="p-12 text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-purple-500 mx-auto mb-4"></div>
+                  <p className="text-gray-500">Loading Barttorvik data...</p>
+                </div>
+              ) : (
+                <>
+                  {/* Schedule View */}
+                  {btView === 'schedule' && (
+                    <div className="overflow-x-auto">
+                      {btGames.length === 0 ? (
+                        <div className="p-12 text-center">
+                          <div className="text-5xl mb-4">📅</div>
+                          <p className="text-gray-500">No games loaded. Click Refresh to fetch data.</p>
+                        </div>
+                      ) : (
+                        <table className="w-full">
+                          <thead className="bg-purple-50 sticky top-0">
+                            <tr>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-purple-800 uppercase">Time</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-purple-800 uppercase">Away</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-purple-800 uppercase">Home</th>
+                              <th className="px-4 py-3 text-center text-xs font-semibold text-purple-800 uppercase">Line</th>
+                              <th className="px-4 py-3 text-center text-xs font-semibold text-purple-800 uppercase">BT Proj</th>
+                              <th className="px-4 py-3 text-center text-xs font-semibold text-purple-800 uppercase">Total</th>
+                              <th className="px-4 py-3 text-center text-xs font-semibold text-purple-800 uppercase">BT Total</th>
+                              <th className="px-4 py-3 text-center text-xs font-semibold text-purple-800 uppercase">Win %</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {btGames
+                              .filter(g => {
+                                if (!btSearchTerm) return true;
+                                const term = btSearchTerm.toLowerCase();
+                                return g.away_team.toLowerCase().includes(term) || 
+                                       g.home_team.toLowerCase().includes(term);
+                              })
+                              .map((game, idx) => {
+                                const spreadDiff = game.spread && game.predicted_spread 
+                                  ? Math.abs(game.spread - game.predicted_spread) 
+                                  : null;
+                                const totalDiff = game.total && game.predicted_total
+                                  ? Math.abs(game.total - game.predicted_total)
+                                  : null;
+                                const hasEdge = (spreadDiff && spreadDiff >= 2) || (totalDiff && totalDiff >= 3);
+                                
+                                // Show warning if no market data (couldn't match to Odds API)
+                                const noMarketData = game.spread == null;
+                                
+                                return (
+                                  <tr 
+                                    key={idx} 
+                                    className={`hover:bg-purple-50 transition-colors ${hasEdge ? 'bg-green-50' : ''}`}
+                                  >
+                                    <td className="px-4 py-3 text-sm text-gray-600">
+                                      <div>{game.date}</div>
+                                      <div className="text-xs text-gray-400">{game.time}</div>
+                                    </td>
+                                    <td className="px-4 py-3">
+                                      <div className="flex items-center gap-2">
+                                        {game.away_rank && (
+                                          <span className="text-xs text-purple-600 font-semibold">#{game.away_rank}</span>
+                                        )}
+                                        {noMarketData && <span className="text-amber-500" title={`No Odds API match for "${game.away_team}"`}>⚠️</span>}
+                                        <span className={`font-medium ${noMarketData ? 'text-amber-700' : 'text-gray-900'}`}>{game.away_team}</span>
+                                      </div>
+                                    </td>
+                                    <td className="px-4 py-3">
+                                      <div className="flex items-center gap-2">
+                                        {game.home_rank && (
+                                          <span className="text-xs text-purple-600 font-semibold">#{game.home_rank}</span>
+                                        )}
+                                        {noMarketData && <span className="text-amber-500" title={`No Odds API match for "${game.home_team}"`}>⚠️</span>}
+                                        <span className={`font-medium ${noMarketData ? 'text-amber-700' : 'text-gray-900'}`}>{game.home_team}</span>
+                                        {game.neutral && <span className="text-xs text-gray-400">(N)</span>}
+                                      </div>
+                                    </td>
+                                    <td className="px-4 py-3 text-center">
+                                      {game.spread != null ? (
+                                        <span className={`font-mono ${game.spread < 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                          {game.spread > 0 ? '+' : ''}{game.spread.toFixed(1)}
+                                        </span>
+                                      ) : '-'}
+                                    </td>
+                                    <td className="px-4 py-3 text-center">
+                                      {game.predicted_spread != null ? (
+                                        <span className={`font-mono font-semibold ${
+                                          spreadDiff && spreadDiff >= 2 ? 'text-purple-700 bg-purple-100 px-2 py-0.5 rounded' : 'text-gray-700'
+                                        }`}>
+                                          {game.predicted_spread > 0 ? '+' : ''}{game.predicted_spread.toFixed(1)}
+                                        </span>
+                                      ) : '-'}
+                                    </td>
+                                    <td className="px-4 py-3 text-center font-mono text-gray-600">
+                                      {game.total?.toFixed(1) || '-'}
+                                    </td>
+                                    <td className="px-4 py-3 text-center">
+                                      {game.predicted_total != null ? (
+                                        <span className={`font-mono font-semibold ${
+                                          totalDiff && totalDiff >= 3 ? 'text-purple-700 bg-purple-100 px-2 py-0.5 rounded' : 'text-gray-700'
+                                        }`}>
+                                          {game.predicted_total.toFixed(1)}
+                                        </span>
+                                      ) : '-'}
+                                    </td>
+                                    <td className="px-4 py-3 text-center">
+                                      {game.home_win_prob != null ? (
+                                        <div className="text-xs">
+                                          <div className="text-gray-500">{(game.away_win_prob! * 100).toFixed(0)}%</div>
+                                          <div className="font-semibold text-purple-700">{(game.home_win_prob * 100).toFixed(0)}%</div>
+                                        </div>
+                                      ) : '-'}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Ratings View */}
+                  {btView === 'ratings' && (
+                    <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
+                      {btRatings.length === 0 ? (
+                        <div className="p-12 text-center">
+                          <div className="text-5xl mb-4">📊</div>
+                          <p className="text-gray-500">No ratings loaded. Click Refresh to fetch data.</p>
+                        </div>
+                      ) : (
+                        <table className="w-full">
+                          <thead className="bg-purple-50 sticky top-0">
+                            <tr>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-purple-800 uppercase w-16">#</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-purple-800 uppercase">Team</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-purple-800 uppercase">Conf</th>
+                              <th className="px-4 py-3 text-center text-xs font-semibold text-purple-800 uppercase">Record</th>
+                              <th className="px-4 py-3 text-right text-xs font-semibold text-purple-800 uppercase">AdjO</th>
+                              <th className="px-4 py-3 text-right text-xs font-semibold text-purple-800 uppercase">AdjD</th>
+                              <th className="px-4 py-3 text-right text-xs font-semibold text-purple-800 uppercase">AdjT</th>
+                              <th className="px-4 py-3 text-right text-xs font-semibold text-purple-800 uppercase">Barthag</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {btRatings
+                              .filter(r => {
+                                if (!btSearchTerm) return true;
+                                const term = btSearchTerm.toLowerCase();
+                                return r.team.toLowerCase().includes(term) || 
+                                       r.conf.toLowerCase().includes(term);
+                              })
+                              .map((rating) => (
+                                <tr key={`${rating.rank}-${rating.team}`} className="hover:bg-purple-50 transition-colors">
+                                  <td className="px-4 py-3 text-sm font-semibold text-purple-700">{rating.rank}</td>
+                                  <td className="px-4 py-3">
+                                    <span className="font-medium text-gray-900">{rating.team}</span>
+                                  </td>
+                                  <td className="px-4 py-3 text-sm text-gray-600">{rating.conf}</td>
+                                  <td className="px-4 py-3 text-center text-sm text-gray-600">{rating.record}</td>
+                                  <td className="px-4 py-3 text-right font-mono text-sm text-green-700">{rating.adj_o.toFixed(1)}</td>
+                                  <td className="px-4 py-3 text-right font-mono text-sm text-red-700">{rating.adj_d.toFixed(1)}</td>
+                                  <td className="px-4 py-3 text-right font-mono text-sm text-gray-600">{rating.adj_t.toFixed(1)}</td>
+                                  <td className="px-4 py-3 text-right font-mono text-sm font-semibold text-purple-700">
+                                    {rating.barthag.toFixed(4)}
+                                  </td>
+                                </tr>
+                              ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  )}
+                </>
               )}
             </>
           )}
@@ -2126,6 +2970,22 @@ export default function RatingsPage() {
                 )}
                 <p className="mt-1 text-xs text-gray-500">
                   Use if games fail with &quot;No Odds&quot;. Select the matching team from Odds API.
+                </p>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Torvik Name (for BT schedule matching, optional)
+                </label>
+                <input
+                  type="text"
+                  value={newOverride.torvikName || ''}
+                  onChange={(e) => setNewOverride({ ...newOverride, torvikName: e.target.value })}
+                  placeholder="e.g., Miami OH, N.C. State, UConn"
+                  className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-900"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Use the exact team name from Barttorvik&apos;s schedule to match with market odds.
                 </p>
               </div>
             </div>

@@ -12,6 +12,7 @@
     "@supabase/supabase-js": "^2.56.0",
     "axios": "^1.8.4",
     "next": "^15.2.6",
+    "puppeteer": "^24.36.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-tabs": "^6.1.0"
