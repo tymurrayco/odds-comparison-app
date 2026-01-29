@@ -216,7 +216,6 @@ export default function RatingsPage() {
   const [btError, setBtError] = useState<string | null>(null);
   const [btView, setBtView] = useState<'schedule' | 'ratings'>('schedule');
   const [btSearchTerm, setBtSearchTerm] = useState('');
-  const [btScheduleLoaded, setBtScheduleLoaded] = useState(false);
   
   // Config state
   const [hca, setHca] = useState(DEFAULT_RATINGS_CONFIG.hca);
@@ -797,44 +796,6 @@ export default function RatingsPage() {
       setBtError('Failed to sync Torvik teams');
     } finally {
       setBtLoading(false);
-    }
-  };
-
-  // Load BT schedule from Supabase (fast, for Schedule tab)
-  const loadBTScheduleFromSupabase = async () => {
-    try {
-      const response = await fetch('/api/ratings/bt-schedule');
-      const data = await response.json();
-      
-      if (data.success && data.data) {
-        // Convert Supabase format to BTGame format
-        const games: BTGame[] = data.data.map((g: { 
-          gameDate: string; 
-          gameTime?: string; 
-          awayTeam: string; 
-          homeTeam: string; 
-          predictedSpread?: number; 
-          predictedTotal?: number; 
-          awayWinProb?: number; 
-          homeWinProb?: number; 
-        }) => ({
-          date: g.gameDate,
-          time: g.gameTime || '',
-          away_team: g.awayTeam,
-          home_team: g.homeTeam,
-          status: 'scheduled' as const,
-          predicted_spread: g.predictedSpread,
-          predicted_total: g.predictedTotal,
-          away_win_prob: g.awayWinProb,
-          home_win_prob: g.homeWinProb,
-        }));
-        
-        setBtGames(games);
-        setBtScheduleLoaded(true);
-        console.log(`Loaded ${games.length} BT games from Supabase`);
-      }
-    } catch (err) {
-      console.error('Failed to load BT schedule from Supabase:', err);
     }
   };
 
