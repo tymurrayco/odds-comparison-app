@@ -762,24 +762,6 @@ export default function RatingsPage() {
     }
   };
 
-  const openEditOverrideModal = (override: TeamOverride) => {
-    setEditingOverride(override);
-    setNewOverride({ 
-      sourceName: override.sourceName, 
-      kenpomName: override.kenpomName,
-      espnName: override.espnName || '',
-      oddsApiName: override.oddsApiName || '',
-      torvikName: override.torvikName || '',
-      notes: override.notes || '' 
-    });
-    setKenpomSearch(override.kenpomName);
-    setShowKenpomDropdown(false);
-    setOddsApiSearch(override.oddsApiName || '');
-    setShowOddsApiDropdown(false);
-    setOverrideError(null);
-    setShowOverrideModal(true);
-  };
-
   const saveOverride = async () => {
     if (!newOverride.sourceName || !newOverride.kenpomName) {
       setOverrideError('Both source name and KenPom name are required');
@@ -1857,7 +1839,7 @@ export default function RatingsPage() {
                   <table className="w-full">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-1 sm:px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase whitespace-nowrap w-8 sm:w-auto">Time</th>
+                        <th className="px-1 sm:px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase whitespace-nowrap w-10 sm:w-auto">Time</th>
                         <th className="px-1 sm:px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase min-w-[60px] sm:min-w-[120px]">Away</th>
                         <th className="px-1 py-3 text-center text-xs font-semibold text-gray-600 uppercase w-6 hidden sm:table-cell"></th>
                         <th className="px-1 sm:px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase min-w-[60px] sm:min-w-[120px]">Home</th>
