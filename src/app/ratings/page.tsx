@@ -176,7 +176,38 @@ export default function RatingsPage() {
   }
   const [scheduleGames, setScheduleGames] = useState<ScheduleGame[]>([]);
   const [scheduleLoading, setScheduleLoading] = useState(false);
-  const [scheduleFilter, setScheduleFilter] = useState<'all' | 'today' | 'tomorrow'>('all');
+  const [scheduleFilter, setScheduleFilter] = useState<'all' | 'today' | 'tomorrow' | 'day2' | 'day3'>('all');
+  const [scheduleSortBy, setScheduleSortBy] = useState<'time' | 'delta' | 'awayMovement' | 'homeMovement'>('time');
+  const [scheduleSortDir, setScheduleSortDir] = useState<'asc' | 'desc'>('asc');
+  
+  // Combined schedule (BT primary + Odds API enrichment)
+  interface CombinedScheduleGame {
+    // BT data (always present)
+    id: string;
+    gameDate: string; // YYYY-MM-DD format
+    gameTime: string;
+    homeTeam: string; // BT team name
+    awayTeam: string; // BT team name
+    btSpread: number | null;
+    btTotal: number | null;
+    homeWinProb: number | null;
+    awayWinProb: number | null;
+    // Odds API data (may be null if no odds yet)
+    oddsGameId: string | null;
+    spread: number | null;
+    openingSpread: number | null;
+    total: number | null;
+    spreadBookmaker: string | null;
+    hasStarted: boolean;
+    isFrozen: boolean;
+    // Computed
+    isToday: boolean;
+    isTomorrow: boolean;
+    isDay2: boolean;
+    isDay3: boolean;
+    dateLabel: string; // "Today", "Tomorrow", "Jan 31", etc.
+  }
+  const [combinedScheduleGames, setCombinedScheduleGames] = useState<CombinedScheduleGame[]>([]);
   
   // Barttorvik state
   const [btGames, setBtGames] = useState<BTGame[]>([]);
@@ -344,16 +375,234 @@ export default function RatingsPage() {
   const loadSchedule = async () => {
     setScheduleLoading(true);
     try {
-      // Get user's timezone and pass it to the API
-      // Add timestamp to bust Vercel edge cache
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
       const cacheBuster = Date.now();
-      const response = await fetch(`/api/ratings/schedule?timezone=${encodeURIComponent(timezone)}&_t=${cacheBuster}`);
-      const data = await response.json();
       
-      if (data.success) {
-        setScheduleGames(data.games || []);
+      // Use existing btGames if already loaded (from BT tab), otherwise fetch
+      let btGamesRaw: Array<{
+        id?: number;
+        gameDate: string;
+        gameTime?: string;
+        homeTeam: string;
+        awayTeam: string;
+        predictedSpread?: number;
+        predictedTotal?: number;
+        homeWinProb?: number;
+        awayWinProb?: number;
+      }> = [];
+      
+      if (btGames.length > 0) {
+        // Convert from BTGame format to the format we need
+        btGamesRaw = btGames.map(g => ({
+          gameDate: g.date,
+          gameTime: g.time,
+          homeTeam: g.home_team,
+          awayTeam: g.away_team,
+          predictedSpread: g.predicted_spread,
+          predictedTotal: g.predicted_total,
+          homeWinProb: g.home_win_prob,
+          awayWinProb: g.away_win_prob,
+        }));
+        console.log(`Using existing ${btGamesRaw.length} BT games from state`);
+      } else {
+        // Fetch from API
+        const btRes = await fetch('/api/ratings/bt-schedule');
+        const btData = await btRes.json();
+        btGamesRaw = btData.success ? (btData.data || []) : [];
+        console.log(`Fetched ${btGamesRaw.length} BT games from API`);
       }
+      
+      // Load Odds API and overrides in parallel
+      const [oddsRes, overridesRes] = await Promise.all([
+        fetch(`/api/ratings/schedule?timezone=${encodeURIComponent(timezone)}&_t=${cacheBuster}`),
+        overrides.length === 0 ? fetch('/api/ratings/overrides') : Promise.resolve(null),
+      ]);
+      
+      const oddsData = await oddsRes.json();
+      
+      // Load overrides if not already loaded
+      let currentOverrides = overrides;
+      if (overridesRes) {
+        const overridesData = await overridesRes.json();
+        if (overridesData.success) {
+          currentOverrides = overridesData.overrides || [];
+          setOverrides(currentOverrides);
+        }
+      }
+      
+      const oddsGames: ScheduleGame[] = oddsData.success ? (oddsData.games || []) : [];
+      
+      // Also update scheduleGames for backward compatibility
+      if (oddsData.success && oddsData.games) {
+        setScheduleGames(oddsData.games);
+      }
+      
+      // Build lookup maps for matching BT teams to Odds API teams
+      // torvikName -> oddsApiName
+      const torvikToOddsApi: Record<string, string> = {};
+      for (const override of currentOverrides) {
+        if (override.torvikName && override.oddsApiName) {
+          torvikToOddsApi[override.torvikName.toLowerCase()] = override.oddsApiName.toLowerCase();
+        }
+      }
+      
+      // Helper to get date label for a game
+      const getDateLabel = (gameDate: string): { label: string; isToday: boolean; isTomorrow: boolean; isDay2: boolean; isDay3: boolean } => {
+        const now = new Date();
+        const eastern = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+        
+        const formatDate = (d: Date) => {
+          const year = d.getFullYear();
+          const month = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          return `${year}-${month}-${day}`;
+        };
+        
+        const todayStr = formatDate(eastern);
+        
+        const tomorrow = new Date(eastern);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const tomorrowStr = formatDate(tomorrow);
+        
+        const day2 = new Date(eastern);
+        day2.setDate(day2.getDate() + 2);
+        const day2Str = formatDate(day2);
+        
+        const day3 = new Date(eastern);
+        day3.setDate(day3.getDate() + 3);
+        const day3Str = formatDate(day3);
+        
+        if (gameDate === todayStr) {
+          return { label: 'Today', isToday: true, isTomorrow: false, isDay2: false, isDay3: false };
+        } else if (gameDate === tomorrowStr) {
+          return { label: 'Tomorrow', isToday: false, isTomorrow: true, isDay2: false, isDay3: false };
+        } else if (gameDate === day2Str) {
+          // Format as "Jan 31" for +2 day
+          const [year, month, day] = gameDate.split('-').map(Number);
+          const date = new Date(year, month - 1, day);
+          const label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          return { label, isToday: false, isTomorrow: false, isDay2: true, isDay3: false };
+        } else if (gameDate === day3Str) {
+          // Format as "Jan 31" for +3 day
+          const [year, month, day] = gameDate.split('-').map(Number);
+          const date = new Date(year, month - 1, day);
+          const label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          return { label, isToday: false, isTomorrow: false, isDay2: false, isDay3: true };
+        } else {
+          // Format as "Jan 31" for other dates
+          const [year, month, day] = gameDate.split('-').map(Number);
+          const date = new Date(year, month - 1, day);
+          const label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          return { label, isToday: false, isTomorrow: false, isDay2: false, isDay3: false };
+        }
+      };
+      
+      // Helper to normalize team names for fuzzy matching
+      const normalizeForMatch = (name: string): string => {
+        return name.toLowerCase()
+          .replace(/\s+(bulldogs|wildcats|tigers|bears|eagles|hawks|cardinals|blue devils|hoosiers|boilermakers|wolverines|buckeyes|spartans|badgers|gophers|hawkeyes|fighting irish|crimson tide|volunteers|razorbacks|rebels|aggies|longhorns|sooners|cowboys|horned frogs|jayhawks|cyclones|mountaineers|red raiders|golden eagles|panthers|cougars|huskies|ducks|beavers|bruins|trojans|sun devils|utes|buffaloes|aztecs|wolf pack|lobos|owls|mean green|roadrunners|miners|mustangs|golden hurricane|shockers|bearcats|red storm|pirates|blue demons|billikens|musketeers|explorers|gaels|zags|gonzaga bulldogs|toreros|matadors|anteaters|gauchos|highlanders|tritons|49ers|beach|titans|broncos|waves|pilots|lions|leopards|big green|crimson|elis|quakers|orange|hokies|cavaliers|tar heels|wolfpack|demon deacons|yellow jackets|seminoles|hurricanes|fighting illini|cornhuskers|nittany lions|terrapins|scarlet knights|hoyas|friars|bluejays|johnnies|red foxes|rams|bonnies|dukes|flyers|colonials|spiders|phoenix|redhawks|penguins|golden flashes|rockets|chippewas|bulls|thundering herd|bobcats|zips|falcons)$/i, '')
+          .replace(/\(.*?\)/g, '')
+          .replace(/st\./g, 'state')
+          .replace(/[^a-z0-9\s]/g, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+      };
+      
+      // Function to find matching Odds API game for a BT game
+      const findOddsMatch = (btHome: string, btAway: string): ScheduleGame | null => {
+        // First try override mapping
+        const oddsHomeOverride = torvikToOddsApi[btHome.toLowerCase()];
+        const oddsAwayOverride = torvikToOddsApi[btAway.toLowerCase()];
+        
+        for (const oddsGame of oddsGames) {
+          const oddsHomeLower = oddsGame.homeTeam.toLowerCase();
+          const oddsAwayLower = oddsGame.awayTeam.toLowerCase();
+          
+          // Try exact override match first
+          if (oddsHomeOverride && oddsAwayOverride) {
+            if (oddsHomeLower.includes(oddsHomeOverride) || oddsHomeOverride.includes(oddsHomeLower)) {
+              if (oddsAwayLower.includes(oddsAwayOverride) || oddsAwayOverride.includes(oddsAwayLower)) {
+                return oddsGame;
+              }
+            }
+          }
+          
+          // Try normalized fuzzy match
+          const btHomeNorm = normalizeForMatch(btHome);
+          const btAwayNorm = normalizeForMatch(btAway);
+          const oddsHomeNorm = normalizeForMatch(oddsGame.homeTeam);
+          const oddsAwayNorm = normalizeForMatch(oddsGame.awayTeam);
+          
+          const homeMatch = btHomeNorm === oddsHomeNorm || 
+                            btHomeNorm.includes(oddsHomeNorm) || 
+                            oddsHomeNorm.includes(btHomeNorm);
+          const awayMatch = btAwayNorm === oddsAwayNorm || 
+                            btAwayNorm.includes(oddsAwayNorm) || 
+                            oddsAwayNorm.includes(btAwayNorm);
+          
+          if (homeMatch && awayMatch) {
+            return oddsGame;
+          }
+        }
+        
+        return null;
+      };
+      
+      // Combine BT games with Odds API data
+      const combinedGames: CombinedScheduleGame[] = btGamesRaw.map((bt: {
+        id?: number;
+        gameDate: string;
+        gameTime?: string;
+        homeTeam: string;
+        awayTeam: string;
+        predictedSpread?: number;
+        predictedTotal?: number;
+        homeWinProb?: number;
+        awayWinProb?: number;
+      }) => {
+        const oddsMatch = findOddsMatch(bt.homeTeam, bt.awayTeam);
+        const dateInfo = getDateLabel(bt.gameDate);
+        
+        return {
+          id: bt.id?.toString() || `${bt.gameDate}-${bt.awayTeam}-${bt.homeTeam}`,
+          gameDate: bt.gameDate,
+          gameTime: bt.gameTime || '',
+          homeTeam: bt.homeTeam,
+          awayTeam: bt.awayTeam,
+          btSpread: bt.predictedSpread ?? null,
+          btTotal: bt.predictedTotal ?? null,
+          homeWinProb: bt.homeWinProb ?? null,
+          awayWinProb: bt.awayWinProb ?? null,
+          // Odds API data
+          oddsGameId: oddsMatch?.id || null,
+          spread: oddsMatch?.spread ?? null,
+          openingSpread: oddsMatch?.openingSpread ?? null,
+          total: oddsMatch?.total ?? null,
+          spreadBookmaker: oddsMatch?.spreadBookmaker ?? null,
+          hasStarted: oddsMatch?.hasStarted ?? false,
+          isFrozen: oddsMatch?.isFrozen ?? false,
+          // Date info
+          isToday: dateInfo.isToday,
+          isTomorrow: dateInfo.isTomorrow,
+          isDay2: dateInfo.isDay2,
+          isDay3: dateInfo.isDay3,
+          dateLabel: dateInfo.label,
+        };
+      });
+      
+      // Sort by date then time
+      combinedGames.sort((a, b) => {
+        const dateCompare = a.gameDate.localeCompare(b.gameDate);
+        if (dateCompare !== 0) return dateCompare;
+        return (a.gameTime || '').localeCompare(b.gameTime || '');
+      });
+      
+      setCombinedScheduleGames(combinedGames);
+      
+      // Log match stats
+      const matchedCount = combinedGames.filter(g => g.oddsGameId !== null).length;
+      console.log(`Loaded ${combinedGames.length} BT games, ${matchedCount} matched with Odds API`);
+      
     } catch (err) {
       console.error('Failed to load schedule:', err);
     } finally {
@@ -627,16 +876,13 @@ export default function RatingsPage() {
       loadOverrides();
     }
     if (activeTab === 'schedule') {
-      if (scheduleGames.length === 0) {
+      // Load combined schedule (BT primary + Odds API enrichment)
+      if (combinedScheduleGames.length === 0) {
         loadSchedule();
       }
       // Also load overrides for team name mapping if not already loaded
       if (overrides.length === 0) {
         loadOverrides();
-      }
-      // Load BT schedule from Supabase if not already loaded
-      if (!btScheduleLoaded && btGames.length === 0) {
-        loadBTScheduleFromSupabase();
       }
     }
     if (activeTab === 'barttorvik' && btGames.length === 0 && btRatings.length === 0) {
@@ -1104,12 +1350,141 @@ export default function RatingsPage() {
     return logs;
   }, [matchingLogs, logFilter, searchTerm, nonD1GameIds]);
 
-  // Filter schedule games
+  // Filter and sort schedule games (now using combinedScheduleGames as primary)
   const filteredScheduleGames = useMemo(() => {
-    if (scheduleFilter === 'today') return scheduleGames.filter(g => g.isToday);
-    if (scheduleFilter === 'tomorrow') return scheduleGames.filter(g => g.isTomorrow);
-    return scheduleGames;
-  }, [scheduleGames, scheduleFilter]);
+    let games = combinedScheduleGames;
+    
+    // Apply date filter
+    if (scheduleFilter === 'today') games = games.filter(g => g.isToday);
+    else if (scheduleFilter === 'tomorrow') games = games.filter(g => g.isTomorrow);
+    else if (scheduleFilter === 'day2') games = games.filter(g => g.isDay2);
+    else if (scheduleFilter === 'day3') games = games.filter(g => g.isDay3);
+    
+    // Helper to find team rating
+    const findTeamRating = (btTeamName: string) => {
+      if (!snapshot?.ratings) return null;
+      const searchLower = btTeamName.toLowerCase();
+      
+      const overrideByTorvik = overrides.find(o => o.torvikName?.toLowerCase() === searchLower);
+      if (overrideByTorvik) {
+        return snapshot.ratings.find(r => r.teamName === overrideByTorvik.kenpomName);
+      }
+      
+      const overrideBySource = overrides.find(o => o.sourceName.toLowerCase() === searchLower);
+      if (overrideBySource) {
+        return snapshot.ratings.find(r => r.teamName === overrideBySource.kenpomName);
+      }
+      
+      let rating = snapshot.ratings.find(r => r.teamName === btTeamName);
+      if (rating) return rating;
+      
+      rating = snapshot.ratings.find(r => r.teamName.toLowerCase() === searchLower);
+      if (rating) return rating;
+      
+      return null;
+    };
+    
+    // Helper to compute movement score for a game
+    // Positive = green (moving toward projection), Negative = red (moving away)
+    // Magnitude = intensity of the color
+    const computeMovementScore = (game: typeof games[0], forTeam: 'home' | 'away'): number | null => {
+      const homeRating = findTeamRating(game.homeTeam);
+      const awayRating = findTeamRating(game.awayTeam);
+      
+      if (!homeRating || !awayRating || game.openingSpread === null || game.spread === null) {
+        return null;
+      }
+      
+      if (game.openingSpread === game.spread) {
+        return 0; // No movement
+      }
+      
+      const projectedSpread = -((homeRating.rating - awayRating.rating) + hca);
+      const openDiff = Math.abs(projectedSpread - game.openingSpread);
+      const currentDiff = Math.abs(projectedSpread - game.spread);
+      const lineMovement = Math.abs(game.spread - game.openingSpread);
+      
+      const movingToward = currentDiff < openDiff;
+      
+      // Determine which team the line is moving toward
+      const movingTowardHome = game.spread < game.openingSpread;
+      
+      // For the requested team, compute score
+      // Positive score = green highlight on this team
+      // Negative score = red highlight on this team
+      if (forTeam === 'home') {
+        if (movingTowardHome) {
+          // Line moving toward home team
+          return movingToward ? lineMovement : -lineMovement;
+        } else {
+          // Line moving toward away team, so home has no highlight
+          return 0;
+        }
+      } else {
+        // away team
+        if (!movingTowardHome) {
+          // Line moving toward away team
+          return movingToward ? lineMovement : -lineMovement;
+        } else {
+          // Line moving toward home team, so away has no highlight
+          return 0;
+        }
+      }
+    };
+    
+    // If sorting by delta or movement, compute values
+    if (scheduleSortBy === 'delta' || scheduleSortBy === 'awayMovement' || scheduleSortBy === 'homeMovement') {
+      const gamesWithValues = games.map(game => {
+        const homeRating = findTeamRating(game.homeTeam);
+        const awayRating = findTeamRating(game.awayTeam);
+        
+        let delta: number | null = null;
+        if (homeRating && awayRating && game.spread !== null) {
+          const projectedSpread = -((homeRating.rating - awayRating.rating) + hca);
+          delta = Math.abs(projectedSpread - game.spread);
+        }
+        
+        const awayMovement = computeMovementScore(game, 'away');
+        const homeMovement = computeMovementScore(game, 'home');
+        
+        return { game, delta, awayMovement, homeMovement };
+      });
+      
+      // Sort based on selected column
+      gamesWithValues.sort((a, b) => {
+        let aVal: number | null;
+        let bVal: number | null;
+        
+        if (scheduleSortBy === 'delta') {
+          aVal = a.delta;
+          bVal = b.delta;
+        } else if (scheduleSortBy === 'awayMovement') {
+          aVal = a.awayMovement;
+          bVal = b.awayMovement;
+        } else {
+          aVal = a.homeMovement;
+          bVal = b.homeMovement;
+        }
+        
+        // Nulls go to the end
+        if (aVal === null && bVal === null) return 0;
+        if (aVal === null) return 1;
+        if (bVal === null) return -1;
+        
+        const comparison = aVal - bVal;
+        return scheduleSortDir === 'desc' ? -comparison : comparison;
+      });
+      
+      return gamesWithValues.map(g => g.game);
+    }
+    
+    // Default: sort by date then time
+    return [...games].sort((a, b) => {
+      const dateCompare = a.gameDate.localeCompare(b.gameDate);
+      if (dateCompare !== 0) return dateCompare;
+      return (a.gameTime || '').localeCompare(b.gameTime || '');
+    });
+  }, [combinedScheduleGames, scheduleFilter, scheduleSortBy, scheduleSortDir, snapshot?.ratings, overrides, hca]);
   
   const toggleSort = (column: typeof sortBy) => {
     if (sortBy === column) setSortDir(sortDir === 'desc' ? 'asc' : 'desc');
@@ -1346,20 +1721,20 @@ export default function RatingsPage() {
                 Ratings {snapshot && `(${snapshot.ratings.length})`}
               </button>
               <button
+                onClick={() => setActiveTab('schedule')}
+                className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === 'schedule' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Schedule
+              </button>
+              <button
                 onClick={() => setActiveTab('hypotheticals')}
                 className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
                   activeTab === 'hypotheticals' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
               >
                 Hypotheticals
-              </button>
-              <button
-                onClick={() => setActiveTab('schedule')}
-                className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === 'schedule' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                Schedule {scheduleGames.length > 0 && `(${scheduleGames.length})`}
               </button>
               <button
                 onClick={() => setActiveTab('matching')}
@@ -1792,16 +2167,28 @@ export default function RatingsPage() {
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-gray-600">Filter:</span>
                   <div className="flex rounded-lg overflow-hidden border border-gray-300">
-                    {(['all', 'today', 'tomorrow'] as const).map((filter) => (
-                      <button
-                        key={filter}
-                        onClick={() => setScheduleFilter(filter)}
-                        className={`px-3 py-1 text-sm font-medium capitalize ${scheduleFilter === filter ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
-                      >
-                        {filter} {filter === 'today' && scheduleGames.filter(g => g.isToday).length > 0 && `(${scheduleGames.filter(g => g.isToday).length})`}
-                        {filter === 'tomorrow' && scheduleGames.filter(g => g.isTomorrow).length > 0 && `(${scheduleGames.filter(g => g.isTomorrow).length})`}
-                      </button>
-                    ))}
+                    {([
+                      { key: 'all', label: 'All' },
+                      { key: 'today', label: 'Today' },
+                      { key: 'tomorrow', label: 'Tomorrow' },
+                      { key: 'day2', label: '+2' },
+                      { key: 'day3', label: '+3' },
+                    ] as const).map(({ key, label }) => {
+                      const count = key === 'today' ? combinedScheduleGames.filter(g => g.isToday).length
+                        : key === 'tomorrow' ? combinedScheduleGames.filter(g => g.isTomorrow).length
+                        : key === 'day2' ? combinedScheduleGames.filter(g => g.isDay2).length
+                        : key === 'day3' ? combinedScheduleGames.filter(g => g.isDay3).length
+                        : 0;
+                      return (
+                        <button
+                          key={key}
+                          onClick={() => setScheduleFilter(key)}
+                          className={`px-3 py-1 text-sm font-medium ${scheduleFilter === key ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+                        >
+                          {label} {count > 0 && `(${count})`}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
                 <button
@@ -1832,53 +2219,98 @@ export default function RatingsPage() {
               ) : filteredScheduleGames.length === 0 ? (
                 <div className="p-8 text-center text-gray-500">
                   <div className="text-4xl mb-3">📅</div>
-                  <p>No games found for {scheduleFilter === 'all' ? 'today or tomorrow' : scheduleFilter}.</p>
+                  <p>No games found for {scheduleFilter === 'all' ? 'the next 4 days' : scheduleFilter}.</p>
+                  <p className="text-sm mt-2">Try refreshing BT data locally.</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-1 sm:px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase whitespace-nowrap w-10 sm:w-auto">Time</th>
-                        <th className="px-1 sm:px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase min-w-[60px] sm:min-w-[120px]">Away</th>
+                        <th 
+                          className="px-1 sm:px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase whitespace-nowrap w-10 sm:w-auto cursor-pointer hover:bg-gray-100"
+                          onClick={() => {
+                            setScheduleSortBy('time');
+                            setScheduleSortDir('asc');
+                          }}
+                        >
+                          Time {scheduleSortBy === 'time' && '↓'}
+                        </th>
+                        <th 
+                          className="px-1 sm:px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase min-w-[60px] sm:min-w-[120px] cursor-pointer hover:bg-gray-100"
+                          onClick={() => {
+                            if (scheduleSortBy === 'awayMovement') {
+                              setScheduleSortDir(scheduleSortDir === 'desc' ? 'asc' : 'desc');
+                            } else {
+                              setScheduleSortBy('awayMovement');
+                              setScheduleSortDir('desc'); // Green (positive) first
+                            }
+                          }}
+                        >
+                          Away {scheduleSortBy === 'awayMovement' && (scheduleSortDir === 'desc' ? '↓' : '↑')}
+                        </th>
                         <th className="px-1 py-3 text-center text-xs font-semibold text-gray-600 uppercase w-6 hidden sm:table-cell"></th>
-                        <th className="px-1 sm:px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase min-w-[60px] sm:min-w-[120px]">Home</th>
+                        <th 
+                          className="px-1 sm:px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase min-w-[60px] sm:min-w-[120px] cursor-pointer hover:bg-gray-100"
+                          onClick={() => {
+                            if (scheduleSortBy === 'homeMovement') {
+                              setScheduleSortDir(scheduleSortDir === 'desc' ? 'asc' : 'desc');
+                            } else {
+                              setScheduleSortBy('homeMovement');
+                              setScheduleSortDir('desc'); // Green (positive) first
+                            }
+                          }}
+                        >
+                          Home {scheduleSortBy === 'homeMovement' && (scheduleSortDir === 'desc' ? '↓' : '↑')}
+                        </th>
                         <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-purple-600 uppercase whitespace-nowrap">BT</th>
                         <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase whitespace-nowrap">Proj</th>
                         <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase whitespace-nowrap">Open</th>
                         <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase whitespace-nowrap">Curr</th>
                         <th className="px-1 sm:px-2 py-3 text-center text-xs font-semibold text-gray-600 uppercase whitespace-nowrap">+/-</th>
-                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase whitespace-nowrap">Delta</th>
+                        <th 
+                          className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase whitespace-nowrap cursor-pointer hover:bg-gray-100"
+                          onClick={() => {
+                            if (scheduleSortBy === 'delta') {
+                              setScheduleSortDir(scheduleSortDir === 'desc' ? 'asc' : 'desc');
+                            } else {
+                              setScheduleSortBy('delta');
+                              setScheduleSortDir('desc'); // Default to highest delta first
+                            }
+                          }}
+                        >
+                          Delta {scheduleSortBy === 'delta' && (scheduleSortDir === 'desc' ? '↓' : '↑')}
+                        </th>
                         <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase whitespace-nowrap hidden sm:table-cell">Total</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {filteredScheduleGames.map((game) => {
-                        const gameDate = new Date(game.commenceTime);
-                        const timeStr = gameDate.toLocaleTimeString('en-US', { 
-                          hour: 'numeric', 
-                          minute: '2-digit',
-                          hour12: true 
-                        });
-                        // Mobile: remove AM/PM
-                        const timeStrMobile = timeStr.replace(/ ?[AP]M$/i, '');
-                        const dayStr = game.isToday ? 'Today' : 'Tomorrow';
+                      {filteredScheduleGames.map((game, index) => {
+                        // Check if we need a date separator row
+                        const prevGame = index > 0 ? filteredScheduleGames[index - 1] : null;
+                        const showDateHeader = !prevGame || prevGame.gameDate !== game.gameDate;
                         
-                        // Find team rating using overrides for Odds API name mapping
-                        const findTeamRating = (oddsApiTeamName: string) => {
+                        // Parse time for display - game.gameTime is in format like "7:00" or "7:00 PM"
+                        const timeStr = game.gameTime || '—';
+                        const timeStrMobile = timeStr.replace(/ ?[AP]M$/i, '');
+                        const dayStr = game.dateLabel;
+                        
+                        // Find team rating using BT team names
+                        // Need to map through overrides: torvikName -> kenpomName
+                        const findTeamRating = (btTeamName: string) => {
                           if (!snapshot?.ratings) return null;
                           
-                          const searchLower = oddsApiTeamName.toLowerCase();
+                          const searchLower = btTeamName.toLowerCase();
                           
-                          // 1. Check if there's an override with this oddsApiName
-                          const overrideByOddsApi = overrides.find(o => 
-                            o.oddsApiName?.toLowerCase() === searchLower
+                          // 1. Check if there's an override with this torvikName -> get kenpomName
+                          const overrideByTorvik = overrides.find(o => 
+                            o.torvikName?.toLowerCase() === searchLower
                           );
-                          if (overrideByOddsApi) {
-                            return snapshot.ratings.find(r => r.teamName === overrideByOddsApi.kenpomName);
+                          if (overrideByTorvik) {
+                            return snapshot.ratings.find(r => r.teamName === overrideByTorvik.kenpomName);
                           }
                           
-                          // 2. Check if there's an override with this sourceName (ESPN name might match Odds API)
+                          // 2. Check if there's an override with this sourceName
                           const overrideBySource = overrides.find(o => 
                             o.sourceName.toLowerCase() === searchLower
                           );
@@ -1887,28 +2319,25 @@ export default function RatingsPage() {
                           }
                           
                           // 3. Try exact match on teamName in ratings
-                          let rating = snapshot.ratings.find(r => r.teamName === oddsApiTeamName);
+                          let rating = snapshot.ratings.find(r => r.teamName === btTeamName);
                           if (rating) return rating;
                           
-                          // 4. Case-insensitive exact match on ratings teamName
+                          // 4. Case-insensitive exact match
                           rating = snapshot.ratings.find(r => 
                             r.teamName.toLowerCase() === searchLower
                           );
                           if (rating) return rating;
                           
-                          // 5. Try matching by checking if ratings teamName is contained at START of Odds API name
-                          // This handles "Duke Blue Devils" -> "Duke", "Oregon Ducks" -> "Oregon"
+                          // 5. Try matching by checking if ratings teamName is at START
                           rating = snapshot.ratings.find(r => {
                             const ratingLower = r.teamName.toLowerCase();
-                            // Check if Odds API name starts with the rating name followed by space
                             return searchLower.startsWith(ratingLower + ' ') || searchLower === ratingLower;
                           });
                           if (rating) return rating;
                           
-                          // 6. Try stripping last word (mascot) from Odds API name and matching
-                          const words = oddsApiTeamName.split(' ');
+                          // 6. Try stripping last word (mascot)
+                          const words = btTeamName.split(' ');
                           if (words.length > 1) {
-                            // Try progressively removing words from the end
                             for (let i = words.length - 1; i >= 1; i--) {
                               const withoutMascot = words.slice(0, i).join(' ');
                               rating = snapshot.ratings.find(r => 
@@ -1918,7 +2347,6 @@ export default function RatingsPage() {
                             }
                           }
                           
-                          // 7. No match found
                           return null;
                         };
                         
@@ -1927,86 +2355,41 @@ export default function RatingsPage() {
                         
                         let projectedSpread: number | null = null;
                         if (homeRating && awayRating) {
-                          // Spread = -(HomeRating - AwayRating + HCA)
                           projectedSpread = -((homeRating.rating - awayRating.rating) + hca);
                           projectedSpread = Math.round(projectedSpread * 100) / 100;
                         }
                         
-                        // Calculate delta (absolute difference)
+                        // Calculate delta (absolute difference between projection and market)
                         let delta: number | null = null;
                         if (projectedSpread !== null && game.spread !== null) {
                           delta = Math.abs(projectedSpread - game.spread);
                           delta = Math.round(delta * 100) / 100;
                         }
                         
-                        // Find matching BT game for Barttorvik projected spread
-                        const findBTGame = (): BTGame | null => {
-                          if (btGames.length === 0) return null;
-                          
-                          // Helper to normalize team name for matching
-                          const normalize = (name: string) => {
-                            return name.toLowerCase()
-                              .replace(/\s+(bulldogs|wildcats|tigers|bears|eagles|hawks|cardinals|blue devils|hoosiers|boilermakers|wolverines|buckeyes|spartans|badgers|gophers|hawkeyes|fighting irish|crimson tide|volunteers|razorbacks|rebels|aggies|longhorns|sooners|cowboys|horned frogs|jayhawks|cyclones|mountaineers|red raiders|golden eagles|panthers|cougars|huskies|ducks|beavers|bruins|trojans|sun devils|utes|buffaloes|aztecs|wolf pack|lobos|owls|mean green|roadrunners|miners|mustangs|golden hurricane|shockers|bearcats|red storm|pirates|blue demons|billikens|musketeers|explorers|gaels|zags|toreros|matadors|anteaters|gauchos|highlanders|tritons|49ers|beach|titans|broncos|waves|pilots|lions|leopards|big green|crimson|elis|quakers|orange|hokies|cavaliers|tar heels|wolfpack|demon deacons|yellow jackets|seminoles|hurricanes|fighting illini|cornhuskers|nittany lions|terrapins|scarlet knights|hoyas|friars|bluejays|johnnies|red foxes|rams|bonnies|dukes|flyers|colonials|spiders|phoenix|redhawks|penguins|golden flashes|rockets|chippewas|bulls|thundering herd|bobcats|red hawks|zips|falcons)$/i, '')
-                              .replace(/\(.*\)/g, '')
-                              .replace(/st\./g, 'state')
-                              .replace(/\s+/g, ' ')
-                              .trim();
-                          };
-                          
-                          const homeNorm = normalize(game.homeTeam);
-                          const awayNorm = normalize(game.awayTeam);
-                          
-                          // Check overrides first: oddsApiName -> torvikName
-                          const homeOverride = overrides.find(o => o.oddsApiName?.toLowerCase() === game.homeTeam.toLowerCase());
-                          const awayOverride = overrides.find(o => o.oddsApiName?.toLowerCase() === game.awayTeam.toLowerCase());
-                          
-                          const homeTorvikName = homeOverride?.torvikName?.toLowerCase();
-                          const awayTorvikName = awayOverride?.torvikName?.toLowerCase();
-                          
-                          return btGames.find(bt => {
-                            const btHome = bt.home_team.toLowerCase();
-                            const btAway = bt.away_team.toLowerCase();
-                            
-                            // Match using overrides if available
-                            const homeMatch = homeTorvikName 
-                              ? btHome === homeTorvikName 
-                              : (btHome === homeNorm || normalize(bt.home_team) === homeNorm);
-                            const awayMatch = awayTorvikName 
-                              ? btAway === awayTorvikName 
-                              : (btAway === awayNorm || normalize(bt.away_team) === awayNorm);
-                            
-                            return homeMatch && awayMatch;
-                          }) || null;
-                        };
+                        // BT spread is already in game.btSpread
+                        const btSpread = game.btSpread;
                         
-                        const btGame = findBTGame();
-                        const btSpread = btGame?.predicted_spread ?? null;
-                        
-                        // Helper function to get graduated background based on line movement
+                        // Line movement highlighting logic
                         const getGreenHighlightClass = (movement: number): string => {
-                          if (movement < 0.5) return ''; // No highlight for less than 0.5 point move
-                          if (movement < 1) return 'bg-green-50'; // 0.5-1: very light
-                          if (movement < 2) return 'bg-green-100'; // 1-2: light
-                          if (movement < 3) return 'bg-green-200'; // 2-3: medium
-                          if (movement < 4) return 'bg-green-300'; // 3-4: stronger
-                          if (movement < 5) return 'bg-green-400'; // 4-5: dark
-                          return 'bg-green-500'; // 5+: solid
+                          if (movement < 0.5) return '';
+                          if (movement < 1) return 'bg-green-50';
+                          if (movement < 2) return 'bg-green-100';
+                          if (movement < 3) return 'bg-green-200';
+                          if (movement < 4) return 'bg-green-300';
+                          if (movement < 5) return 'bg-green-400';
+                          return 'bg-green-500';
                         };
                         
                         const getRedHighlightClass = (movement: number): string => {
-                          if (movement < 0.5) return ''; // No highlight for less than 0.5 point move
-                          if (movement < 1) return 'bg-red-50'; // 0.5-1: very light
-                          if (movement < 2) return 'bg-red-100'; // 1-2: light
-                          if (movement < 3) return 'bg-red-200'; // 2-3: medium
-                          if (movement < 4) return 'bg-red-300'; // 3-4: stronger
-                          if (movement < 5) return 'bg-red-400'; // 4-5: dark
-                          return 'bg-red-500'; // 5+: solid
+                          if (movement < 0.5) return '';
+                          if (movement < 1) return 'bg-red-50';
+                          if (movement < 2) return 'bg-red-100';
+                          if (movement < 3) return 'bg-red-200';
+                          if (movement < 4) return 'bg-red-300';
+                          if (movement < 5) return 'bg-red-400';
+                          return 'bg-red-500';
                         };
                         
-                        // Determine which team to highlight based on line movement direction
-                        // Highlight goes on the team the line is moving TOWARD
-                        // Green = moving TOWARD our projection (good)
-                        // Red = moving AWAY from our projection (bad)
                         let highlightAwayClass = '';
                         let highlightHomeClass = '';
                         
@@ -2015,25 +2398,32 @@ export default function RatingsPage() {
                           const currentDiff = Math.abs(projectedSpread - game.spread);
                           const lineMovement = Math.abs(game.spread - game.openingSpread);
                           
-                          // Determine if line is moving toward or away from projection
                           const movingToward = currentDiff < openDiff;
                           const highlightClass = movingToward ? getGreenHighlightClass(lineMovement) : getRedHighlightClass(lineMovement);
                           
-                          // Determine which team the line is moving TOWARD and highlight that team
-                          // If spread gets more negative (e.g., -10.5 to -12), line moving toward HOME team
-                          // If spread gets more positive (e.g., -10.5 to -8), line moving toward AWAY team
-                          // Color is green if this movement is toward our projection, red if away
                           if (game.spread < game.openingSpread) {
-                            // Line moved more negative = moving toward home team
                             highlightHomeClass = highlightClass;
                           } else {
-                            // Line moved more positive = moving toward away team
                             highlightAwayClass = highlightClass;
                           }
                         }
                         
                         return (
-                          <tr key={game.id} className="hover:bg-gray-50">
+                          <React.Fragment key={game.id}>
+                            {showDateHeader && (
+                              <tr className="bg-blue-100">
+                                <td colSpan={11} className="px-4 py-2">
+                                  <span className="font-semibold text-blue-800 text-sm">
+                                    {game.dateLabel}
+                                    {game.isToday && ' 📍'}
+                                  </span>
+                                  <span className="text-blue-600 text-xs ml-2">
+                                    ({filteredScheduleGames.filter(g => g.gameDate === game.gameDate).length} games)
+                                  </span>
+                                </td>
+                              </tr>
+                            )}
+                            <tr className="hover:bg-gray-50">
                             <td className="px-1 sm:px-4 py-3">
                               <div className="text-xs sm:text-sm font-medium text-gray-900">
                                 <span className="sm:hidden">{timeStrMobile}</span>
@@ -2059,7 +2449,7 @@ export default function RatingsPage() {
                                   );
                                 })()}
                                 <span className="text-sm font-medium text-gray-900 hidden sm:inline">{game.awayTeam}</span>
-                                {!awayRating && <span className="text-xs text-red-400 hidden sm:inline">?</span>}
+                                {!awayRating && <span className="text-xs text-red-400 hidden sm:inline" title="Team not found in ratings">?</span>}
                               </div>
                             </td>
                             <td className="px-1 py-3 text-center text-gray-400 hidden sm:table-cell">@</td>
@@ -2081,12 +2471,12 @@ export default function RatingsPage() {
                                   );
                                 })()}
                                 <span className="text-sm font-medium text-gray-900 hidden sm:inline">{game.homeTeam}</span>
-                                {!homeRating && <span className="text-xs text-red-400 hidden sm:inline">?</span>}
+                                {!homeRating && <span className="text-xs text-red-400 hidden sm:inline" title="Team not found in ratings">?</span>}
                               </div>
                             </td>
                             <td className="px-2 sm:px-4 py-3 text-right">
                               {btSpread !== null ? (
-                                <span className={`font-mono text-xs sm:text-sm font-semibold ${btSpread < 0 ? 'text-purple-600' : btSpread > 0 ? 'text-purple-600' : 'text-gray-600'}`}>
+                                <span className="font-mono text-xs sm:text-sm font-semibold text-purple-600">
                                   {btSpread > 0 ? '+' : ''}{btSpread.toFixed(1)}
                                 </span>
                               ) : (
@@ -2096,16 +2486,15 @@ export default function RatingsPage() {
                             <td className="px-2 sm:px-4 py-3 text-right">
                               {projectedSpread !== null ? (
                                 <span className={`font-mono text-xs sm:text-sm font-semibold ${projectedSpread < 0 ? 'text-green-600' : projectedSpread > 0 ? 'text-red-600' : 'text-gray-600'}`}>
-                                  {projectedSpread > 0 ? '+' : ''}{projectedSpread}
+                                  {projectedSpread > 0 ? '+' : ''}{projectedSpread.toFixed(1)}
                                 </span>
                               ) : (
-                                <span className="text-gray-400">—</span>
+                                <span className="text-gray-400 text-xs" title="Team not found in ratings">⚠️</span>
                               )}
                             </td>
                             <td className="px-2 sm:px-4 py-3 text-right">
                               {game.openingSpread !== null ? (
                                 <div className="relative inline-flex items-center">
-                                  {/* Small logo stamp showing which team the opening spread references */}
                                   {game.openingSpread !== 0 && getTeamLogo(game.homeTeam) && (
                                     <img 
                                       src={getTeamLogo(game.homeTeam)!}
@@ -2129,30 +2518,22 @@ export default function RatingsPage() {
                                   {game.isFrozen && <span className="ml-1 text-gray-400" title="Closing line (game started)">🔒</span>}
                                 </span>
                               ) : (
-                                <span className="text-gray-400">—</span>
+                                <span className="text-gray-400 text-xs" title="No odds available yet">—</span>
                               )}
                             </td>
                             <td className="px-1 sm:px-4 py-3 text-center">
                               {(() => {
-                                // Movement indicator: is line moving toward or away from our projection?
                                 if (projectedSpread === null || game.openingSpread === null || game.spread === null) {
                                   return <span className="text-gray-300">—</span>;
                                 }
-                                
-                                // No movement
                                 if (game.openingSpread === game.spread) {
                                   return <span className="text-gray-400">—</span>;
                                 }
-                                
-                                // Calculate if movement is toward our projection
                                 const openDiff = Math.abs(projectedSpread - game.openingSpread);
                                 const currentDiff = Math.abs(projectedSpread - game.spread);
-                                
                                 if (currentDiff < openDiff) {
-                                  // Moving toward our projection - good!
                                   return <span className="text-green-600 font-bold">+</span>;
                                 } else {
-                                  // Moving away from our projection - bad
                                   return <span className="text-red-600 font-bold">−</span>;
                                 }
                               })()}
@@ -2160,7 +2541,7 @@ export default function RatingsPage() {
                             <td className="px-2 sm:px-4 py-3 text-right">
                               {delta !== null ? (
                                 <span className={`font-mono text-xs sm:text-sm font-semibold px-1 sm:px-2 py-1 rounded ${delta >= 3 ? 'bg-green-100' : 'bg-gray-100'}`}>
-                                  {delta}
+                                  {delta.toFixed(1)}
                                 </span>
                               ) : (
                                 <span className="text-gray-400">—</span>
@@ -2169,11 +2550,14 @@ export default function RatingsPage() {
                             <td className="px-2 sm:px-4 py-3 text-right hidden sm:table-cell">
                               {game.total !== null ? (
                                 <span className="font-mono text-xs sm:text-sm text-gray-700">{game.total}</span>
+                              ) : game.btTotal !== null ? (
+                                <span className="font-mono text-xs sm:text-sm text-purple-400" title="BT projected total">{game.btTotal.toFixed(0)}</span>
                               ) : (
                                 <span className="text-gray-400">—</span>
                               )}
                             </td>
                           </tr>
+                          </React.Fragment>
                         );
                       })}
                     </tbody>

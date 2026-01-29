@@ -296,43 +296,41 @@ async function fetchScheduleForDate(dateStr?: string): Promise<BTGame[]> {
       const dateHeader = document.body.textContent?.match(/Games Scheduled for (\d{2}\/\d{2}\/\d{4})/);
       const gameDate = dateHeader ? dateHeader[1] : new Date().toLocaleDateString('en-US');
       
+      // Convert MM/DD/YYYY to YYYY-MM-DD for consistency
+      const [month, day, year] = gameDate.split('/');
+      const formattedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+      
       rows.forEach((row) => {
         const cells = row.querySelectorAll('td');
-        if (cells.length < 3) return;
+        if (cells.length < 5) return;
         
+        // Get text content from cells
         const cellTexts = Array.from(cells).map(cell => cell.textContent?.trim() || '');
         
-        // First cell is TIME (e.g., "07:00 PM")
-        const time = cellTexts[0];
-        if (!time || !time.includes(':')) return; // Skip header rows
+        // Find team links - there should be 2 team links per row
+        const teamLinks = row.querySelectorAll('a[href*="team.php"]');
+        if (teamLinks.length < 2) return;
         
-        // Second cell is MATCHUP - find team links
-        const teamLinks = cells[1]?.querySelectorAll('a[href*="team.php"]');
-        if (!teamLinks || teamLinks.length < 2) return;
-        
+        // First team link is away, second is home
         const awayTeam = teamLinks[0].textContent?.trim() || '';
         const homeTeam = teamLinks[1].textContent?.trim() || '';
         
-        // Extract ranks from the cell text
-        const matchupText = cellTexts[1];
-        const rankMatches = matchupText.match(/(\d+)\s+\w/g);
-        let awayRank: number | undefined;
-        let homeRank: number | undefined;
+        if (!awayTeam || !homeTeam) return;
         
-        if (rankMatches && rankMatches.length >= 1) {
-          awayRank = parseInt(rankMatches[0]);
-        }
-        // Look for rank before "at"
-        const awayRankMatch = matchupText.match(/^(\d+)\s/);
-        const homeRankMatch = matchupText.match(/at\s+(\d+)\s/);
-        if (awayRankMatch) awayRank = parseInt(awayRankMatch[1]);
-        if (homeRankMatch) homeRank = parseInt(homeRankMatch[1]);
+        // Find the time (format: HH:MM or H:MM, possibly with AM/PM)
+        const timeMatch = cellTexts.find(t => /^\d{1,2}:\d{2}/.test(t));
+        const time = timeMatch || '';
         
-        // Third cell is T-RANK LINE: "Purdue -1.1, 76-75 (54%)"
-        const tRankCell = cellTexts[2];
+        // Extract ranks if present (usually in parentheses or before team name)
+        const awayRankMatch = cellTexts[0]?.match(/^(\d+)/);
+        const homeRankMatch = cellTexts[2]?.match(/^(\d+)/);
+        const awayRank = awayRankMatch ? parseInt(awayRankMatch[1]) : undefined;
+        const homeRank = homeRankMatch ? parseInt(homeRankMatch[1]) : undefined;
         
-        // Parse: "TeamName -X.X, XX-XX (XX%)" - note the comma after spread
-        const tRankMatch = tRankCell.match(/^(.+?)\s+(-?\d+\.?\d*),?\s+(\d+)-(\d+)\s+\((\d+)%\)/);
+        // Look for T-RANK LINE data (format: "TeamName -X.X, YY-ZZ (PP%)")
+        // This contains the predicted spread, total, and win probability
+        const tRankCell = cellTexts.find(t => t.includes('%') && t.includes('-'));
+        const tRankMatch = tRankCell?.match(/([A-Za-z\s.&']+?)\s+(-?\d+\.?\d*),?\s+(\d+)-(\d+)\s+\((\d+)%\)/);
         
         let predictedSpread: number | undefined;
         let predictedTotal: number | undefined;
@@ -366,7 +364,7 @@ async function fetchScheduleForDate(dateStr?: string): Promise<BTGame[]> {
         }
         
         data.push({
-          date: gameDate,
+          date: formattedDate,
           time: time,
           away_team: awayTeam,
           home_team: homeTeam,
@@ -393,7 +391,7 @@ async function fetchScheduleForDate(dateStr?: string): Promise<BTGame[]> {
 }
 
 async function fetchSchedule(): Promise<BTGame[]> {
-  // Get today and tomorrow in YYYYMMDD format (Eastern time)
+  // Get today through day+3 in YYYYMMDD format (Eastern time)
   const now = new Date();
   const eastern = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
   
@@ -404,21 +402,29 @@ async function fetchSchedule(): Promise<BTGame[]> {
     return `${year}${month}${day}`;
   };
   
-  const todayStr = formatDate(eastern);
-  const tomorrow = new Date(eastern);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const tomorrowStr = formatDate(tomorrow);
+  // Build array of 4 dates: today, tomorrow, +2, +3
+  const dates: string[] = [];
+  for (let i = 0; i < 4; i++) {
+    const targetDate = new Date(eastern);
+    targetDate.setDate(targetDate.getDate() + i);
+    dates.push(formatDate(targetDate));
+  }
   
-  console.log(`Fetching BT schedule for today (${todayStr}) and tomorrow (${tomorrowStr})`);
+  console.log(`Fetching BT schedule for 4 days: ${dates.join(', ')}`);
   
-  // Fetch both days
-  const [todayGames, tomorrowGames] = await Promise.all([
-    fetchScheduleForDate(todayStr),
-    fetchScheduleForDate(tomorrowStr),
-  ]);
+  // Fetch all 4 days in parallel
+  const results = await Promise.all(
+    dates.map(dateStr => fetchScheduleForDate(dateStr))
+  );
   
-  const allGames = [...todayGames, ...tomorrowGames];
-  console.log(`Total: ${allGames.length} games (${todayGames.length} today, ${tomorrowGames.length} tomorrow)`);
+  // Combine all games
+  const allGames = results.flat();
+  
+  // Log breakdown
+  console.log(`Total: ${allGames.length} games`);
+  results.forEach((games, i) => {
+    console.log(`  Day ${i} (${dates[i]}): ${games.length} games`);
+  });
   
   return allGames;
 }

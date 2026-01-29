@@ -1108,21 +1108,22 @@ export async function saveBTSchedule(games: BTScheduleGame[]): Promise<void> {
 }
 
 /**
- * Load BT schedule games for a specific date (or today/tomorrow)
+ * Load BT schedule games for a specific date or 4-day window (today through +3)
  */
 export async function loadBTSchedule(date?: string): Promise<BTScheduleGame[]> {
   const supabase = getSupabaseClient();
   
-  // If no date specified, get today and tomorrow
+  // If no date specified, get 4 days: today, tomorrow, +2, +3
   let query = supabase
     .from('ncaab_bt_schedule')
     .select('*')
+    .order('game_date')
     .order('game_time');
   
   if (date) {
     query = query.eq('game_date', date);
   } else {
-    // Get today and tomorrow in US Eastern time
+    // Get today through +3 in US Eastern time
     const now = new Date();
     const eastern = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
     
@@ -1134,13 +1135,16 @@ export async function loadBTSchedule(date?: string): Promise<BTScheduleGame[]> {
       return `${year}-${month}-${day}`;
     };
     
-    const today = formatDate(eastern);
-    const tomorrow = new Date(eastern);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowStr = formatDate(tomorrow);
+    // Build array of 4 dates
+    const dates: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      const targetDate = new Date(eastern);
+      targetDate.setDate(targetDate.getDate() + i);
+      dates.push(formatDate(targetDate));
+    }
     
-    console.log(`[Supabase] Loading BT schedule for ${today} and ${tomorrowStr}`);
-    query = query.in('game_date', [today, tomorrowStr]);
+    console.log(`[Supabase] Loading BT schedule for: ${dates.join(', ')}`);
+    query = query.in('game_date', dates);
   }
   
   const { data, error } = await query;
