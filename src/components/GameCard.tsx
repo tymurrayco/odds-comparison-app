@@ -34,9 +34,10 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
   const isHighlighted = highlightedGameId === game.id;
   
   // Copy game link to clipboard
+  // UPDATED: Now includes league parameter to save API calls on the game page
   const copyGameLink = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const url = `${window.location.origin}/game/${game.id}`;
+    const url = `${window.location.origin}/game/${game.id}?league=${game.sport_key}`;
     navigator.clipboard.writeText(url).then(() => {
       setShowLinkCopied(true);
       setTimeout(() => setShowLinkCopied(false), 2000);

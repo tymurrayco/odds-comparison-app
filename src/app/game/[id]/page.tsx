@@ -2,28 +2,52 @@
 import { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 
+// All supported leagues - used for validation and fallback
+const ALL_LEAGUES = [
+  'basketball_nba',
+  'americanfootball_nfl',
+  'icehockey_nhl',
+  'baseball_mlb',
+  'americanfootball_ncaaf',
+  'basketball_ncaab',
+  'basketball_wnba',
+  'soccer_usa_mls',
+  'soccer_epl'
+];
+
 // Fetch game data server-side for meta tags
-async function getGame(id: string) {
+// UPDATED: Now accepts optional league parameter to avoid checking all leagues (saves up to 8 API calls!)
+async function getGame(id: string, league?: string | null) {
   try {
-    // Try each league until we find the game
-    const leagues = [
-      'basketball_nba',
-      'americanfootball_nfl',
-      'icehockey_nhl',
-      'baseball_mlb',
-      'americanfootball_ncaaf',
-      'basketball_ncaab',
-      'basketball_wnba',
-      'soccer_usa_mls',
-      'soccer_epl'
-    ];
-    
-    for (const league of leagues) {
-      const apiKey = process.env.ODDS_API_KEY;
-      if (!apiKey) continue;
-      
+    const apiKey = process.env.ODDS_API_KEY;
+    if (!apiKey) return null;
+
+    // If league is provided and valid, check that league first (1 API call instead of up to 9!)
+    if (league && ALL_LEAGUES.includes(league)) {
       const response = await fetch(
         `https://api.the-odds-api.com/v4/sports/${league}/odds/?apiKey=${apiKey}&regions=us&markets=spreads,totals,h2h&oddsFormat=american`,
+        { next: { revalidate: 60 } } // Cache for 60 seconds
+      );
+      
+      if (response.ok) {
+        const games = await response.json();
+        const game = games.find((g: { id: string }) => g.id === id);
+        
+        if (game) {
+          return { ...game, sport_key: league };
+        }
+      }
+      // If not found in specified league, fall through to check all leagues
+      // This handles edge cases where league param might be stale/wrong
+    }
+    
+    // Fallback: Try each league until we find the game (for old links without league param)
+    for (const leagueKey of ALL_LEAGUES) {
+      // Skip the league we already checked above
+      if (leagueKey === league) continue;
+      
+      const response = await fetch(
+        `https://api.the-odds-api.com/v4/sports/${leagueKey}/odds/?apiKey=${apiKey}&regions=us&markets=spreads,totals,h2h&oddsFormat=american`,
         { next: { revalidate: 60 } } // Cache for 60 seconds
       );
       
@@ -33,7 +57,7 @@ async function getGame(id: string) {
       const game = games.find((g: { id: string }) => g.id === id);
       
       if (game) {
-        return { ...game, sport_key: league };
+        return { ...game, sport_key: leagueKey };
       }
     }
     
@@ -198,13 +222,17 @@ async function getESPNLogos(
 }
 
 // Generate dynamic metadata for Open Graph
+// UPDATED: Now reads league from searchParams to optimize API usage
 export async function generateMetadata({ 
-  params 
+  params,
+  searchParams
 }: { 
-  params: Promise<{ id: string }> 
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ league?: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const game = await getGame(id);
+  const { league } = await searchParams;
+  const game = await getGame(id, league);
   
   if (!game) {
     return {
@@ -306,13 +334,17 @@ export async function generateMetadata({
 
 // The page component renders content then redirects client-side
 // This allows crawlers to read meta tags before redirect
+// UPDATED: Now reads league from searchParams to optimize API usage
 export default async function GamePage({ 
-  params 
+  params,
+  searchParams
 }: { 
-  params: Promise<{ id: string }> 
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ league?: string }>;
 }) {
   const { id } = await params;
-  const game = await getGame(id);
+  const { league } = await searchParams;
+  const game = await getGame(id, league);
   
   if (!game) {
     redirect('/');

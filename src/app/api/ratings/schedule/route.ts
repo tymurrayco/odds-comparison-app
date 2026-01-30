@@ -501,6 +501,29 @@ export async function GET(request: Request) {
       }
       
       console.log(`[Schedule] Final opening lines count: ${openingLines.size}`);
+      
+      // Update cached closing lines with opening spreads
+      if (openingLines.size > 0) {
+        const gameIdsWithOpening = Array.from(openingLines.keys());
+        const updates = gameIdsWithOpening.map(gameId => ({
+          game_id: gameId,
+          opening_spread: openingLines.get(gameId),
+        }));
+        
+        // Batch update opening spreads
+        for (const update of updates) {
+          const { error: updateError } = await supabase
+            .from('closing_lines')
+            .update({ opening_spread: update.opening_spread })
+            .eq('game_id', update.game_id);
+          
+          if (updateError) {
+            console.warn(`[Schedule] Failed to update opening spread for ${update.game_id}:`, updateError);
+          }
+        }
+        
+        console.log(`[Schedule] Updated ${updates.length} games with opening spreads`);
+      }
     }
     
     // Build the final schedule games list
