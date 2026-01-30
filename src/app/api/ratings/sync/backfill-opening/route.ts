@@ -177,7 +177,7 @@ export async function POST(request: NextRequest) {
       message: `Backfilled ${gamesProcessed} games (${gamesUpdated} updated, ${gamesInserted} inserted). Run the SQL UPDATE to copy opening_spread to ncaab_game_adjustments.`,
     });
     
-} catch (error) {
+  } catch (error) {
     console.error('[Backfill] Error:', error);
     return NextResponse.json({
       success: false,
@@ -209,8 +209,8 @@ async function fetchOddsForTimestamp(apiKey: string, timestamp: string): Promise
     } else {
       console.error(`[Backfill] Pinnacle fetch failed: ${response.status}`);
     }
-  } catch (err) {
-    console.error('[Backfill] Pinnacle fetch error:', err);
+  } catch {
+    console.error('[Backfill] Pinnacle fetch error');
   }
   
   // Also try US books for games Pinnacle might not have
@@ -233,8 +233,8 @@ async function fetchOddsForTimestamp(apiKey: string, timestamp: string): Promise
         }
       }
     }
-  } catch (err) {
-    console.error('[Backfill] US books fetch error:', err);
+  } catch {
+    console.error('[Backfill] US books fetch error');
   }
   
   return allGames;
@@ -317,7 +317,11 @@ export async function GET(request: NextRequest) {
     .gte('game_date', startOfDay)
     .lte('game_date', endOfDay)
     .order('game_date');
-  
+
+  if (error) {
+    return NextResponse.json({ success: false, error: error.message });
+  }
+
   return NextResponse.json({
     success: true,
     date,
