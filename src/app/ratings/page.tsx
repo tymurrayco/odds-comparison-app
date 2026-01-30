@@ -769,35 +769,51 @@ export default function RatingsPage() {
   const loadHistory = async () => {
     setHistoryLoading(true);
     try {
-      const response = await fetch('/api/ratings/schedule/history?limit=250');
-      const data = await response.json();
+      const allGames: HistoryGame[] = [];
+      let offset = 0;
+      const batchSize = 1000;
+      let hasMore = true;
       
-      if (data.success) {
-        // Map from API response to HistoryGame format
-        const games: HistoryGame[] = (data.games || []).map((g: {
-          id: string;
-          commenceTime: string;
-          homeTeam: string;
-          awayTeam: string;
-          projectedSpread: number | null;
-          openingSpread: number | null;
-          spread: number | null;
-          spreadBookmaker: string | null;
-        }) => ({
-          id: g.id,
-          gameDate: g.commenceTime,
-          homeTeam: g.homeTeam,
-          awayTeam: g.awayTeam,
-          projectedSpread: g.projectedSpread,
-          openingSpread: g.openingSpread,
-          closingSpread: g.spread,
-          closingSource: g.spreadBookmaker,
-          difference: g.projectedSpread !== null && g.spread !== null 
-            ? Math.round((g.spread - g.projectedSpread) * 100) / 100
-            : null,
-        }));
-        setHistoryGames(games);
+      while (hasMore) {
+        const response = await fetch(`/api/ratings/schedule/history?limit=${batchSize}&offset=${offset}`);
+        const data = await response.json();
+        
+        if (data.success && data.games && data.games.length > 0) {
+          const games: HistoryGame[] = data.games.map((g: {
+            id: string;
+            commenceTime: string;
+            homeTeam: string;
+            awayTeam: string;
+            projectedSpread: number | null;
+            openingSpread: number | null;
+            spread: number | null;
+            spreadBookmaker: string | null;
+          }) => ({
+            id: g.id,
+            gameDate: g.commenceTime,
+            homeTeam: g.homeTeam,
+            awayTeam: g.awayTeam,
+            projectedSpread: g.projectedSpread,
+            openingSpread: g.openingSpread,
+            closingSpread: g.spread,
+            closingSource: g.spreadBookmaker,
+            difference: g.projectedSpread !== null && g.spread !== null 
+              ? Math.round((g.spread - g.projectedSpread) * 100) / 100
+              : null,
+          }));
+          allGames.push(...games);
+          offset += batchSize;
+          
+          // Stop if we got fewer than requested (no more data)
+          if (data.games.length < batchSize) {
+            hasMore = false;
+          }
+        } else {
+          hasMore = false;
+        }
       }
+      
+      setHistoryGames(allGames);
     } catch (err) {
       console.error('Failed to load history:', err);
     } finally {
@@ -1780,7 +1796,7 @@ export default function RatingsPage() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Power Ratings</h1>
-              <p className="text-sm text-gray-500">Market-adjusted NCAAB power ratings</p>
+              <p className="text-sm text-gray-900">Market-adjusted NCAAB power ratings</p>
             </div>
             <Link href="/" className="text-blue-600 hover:text-blue-700 text-sm font-medium">← Back to Odds</Link>
           </div>
@@ -1792,28 +1808,28 @@ export default function RatingsPage() {
         <div className="bg-white rounded-xl p-6 mb-4 border border-gray-200 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-900">Initial Configuration</h2>
-            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">2025-26 Season</span>
+            <span className="text-xs text-gray-900 bg-gray-100 px-2 py-1 rounded">2025-26 Season</span>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-gray-50 rounded-lg p-4">
-              <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Initial Ratings Source</div>
+              <div className="text-xs font-medium text-gray-900 uppercase tracking-wide mb-1">Initial Ratings Source</div>
               <div className="text-lg font-semibold text-gray-900">KenPom Final AdjEM</div>
-              <div className="text-sm text-gray-600 mt-1">End of 2024-25 season (Apr 7, 2025)</div>
+              <div className="text-sm text-gray-900 mt-1">End of 2024-25 season (Apr 7, 2025)</div>
             </div>
             
             <div className="bg-gray-50 rounded-lg p-4">
-              <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Home Court Advantage</div>
+              <div className="text-xs font-medium text-gray-900 uppercase tracking-wide mb-1">Home Court Advantage</div>
               <div className="text-lg font-semibold text-gray-900">{hca} points</div>
-              <div className="text-sm text-gray-600 mt-1">Added to home team projection</div>
+              <div className="text-sm text-gray-900 mt-1">Added to home team projection</div>
             </div>
             
             <div className="bg-gray-50 rounded-lg p-4">
-              <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Closing Line Source</div>
+              <div className="text-xs font-medium text-gray-900 uppercase tracking-wide mb-1">Closing Line Source</div>
               <div className="text-lg font-semibold text-gray-900">
                 {CLOSING_LINE_SOURCES.find(s => s.value === closingSource)?.label || closingSource}
               </div>
-              <div className="text-sm text-gray-600 mt-1">
+              <div className="text-sm text-gray-900 mt-1">
                 {CLOSING_LINE_SOURCES.find(s => s.value === closingSource)?.description}
               </div>
             </div>
@@ -1825,7 +1841,7 @@ export default function RatingsPage() {
               <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
                 {syncRange?.lastGameDate && (
                   <div className="flex items-center gap-2">
-                    <span className="text-gray-500">Synced through:</span>
+                    <span className="text-gray-900">Synced through:</span>
                     <span className="font-semibold text-blue-600">
                       {new Date(syncRange.lastGameDate).toLocaleDateString('en-US', { 
                         month: 'short', 
@@ -1838,12 +1854,12 @@ export default function RatingsPage() {
                 {snapshot && (
                   <>
                     <div className="flex items-center gap-2">
-                      <span className="text-gray-500">Teams:</span>
-                      <span className="text-gray-700">{snapshot.ratings.length}</span>
+                      <span className="text-gray-900">Teams:</span>
+                      <span className="text-gray-900">{snapshot.ratings.length}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-gray-500">Games processed:</span>
-                      <span className="text-gray-700">{snapshot.gamesProcessed}</span>
+                      <span className="text-gray-900">Games processed:</span>
+                      <span className="text-gray-900">{snapshot.gamesProcessed}</span>
                     </div>
                   </>
                 )}
@@ -1859,7 +1875,7 @@ export default function RatingsPage() {
           
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
+              <label className="block text-xs font-medium text-gray-900 mb-1">Start Date</label>
               <input
                 type="date"
                 value={syncStartDate}
@@ -1868,7 +1884,7 @@ export default function RatingsPage() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
+              <label className="block text-xs font-medium text-gray-900 mb-1">End Date</label>
               <input
                 type="date"
                 value={syncEndDate}
@@ -1877,7 +1893,7 @@ export default function RatingsPage() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Max Games</label>
+              <label className="block text-xs font-medium text-gray-900 mb-1">Max Games</label>
               <input
                 type="text"
                 inputMode="numeric"
@@ -1909,7 +1925,7 @@ export default function RatingsPage() {
                   setSyncStartDate('');
                   setSyncEndDate('');
                 }}
-                className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-lg transition-colors text-sm"
+                className="w-full bg-gray-100 hover:bg-gray-200 text-gray-900 font-medium py-2 px-4 rounded-lg transition-colors text-sm"
               >
                 Clear Dates
               </button>
@@ -1925,7 +1941,7 @@ export default function RatingsPage() {
               </button>
             </div>
           </div>
-          <p className="text-xs text-gray-500 mt-3">
+          <p className="text-xs text-gray-900 mt-3">
             Leave dates empty to sync all unprocessed games. &quot;Recalculate&quot; replays existing games without re-fetching odds.
           </p>
           
@@ -1956,7 +1972,7 @@ export default function RatingsPage() {
               <button
                 onClick={() => setActiveTab('ratings')}
                 className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === 'ratings' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+                  activeTab === 'ratings' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-900 hover:text-gray-900'
                 }`}
               >
                 Ratings {snapshot && `(${snapshot.ratings.length})`}
@@ -1964,7 +1980,7 @@ export default function RatingsPage() {
               <button
                 onClick={() => setActiveTab('schedule')}
                 className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === 'schedule' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+                  activeTab === 'schedule' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-900 hover:text-gray-900'
                 }`}
               >
                 Schedule
@@ -1972,7 +1988,7 @@ export default function RatingsPage() {
               <button
                 onClick={() => setActiveTab('history')}
                 className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === 'history' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+                  activeTab === 'history' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-900 hover:text-gray-900'
                 }`}
               >
                 History {historyGames.length > 0 && `(${historyGames.length})`}
@@ -1980,7 +1996,7 @@ export default function RatingsPage() {
               <button
                 onClick={() => setActiveTab('hypotheticals')}
                 className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === 'hypotheticals' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+                  activeTab === 'hypotheticals' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-900 hover:text-gray-900'
                 }`}
               >
                 Hypotheticals
@@ -1989,7 +2005,7 @@ export default function RatingsPage() {
               <button
                 onClick={() => setActiveTab('matching')}
                 className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === 'matching' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+                  activeTab === 'matching' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-900 hover:text-gray-900'
                 }`}
               >
                 Matching Logs {matchingStats && `(${matchingStats.total})`}
@@ -1999,7 +2015,7 @@ export default function RatingsPage() {
               <button
                 onClick={() => setActiveTab('overrides')}
                 className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === 'overrides' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+                  activeTab === 'overrides' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-900 hover:text-gray-900'
                 }`}
               >
                 Name Overrides {overrides.length > 0 && `(${overrides.length})`}
@@ -2009,7 +2025,7 @@ export default function RatingsPage() {
               <button
                 onClick={() => setActiveTab('barttorvik')}
                 className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === 'barttorvik' ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+                  activeTab === 'barttorvik' ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-900 hover:text-gray-900'
                 }`}
               >
                 BT {btGames.length > 0 && `(${btGames.length})`}
@@ -2076,7 +2092,7 @@ export default function RatingsPage() {
                             className={`hover:bg-gray-50 transition-colors ${hasGames ? 'cursor-pointer' : ''} ${isExpanded ? 'bg-blue-50' : ''}`}
                             onClick={() => hasGames && toggleTeamExpanded(team.teamName)}
                           >
-                            <td className="px-2 sm:px-4 py-3 text-sm text-gray-500">{rank}</td>
+                            <td className="px-2 sm:px-4 py-3 text-sm text-gray-900">{rank}</td>
                             <td className="px-2 sm:px-4 py-3">
                               <div className="flex items-center gap-1 sm:gap-2">
                                 {logoUrl ? (
@@ -2087,7 +2103,7 @@ export default function RatingsPage() {
                                     onError={(e) => { e.currentTarget.style.display = 'none'; }}
                                   />
                                 ) : (
-                                  <div className="w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center text-xs text-gray-500 flex-shrink-0">
+                                  <div className="w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center text-xs text-gray-900 flex-shrink-0">
                                     {team.teamName.charAt(0)}
                                   </div>
                                 )}
@@ -2097,21 +2113,21 @@ export default function RatingsPage() {
                                 )}
                               </div>
                             </td>
-                            <td className="px-2 sm:px-4 py-3 text-sm text-gray-500 hidden sm:table-cell">{team.conference || '-'}</td>
+                            <td className="px-2 sm:px-4 py-3 text-sm text-gray-900 hidden sm:table-cell">{team.conference || '-'}</td>
                             <td className="px-2 sm:px-4 py-3 text-right">
                               <span className={`font-mono font-semibold ${team.rating >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                 {formatRating(team.rating)}
                               </span>
                             </td>
                             <td className="px-2 sm:px-4 py-3 text-right text-sm text-gray-900 font-mono hidden sm:table-cell">
-                              {formatRating(team.initialRating)} <span className="text-gray-500">(#{initialRankMap.get(team.teamName)})</span>
+                              {formatRating(team.initialRating)} <span className="text-gray-900">(#{initialRankMap.get(team.teamName)})</span>
                             </td>
                             <td className="px-2 sm:px-4 py-3 text-right">
                               <span className={`text-sm font-mono ${change > 0 ? 'text-green-600' : change < 0 ? 'text-red-600' : 'text-gray-400'}`}>
                                 {change > 0 ? '+' : ''}{change.toFixed(2)}
                               </span>
                             </td>
-                            <td className="px-2 sm:px-4 py-3 text-right text-sm text-gray-500">{team.gamesProcessed}</td>
+                            <td className="px-2 sm:px-4 py-3 text-right text-sm text-gray-900">{team.gamesProcessed}</td>
                           </tr>
                           
                           {isExpanded && hasGames && (
@@ -2120,7 +2136,7 @@ export default function RatingsPage() {
                                 <div className="py-3 pl-8 pr-4">
                                   <table className="w-full text-sm">
                                     <thead>
-                                      <tr className="text-xs text-gray-500 uppercase">
+                                      <tr className="text-xs text-gray-900 uppercase">
                                         <th className="text-left py-2">Date</th>
                                         <th className="text-left py-2">Opponent</th>
                                         <th className="text-left py-2">Projection Formula</th>
@@ -2142,10 +2158,10 @@ export default function RatingsPage() {
                                         
                                         return (
                                           <tr key={adj.gameId} className="hover:bg-gray-100">
-                                            <td className="py-2 text-gray-600">{new Date(adj.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</td>
+                                            <td className="py-2 text-gray-900">{new Date(adj.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</td>
                                             <td className="py-2">
                                               <div className="flex items-center gap-2">
-                                                <span className="text-gray-500">{details.location}</span>
+                                                <span className="text-gray-900">{details.location}</span>
                                                 {(() => {
                                                   const oppLogo = getTeamLogo(details.opponent);
                                                   return oppLogo ? (
@@ -2162,10 +2178,10 @@ export default function RatingsPage() {
                                                 {adj.isNeutralSite && <span className="text-xs text-amber-600">(N)</span>}
                                               </div>
                                             </td>
-                                            <td className="py-2 font-mono text-xs text-gray-600">
+                                            <td className="py-2 font-mono text-xs text-gray-900">
                                               <span className="text-gray-900">{teamRating.toFixed(1)}</span>
                                               <span className="text-gray-400"> − </span>
-                                              <span className="text-gray-500">{oppRating.toFixed(1)}</span>
+                                              <span className="text-gray-900">{oppRating.toFixed(1)}</span>
                                               {hcaApplied !== 0 && (
                                                 <>
                                                   <span className="text-gray-400"> {hcaApplied > 0 ? '+' : '−'} </span>
@@ -2173,13 +2189,13 @@ export default function RatingsPage() {
                                                 </>
                                               )}
                                               <span className="text-gray-400"> = </span>
-                                              <span className={`font-medium ${teamSpread < 0 ? 'text-green-700' : teamSpread > 0 ? 'text-red-700' : 'text-gray-700'}`}>
+                                              <span className={`font-medium ${teamSpread < 0 ? 'text-green-700' : teamSpread > 0 ? 'text-red-700' : 'text-gray-900'}`}>
                                                 {teamSpread > 0 ? '+' : ''}{teamSpread.toFixed(1)}
                                               </span>
                                             </td>
-                                            <td className="py-2 text-right font-mono text-gray-700">{formatSpread(adj.closingSpread)}</td>
-                                            <td className="py-2 text-right font-mono text-gray-500">{details.ratingBefore.toFixed(2)}</td>
-                                            <td className="py-2 text-right font-mono text-gray-700">{details.ratingAfter.toFixed(2)}</td>
+                                            <td className="py-2 text-right font-mono text-gray-900">{formatSpread(adj.closingSpread)}</td>
+                                            <td className="py-2 text-right font-mono text-gray-900">{details.ratingBefore.toFixed(2)}</td>
+                                            <td className="py-2 text-right font-mono text-gray-900">{details.ratingAfter.toFixed(2)}</td>
                                             <td className={`py-2 text-right font-mono font-medium ${details.ratingChange > 0 ? 'text-green-600' : details.ratingChange < 0 ? 'text-red-600' : 'text-gray-400'}`}>
                                               {details.ratingChange > 0 ? '+' : ''}{details.ratingChange.toFixed(2)}
                                             </td>
@@ -2206,10 +2222,10 @@ export default function RatingsPage() {
             <div className="p-6">
               <div className="max-w-2xl mx-auto">
                 <h2 className="text-lg font-semibold text-gray-900 mb-4">Hypothetical Matchup Calculator</h2>
-                <p className="text-sm text-gray-500 mb-6">Select two teams to see the projected spread based on current power ratings.</p>
+                <p className="text-sm text-gray-900 mb-6">Select two teams to see the projected spread based on current power ratings.</p>
                 
                 {!snapshot ? (
-                  <div className="text-center py-8 text-gray-500">
+                  <div className="text-center py-8 text-gray-900">
                     <p>No ratings available. Sync games first to use the hypothetical matchup calculator.</p>
                   </div>
                 ) : (
@@ -2218,7 +2234,7 @@ export default function RatingsPage() {
                     <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-4 items-end mb-6">
                       {/* Away Team */}
                       <div className="relative">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Away Team</label>
+                        <label className="block text-sm font-medium text-gray-900 mb-1">Away Team</label>
                         <input
                           type="text"
                           value={awayTeamSearch}
@@ -2267,7 +2283,7 @@ export default function RatingsPage() {
 
                       {/* Home Team */}
                       <div className="relative">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Home Team</label>
+                        <label className="block text-sm font-medium text-gray-900 mb-1">Home Team</label>
                         <input
                           type="text"
                           value={homeTeamSearch}
@@ -2311,7 +2327,7 @@ export default function RatingsPage() {
                           onChange={(e) => setIsNeutralSite(e.target.checked)}
                           className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                         />
-                        <span className="text-sm text-gray-700">Neutral Site</span>
+                        <span className="text-sm text-gray-900">Neutral Site</span>
                       </label>
                     </div>
 
@@ -2331,14 +2347,14 @@ export default function RatingsPage() {
                                   onError={(e) => { e.currentTarget.style.display = 'none'; }}
                                 />
                               ) : (
-                                <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center text-2xl text-gray-500 mx-auto mb-2">
+                                <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center text-2xl text-gray-900 mx-auto mb-2">
                                   {matchupProjection.awayTeam.charAt(0)}
                                 </div>
                               );
                             })()}
                             <div className="text-lg font-bold text-gray-900">{matchupProjection.awayTeam}</div>
-                            <div className="text-xs text-gray-500">{matchupProjection.awayConference || 'Unknown'}</div>
-                            <div className="text-sm font-mono text-gray-600 mt-1">
+                            <div className="text-xs text-gray-900">{matchupProjection.awayConference || 'Unknown'}</div>
+                            <div className="text-sm font-mono text-gray-900 mt-1">
                               {formatRating(matchupProjection.awayRating)}
                             </div>
                           </div>
@@ -2360,14 +2376,14 @@ export default function RatingsPage() {
                                   onError={(e) => { e.currentTarget.style.display = 'none'; }}
                                 />
                               ) : (
-                                <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center text-2xl text-gray-500 mx-auto mb-2">
+                                <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center text-2xl text-gray-900 mx-auto mb-2">
                                   {matchupProjection.homeTeam.charAt(0)}
                                 </div>
                               );
                             })()}
                             <div className="text-lg font-bold text-gray-900">{matchupProjection.homeTeam}</div>
-                            <div className="text-xs text-gray-500">{matchupProjection.homeConference || 'Unknown'}</div>
-                            <div className="text-sm font-mono text-gray-600 mt-1">
+                            <div className="text-xs text-gray-900">{matchupProjection.homeConference || 'Unknown'}</div>
+                            <div className="text-sm font-mono text-gray-900 mt-1">
                               {formatRating(matchupProjection.homeRating)}
                             </div>
                           </div>
@@ -2375,10 +2391,10 @@ export default function RatingsPage() {
 
                         {/* Projected Spread */}
                         <div className="text-center border-t border-blue-200 pt-4">
-                          <div className="text-sm text-gray-500 mb-1">Projected Spread</div>
+                          <div className="text-sm text-gray-900 mb-1">Projected Spread</div>
                           <div className={`text-4xl font-bold ${
                             matchupProjection.projectedSpread < 0 ? 'text-green-600' : 
-                            matchupProjection.projectedSpread > 0 ? 'text-red-600' : 'text-gray-600'
+                            matchupProjection.projectedSpread > 0 ? 'text-red-600' : 'text-gray-900'
                           }`}>
                             {matchupProjection.homeTeam} {matchupProjection.projectedSpread === 0 ? 'PK' : `${matchupProjection.projectedSpread > 0 ? '+' : ''}${Math.round(matchupProjection.projectedSpread * 100) / 100}`}
                           </div>
@@ -2388,7 +2404,7 @@ export default function RatingsPage() {
                         </div>
 
                         {/* Calculation Breakdown */}
-                        <div className="mt-4 pt-4 border-t border-blue-200 text-xs text-gray-500 text-center font-mono">
+                        <div className="mt-4 pt-4 border-t border-blue-200 text-xs text-gray-900 text-center font-mono">
                           Home Rating ({formatRating(matchupProjection.homeRating)}) - Away Rating ({formatRating(matchupProjection.awayRating)})
                           {!isNeutralSite && <> + HCA ({hca})</>} = {Math.round((matchupProjection.homeRating - matchupProjection.awayRating + matchupProjection.hcaApplied) * 100) / 100} → 
                           <span className="font-semibold"> Spread: {matchupProjection.projectedSpread === 0 ? 'PK' : `${matchupProjection.projectedSpread > 0 ? '+' : ''}${Math.round(matchupProjection.projectedSpread * 100) / 100}`}</span>
@@ -2398,13 +2414,13 @@ export default function RatingsPage() {
 
                     {/* Empty state when no teams selected */}
                     {!matchupProjection && (homeTeam || awayTeam) && (
-                      <div className="bg-gray-50 rounded-xl p-8 text-center text-gray-500 border border-gray-200">
+                      <div className="bg-gray-50 rounded-xl p-8 text-center text-gray-900 border border-gray-200">
                         Select both teams to see the projected spread.
                       </div>
                     )}
 
                     {!matchupProjection && !homeTeam && !awayTeam && (
-                      <div className="bg-gray-50 rounded-xl p-8 text-center text-gray-500 border border-gray-200">
+                      <div className="bg-gray-50 rounded-xl p-8 text-center text-gray-900 border border-gray-200">
                         <div className="text-4xl mb-3">🏀</div>
                         <p>Search and select teams above to calculate a projected spread.</p>
                       </div>
@@ -2420,7 +2436,7 @@ export default function RatingsPage() {
             <>
               <div className="p-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-600">Filter:</span>
+                  <span className="text-sm text-gray-900">Filter:</span>
                   <div className="flex rounded-lg overflow-hidden border border-gray-300">
                     {([
                       { key: 'all', label: 'All' },
@@ -2438,7 +2454,7 @@ export default function RatingsPage() {
                         <button
                           key={key}
                           onClick={() => setScheduleFilter(key)}
-                          className={`px-3 py-1 text-sm font-medium ${scheduleFilter === key ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+                          className={`px-3 py-1 text-sm font-medium ${scheduleFilter === key ? 'bg-blue-600 text-white' : 'bg-white text-gray-900 hover:bg-gray-50'}`}
                         >
                           {label} {count > 0 && `(${count})`}
                         </button>
@@ -2457,22 +2473,22 @@ export default function RatingsPage() {
 
               {/* Legend/Key for line movement colors */}
               <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 flex flex-wrap items-center gap-4 text-xs">
-                <span className="text-gray-600 font-medium">Line Movement:</span>
+                <span className="text-gray-900 font-medium">Line Movement:</span>
                 <div className="flex items-center gap-1">
                   <div className="w-4 h-4 bg-green-200 rounded"></div>
-                  <span className="text-gray-600">Toward projection</span>
+                  <span className="text-gray-900">Toward projection</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <div className="w-4 h-4 bg-red-200 rounded"></div>
-                  <span className="text-gray-600">Against projection</span>
+                  <span className="text-gray-900">Against projection</span>
                 </div>
                 <span className="text-gray-400 hidden sm:inline">| Intensity = magnitude of move</span>
               </div>
 
               {scheduleLoading ? (
-                <div className="p-8 text-center text-gray-500">Loading schedule...</div>
+                <div className="p-8 text-center text-gray-900">Loading schedule...</div>
               ) : filteredScheduleGames.length === 0 ? (
-                <div className="p-8 text-center text-gray-500">
+                <div className="p-8 text-center text-gray-900">
                   <div className="text-4xl mb-3">📅</div>
                   <p>No games found for {scheduleFilter === 'all' ? 'the next 4 days' : scheduleFilter}.</p>
                   <p className="text-sm mt-2">Try refreshing BT data locally.</p>
@@ -2483,7 +2499,7 @@ export default function RatingsPage() {
                     <thead className="bg-gray-50">
                       <tr>
                         <th 
-                          className="px-1 sm:px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase whitespace-nowrap w-10 sm:w-auto cursor-pointer hover:bg-gray-100"
+                          className="px-1 sm:px-4 py-3 text-left text-xs font-semibold text-gray-900 uppercase whitespace-nowrap w-10 sm:w-auto cursor-pointer hover:bg-gray-100"
                           onClick={() => {
                             setScheduleSortBy('time');
                             setScheduleSortDir('asc');
@@ -2492,7 +2508,7 @@ export default function RatingsPage() {
                           Time {scheduleSortBy === 'time' && '↓'}
                         </th>
                         <th 
-                          className="px-1 sm:px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase min-w-[60px] sm:min-w-[120px] cursor-pointer hover:bg-gray-100"
+                          className="px-1 sm:px-4 py-3 text-center text-xs font-semibold text-gray-900 uppercase min-w-[60px] sm:min-w-[120px] cursor-pointer hover:bg-gray-100"
                           onClick={() => {
                             if (scheduleSortBy === 'awayMovement') {
                               setScheduleSortDir(scheduleSortDir === 'desc' ? 'asc' : 'desc');
@@ -2504,9 +2520,9 @@ export default function RatingsPage() {
                         >
                           Away {scheduleSortBy === 'awayMovement' && (scheduleSortDir === 'desc' ? '↓' : '↑')}
                         </th>
-                        <th className="px-1 py-3 text-center text-xs font-semibold text-gray-600 uppercase w-6 hidden sm:table-cell"></th>
+                        <th className="px-1 py-3 text-center text-xs font-semibold text-gray-900 uppercase w-6 hidden sm:table-cell"></th>
                         <th 
-                          className="px-1 sm:px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase min-w-[60px] sm:min-w-[120px] cursor-pointer hover:bg-gray-100"
+                          className="px-1 sm:px-4 py-3 text-center text-xs font-semibold text-gray-900 uppercase min-w-[60px] sm:min-w-[120px] cursor-pointer hover:bg-gray-100"
                           onClick={() => {
                             if (scheduleSortBy === 'homeMovement') {
                               setScheduleSortDir(scheduleSortDir === 'desc' ? 'asc' : 'desc');
@@ -2519,12 +2535,12 @@ export default function RatingsPage() {
                           Home {scheduleSortBy === 'homeMovement' && (scheduleSortDir === 'desc' ? '↓' : '↑')}
                         </th>
                         <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-purple-600 uppercase whitespace-nowrap">BT</th>
-                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase whitespace-nowrap">Proj</th>
-                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase whitespace-nowrap">Open</th>
-                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase whitespace-nowrap">Curr</th>
-                        <th className="px-1 sm:px-2 py-3 text-center text-xs font-semibold text-gray-600 uppercase whitespace-nowrap">+/-</th>
+                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-900 uppercase whitespace-nowrap">Proj</th>
+                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-900 uppercase whitespace-nowrap">Open</th>
+                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-900 uppercase whitespace-nowrap">Curr</th>
+                        <th className="px-1 sm:px-2 py-3 text-center text-xs font-semibold text-gray-900 uppercase whitespace-nowrap">+/-</th>
                         <th 
-                          className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase whitespace-nowrap cursor-pointer hover:bg-gray-100"
+                          className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-900 uppercase whitespace-nowrap cursor-pointer hover:bg-gray-100"
                           onClick={() => {
                             if (scheduleSortBy === 'delta') {
                               setScheduleSortDir(scheduleSortDir === 'desc' ? 'asc' : 'desc');
@@ -2536,7 +2552,7 @@ export default function RatingsPage() {
                         >
                           Delta {scheduleSortBy === 'delta' && (scheduleSortDir === 'desc' ? '↓' : '↑')}
                         </th>
-                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase whitespace-nowrap hidden sm:table-cell">Total</th>
+                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-900 uppercase whitespace-nowrap hidden sm:table-cell">Total</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -2684,7 +2700,7 @@ export default function RatingsPage() {
                                 <span className="sm:hidden">{timeStrMobile}</span>
                                 <span className="hidden sm:inline">{timeStr}</span>
                               </div>
-                              <div className="text-xs text-gray-500">{dayStr}</div>
+                              <div className="text-xs text-gray-900">{dayStr}</div>
                             </td>
                             <td className={`px-1 sm:px-4 py-3 ${highlightAwayClass}`}>
                               <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2">
@@ -2698,7 +2714,7 @@ export default function RatingsPage() {
                                       title={game.awayTeam}
                                     />
                                   ) : (
-                                    <div className="w-6 h-6 sm:w-6 sm:h-6 bg-gray-200 rounded-full flex items-center justify-center text-xs text-gray-500 flex-shrink-0" title={game.awayTeam}>
+                                    <div className="w-6 h-6 sm:w-6 sm:h-6 bg-gray-200 rounded-full flex items-center justify-center text-xs text-gray-900 flex-shrink-0" title={game.awayTeam}>
                                       {game.awayTeam.charAt(0)}
                                     </div>
                                   );
@@ -2720,7 +2736,7 @@ export default function RatingsPage() {
                                       title={game.homeTeam}
                                     />
                                   ) : (
-                                    <div className="w-6 h-6 sm:w-6 sm:h-6 bg-gray-200 rounded-full flex items-center justify-center text-xs text-gray-500 flex-shrink-0" title={game.homeTeam}>
+                                    <div className="w-6 h-6 sm:w-6 sm:h-6 bg-gray-200 rounded-full flex items-center justify-center text-xs text-gray-900 flex-shrink-0" title={game.homeTeam}>
                                       {game.homeTeam.charAt(0)}
                                     </div>
                                   );
@@ -2740,7 +2756,7 @@ export default function RatingsPage() {
                             </td>
                             <td className="px-2 sm:px-4 py-3 text-right">
                               {projectedSpread !== null ? (
-                                <span className={`font-mono text-xs sm:text-sm font-semibold ${projectedSpread < 0 ? 'text-green-600' : projectedSpread > 0 ? 'text-red-600' : 'text-gray-600'}`}>
+                                <span className={`font-mono text-xs sm:text-sm font-semibold ${projectedSpread < 0 ? 'text-green-600' : projectedSpread > 0 ? 'text-red-600' : 'text-gray-900'}`}>
                                   {projectedSpread > 0 ? '+' : ''}{projectedSpread.toFixed(1)}
                                 </span>
                               ) : (
@@ -2758,7 +2774,7 @@ export default function RatingsPage() {
                                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
                                     />
                                   )}
-                                  <span className={`font-mono text-xs sm:text-sm font-semibold ${game.openingSpread < 0 ? 'text-green-600' : game.openingSpread > 0 ? 'text-red-600' : 'text-gray-600'}`}>
+                                  <span className={`font-mono text-xs sm:text-sm font-semibold ${game.openingSpread < 0 ? 'text-green-600' : game.openingSpread > 0 ? 'text-red-600' : 'text-gray-900'}`}>
                                     {game.openingSpread > 0 ? '+' : ''}{game.openingSpread}
                                   </span>
                                 </div>
@@ -2768,7 +2784,7 @@ export default function RatingsPage() {
                             </td>
                             <td className="px-2 sm:px-4 py-3 text-right">
                               {game.spread !== null ? (
-                                <span className={`font-mono text-xs sm:text-sm font-semibold ${game.spread < 0 ? 'text-green-600' : game.spread > 0 ? 'text-red-600' : 'text-gray-600'}`}>
+                                <span className={`font-mono text-xs sm:text-sm font-semibold ${game.spread < 0 ? 'text-green-600' : game.spread > 0 ? 'text-red-600' : 'text-gray-900'}`}>
                                   {game.spread > 0 ? '+' : ''}{game.spread}
                                   {game.isFrozen && <span className="ml-1 text-gray-400" title="Closing line (game started)">🔒</span>}
                                 </span>
@@ -2804,7 +2820,7 @@ export default function RatingsPage() {
                             </td>
                             <td className="px-2 sm:px-4 py-3 text-right hidden sm:table-cell">
                               {game.total !== null ? (
-                                <span className="font-mono text-xs sm:text-sm text-gray-700">{game.total}</span>
+                                <span className="font-mono text-xs sm:text-sm text-gray-900">{game.total}</span>
                               ) : game.btTotal !== null ? (
                                 <span className="font-mono text-xs sm:text-sm text-purple-400" title="BT projected total">{game.btTotal.toFixed(0)}</span>
                               ) : (
@@ -2817,7 +2833,7 @@ export default function RatingsPage() {
                       })}
                     </tbody>
                   </table>
-                  <div className="px-4 py-2 text-xs text-gray-600 border-t border-gray-100 bg-blue-50">
+                  <div className="px-4 py-2 text-xs text-gray-900 border-t border-gray-100 bg-blue-50">
                     Open & Current spreads sourced from Pinnacle, with DraftKings/FanDuel/BetMGM/BetRivers average as fallback.
                   </div>
                 </div>
@@ -2831,7 +2847,7 @@ export default function RatingsPage() {
               <div className="p-4 border-b border-gray-200">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm text-gray-600">Date Range:</span>
+                    <span className="text-sm text-gray-900">Date Range:</span>
                     <input
                       type="date"
                       value={historyStartDate}
@@ -2848,13 +2864,13 @@ export default function RatingsPage() {
                     {(historyStartDate || historyEndDate) && (
                       <button
                         onClick={() => { setHistoryStartDate(''); setHistoryEndDate(''); }}
-                        className="px-2 py-1 text-xs text-gray-500 hover:text-gray-700"
+                        className="px-2 py-1 text-xs text-gray-900 hover:text-gray-900"
                       >
                         Clear
                       </button>
                     )}
                     <span className="text-gray-300 mx-2">|</span>
-                    <span className="text-sm text-gray-600">|Diff| ≥</span>
+                    <span className="text-sm text-gray-900">|Diff| ≥</span>
                     <input
                       type="range"
                       min="0"
@@ -2866,18 +2882,18 @@ export default function RatingsPage() {
                       onTouchEnd={(e) => setHistoryDiffMin(parseFloat((e.target as HTMLInputElement).value))}
                       className="w-24 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                     />
-                    <span className="text-xs text-gray-600 font-mono w-6">{historyDiffMinDisplay}</span>
+                    <span className="text-xs text-gray-900 font-mono w-6">{historyDiffMinDisplay}</span>
                     {historyDiffMinDisplay !== 0 && (
                       <button
                         onClick={() => { setHistoryDiffMinDisplay(0); setHistoryDiffMin(0); }}
-                        className="px-2 py-1 text-xs text-gray-500 hover:text-gray-700"
+                        className="px-2 py-1 text-xs text-gray-900 hover:text-gray-900"
                       >
                         Reset
                       </button>
                     )}
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-sm text-gray-600">
+                    <span className="text-sm text-gray-900">
                       Showing {filteredHistoryGames.length} of {historyGames.length} games
                     </span>
                     <button
@@ -2901,20 +2917,20 @@ export default function RatingsPage() {
 
               {/* Legend for line movement */}
               <div className="px-4 py-2 text-xs flex flex-wrap items-center gap-2 sm:gap-4 bg-gray-50 border-b border-gray-100">
-                <span className="text-gray-500">Line Movement:</span>
+                <span className="text-gray-900">Line Movement:</span>
                 <div className="flex items-center gap-1">
                   <div className="w-4 h-4 bg-green-200 rounded"></div>
-                  <span className="text-gray-600">Toward projection</span>
+                  <span className="text-gray-900">Toward projection</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <div className="w-4 h-4 bg-red-200 rounded"></div>
-                  <span className="text-gray-600">Against projection</span>
+                  <span className="text-gray-900">Against projection</span>
                 </div>
                 <span className="text-gray-400 ml-2">| Click column headers to sort</span>
               </div>
               
               {historyLoading ? (
-                <div className="p-8 text-center text-gray-500">
+                <div className="p-8 text-center text-gray-900">
                   <svg className="animate-spin h-8 w-8 mx-auto mb-3 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -2922,7 +2938,7 @@ export default function RatingsPage() {
                   Loading history...
                 </div>
               ) : filteredHistoryGames.length === 0 ? (
-                <div className="p-8 text-center text-gray-500">
+                <div className="p-8 text-center text-gray-900">
                   <div className="text-4xl mb-3">📊</div>
                   <p>No historical games found.</p>
                   <p className="text-sm mt-2">{historyGames.length > 0 ? 'Try adjusting the date filter.' : 'Sync games to build history.'}</p>
@@ -2933,7 +2949,7 @@ export default function RatingsPage() {
                     <thead className="bg-gray-50 sticky top-0">
                       <tr>
                         <th 
-                          className="px-2 sm:px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase cursor-pointer hover:bg-gray-100"
+                          className="px-2 sm:px-4 py-3 text-left text-xs font-semibold text-gray-900 uppercase cursor-pointer hover:bg-gray-100"
                           onClick={() => {
                             if (historySortField === 'date') {
                               setHistorySortDirection(d => d === 'asc' ? 'desc' : 'asc');
@@ -2946,7 +2962,7 @@ export default function RatingsPage() {
                           Date {historySortField === 'date' && (historySortDirection === 'desc' ? '↓' : '↑')}
                         </th>
                         <th 
-                          className="px-1 sm:px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase min-w-[60px] sm:min-w-[120px] cursor-pointer hover:bg-gray-100"
+                          className="px-1 sm:px-4 py-3 text-center text-xs font-semibold text-gray-900 uppercase min-w-[60px] sm:min-w-[120px] cursor-pointer hover:bg-gray-100"
                           onClick={() => {
                             if (historySortField === 'awayMovement') {
                               setHistorySortDirection(d => d === 'asc' ? 'desc' : 'asc');
@@ -2958,9 +2974,9 @@ export default function RatingsPage() {
                         >
                           Away {historySortField === 'awayMovement' && (historySortDirection === 'desc' ? '↓' : '↑')}
                         </th>
-                        <th className="px-1 py-3 text-center text-xs font-semibold text-gray-600 uppercase w-6 hidden sm:table-cell"></th>
+                        <th className="px-1 py-3 text-center text-xs font-semibold text-gray-900 uppercase w-6 hidden sm:table-cell"></th>
                         <th 
-                          className="px-1 sm:px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase min-w-[60px] sm:min-w-[120px] cursor-pointer hover:bg-gray-100"
+                          className="px-1 sm:px-4 py-3 text-center text-xs font-semibold text-gray-900 uppercase min-w-[60px] sm:min-w-[120px] cursor-pointer hover:bg-gray-100"
                           onClick={() => {
                             if (historySortField === 'homeMovement') {
                               setHistorySortDirection(d => d === 'asc' ? 'desc' : 'asc');
@@ -2972,12 +2988,12 @@ export default function RatingsPage() {
                         >
                           Home {historySortField === 'homeMovement' && (historySortDirection === 'desc' ? '↓' : '↑')}
                         </th>
-                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Proj</th>
-                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Open</th>
-                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Close</th>
-                        <th className="px-1 sm:px-2 py-3 text-center text-xs font-semibold text-gray-600 uppercase">+/-</th>
+                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-900 uppercase">Proj</th>
+                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-900 uppercase">Open</th>
+                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-900 uppercase">Close</th>
+                        <th className="px-1 sm:px-2 py-3 text-center text-xs font-semibold text-gray-900 uppercase">+/-</th>
                         <th 
-                          className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase cursor-pointer hover:bg-gray-100"
+                          className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-900 uppercase cursor-pointer hover:bg-gray-100"
                           onClick={() => {
                             if (historySortField === 'diff') {
                               setHistorySortDirection(d => d === 'asc' ? 'desc' : 'asc');
@@ -3046,7 +3062,7 @@ export default function RatingsPage() {
                         
                         return (
                           <tr key={game.id} className="hover:bg-gray-50">
-                            <td className="px-2 sm:px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
+                            <td className="px-2 sm:px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
                               {dateStr}
                             </td>
                             <td className={`px-1 sm:px-4 py-3 ${highlightAwayClass}`}>
@@ -3054,7 +3070,7 @@ export default function RatingsPage() {
                                 {awayLogo ? (
                                   <img src={awayLogo} alt={game.awayTeam} className="w-5 h-5 sm:w-6 sm:h-6 object-contain flex-shrink-0" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                                 ) : (
-                                  <div className="w-5 h-5 sm:w-6 sm:h-6 bg-gray-200 rounded-full flex items-center justify-center text-xs text-gray-500 flex-shrink-0">
+                                  <div className="w-5 h-5 sm:w-6 sm:h-6 bg-gray-200 rounded-full flex items-center justify-center text-xs text-gray-900 flex-shrink-0">
                                     {game.awayTeam.charAt(0)}
                                   </div>
                                 )}
@@ -3067,7 +3083,7 @@ export default function RatingsPage() {
                                 {homeLogo ? (
                                   <img src={homeLogo} alt={game.homeTeam} className="w-5 h-5 sm:w-6 sm:h-6 object-contain flex-shrink-0" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                                 ) : (
-                                  <div className="w-5 h-5 sm:w-6 sm:h-6 bg-gray-200 rounded-full flex items-center justify-center text-xs text-gray-500 flex-shrink-0">
+                                  <div className="w-5 h-5 sm:w-6 sm:h-6 bg-gray-200 rounded-full flex items-center justify-center text-xs text-gray-900 flex-shrink-0">
                                     {game.homeTeam.charAt(0)}
                                   </div>
                                 )}
@@ -3126,7 +3142,7 @@ export default function RatingsPage() {
                       })}
                     </tbody>
                   </table>
-                  <div className="px-4 py-2 text-xs text-gray-600 border-t border-gray-100 bg-gray-50">
+                  <div className="px-4 py-2 text-xs text-gray-900 border-t border-gray-100 bg-gray-50">
                     Diff = Close − Proj (negative = market moved toward our projection)
                   </div>
                 </div>
@@ -3141,7 +3157,7 @@ export default function RatingsPage() {
                 <div className="p-4 border-b border-gray-200 bg-gray-50">
                   <div className="flex flex-wrap gap-4">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm text-gray-600">Total:</span>
+                      <span className="text-sm text-gray-900">Total:</span>
                       <span className="font-semibold">{matchingStats.total}</span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -3158,13 +3174,13 @@ export default function RatingsPage() {
 
               <div className="p-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-600">Filter:</span>
+                  <span className="text-sm text-gray-900">Filter:</span>
                   <div className="flex rounded-lg overflow-hidden border border-gray-300">
                     {(['all', 'success', 'failed'] as const).map((filter) => (
                       <button
                         key={filter}
                         onClick={() => setLogFilter(filter)}
-                        className={`px-3 py-1 text-sm font-medium ${logFilter === filter ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+                        className={`px-3 py-1 text-sm font-medium ${logFilter === filter ? 'bg-blue-600 text-white' : 'bg-white text-gray-900 hover:bg-gray-50'}`}
                       >
                         {filter.charAt(0).toUpperCase() + filter.slice(1)}
                       </button>
@@ -3181,24 +3197,24 @@ export default function RatingsPage() {
               </div>
 
               {logsLoading ? (
-                <div className="p-8 text-center text-gray-500">Loading...</div>
+                <div className="p-8 text-center text-gray-900">Loading...</div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Date</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">ESPN Teams</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Matched To</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Status</th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Spread</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Action</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-900 uppercase">Date</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-900 uppercase">ESPN Teams</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-900 uppercase">Matched To</th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-900 uppercase">Status</th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-900 uppercase">Spread</th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-900 uppercase">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {filteredLogs.map((log) => (
                         <tr key={log.gameId} className="hover:bg-gray-50">
-                          <td className="px-4 py-3 text-sm text-gray-600">
+                          <td className="px-4 py-3 text-sm text-gray-900">
                             {new Date(log.gameDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                           </td>
                           <td className="px-4 py-3">
@@ -3230,7 +3246,7 @@ export default function RatingsPage() {
                               {getStatusLabel(log.status)}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-right text-sm font-mono text-gray-700">
+                          <td className="px-4 py-3 text-right text-sm font-mono text-gray-900">
                             {log.closingSpread !== null ? formatSpread(log.closingSpread) : '—'}
                           </td>
                           <td className="px-4 py-3 text-center">
@@ -3266,7 +3282,7 @@ export default function RatingsPage() {
                                 </div>
                                 <button
                                   onClick={() => markAsNonD1(log)}
-                                  className="text-gray-500 hover:text-gray-700 text-xs"
+                                  className="text-gray-900 hover:text-gray-900 text-xs"
                                 >
                                   Mark Non-D1
                                 </button>
@@ -3275,7 +3291,7 @@ export default function RatingsPage() {
                             {log.status === 'no_spread' && (
                               <button
                                 onClick={() => markAsNonD1(log)}
-                                className="text-gray-500 hover:text-gray-700 text-xs"
+                                className="text-gray-900 hover:text-gray-900 text-xs"
                               >
                                 Mark Non-D1
                               </button>
@@ -3296,7 +3312,7 @@ export default function RatingsPage() {
               <div className="p-4 border-b border-gray-200 flex justify-between items-center">
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900">Team Name Overrides</h2>
-                  <p className="text-sm text-gray-500">Manual mappings for team names across data sources</p>
+                  <p className="text-sm text-gray-900">Manual mappings for team names across data sources</p>
                 </div>
                 <button
                   onClick={() => openAddOverrideModal()}
@@ -3307,9 +3323,9 @@ export default function RatingsPage() {
               </div>
 
               {overridesLoading ? (
-                <div className="p-8 text-center text-gray-500">Loading...</div>
+                <div className="p-8 text-center text-gray-900">Loading...</div>
               ) : overrides.length === 0 ? (
-                <div className="p-8 text-center text-gray-500">
+                <div className="p-8 text-center text-gray-900">
                   No overrides yet. Add one to map unmatched team names.
                 </div>
               ) : (
@@ -3317,13 +3333,13 @@ export default function RatingsPage() {
                   <table className="w-full text-sm">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Source</th>
-                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">KenPom</th>
-                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">ESPN</th>
-                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Odds API</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-900 uppercase">Source</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-900 uppercase">KenPom</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-900 uppercase">ESPN</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-900 uppercase">Odds API</th>
                         <th className="px-3 py-2 text-left text-xs font-semibold text-purple-600 uppercase">Torvik</th>
-                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Notes</th>
-                        <th className="px-3 py-2 text-center text-xs font-semibold text-gray-600 uppercase w-28">Actions</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-900 uppercase">Notes</th>
+                        <th className="px-3 py-2 text-center text-xs font-semibold text-gray-900 uppercase w-28">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -3452,7 +3468,7 @@ export default function RatingsPage() {
                                 </button>
                                 <button
                                   onClick={cancelInlineEdit}
-                                  className="text-gray-500 hover:text-gray-700 text-xs font-medium"
+                                  className="text-gray-900 hover:text-gray-900 text-xs font-medium"
                                 >
                                   Cancel
                                 </button>
@@ -3465,7 +3481,7 @@ export default function RatingsPage() {
                               <td className="px-3 py-2 text-blue-600">{override.espnName || <span className="text-gray-300">—</span>}</td>
                               <td className="px-3 py-2 text-orange-600">{override.oddsApiName || <span className="text-gray-300">—</span>}</td>
                               <td className="px-3 py-2 text-purple-600 font-medium">{override.torvikName || <span className="text-gray-300">—</span>}</td>
-                              <td className="px-3 py-2 text-gray-500 truncate max-w-32">{override.notes || <span className="text-gray-300">—</span>}</td>
+                              <td className="px-3 py-2 text-gray-900 truncate max-w-32">{override.notes || <span className="text-gray-300">—</span>}</td>
                               <td className="px-3 py-2 text-center whitespace-nowrap">
                                 <button
                                   onClick={() => startInlineEdit(override)}
@@ -3498,7 +3514,7 @@ export default function RatingsPage() {
               <div className="p-4 border-b border-gray-200 bg-purple-50">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-gray-600 font-medium">View:</span>
+                    <span className="text-sm text-gray-900 font-medium">View:</span>
                     <div className="flex rounded-lg overflow-hidden border border-purple-300">
                       <button
                         onClick={() => setBtView('schedule')}
@@ -3541,7 +3557,7 @@ export default function RatingsPage() {
                     <button
                       onClick={syncTorvikTeams}
                       disabled={btLoading}
-                      className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 disabled:bg-gray-100 text-gray-700 text-sm font-medium rounded-lg transition-colors border border-gray-300"
+                      className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 disabled:bg-gray-100 text-gray-900 text-sm font-medium rounded-lg transition-colors border border-gray-300"
                       title="Save all Torvik team names to database (run once)"
                     >
                       Sync Teams
@@ -3559,7 +3575,7 @@ export default function RatingsPage() {
               {btLoading ? (
                 <div className="p-12 text-center">
                   <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-purple-500 mx-auto mb-4"></div>
-                  <p className="text-gray-500">Loading Barttorvik data...</p>
+                  <p className="text-gray-900">Loading Barttorvik data...</p>
                 </div>
               ) : (
                 <>
@@ -3569,7 +3585,7 @@ export default function RatingsPage() {
                       {btGames.length === 0 ? (
                         <div className="p-12 text-center">
                           <div className="text-5xl mb-4">📅</div>
-                          <p className="text-gray-500">No games loaded. Click Refresh to fetch data.</p>
+                          <p className="text-gray-900">No games loaded. Click Refresh to fetch data.</p>
                         </div>
                       ) : (
                         <table className="w-full">
@@ -3610,7 +3626,7 @@ export default function RatingsPage() {
                                     key={idx} 
                                     className={`hover:bg-purple-50 transition-colors ${hasEdge ? 'bg-green-50' : ''}`}
                                   >
-                                    <td className="px-4 py-3 text-sm text-gray-600">
+                                    <td className="px-4 py-3 text-sm text-gray-900">
                                       <div>{game.date}</div>
                                       <div className="text-xs text-gray-400">{game.time}</div>
                                     </td>
@@ -3643,19 +3659,19 @@ export default function RatingsPage() {
                                     <td className="px-4 py-3 text-center">
                                       {game.predicted_spread != null ? (
                                         <span className={`font-mono font-semibold ${
-                                          spreadDiff && spreadDiff >= 2 ? 'text-purple-700 bg-purple-100 px-2 py-0.5 rounded' : 'text-gray-700'
+                                          spreadDiff && spreadDiff >= 2 ? 'text-purple-700 bg-purple-100 px-2 py-0.5 rounded' : 'text-gray-900'
                                         }`}>
                                           {game.predicted_spread > 0 ? '+' : ''}{game.predicted_spread.toFixed(1)}
                                         </span>
                                       ) : '-'}
                                     </td>
-                                    <td className="px-4 py-3 text-center font-mono text-gray-600">
+                                    <td className="px-4 py-3 text-center font-mono text-gray-900">
                                       {game.total?.toFixed(1) || '-'}
                                     </td>
                                     <td className="px-4 py-3 text-center">
                                       {game.predicted_total != null ? (
                                         <span className={`font-mono font-semibold ${
-                                          totalDiff && totalDiff >= 3 ? 'text-purple-700 bg-purple-100 px-2 py-0.5 rounded' : 'text-gray-700'
+                                          totalDiff && totalDiff >= 3 ? 'text-purple-700 bg-purple-100 px-2 py-0.5 rounded' : 'text-gray-900'
                                         }`}>
                                           {game.predicted_total.toFixed(1)}
                                         </span>
@@ -3664,7 +3680,7 @@ export default function RatingsPage() {
                                     <td className="px-4 py-3 text-center">
                                       {game.home_win_prob != null ? (
                                         <div className="text-xs">
-                                          <div className="text-gray-500">{(game.away_win_prob! * 100).toFixed(0)}%</div>
+                                          <div className="text-gray-900">{(game.away_win_prob! * 100).toFixed(0)}%</div>
                                           <div className="font-semibold text-purple-700">{(game.home_win_prob * 100).toFixed(0)}%</div>
                                         </div>
                                       ) : '-'}
@@ -3684,7 +3700,7 @@ export default function RatingsPage() {
                       {btRatings.length === 0 ? (
                         <div className="p-12 text-center">
                           <div className="text-5xl mb-4">📊</div>
-                          <p className="text-gray-500">No ratings loaded. Click Refresh to fetch data.</p>
+                          <p className="text-gray-900">No ratings loaded. Click Refresh to fetch data.</p>
                         </div>
                       ) : (
                         <table className="w-full">
@@ -3714,11 +3730,11 @@ export default function RatingsPage() {
                                   <td className="px-4 py-3">
                                     <span className="font-medium text-gray-900">{rating.team}</span>
                                   </td>
-                                  <td className="px-4 py-3 text-sm text-gray-600">{rating.conf}</td>
-                                  <td className="px-4 py-3 text-center text-sm text-gray-600">{rating.record}</td>
+                                  <td className="px-4 py-3 text-sm text-gray-900">{rating.conf}</td>
+                                  <td className="px-4 py-3 text-center text-sm text-gray-900">{rating.record}</td>
                                   <td className="px-4 py-3 text-right font-mono text-sm text-green-700">{rating.adj_o.toFixed(1)}</td>
                                   <td className="px-4 py-3 text-right font-mono text-sm text-red-700">{rating.adj_d.toFixed(1)}</td>
-                                  <td className="px-4 py-3 text-right font-mono text-sm text-gray-600">{rating.adj_t.toFixed(1)}</td>
+                                  <td className="px-4 py-3 text-right font-mono text-sm text-gray-900">{rating.adj_t.toFixed(1)}</td>
                                   <td className="px-4 py-3 text-right font-mono text-sm font-semibold text-purple-700">
                                     {rating.barthag.toFixed(4)}
                                   </td>
@@ -3740,7 +3756,7 @@ export default function RatingsPage() {
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-12 text-center mt-6">
             <div className="text-6xl mb-4">📊</div>
             <h2 className="text-xl font-semibold mb-2 text-gray-900">No Ratings Calculated Yet</h2>
-            <p className="text-gray-500 mb-6">Click &ldquo;Sync Games&rdquo; to generate market-adjusted power ratings.</p>
+            <p className="text-gray-900 mb-6">Click &ldquo;Sync Games&rdquo; to generate market-adjusted power ratings.</p>
           </div>
         )}
       </main>
@@ -3761,7 +3777,7 @@ export default function RatingsPage() {
             
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-900 mb-1">
                   Source Name (ESPN/OddsAPI)
                 </label>
                 <input
@@ -3774,7 +3790,7 @@ export default function RatingsPage() {
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-900 mb-1">
                   KenPom Name
                 </label>
                 <input
@@ -3791,7 +3807,7 @@ export default function RatingsPage() {
                   autoComplete="off"
                 />
                 {kenpomTeams.length === 0 && kenpomSearch && (
-                  <p className="mt-1 text-sm text-gray-500">Loading teams...</p>
+                  <p className="mt-1 text-sm text-gray-900">Loading teams...</p>
                 )}
                 {showKenpomDropdown && filteredKenpomTeams.length > 0 && (
                   <div className="mt-1 border border-gray-200 rounded-lg max-h-48 overflow-y-auto bg-white shadow-lg">
@@ -3806,7 +3822,7 @@ export default function RatingsPage() {
                           setShowKenpomDropdown(false);
                         }}
                         className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 border-b border-gray-100 last:border-b-0 ${
-                          newOverride.kenpomName === team ? 'bg-blue-100 text-blue-700 font-medium' : 'text-gray-700'
+                          newOverride.kenpomName === team ? 'bg-blue-100 text-blue-700 font-medium' : 'text-gray-900'
                         }`}
                       >
                         {team}
@@ -3823,7 +3839,7 @@ export default function RatingsPage() {
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-900 mb-1">
                   Notes (optional)
                 </label>
                 <input
@@ -3836,7 +3852,7 @@ export default function RatingsPage() {
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-900 mb-1">
                   ESPN Name (for logo lookup, optional)
                 </label>
                 <input
@@ -3846,13 +3862,13 @@ export default function RatingsPage() {
                   placeholder="e.g., UConn, NC State, Ole Miss"
                   className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-900"
                 />
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="mt-1 text-xs text-gray-900">
                   Only needed if logo doesn&apos;t show. Use ESPN&apos;s display name.
                 </p>
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-900 mb-1">
                   Odds API Name (for game matching, optional)
                 </label>
                 <input
@@ -3869,7 +3885,7 @@ export default function RatingsPage() {
                   autoComplete="off"
                 />
                 {oddsApiTeams.length === 0 && oddsApiSearch && (
-                  <p className="mt-1 text-sm text-gray-500">No Odds API teams loaded yet. Run a sync first to populate.</p>
+                  <p className="mt-1 text-sm text-gray-900">No Odds API teams loaded yet. Run a sync first to populate.</p>
                 )}
                 {showOddsApiDropdown && filteredOddsApiTeams.length > 0 && (
                   <div className="mt-1 border border-gray-200 rounded-lg max-h-48 overflow-y-auto bg-white shadow-lg">
@@ -3884,7 +3900,7 @@ export default function RatingsPage() {
                           setShowOddsApiDropdown(false);
                         }}
                         className={`w-full text-left px-3 py-2 text-sm hover:bg-orange-50 border-b border-gray-100 last:border-b-0 ${
-                          newOverride.oddsApiName === team ? 'bg-orange-100 text-orange-700 font-medium' : 'text-gray-700'
+                          newOverride.oddsApiName === team ? 'bg-orange-100 text-orange-700 font-medium' : 'text-gray-900'
                         }`}
                       >
                         {team}
@@ -3898,13 +3914,13 @@ export default function RatingsPage() {
                 {newOverride.oddsApiName && !showOddsApiDropdown && (
                   <p className="mt-1 text-sm text-green-600">✓ Selected: {newOverride.oddsApiName}</p>
                 )}
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="mt-1 text-xs text-gray-900">
                   Use if games fail with &quot;No Odds&quot;. Select the matching team from Odds API.
                 </p>
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-900 mb-1">
                   Torvik Name (for BT schedule matching, optional)
                 </label>
                 <input
@@ -3914,7 +3930,7 @@ export default function RatingsPage() {
                   placeholder="e.g., Miami OH, N.C. State, UConn"
                   className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-900"
                 />
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="mt-1 text-xs text-gray-900">
                   Use the exact team name from Barttorvik&apos;s schedule to match with market odds.
                 </p>
               </div>
@@ -3923,7 +3939,7 @@ export default function RatingsPage() {
             <div className="flex justify-end gap-3 mt-6">
               <button
                 onClick={() => setShowOverrideModal(false)}
-                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg font-medium"
+                className="px-4 py-2 text-gray-900 hover:bg-gray-100 rounded-lg font-medium"
               >
                 Cancel
               </button>
@@ -3940,7 +3956,7 @@ export default function RatingsPage() {
       
       {/* Footer */}
       <footer className="border-t border-gray-200 mt-12 py-6 bg-white">
-        <div className="max-w-7xl mx-auto px-4 text-center text-sm text-gray-500">
+        <div className="max-w-7xl mx-auto px-4 text-center text-sm text-gray-900">
           <p>Initial ratings from KenPom final AdjEM, adjusted using closing lines.</p>
         </div>
       </footer>

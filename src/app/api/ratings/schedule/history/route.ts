@@ -1,6 +1,6 @@
 // src/app/api/ratings/schedule/history/route.ts
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 // Force dynamic rendering
@@ -12,6 +12,10 @@ export const revalidate = 0;
  * 
  * Fetches historical games with closing lines from Supabase.
  * Uses ncaab_game_adjustments which has projected spreads and opening spreads.
+ * 
+ * Query params:
+ *   - limit: number of records to fetch (default 1000)
+ *   - offset: starting position for pagination (default 0)
  */
 
 // Initialize Supabase client
@@ -35,14 +39,18 @@ interface HistoryGame {
   isFrozen: boolean;
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url);
+    const limit = parseInt(searchParams.get('limit') || '1000');
+    const offset = parseInt(searchParams.get('offset') || '0');
+    
     // Fetch game adjustments which have projected spread, closing spread, opening spread, and team names
     const { data: adjustments, error } = await supabase
       .from('ncaab_game_adjustments')
       .select('*')
       .order('game_date', { ascending: false })
-      .limit(5000);
+      .range(offset, offset + limit - 1);
     
     if (error) {
       console.error('[History] Supabase error:', error);
@@ -79,12 +87,14 @@ export async function GET() {
         isFrozen: true,
       }));
     
-    console.log(`[History] Returning ${games.length} historical games from game_adjustments`);
+    console.log(`[History] Returning ${games.length} historical games (offset: ${offset}, limit: ${limit})`);
     
     return NextResponse.json({
       success: true,
       games,
       count: games.length,
+      offset,
+      limit,
     }, {
       headers: {
         'Cache-Control': 'no-store, max-age=0',
