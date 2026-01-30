@@ -1124,22 +1124,35 @@ export async function loadBTSchedule(date?: string): Promise<BTScheduleGame[]> {
     query = query.eq('game_date', date);
   } else {
     // Get today through +3 in US Eastern time
+    // Eastern is UTC-5 (EST) or UTC-4 (EDT)
+    // Use a reliable method that works in serverless environments
     const now = new Date();
-    const eastern = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    const utcTime = now.getTime();
     
-    // Format as YYYY-MM-DD without using toISOString (which converts to UTC)
+    // Determine if we're in EDT (March-November) or EST
+    // Simple approximation: EDT from second Sunday of March to first Sunday of November
+    const year = now.getUTCFullYear();
+    const marchSecondSunday = new Date(Date.UTC(year, 2, 8 + (7 - new Date(Date.UTC(year, 2, 1)).getUTCDay()) % 7, 7)); // 2am EST = 7am UTC
+    const novFirstSunday = new Date(Date.UTC(year, 10, 1 + (7 - new Date(Date.UTC(year, 10, 1)).getUTCDay()) % 7, 6)); // 2am EDT = 6am UTC
+    
+    const isDST = utcTime >= marchSecondSunday.getTime() && utcTime < novFirstSunday.getTime();
+    const easternOffset = isDST ? -4 : -5; // EDT = -4, EST = -5
+    
+    // Get Eastern time by applying offset
+    const easternTime = new Date(utcTime + (easternOffset * 60 * 60 * 1000));
+    
+    // Format as YYYY-MM-DD using UTC methods (since we already adjusted for Eastern)
     const formatDate = (d: Date) => {
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
+      const year = d.getUTCFullYear();
+      const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(d.getUTCDate()).padStart(2, '0');
       return `${year}-${month}-${day}`;
     };
     
     // Build array of 4 dates
     const dates: string[] = [];
     for (let i = 0; i < 4; i++) {
-      const targetDate = new Date(eastern);
-      targetDate.setDate(targetDate.getDate() + i);
+      const targetDate = new Date(easternTime.getTime() + (i * 24 * 60 * 60 * 1000));
       dates.push(formatDate(targetDate));
     }
     
