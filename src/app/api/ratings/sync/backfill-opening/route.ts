@@ -177,7 +177,7 @@ export async function POST(request: NextRequest) {
       message: `Backfilled ${gamesProcessed} games (${gamesUpdated} updated, ${gamesInserted} inserted). Run the SQL UPDATE to copy opening_spread to ncaab_game_adjustments.`,
     });
     
-  } catch (error) {
+  } catch (_error) {
     console.error('[Backfill] Error:', error);
     return NextResponse.json({
       success: false,

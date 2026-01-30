@@ -2,7 +2,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { 
   RatingsSnapshot, 
@@ -132,6 +132,12 @@ export default function RatingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<RatingsSnapshot | null>(null);
   const [syncRange, setSyncRange] = useState<{ firstGameDate: string | null; lastGameDate: string | null } | null>(null);
+  
+  // Check if running locally
+  const [isLocalhost, setIsLocalhost] = useState(false);
+  useEffect(() => {
+    setIsLocalhost(window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  }, []);
   
   // Matching logs state
   const [matchingLogs, setMatchingLogs] = useState<MatchingLog[]>([]);
@@ -1020,10 +1026,10 @@ export default function RatingsPage() {
 
   // Load data when switching tabs
   useEffect(() => {
-    if (activeTab === 'matching' && matchingLogs.length === 0) {
+    if (isLocalhost && activeTab === 'matching' && matchingLogs.length === 0) {
       loadMatchingLogs();
     }
-    if (activeTab === 'overrides' && overrides.length === 0) {
+    if (isLocalhost && activeTab === 'overrides' && overrides.length === 0) {
       loadOverrides();
     }
     if (activeTab === 'schedule') {
@@ -1039,11 +1045,11 @@ export default function RatingsPage() {
     if (activeTab === 'history' && historyGames.length === 0) {
       loadHistory();
     }
-    if (activeTab === 'barttorvik' && btGames.length === 0 && btRatings.length === 0) {
+    if (isLocalhost && activeTab === 'barttorvik' && btGames.length === 0 && btRatings.length === 0) {
       loadBarttorvik();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab]);
+  }, [activeTab, isLocalhost]);
   
   const calculateRatings = async () => {
     setLoading(true);
@@ -1846,7 +1852,8 @@ export default function RatingsPage() {
           )}
         </div>
 
-        {/* Date Range Sync Panel */}
+        {/* Date Range Sync Panel - Only show on localhost */}
+        {isLocalhost && (
         <div className="bg-white rounded-xl p-6 mb-6 border border-gray-200 shadow-sm">
           <h2 className="text-lg font-semibold mb-4 text-gray-900">Sync Games</h2>
           
@@ -1940,6 +1947,7 @@ export default function RatingsPage() {
             </div>
           )}
         </div>
+        )}
 
         {/* Tabs */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -1977,6 +1985,7 @@ export default function RatingsPage() {
               >
                 Hypotheticals
               </button>
+              {isLocalhost && (
               <button
                 onClick={() => setActiveTab('matching')}
                 className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
@@ -1985,6 +1994,8 @@ export default function RatingsPage() {
               >
                 Matching Logs {matchingStats && `(${matchingStats.total})`}
               </button>
+              )}
+              {isLocalhost && (
               <button
                 onClick={() => setActiveTab('overrides')}
                 className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
@@ -1993,6 +2004,8 @@ export default function RatingsPage() {
               >
                 Name Overrides {overrides.length > 0 && `(${overrides.length})`}
               </button>
+              )}
+              {isLocalhost && (
               <button
                 onClick={() => setActiveTab('barttorvik')}
                 className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
@@ -2001,6 +2014,7 @@ export default function RatingsPage() {
               >
                 BT {btGames.length > 0 && `(${btGames.length})`}
               </button>
+              )}
             </nav>
           </div>
           
@@ -3121,7 +3135,7 @@ export default function RatingsPage() {
           )}
 
           {/* Matching Log Tab */}
-          {activeTab === 'matching' && (
+          {isLocalhost && activeTab === 'matching' && (
             <>
               {matchingStats && (
                 <div className="p-4 border-b border-gray-200 bg-gray-50">
@@ -3277,7 +3291,7 @@ export default function RatingsPage() {
           )}
 
           {/* Overrides Tab */}
-          {activeTab === 'overrides' && (
+          {isLocalhost && activeTab === 'overrides' && (
             <>
               <div className="p-4 border-b border-gray-200 flex justify-between items-center">
                 <div>
@@ -3478,7 +3492,7 @@ export default function RatingsPage() {
           )}
 
           {/* Barttorvik Tab */}
-          {activeTab === 'barttorvik' && (
+          {isLocalhost && activeTab === 'barttorvik' && (
             <>
               {/* Sub-tabs and controls */}
               <div className="p-4 border-b border-gray-200 bg-purple-50">
