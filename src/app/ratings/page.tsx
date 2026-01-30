@@ -411,37 +411,18 @@ export default function RatingsPage() {
         console.log(`Fetched ${btGamesRaw.length} BT games from API`);
       }
       
-      // Load Odds API and overrides in parallel
-      const [oddsRes, overridesRes] = await Promise.all([
-        fetch(`/api/ratings/schedule?timezone=${encodeURIComponent(timezone)}&_t=${cacheBuster}`),
-        overrides.length === 0 ? fetch('/api/ratings/overrides') : Promise.resolve(null),
-      ]);
-      
-      const oddsData = await oddsRes.json();
-      
-      // Load overrides if not already loaded
+      // Load overrides first (needed for team name mapping)
       let currentOverrides = overrides;
-      if (overridesRes) {
-        const overridesData = await overridesRes.json();
-        if (overridesData.success) {
-          currentOverrides = overridesData.overrides || [];
-          setOverrides(currentOverrides);
-        }
-      }
-      
-      const oddsGames: ScheduleGame[] = oddsData.success ? (oddsData.games || []) : [];
-      
-      // Also update scheduleGames for backward compatibility
-      if (oddsData.success && oddsData.games) {
-        setScheduleGames(oddsData.games);
-      }
-      
-      // Build lookup maps for matching BT teams to Odds API teams
-      // torvikName -> oddsApiName
-      const torvikToOddsApi: Record<string, string> = {};
-      for (const override of currentOverrides) {
-        if (override.torvikName && override.oddsApiName) {
-          torvikToOddsApi[override.torvikName.toLowerCase()] = override.oddsApiName.toLowerCase();
+      if (overrides.length === 0) {
+        try {
+          const overridesRes = await fetch('/api/ratings/overrides');
+          const overridesData = await overridesRes.json();
+          if (overridesData.success) {
+            currentOverrides = overridesData.overrides || [];
+            setOverrides(currentOverrides);
+          }
+        } catch (err) {
+          console.error('Failed to load overrides:', err);
         }
       }
       
@@ -476,19 +457,16 @@ export default function RatingsPage() {
         } else if (gameDate === tomorrowStr) {
           return { label: 'Tomorrow', isToday: false, isTomorrow: true, isDay2: false, isDay3: false };
         } else if (gameDate === day2Str) {
-          // Format as "Jan 31" for +2 day
           const [year, month, day] = gameDate.split('-').map(Number);
           const date = new Date(year, month - 1, day);
           const label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
           return { label, isToday: false, isTomorrow: false, isDay2: true, isDay3: false };
         } else if (gameDate === day3Str) {
-          // Format as "Jan 31" for +3 day
           const [year, month, day] = gameDate.split('-').map(Number);
           const date = new Date(year, month - 1, day);
           const label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
           return { label, isToday: false, isTomorrow: false, isDay2: false, isDay3: true };
         } else {
-          // Format as "Jan 31" for other dates
           const [year, month, day] = gameDate.split('-').map(Number);
           const date = new Date(year, month - 1, day);
           const label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -496,70 +474,8 @@ export default function RatingsPage() {
         }
       };
       
-      // Helper to normalize team names for fuzzy matching
-      const normalizeForMatch = (name: string): string => {
-        return name.toLowerCase()
-          .replace(/\s+(bulldogs|wildcats|tigers|bears|eagles|hawks|cardinals|blue devils|hoosiers|boilermakers|wolverines|buckeyes|spartans|badgers|gophers|hawkeyes|fighting irish|crimson tide|volunteers|razorbacks|rebels|aggies|longhorns|sooners|cowboys|horned frogs|jayhawks|cyclones|mountaineers|red raiders|golden eagles|panthers|cougars|huskies|ducks|beavers|bruins|trojans|sun devils|utes|buffaloes|aztecs|wolf pack|lobos|owls|mean green|roadrunners|miners|mustangs|golden hurricane|shockers|bearcats|red storm|pirates|blue demons|billikens|musketeers|explorers|gaels|zags|gonzaga bulldogs|toreros|matadors|anteaters|gauchos|highlanders|tritons|49ers|beach|titans|broncos|waves|pilots|lions|leopards|big green|crimson|elis|quakers|orange|hokies|cavaliers|tar heels|wolfpack|demon deacons|yellow jackets|seminoles|hurricanes|fighting illini|cornhuskers|nittany lions|terrapins|scarlet knights|hoyas|friars|bluejays|johnnies|red foxes|rams|bonnies|dukes|flyers|colonials|spiders|phoenix|redhawks|penguins|golden flashes|rockets|chippewas|bulls|thundering herd|bobcats|zips|falcons)$/i, '')
-          .replace(/\(.*?\)/g, '')
-          .replace(/st\./g, 'state')
-          .replace(/[^a-z0-9\s]/g, '')
-          .replace(/\s+/g, ' ')
-          .trim();
-      };
-      
-      // Function to find matching Odds API game for a BT game
-      const findOddsMatch = (btHome: string, btAway: string): ScheduleGame | null => {
-        // First try override mapping
-        const oddsHomeOverride = torvikToOddsApi[btHome.toLowerCase()];
-        const oddsAwayOverride = torvikToOddsApi[btAway.toLowerCase()];
-        
-        for (const oddsGame of oddsGames) {
-          const oddsHomeLower = oddsGame.homeTeam.toLowerCase();
-          const oddsAwayLower = oddsGame.awayTeam.toLowerCase();
-          
-          // Try exact override match first
-          if (oddsHomeOverride && oddsAwayOverride) {
-            if (oddsHomeLower.includes(oddsHomeOverride) || oddsHomeOverride.includes(oddsHomeLower)) {
-              if (oddsAwayLower.includes(oddsAwayOverride) || oddsAwayOverride.includes(oddsAwayLower)) {
-                return oddsGame;
-              }
-            }
-          }
-          
-          // Try normalized fuzzy match
-          const btHomeNorm = normalizeForMatch(btHome);
-          const btAwayNorm = normalizeForMatch(btAway);
-          const oddsHomeNorm = normalizeForMatch(oddsGame.homeTeam);
-          const oddsAwayNorm = normalizeForMatch(oddsGame.awayTeam);
-          
-          const homeMatch = btHomeNorm === oddsHomeNorm || 
-                            btHomeNorm.includes(oddsHomeNorm) || 
-                            oddsHomeNorm.includes(btHomeNorm);
-          const awayMatch = btAwayNorm === oddsAwayNorm || 
-                            btAwayNorm.includes(oddsAwayNorm) || 
-                            oddsAwayNorm.includes(btAwayNorm);
-          
-          if (homeMatch && awayMatch) {
-            return oddsGame;
-          }
-        }
-        
-        return null;
-      };
-      
-      // Combine BT games with Odds API data
-      const combinedGames: CombinedScheduleGame[] = btGamesRaw.map((bt: {
-        id?: number;
-        gameDate: string;
-        gameTime?: string;
-        homeTeam: string;
-        awayTeam: string;
-        predictedSpread?: number;
-        predictedTotal?: number;
-        homeWinProb?: number;
-        awayWinProb?: number;
-      }) => {
-        const oddsMatch = findOddsMatch(bt.homeTeam, bt.awayTeam);
+      // Build initial combined games from BT data (no odds yet)
+      const initialCombinedGames: CombinedScheduleGame[] = btGamesRaw.map((bt) => {
         const dateInfo = getDateLabel(bt.gameDate);
         
         return {
@@ -572,14 +488,14 @@ export default function RatingsPage() {
           btTotal: bt.predictedTotal ?? null,
           homeWinProb: bt.homeWinProb ?? null,
           awayWinProb: bt.awayWinProb ?? null,
-          // Odds API data
-          oddsGameId: oddsMatch?.id || null,
-          spread: oddsMatch?.spread ?? null,
-          openingSpread: oddsMatch?.openingSpread ?? null,
-          total: oddsMatch?.total ?? null,
-          spreadBookmaker: oddsMatch?.spreadBookmaker ?? null,
-          hasStarted: oddsMatch?.hasStarted ?? false,
-          isFrozen: oddsMatch?.isFrozen ?? false,
+          // No odds yet
+          oddsGameId: null,
+          spread: null,
+          openingSpread: null,
+          total: null,
+          spreadBookmaker: null,
+          hasStarted: false,
+          isFrozen: false,
           // Date info
           isToday: dateInfo.isToday,
           isTomorrow: dateInfo.isTomorrow,
@@ -590,21 +506,115 @@ export default function RatingsPage() {
       });
       
       // Sort by date then time
-      combinedGames.sort((a, b) => {
+      initialCombinedGames.sort((a, b) => {
         const dateCompare = a.gameDate.localeCompare(b.gameDate);
         if (dateCompare !== 0) return dateCompare;
         return (a.gameTime || '').localeCompare(b.gameTime || '');
       });
       
-      setCombinedScheduleGames(combinedGames);
+      // Show BT games immediately (without odds)
+      setCombinedScheduleGames(initialCombinedGames);
+      setScheduleLoading(false);
       
-      // Log match stats
-      const matchedCount = combinedGames.filter(g => g.oddsGameId !== null).length;
-      console.log(`Loaded ${combinedGames.length} BT games, ${matchedCount} matched with Odds API`);
+      console.log(`Displayed ${initialCombinedGames.length} BT games, now fetching odds...`);
+      
+      // Now fetch odds data in the background and merge when ready
+      try {
+        const oddsRes = await fetch(`/api/ratings/schedule?timezone=${encodeURIComponent(timezone)}&_t=${cacheBuster}`);
+        const oddsData = await oddsRes.json();
+        
+        if (oddsData.success && oddsData.games) {
+          const oddsGames: ScheduleGame[] = oddsData.games;
+          setScheduleGames(oddsGames);
+          
+          // Build lookup maps for matching
+          const torvikToOddsApi: Record<string, string> = {};
+          for (const override of currentOverrides) {
+            if (override.torvikName && override.oddsApiName) {
+              torvikToOddsApi[override.torvikName.toLowerCase()] = override.oddsApiName.toLowerCase();
+            }
+          }
+          
+          // Helper to normalize team names for fuzzy matching
+          const normalizeForMatch = (name: string): string => {
+            return name.toLowerCase()
+              .replace(/\s+(bulldogs|wildcats|tigers|bears|eagles|hawks|cardinals|blue devils|hoosiers|boilermakers|wolverines|buckeyes|spartans|badgers|gophers|hawkeyes|fighting irish|crimson tide|volunteers|razorbacks|rebels|aggies|longhorns|sooners|cowboys|horned frogs|jayhawks|cyclones|mountaineers|red raiders|golden eagles|panthers|cougars|huskies|ducks|beavers|bruins|trojans|sun devils|utes|buffaloes|aztecs|wolf pack|lobos|owls|mean green|roadrunners|miners|mustangs|golden hurricane|shockers|bearcats|red storm|pirates|blue demons|billikens|musketeers|explorers|gaels|zags|gonzaga bulldogs|toreros|matadors|anteaters|gauchos|highlanders|tritons|49ers|beach|titans|broncos|waves|pilots|lions|leopards|big green|crimson|elis|quakers|orange|hokies|cavaliers|tar heels|wolfpack|demon deacons|yellow jackets|seminoles|hurricanes|fighting illini|cornhuskers|nittany lions|terrapins|scarlet knights|hoyas|friars|bluejays|johnnies|red foxes|rams|bonnies|dukes|flyers|colonials|spiders|phoenix|redhawks|penguins|golden flashes|rockets|chippewas|bulls|thundering herd|bobcats|zips|falcons)$/i, '')
+              .replace(/\(.*?\)/g, '')
+              .replace(/st\./g, 'state')
+              .replace(/[^a-z0-9\s]/g, '')
+              .replace(/\s+/g, ' ')
+              .trim();
+          };
+          
+          // Function to find matching Odds API game
+          const findOddsMatch = (btHome: string, btAway: string): ScheduleGame | null => {
+            const oddsHomeOverride = torvikToOddsApi[btHome.toLowerCase()];
+            const oddsAwayOverride = torvikToOddsApi[btAway.toLowerCase()];
+            
+            for (const oddsGame of oddsGames) {
+              const oddsHomeLower = oddsGame.homeTeam.toLowerCase();
+              const oddsAwayLower = oddsGame.awayTeam.toLowerCase();
+              
+              if (oddsHomeOverride && oddsAwayOverride) {
+                if (oddsHomeLower.includes(oddsHomeOverride) || oddsHomeOverride.includes(oddsHomeLower)) {
+                  if (oddsAwayLower.includes(oddsAwayOverride) || oddsAwayOverride.includes(oddsAwayLower)) {
+                    return oddsGame;
+                  }
+                }
+              }
+              
+              const btHomeNorm = normalizeForMatch(btHome);
+              const btAwayNorm = normalizeForMatch(btAway);
+              const oddsHomeNorm = normalizeForMatch(oddsGame.homeTeam);
+              const oddsAwayNorm = normalizeForMatch(oddsGame.awayTeam);
+              
+              const homeMatch = btHomeNorm === oddsHomeNorm || 
+                                btHomeNorm.includes(oddsHomeNorm) || 
+                                oddsHomeNorm.includes(btHomeNorm);
+              const awayMatch = btAwayNorm === oddsAwayNorm || 
+                                btAwayNorm.includes(oddsAwayNorm) || 
+                                oddsAwayNorm.includes(btAwayNorm);
+              
+              if (homeMatch && awayMatch) {
+                return oddsGame;
+              }
+            }
+            
+            return null;
+          };
+          
+          // Merge odds into combined games
+          const enrichedGames = initialCombinedGames.map(game => {
+            const oddsMatch = findOddsMatch(game.homeTeam, game.awayTeam);
+            
+            if (oddsMatch) {
+              return {
+                ...game,
+                oddsGameId: oddsMatch.id,
+                spread: oddsMatch.spread,
+                openingSpread: oddsMatch.openingSpread,
+                total: oddsMatch.total,
+                spreadBookmaker: oddsMatch.spreadBookmaker,
+                hasStarted: oddsMatch.hasStarted,
+                isFrozen: oddsMatch.isFrozen,
+              };
+            }
+            
+            return game;
+          });
+          
+          setCombinedScheduleGames(enrichedGames);
+          
+          const matchedCount = enrichedGames.filter(g => g.oddsGameId !== null).length;
+          console.log(`Enriched with odds: ${matchedCount}/${enrichedGames.length} games matched`);
+        }
+      } catch (err) {
+        console.error('Failed to load odds data:', err);
+        // BT games are already displayed, so this is non-fatal
+      }
       
     } catch (err) {
       console.error('Failed to load schedule:', err);
-    } finally {
       setScheduleLoading(false);
     }
   };
