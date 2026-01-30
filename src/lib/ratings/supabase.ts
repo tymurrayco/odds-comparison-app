@@ -312,7 +312,7 @@ export async function saveGameAdjustment(adjustment: GameAdjustment, season: num
         openingSpread = closingLine.opening_spread;
       }
     }
-  } catch (_err) {
+  } catch {
     // Silently continue if we can't find opening spread - it's optional
     console.log(`[Supabase] Could not find opening_spread for ${adjustment.homeTeam} vs ${adjustment.awayTeam}`);
   }
