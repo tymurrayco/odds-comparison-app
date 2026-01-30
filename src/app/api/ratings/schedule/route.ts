@@ -355,11 +355,13 @@ export async function GET(request: Request) {
     const startedGameIds: string[] = [];
     const commenceTimes = new Map<string, string>();
     const homeTeams = new Map<string, string>();
+    const awayTeams = new Map<string, string>();
     
     for (const game of filteredGames) {
       const gameStart = new Date(game.commence_time);
       commenceTimes.set(game.id, game.commence_time);
       homeTeams.set(game.id, game.home_team);
+      awayTeams.set(game.id, game.away_team);
       
       if (gameStart <= now) {
         startedGameIds.push(game.id);
@@ -400,7 +402,7 @@ export async function GET(request: Request) {
     // Fetch closing lines for uncached started games
     const freshClosingLines = await fetchClosingLines(uncachedGameIds, commenceTimes, homeTeams, apiKey);
     
-    // Cache the newly fetched closing lines
+    // Cache the newly fetched closing lines (include team names for later retrieval)
     if (freshClosingLines.size > 0) {
       const rowsToInsert = Array.from(freshClosingLines.entries()).map(([gameId, line]) => ({
         game_id: gameId,
@@ -408,6 +410,9 @@ export async function GET(request: Request) {
         total: line.total,
         spread_bookmaker: line.spreadBookmaker,
         frozen_at: new Date(new Date(commenceTimes.get(gameId)!).getTime() - 5 * 60 * 1000).toISOString(),
+        home_team: homeTeams.get(gameId) || null,
+        away_team: awayTeams.get(gameId) || null,
+        commence_time: commenceTimes.get(gameId) || null,
       }));
       
       const { error: insertError } = await supabase
@@ -417,7 +422,7 @@ export async function GET(request: Request) {
       if (insertError) {
         console.warn('[Schedule] Failed to cache closing lines:', insertError);
       } else {
-        console.log(`[Schedule] Cached ${rowsToInsert.length} closing lines`);
+        console.log(`[Schedule] Cached ${rowsToInsert.length} closing lines with team names`);
       }
     }
     

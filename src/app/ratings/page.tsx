@@ -584,7 +584,7 @@ export default function RatingsPage() {
           };
           
           // Merge odds into combined games
-          const enrichedGames = initialCombinedGames.map(game => {
+          let enrichedGames = initialCombinedGames.map(game => {
             const oddsMatch = findOddsMatch(game.homeTeam, game.awayTeam);
             
             if (oddsMatch) {
@@ -603,10 +603,105 @@ export default function RatingsPage() {
             return game;
           });
           
-          setCombinedScheduleGames(enrichedGames);
-          
           const matchedCount = enrichedGames.filter(g => g.oddsGameId !== null).length;
-          console.log(`Enriched with odds: ${matchedCount}/${enrichedGames.length} games matched`);
+          console.log(`Enriched with live odds: ${matchedCount}/${enrichedGames.length} games matched`);
+          
+          // For games that didn't match (likely finished), try to get closing lines from cache
+          const unmatchedTodayGames = enrichedGames.filter(g => g.isToday && g.oddsGameId === null);
+          
+          if (unmatchedTodayGames.length > 0) {
+            console.log(`Fetching closing lines for ${unmatchedTodayGames.length} unmatched today games...`);
+            console.log('Unmatched games:', unmatchedTodayGames.map(g => `${g.awayTeam} @ ${g.homeTeam}`));
+            
+            try {
+              // Get today's date in YYYY-MM-DD format
+              const now = new Date();
+              const eastern = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+              const todayStr = `${eastern.getFullYear()}-${String(eastern.getMonth() + 1).padStart(2, '0')}-${String(eastern.getDate()).padStart(2, '0')}`;
+              
+              const closingRes = await fetch(`/api/ratings/closing-lines?date=${todayStr}`);
+              const closingData = await closingRes.json();
+              
+              if (closingData.success && closingData.data) {
+                const closingLines = closingData.data;
+                console.log(`Got ${closingLines.length} closing lines`);
+                
+                // Use the SAME matching logic as live odds - closing lines have Odds API names
+                const findClosingMatch = (btHome: string, btAway: string) => {
+                  const oddsHomeOverride = torvikToOddsApi[btHome.toLowerCase()];
+                  const oddsAwayOverride = torvikToOddsApi[btAway.toLowerCase()];
+                  
+                  for (const cl of closingLines) {
+                    const clHomeLower = cl.homeTeam.toLowerCase();
+                    const clAwayLower = cl.awayTeam.toLowerCase();
+                    
+                    // Try override match first (same as live odds matching)
+                    if (oddsHomeOverride && oddsAwayOverride) {
+                      if (clHomeLower.includes(oddsHomeOverride) || oddsHomeOverride.includes(clHomeLower)) {
+                        if (clAwayLower.includes(oddsAwayOverride) || oddsAwayOverride.includes(clAwayLower)) {
+                          return cl;
+                        }
+                      }
+                    }
+                    
+                    // Try normalized fuzzy match (same as live odds matching)
+                    const btHomeNorm = normalizeForMatch(btHome);
+                    const btAwayNorm = normalizeForMatch(btAway);
+                    const clHomeNorm = normalizeForMatch(cl.homeTeam);
+                    const clAwayNorm = normalizeForMatch(cl.awayTeam);
+                    
+                    const homeMatch = btHomeNorm === clHomeNorm || 
+                                      btHomeNorm.includes(clHomeNorm) || 
+                                      clHomeNorm.includes(btHomeNorm);
+                    const awayMatch = btAwayNorm === clAwayNorm || 
+                                      btAwayNorm.includes(clAwayNorm) || 
+                                      clAwayNorm.includes(btAwayNorm);
+                    
+                    if (homeMatch && awayMatch) {
+                      return cl;
+                    }
+                  }
+                  
+                  return null;
+                };
+                
+                // Update unmatched games with closing lines
+                let closingMatchCount = 0;
+                enrichedGames = enrichedGames.map(game => {
+                  if (game.isToday && game.oddsGameId === null) {
+                    const closingMatch = findClosingMatch(game.homeTeam, game.awayTeam);
+                    
+                    if (closingMatch) {
+                      closingMatchCount++;
+                      return {
+                        ...game,
+                        oddsGameId: closingMatch.gameId,
+                        spread: closingMatch.closingSpread,
+                        openingSpread: closingMatch.openingSpread || closingMatch.closingSpread,
+                        total: closingMatch.total,
+                        spreadBookmaker: closingMatch.closingSource,
+                        hasStarted: true,
+                        isFrozen: true,
+                      };
+                    }
+                  }
+                  return game;
+                });
+                
+                console.log(`Matched ${closingMatchCount} of ${unmatchedTodayGames.length} games with closing lines`);
+                
+                // Log any that still didn't match
+                const stillUnmatched = enrichedGames.filter(g => g.isToday && g.oddsGameId === null);
+                if (stillUnmatched.length > 0) {
+                  console.log('Still unmatched after closing lines:', stillUnmatched.map(g => `${g.awayTeam} @ ${g.homeTeam}`));
+                }
+              }
+            } catch (closingErr) {
+              console.error('Failed to fetch closing lines:', closingErr);
+            }
+          }
+          
+          setCombinedScheduleGames(enrichedGames);
         }
       } catch (err) {
         console.error('Failed to load odds data:', err);
