@@ -42,7 +42,7 @@ export async function GET() {
       .from('ncaab_game_adjustments')
       .select('*')
       .order('game_date', { ascending: false })
-      .limit(100);
+      .limit(5000);
     
     if (error) {
       console.error('[History] Supabase error:', error);

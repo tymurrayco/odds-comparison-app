@@ -280,6 +280,43 @@ export async function getProcessedGameIds(season: number = 2026): Promise<Set<st
 export async function saveGameAdjustment(adjustment: GameAdjustment, season: number = 2026): Promise<void> {
   const supabase = getSupabaseClient();
   
+  // Look up opening_spread from closing_lines table
+  // The closing_lines table uses Odds API team names, while adjustment uses KenPom names
+  // We need to translate using the overrides table
+  let openingSpread: number | null = null;
+  
+  try {
+    // Get Odds API names from overrides for both teams
+    const { data: homeOverride } = await supabase
+      .from('ncaab_team_overrides')
+      .select('odds_api_name')
+      .eq('kenpom_name', adjustment.homeTeam)
+      .single();
+    
+    const { data: awayOverride } = await supabase
+      .from('ncaab_team_overrides')
+      .select('odds_api_name')
+      .eq('kenpom_name', adjustment.awayTeam)
+      .single();
+    
+    if (homeOverride?.odds_api_name && awayOverride?.odds_api_name) {
+      // Query closing_lines using Odds API names
+      const { data: closingLine } = await supabase
+        .from('closing_lines')
+        .select('opening_spread')
+        .eq('home_team', homeOverride.odds_api_name)
+        .eq('away_team', awayOverride.odds_api_name)
+        .single();
+      
+      if (closingLine?.opening_spread !== undefined) {
+        openingSpread = closingLine.opening_spread;
+      }
+    }
+  } catch (err) {
+    // Silently continue if we can't find opening spread - it's optional
+    console.log(`[Supabase] Could not find opening_spread for ${adjustment.homeTeam} vs ${adjustment.awayTeam}`);
+  }
+  
   const { error } = await supabase
     .from('ncaab_game_adjustments')
     .upsert({
@@ -299,6 +336,7 @@ export async function saveGameAdjustment(adjustment: GameAdjustment, season: num
       away_rating_after: adjustment.awayRatingAfter,
       season: season,
       processed_at: new Date().toISOString(),
+      opening_spread: openingSpread,
     }, {
       onConflict: 'game_id',
     });

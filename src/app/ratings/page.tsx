@@ -2,7 +2,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { 
   RatingsSnapshot, 
@@ -14,6 +14,23 @@ import {
   CLOSING_LINE_SOURCES,
 } from '@/lib/ratings/constants';
 import { formatSpread, formatRating } from '@/lib/ratings/engine';
+
+// Custom debounce hook for search inputs
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+  
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+    
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+  
+  return debouncedValue;
+}
 
 interface MatchingLog {
   gameId: string;
@@ -107,7 +124,7 @@ interface BTRating {
   barthag: number;
 }
 
-type TabType = 'ratings' | 'hypotheticals' | 'schedule' | 'matching' | 'overrides' | 'barttorvik';
+type TabType = 'ratings' | 'hypotheticals' | 'schedule' | 'history' | 'matching' | 'overrides' | 'barttorvik';
 
 export default function RatingsPage() {
   // State
@@ -149,6 +166,12 @@ export default function RatingsPage() {
   const inlineOddsApiRef = React.useRef<HTMLInputElement>(null);
   const inlineTorvikRef = React.useRef<HTMLInputElement>(null);
   const inlineNotesRef = React.useRef<HTMLInputElement>(null);
+  
+  // Debounced search values (150ms delay for smoother typing)
+  const debouncedKenpomSearch = useDebounce(kenpomSearch, 150);
+  const debouncedOddsApiSearch = useDebounce(oddsApiSearch, 150);
+  const debouncedInlineOddsApiSearch = useDebounce(inlineOddsApiSearch, 150);
+  const debouncedInlineTorvikSearch = useDebounce(inlineTorvikSearch, 150);
   
   // Matchups state
   const [homeTeam, setHomeTeam] = useState<string>('');
@@ -208,6 +231,29 @@ export default function RatingsPage() {
     dateLabel: string; // "Today", "Tomorrow", "Jan 31", etc.
   }
   const [combinedScheduleGames, setCombinedScheduleGames] = useState<CombinedScheduleGame[]>([]);
+  
+  // History state (from ncaab_game_adjustments)
+  interface HistoryGame {
+    id: string;
+    gameDate: string;
+    homeTeam: string;
+    awayTeam: string;
+    projectedSpread: number | null;
+    openingSpread: number | null;
+    closingSpread: number | null;
+    closingSource: string | null;
+    difference: number | null;
+  }
+  const [historyGames, setHistoryGames] = useState<HistoryGame[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyStartDate, setHistoryStartDate] = useState<string>('');
+  const [historyEndDate, setHistoryEndDate] = useState<string>('');
+  const [historyDiffMin, setHistoryDiffMin] = useState<number>(0);
+  const [historyDiffMinDisplay, setHistoryDiffMinDisplay] = useState<number>(0);
+  type HistorySortField = 'date' | 'diff' | 'awayMovement' | 'homeMovement';
+  type SortDirection = 'asc' | 'desc';
+  const [historySortField, setHistorySortField] = useState<HistorySortField>('date');
+  const [historySortDirection, setHistorySortDirection] = useState<SortDirection>('desc');
   
   // Barttorvik state
   const [btGames, setBtGames] = useState<BTGame[]>([]);
@@ -714,6 +760,45 @@ export default function RatingsPage() {
     }
   };
 
+  const loadHistory = async () => {
+    setHistoryLoading(true);
+    try {
+      const response = await fetch('/api/ratings/schedule/history?limit=250');
+      const data = await response.json();
+      
+      if (data.success) {
+        // Map from API response to HistoryGame format
+        const games: HistoryGame[] = (data.games || []).map((g: {
+          id: string;
+          commenceTime: string;
+          homeTeam: string;
+          awayTeam: string;
+          projectedSpread: number | null;
+          openingSpread: number | null;
+          spread: number | null;
+          spreadBookmaker: string | null;
+        }) => ({
+          id: g.id,
+          gameDate: g.commenceTime,
+          homeTeam: g.homeTeam,
+          awayTeam: g.awayTeam,
+          projectedSpread: g.projectedSpread,
+          openingSpread: g.openingSpread,
+          closingSpread: g.spread,
+          closingSource: g.spreadBookmaker,
+          difference: g.projectedSpread !== null && g.spread !== null 
+            ? Math.round((g.spread - g.projectedSpread) * 100) / 100
+            : null,
+        }));
+        setHistoryGames(games);
+      }
+    } catch (err) {
+      console.error('Failed to load history:', err);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
   // Helper to normalize team names for matching
   const normalizeTeamName = (name: string): string => {
     // Common mascot/suffix removals
@@ -951,6 +1036,9 @@ export default function RatingsPage() {
         loadOverrides();
       }
     }
+    if (activeTab === 'history' && historyGames.length === 0) {
+      loadHistory();
+    }
     if (activeTab === 'barttorvik' && btGames.length === 0 && btRatings.length === 0) {
       loadBarttorvik();
     }
@@ -1061,16 +1149,18 @@ export default function RatingsPage() {
     setOverrideError(null);
     setShowOverrideModal(true);
     
-    // Ensure kenpomTeams and oddsApiTeams are loaded
-    try {
-      const response = await fetch('/api/ratings/overrides');
-      const data = await response.json();
-      if (data.success) {
-        if (data.kenpomTeams) setKenpomTeams(data.kenpomTeams);
-        if (data.oddsApiTeams) setOddsApiTeams(data.oddsApiTeams);
+    // Only fetch if teams aren't already loaded (they get loaded when Overrides tab opens)
+    if (kenpomTeams.length === 0 || oddsApiTeams.length === 0) {
+      try {
+        const response = await fetch('/api/ratings/overrides');
+        const data = await response.json();
+        if (data.success) {
+          if (data.kenpomTeams) setKenpomTeams(data.kenpomTeams);
+          if (data.oddsApiTeams) setOddsApiTeams(data.oddsApiTeams);
+        }
+      } catch (err) {
+        console.error('Failed to load teams:', err);
       }
-    } catch (err) {
-      console.error('Failed to load teams:', err);
     }
   };
 
@@ -1234,26 +1324,26 @@ export default function RatingsPage() {
 
   // Filtered Odds API teams for inline edit dropdown
   const filteredInlineOddsApiTeams = useMemo(() => {
-    if (!inlineOddsApiSearch || inlineOddsApiSearch.length < 1) return [];
-    const search = inlineOddsApiSearch.toLowerCase().trim();
+    if (!debouncedInlineOddsApiSearch || debouncedInlineOddsApiSearch.length < 1) return [];
+    const search = debouncedInlineOddsApiSearch.toLowerCase().trim();
     return oddsApiTeams
       .filter(t => t.toLowerCase().includes(search))
       .slice(0, 8);
-  }, [inlineOddsApiSearch, oddsApiTeams]);
+  }, [debouncedInlineOddsApiSearch, oddsApiTeams]);
 
   // Filtered Torvik teams for inline edit dropdown
   const filteredInlineTorvikTeams = useMemo(() => {
-    if (!inlineTorvikSearch || inlineTorvikSearch.length < 1) return [];
-    const search = inlineTorvikSearch.toLowerCase().trim();
+    if (!debouncedInlineTorvikSearch || debouncedInlineTorvikSearch.length < 1) return [];
+    const search = debouncedInlineTorvikSearch.toLowerCase().trim();
     return torvikTeams
       .filter(t => t.toLowerCase().includes(search))
       .slice(0, 8);
-  }, [inlineTorvikSearch, torvikTeams]);
+  }, [debouncedInlineTorvikSearch, torvikTeams]);
 
   // Filtered KenPom teams for autocomplete
   const filteredKenpomTeams = useMemo(() => {
-    if (!kenpomSearch || kenpomSearch.length < 1) return [];
-    const search = kenpomSearch.toLowerCase().trim();
+    if (!debouncedKenpomSearch || debouncedKenpomSearch.length < 1) return [];
+    const search = debouncedKenpomSearch.toLowerCase().trim();
     
     // Prioritize teams that START with the search term
     const startsWithMatches = kenpomTeams.filter(t => 
@@ -1266,12 +1356,12 @@ export default function RatingsPage() {
     );
     
     return [...startsWithMatches, ...containsMatches].slice(0, 15);
-  }, [kenpomTeams, kenpomSearch]);
+  }, [kenpomTeams, debouncedKenpomSearch]);
 
   // Filtered Odds API teams for autocomplete
   const filteredOddsApiTeams = useMemo(() => {
-    if (!oddsApiSearch || oddsApiSearch.length < 1) return [];
-    const search = oddsApiSearch.toLowerCase().trim();
+    if (!debouncedOddsApiSearch || debouncedOddsApiSearch.length < 1) return [];
+    const search = debouncedOddsApiSearch.toLowerCase().trim();
     
     // Prioritize teams that START with the search term
     const startsWithMatches = oddsApiTeams.filter(t => 
@@ -1284,7 +1374,7 @@ export default function RatingsPage() {
     );
     
     return [...startsWithMatches, ...containsMatches].slice(0, 15);
-  }, [oddsApiTeams, oddsApiSearch]);
+  }, [oddsApiTeams, debouncedOddsApiSearch]);
 
   // Get sorted team list for matchups dropdowns
   const sortedTeams = useMemo(() => {
@@ -1415,6 +1505,83 @@ export default function RatingsPage() {
     }
     return logs;
   }, [matchingLogs, logFilter, searchTerm, nonD1GameIds]);
+
+  // Filter and sort history games
+  const filteredHistoryGames = useMemo(() => {
+    let games = [...historyGames];
+    
+    // Apply date filter
+    if (historyStartDate) {
+      const startDate = new Date(historyStartDate);
+      games = games.filter(g => new Date(g.gameDate) >= startDate);
+    }
+    if (historyEndDate) {
+      const endDate = new Date(historyEndDate);
+      endDate.setHours(23, 59, 59, 999); // Include entire end date
+      games = games.filter(g => new Date(g.gameDate) <= endDate);
+    }
+    
+    // Apply diff range filter (absolute value >= min)
+    games = games.filter(g => {
+      if (g.difference === null) return historyDiffMin === 0; // Only show null diff games when slider at 0
+      return Math.abs(g.difference) >= historyDiffMin;
+    });
+    
+    // Helper to calculate line movement for a game
+    const getLineMovement = (game: HistoryGame): { away: number; home: number; toward: boolean | null } => {
+      if (game.projectedSpread === null || game.openingSpread === null || game.closingSpread === null) {
+        return { away: 0, home: 0, toward: null };
+      }
+      const openDiff = Math.abs(game.projectedSpread - game.openingSpread);
+      const closeDiff = Math.abs(game.projectedSpread - game.closingSpread);
+      const lineMovement = Math.abs(game.closingSpread - game.openingSpread);
+      const toward = closeDiff < openDiff;
+      
+      // If spread decreased, home team got the movement; otherwise away team
+      if (game.closingSpread < game.openingSpread) {
+        return { away: 0, home: toward ? lineMovement : -lineMovement, toward };
+      } else {
+        return { away: toward ? lineMovement : -lineMovement, home: 0, toward };
+      }
+    };
+    
+    // Sort
+    games.sort((a, b) => {
+      let comparison = 0;
+      
+      switch (historySortField) {
+        case 'date':
+          comparison = new Date(a.gameDate).getTime() - new Date(b.gameDate).getTime();
+          break;
+        case 'diff':
+          const diffA = a.difference ?? 0;
+          const diffB = b.difference ?? 0;
+          comparison = diffA - diffB;
+          break;
+        case 'awayMovement':
+          const awayA = getLineMovement(a);
+          const awayB = getLineMovement(b);
+          // Sort by intensity (absolute value of movement) with direction
+          comparison = Math.abs(awayA.away) - Math.abs(awayB.away);
+          if (comparison === 0 && awayA.toward !== awayB.toward) {
+            comparison = awayA.toward ? 1 : -1; // Green (toward) sorts after red (against)
+          }
+          break;
+        case 'homeMovement':
+          const homeA = getLineMovement(a);
+          const homeB = getLineMovement(b);
+          comparison = Math.abs(homeA.home) - Math.abs(homeB.home);
+          if (comparison === 0 && homeA.toward !== homeB.toward) {
+            comparison = homeA.toward ? 1 : -1;
+          }
+          break;
+      }
+      
+      return historySortDirection === 'asc' ? comparison : -comparison;
+    });
+    
+    return games;
+  }, [historyGames, historyStartDate, historyEndDate, historyDiffMin, historySortField, historySortDirection]);
 
   // Filter and sort schedule games (now using combinedScheduleGames as primary)
   const filteredScheduleGames = useMemo(() => {
@@ -1793,6 +1960,14 @@ export default function RatingsPage() {
                 }`}
               >
                 Schedule
+              </button>
+              <button
+                onClick={() => setActiveTab('history')}
+                className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === 'history' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                History {historyGames.length > 0 && `(${historyGames.length})`}
               </button>
               <button
                 onClick={() => setActiveTab('hypotheticals')}
@@ -2630,6 +2805,315 @@ export default function RatingsPage() {
                   </table>
                   <div className="px-4 py-2 text-xs text-gray-600 border-t border-gray-100 bg-blue-50">
                     Open & Current spreads sourced from Pinnacle, with DraftKings/FanDuel/BetMGM/BetRivers average as fallback.
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* History Tab */}
+          {activeTab === 'history' && (
+            <>
+              <div className="p-4 border-b border-gray-200">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm text-gray-600">Date Range:</span>
+                    <input
+                      type="date"
+                      value={historyStartDate}
+                      onChange={(e) => setHistoryStartDate(e.target.value)}
+                      className="px-2 py-1 text-sm border border-gray-300 rounded-lg"
+                    />
+                    <span className="text-gray-400">to</span>
+                    <input
+                      type="date"
+                      value={historyEndDate}
+                      onChange={(e) => setHistoryEndDate(e.target.value)}
+                      className="px-2 py-1 text-sm border border-gray-300 rounded-lg"
+                    />
+                    {(historyStartDate || historyEndDate) && (
+                      <button
+                        onClick={() => { setHistoryStartDate(''); setHistoryEndDate(''); }}
+                        className="px-2 py-1 text-xs text-gray-500 hover:text-gray-700"
+                      >
+                        Clear
+                      </button>
+                    )}
+                    <span className="text-gray-300 mx-2">|</span>
+                    <span className="text-sm text-gray-600">|Diff| ≥</span>
+                    <input
+                      type="range"
+                      min="0"
+                      max="10"
+                      step="0.5"
+                      value={historyDiffMinDisplay}
+                      onChange={(e) => setHistoryDiffMinDisplay(parseFloat(e.target.value))}
+                      onMouseUp={(e) => setHistoryDiffMin(parseFloat((e.target as HTMLInputElement).value))}
+                      onTouchEnd={(e) => setHistoryDiffMin(parseFloat((e.target as HTMLInputElement).value))}
+                      className="w-24 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                    <span className="text-xs text-gray-600 font-mono w-6">{historyDiffMinDisplay}</span>
+                    {historyDiffMinDisplay !== 0 && (
+                      <button
+                        onClick={() => { setHistoryDiffMinDisplay(0); setHistoryDiffMin(0); }}
+                        className="px-2 py-1 text-xs text-gray-500 hover:text-gray-700"
+                      >
+                        Reset
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-gray-600">
+                      Showing {filteredHistoryGames.length} of {historyGames.length} games
+                    </span>
+                    <button
+                      onClick={loadHistory}
+                      disabled={historyLoading}
+                      className="px-3 py-1 text-sm bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg transition-colors"
+                    >
+                      {historyLoading ? (
+                        <span className="flex items-center gap-1">
+                          <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Loading...
+                        </span>
+                      ) : 'Refresh'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Legend for line movement */}
+              <div className="px-4 py-2 text-xs flex flex-wrap items-center gap-2 sm:gap-4 bg-gray-50 border-b border-gray-100">
+                <span className="text-gray-500">Line Movement:</span>
+                <div className="flex items-center gap-1">
+                  <div className="w-4 h-4 bg-green-200 rounded"></div>
+                  <span className="text-gray-600">Toward projection</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-4 h-4 bg-red-200 rounded"></div>
+                  <span className="text-gray-600">Against projection</span>
+                </div>
+                <span className="text-gray-400 ml-2">| Click column headers to sort</span>
+              </div>
+              
+              {historyLoading ? (
+                <div className="p-8 text-center text-gray-500">
+                  <svg className="animate-spin h-8 w-8 mx-auto mb-3 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Loading history...
+                </div>
+              ) : filteredHistoryGames.length === 0 ? (
+                <div className="p-8 text-center text-gray-500">
+                  <div className="text-4xl mb-3">📊</div>
+                  <p>No historical games found.</p>
+                  <p className="text-sm mt-2">{historyGames.length > 0 ? 'Try adjusting the date filter.' : 'Sync games to build history.'}</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50 sticky top-0">
+                      <tr>
+                        <th 
+                          className="px-2 sm:px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase cursor-pointer hover:bg-gray-100"
+                          onClick={() => {
+                            if (historySortField === 'date') {
+                              setHistorySortDirection(d => d === 'asc' ? 'desc' : 'asc');
+                            } else {
+                              setHistorySortField('date');
+                              setHistorySortDirection('desc');
+                            }
+                          }}
+                        >
+                          Date {historySortField === 'date' && (historySortDirection === 'desc' ? '↓' : '↑')}
+                        </th>
+                        <th 
+                          className="px-1 sm:px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase min-w-[60px] sm:min-w-[120px] cursor-pointer hover:bg-gray-100"
+                          onClick={() => {
+                            if (historySortField === 'awayMovement') {
+                              setHistorySortDirection(d => d === 'asc' ? 'desc' : 'asc');
+                            } else {
+                              setHistorySortField('awayMovement');
+                              setHistorySortDirection('desc');
+                            }
+                          }}
+                        >
+                          Away {historySortField === 'awayMovement' && (historySortDirection === 'desc' ? '↓' : '↑')}
+                        </th>
+                        <th className="px-1 py-3 text-center text-xs font-semibold text-gray-600 uppercase w-6 hidden sm:table-cell"></th>
+                        <th 
+                          className="px-1 sm:px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase min-w-[60px] sm:min-w-[120px] cursor-pointer hover:bg-gray-100"
+                          onClick={() => {
+                            if (historySortField === 'homeMovement') {
+                              setHistorySortDirection(d => d === 'asc' ? 'desc' : 'asc');
+                            } else {
+                              setHistorySortField('homeMovement');
+                              setHistorySortDirection('desc');
+                            }
+                          }}
+                        >
+                          Home {historySortField === 'homeMovement' && (historySortDirection === 'desc' ? '↓' : '↑')}
+                        </th>
+                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Proj</th>
+                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Open</th>
+                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Close</th>
+                        <th className="px-1 sm:px-2 py-3 text-center text-xs font-semibold text-gray-600 uppercase">+/-</th>
+                        <th 
+                          className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase cursor-pointer hover:bg-gray-100"
+                          onClick={() => {
+                            if (historySortField === 'diff') {
+                              setHistorySortDirection(d => d === 'asc' ? 'desc' : 'asc');
+                            } else {
+                              setHistorySortField('diff');
+                              setHistorySortDirection('asc');
+                            }
+                          }}
+                        >
+                          Diff {historySortField === 'diff' && (historySortDirection === 'desc' ? '↓' : '↑')}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {filteredHistoryGames.map((game) => {
+                        const gameDate = new Date(game.gameDate);
+                        const dateStr = gameDate.toLocaleDateString('en-US', { 
+                          month: 'short', 
+                          day: 'numeric' 
+                        });
+                        
+                        // Line movement highlighting logic (same as Schedule tab)
+                        const getGreenHighlightClass = (movement: number): string => {
+                          if (movement < 0.5) return '';
+                          if (movement < 1) return 'bg-green-50';
+                          if (movement < 2) return 'bg-green-100';
+                          if (movement < 3) return 'bg-green-200';
+                          if (movement < 4) return 'bg-green-300';
+                          if (movement < 5) return 'bg-green-400';
+                          return 'bg-green-500';
+                        };
+                        
+                        const getRedHighlightClass = (movement: number): string => {
+                          if (movement < 0.5) return '';
+                          if (movement < 1) return 'bg-red-50';
+                          if (movement < 2) return 'bg-red-100';
+                          if (movement < 3) return 'bg-red-200';
+                          if (movement < 4) return 'bg-red-300';
+                          if (movement < 5) return 'bg-red-400';
+                          return 'bg-red-500';
+                        };
+                        
+                        let highlightAwayClass = '';
+                        let highlightHomeClass = '';
+                        let lineMovedToward: boolean | null = null;
+                        
+                        if (game.projectedSpread !== null && game.openingSpread !== null && game.closingSpread !== null && game.openingSpread !== game.closingSpread) {
+                          const openDiff = Math.abs(game.projectedSpread - game.openingSpread);
+                          const closeDiff = Math.abs(game.projectedSpread - game.closingSpread);
+                          const lineMovement = Math.abs(game.closingSpread - game.openingSpread);
+                          
+                          lineMovedToward = closeDiff < openDiff;
+                          const highlightClass = lineMovedToward ? getGreenHighlightClass(lineMovement) : getRedHighlightClass(lineMovement);
+                          
+                          // If spread decreased (e.g., -3 to -5), line moved toward home team
+                          if (game.closingSpread < game.openingSpread) {
+                            highlightHomeClass = highlightClass;
+                          } else {
+                            highlightAwayClass = highlightClass;
+                          }
+                        }
+                        
+                        // Get logos
+                        const homeLogo = getTeamLogo(game.homeTeam);
+                        const awayLogo = getTeamLogo(game.awayTeam);
+                        
+                        return (
+                          <tr key={game.id} className="hover:bg-gray-50">
+                            <td className="px-2 sm:px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
+                              {dateStr}
+                            </td>
+                            <td className={`px-1 sm:px-4 py-3 ${highlightAwayClass}`}>
+                              <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2">
+                                {awayLogo ? (
+                                  <img src={awayLogo} alt={game.awayTeam} className="w-5 h-5 sm:w-6 sm:h-6 object-contain flex-shrink-0" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                ) : (
+                                  <div className="w-5 h-5 sm:w-6 sm:h-6 bg-gray-200 rounded-full flex items-center justify-center text-xs text-gray-500 flex-shrink-0">
+                                    {game.awayTeam.charAt(0)}
+                                  </div>
+                                )}
+                                <span className="text-sm font-medium text-gray-900 hidden sm:inline">{game.awayTeam}</span>
+                              </div>
+                            </td>
+                            <td className="px-1 py-3 text-center text-gray-400 hidden sm:table-cell">@</td>
+                            <td className={`px-1 sm:px-4 py-3 ${highlightHomeClass}`}>
+                              <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2">
+                                {homeLogo ? (
+                                  <img src={homeLogo} alt={game.homeTeam} className="w-5 h-5 sm:w-6 sm:h-6 object-contain flex-shrink-0" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                ) : (
+                                  <div className="w-5 h-5 sm:w-6 sm:h-6 bg-gray-200 rounded-full flex items-center justify-center text-xs text-gray-500 flex-shrink-0">
+                                    {game.homeTeam.charAt(0)}
+                                  </div>
+                                )}
+                                <span className="text-sm font-medium text-gray-900 hidden sm:inline">{game.homeTeam}</span>
+                              </div>
+                            </td>
+                            <td className="px-2 sm:px-4 py-3 text-sm text-right font-mono">
+                              {game.projectedSpread !== null 
+                                ? (game.projectedSpread > 0 ? '+' : '') + game.projectedSpread.toFixed(1)
+                                : '—'}
+                            </td>
+                            <td className="px-2 sm:px-4 py-3 text-right">
+                              {game.openingSpread !== null ? (
+                                <div className="relative inline-flex items-center">
+                                  {game.openingSpread !== 0 && homeLogo && (
+                                    <img 
+                                      src={homeLogo}
+                                      alt=""
+                                      className="absolute -bottom-2 -right-3 w-4 h-4 object-contain"
+                                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                    />
+                                  )}
+                                  <span className="font-mono text-xs sm:text-sm">
+                                    {game.openingSpread > 0 ? '+' : ''}{game.openingSpread.toFixed(1)}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-gray-400">—</span>
+                              )}
+                            </td>
+                            <td className="px-2 sm:px-4 py-3 text-sm text-right font-mono font-semibold">
+                              {game.closingSpread !== null 
+                                ? (game.closingSpread > 0 ? '+' : '') + game.closingSpread.toFixed(1)
+                                : '—'}
+                            </td>
+                            <td className="px-1 sm:px-2 py-3 text-center">
+                              {lineMovedToward === null ? (
+                                <span className="text-gray-300">—</span>
+                              ) : lineMovedToward ? (
+                                <span className="text-green-600 font-bold">+</span>
+                              ) : (
+                                <span className="text-red-600 font-bold">−</span>
+                              )}
+                            </td>
+                            <td className={`px-2 sm:px-4 py-3 text-sm text-right font-mono font-semibold ${
+                              game.difference !== null 
+                                ? game.difference > 0 ? 'text-red-600' : game.difference < 0 ? 'text-green-600' : 'text-gray-400'
+                                : 'text-gray-400'
+                            }`}>
+                              {game.difference !== null 
+                                ? (game.difference > 0 ? '+' : '') + game.difference.toFixed(1)
+                                : '—'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  <div className="px-4 py-2 text-xs text-gray-600 border-t border-gray-100 bg-gray-50">
+                    Diff = Close − Proj (negative = market moved toward our projection)
                   </div>
                 </div>
               )}
