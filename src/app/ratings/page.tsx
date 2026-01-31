@@ -1535,15 +1535,19 @@ export default function RatingsPage() {
   const filteredHistoryGames = useMemo(() => {
     let games = [...historyGames];
     
-    // Apply date filter
+    // Apply date filter - compare using date strings to avoid timezone issues
+    // gameDate is stored as "2026-01-30 02:00:00+00" format
     if (historyStartDate) {
-      const startDate = new Date(historyStartDate);
-      games = games.filter(g => new Date(g.gameDate) >= startDate);
+      games = games.filter(g => {
+        const gameDateStr = g.gameDate.substring(0, 10); // Extract "YYYY-MM-DD"
+        return gameDateStr >= historyStartDate;
+      });
     }
     if (historyEndDate) {
-      const endDate = new Date(historyEndDate);
-      endDate.setHours(23, 59, 59, 999); // Include entire end date
-      games = games.filter(g => new Date(g.gameDate) <= endDate);
+      games = games.filter(g => {
+        const gameDateStr = g.gameDate.substring(0, 10); // Extract "YYYY-MM-DD"
+        return gameDateStr <= historyEndDate;
+      });
     }
     
     // Apply diff range filter (absolute value >= min)
