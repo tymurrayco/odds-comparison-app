@@ -2541,7 +2541,6 @@ export default function RatingsPage() {
                         <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-900 uppercase whitespace-nowrap">Proj</th>
                         <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-900 uppercase whitespace-nowrap">Open</th>
                         <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-900 uppercase whitespace-nowrap">Curr</th>
-                        <th className="px-1 sm:px-2 py-3 text-center text-xs font-semibold text-gray-900 uppercase whitespace-nowrap">+/-</th>
                         <th 
                           className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-900 uppercase whitespace-nowrap cursor-pointer hover:bg-gray-100"
                           onClick={() => {
@@ -2666,6 +2665,7 @@ export default function RatingsPage() {
                         
                         let highlightAwayClass = '';
                         let highlightHomeClass = '';
+                        let highlightProjClass = '';
                         
                         if (projectedSpread !== null && game.openingSpread !== null && game.spread !== null && game.openingSpread !== game.spread) {
                           const openDiff = Math.abs(projectedSpread - game.openingSpread);
@@ -2674,6 +2674,9 @@ export default function RatingsPage() {
                           
                           const movingToward = currentDiff < openDiff;
                           const highlightClass = movingToward ? getGreenHighlightClass(lineMovement) : getRedHighlightClass(lineMovement);
+                          
+                          // Highlight projection cell based on movement direction
+                          highlightProjClass = highlightClass;
                           
                           if (game.spread < game.openingSpread) {
                             highlightHomeClass = highlightClass;
@@ -2686,7 +2689,7 @@ export default function RatingsPage() {
                           <React.Fragment key={game.id}>
                             {showDateHeader && (
                               <tr className="bg-blue-100">
-                                <td colSpan={11} className="px-4 py-2">
+                                <td colSpan={10} className="px-4 py-2">
                                   <span className="font-semibold text-blue-800 text-sm">
                                     {game.dateLabel}
                                     {game.isToday && ' 📍'}
@@ -2757,7 +2760,7 @@ export default function RatingsPage() {
                                 <span className="text-gray-400">—</span>
                               )}
                             </td>
-                            <td className="px-2 sm:px-4 py-3 text-right">
+                            <td className={`px-2 sm:px-4 py-3 text-right ${highlightProjClass}`}>
                               {projectedSpread !== null ? (
                                 <span className={`font-mono text-xs sm:text-sm font-semibold ${projectedSpread < 0 ? 'text-green-600' : projectedSpread > 0 ? 'text-red-600' : 'text-gray-900'}`}>
                                   {projectedSpread > 0 ? '+' : ''}{projectedSpread.toFixed(1)}
@@ -2794,23 +2797,6 @@ export default function RatingsPage() {
                               ) : (
                                 <span className="text-gray-400 text-xs" title="No odds available yet">—</span>
                               )}
-                            </td>
-                            <td className="px-1 sm:px-4 py-3 text-center">
-                              {(() => {
-                                if (projectedSpread === null || game.openingSpread === null || game.spread === null) {
-                                  return <span className="text-gray-300">—</span>;
-                                }
-                                if (game.openingSpread === game.spread) {
-                                  return <span className="text-gray-400">—</span>;
-                                }
-                                const openDiff = Math.abs(projectedSpread - game.openingSpread);
-                                const currentDiff = Math.abs(projectedSpread - game.spread);
-                                if (currentDiff < openDiff) {
-                                  return <span className="text-green-600 font-bold">+</span>;
-                                } else {
-                                  return <span className="text-red-600 font-bold">−</span>;
-                                }
-                              })()}
                             </td>
                             <td className="px-2 sm:px-4 py-3 text-right">
                               {delta !== null ? (
