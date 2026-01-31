@@ -3,7 +3,7 @@
 
 import { FuturesMarket, BOOKMAKERS } from '@/lib/api';
 import { createBet } from '@/lib/betService';
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 
 interface FuturesTableProps {
   market: FuturesMarket;
@@ -73,6 +73,63 @@ function getMarketDescription(league: string): string {
   return `${leagueName} Winner`;
 }
 
+// Common mascots to strip for matching KenPom names to Odds API names
+const MASCOTS = [
+  'wildcats', 'bulldogs', 'tigers', 'bears', 'eagles', 'cardinals', 'hokies',
+  'hurricanes', 'panthers', 'yellow jackets', 'fighting irish', 'demon deacons',
+  'seminoles', 'blue devils', 'cavaliers', 'spartans', 'buckeyes', 'nittany lions',
+  'wolverines', 'hoosiers', 'boilermakers', 'fighting illini', 'hawkeyes', 'badgers',
+  'golden gophers', 'cornhuskers', 'scarlet knights', 'terrapins', 'bruins', 'trojans',
+  'ducks', 'huskies', 'jayhawks', 'cyclones', 'red raiders', 'mountaineers',
+  'horned frogs', 'longhorns', 'sooners', 'cougars', 'knights', 'bearcats',
+  'sun devils', 'buffaloes', 'utes', 'volunteers', 'crimson tide', 'razorbacks',
+  'gators', 'rebels', 'gamecocks', 'aggies', 'commodores', 'musketeers', 'friars',
+  'pirates', 'red storm', 'golden eagles', 'blue demons', 'hoyas', 'gaels', 'rams',
+  'flyers', 'wolf pack', 'broncos', 'lobos', 'aztecs', 'shockers', 'tar heels',
+  'orange', 'wolfpack', 'thundering herd', 'zags', 'orangemen', 'crimson',
+  'cardinal', 'owls', 'hawks', 'flames', 'phoenix', 'ramblers', 'billikens',
+  'bonnies', 'colonials', 'explorers', 'dukes', 'spiders', 'toreros', 'dons',
+  'waves', 'pilots', 'lakers', 'anteaters', 'gauchos', 'matadors', 'tritons',
+  'roadrunners', 'miners', 'mean green', 'monarchs', 'keydets', 'boilermakers'
+];
+
+/**
+ * Normalize team name for matching against KenPom elite list
+ */
+function normalizeForMatch(name: string): string {
+  let normalized = name.toLowerCase().trim();
+  
+  // Remove mascots
+  for (const mascot of MASCOTS) {
+    normalized = normalized.replace(new RegExp(`\\s+${mascot}$`, 'i'), '');
+  }
+  
+  // Normalize whitespace
+  normalized = normalized.replace(/\s+/g, ' ').trim();
+  
+  // Normalize variations
+  normalized = normalized
+    .replace(/\bstate\b/gi, 'st')
+    .replace(/\bst\.\b/gi, 'st')
+    .replace(/\bsaint\b/gi, 'st')
+    .replace(/\buniversity\b/gi, '')
+    .replace(/\bcollege\b/gi, '')
+    .replace(/[.'()]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  
+  return normalized;
+}
+
+// Interface for elite team data from API
+interface EliteTeamData {
+  name: string;
+  normalized: string;
+  rankOE: number;
+  rankDE: number;
+  rankEM: number;
+}
+
 export default function FuturesTable({ 
   market, 
   compactMode = false,
@@ -83,6 +140,68 @@ export default function FuturesTable({
   const pressTimer = useRef<NodeJS.Timeout | null>(null);
   const [holdingKey, setHoldingKey] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  // State for KenPom elite teams (NCAAB only)
+  const [eliteTeamsNormalized, setEliteTeamsNormalized] = useState<Set<string>>(new Set());
+  const [eliteTeamsDetails, setEliteTeamsDetails] = useState<Map<string, EliteTeamData>>(new Map());
+  const [eliteLoading, setEliteLoading] = useState(false);
+
+  // Fetch KenPom elite teams when league is NCAAB
+  useEffect(() => {
+    if (league !== 'basketball_ncaab') {
+      setEliteTeamsNormalized(new Set());
+      setEliteTeamsDetails(new Map());
+      return;
+    }
+
+    const fetchEliteTeams = async () => {
+      setEliteLoading(true);
+      try {
+        const response = await fetch('/api/futures/ncaab-elite');
+        const data = await response.json();
+        
+        if (data.success && data.eliteTeamsNormalized) {
+          setEliteTeamsNormalized(new Set(data.eliteTeamsNormalized));
+          
+          // Build details map for tooltips
+          if (data.details) {
+            const detailsMap = new Map<string, EliteTeamData>();
+            data.details.forEach((team: EliteTeamData) => {
+              detailsMap.set(team.normalized, team);
+            });
+            setEliteTeamsDetails(detailsMap);
+          }
+          
+          console.log(`[FuturesTable] Loaded ${data.count} elite teams for NCAAB`);
+        }
+      } catch (error) {
+        console.error('[FuturesTable] Error fetching elite teams:', error);
+      } finally {
+        setEliteLoading(false);
+      }
+    };
+
+    fetchEliteTeams();
+  }, [league]);
+
+  /**
+   * Check if a team is elite (top 25 in both Ortg and Drtg)
+   */
+  const isEliteTeam = (teamName: string): boolean => {
+    if (league !== 'basketball_ncaab' || eliteTeamsNormalized.size === 0) {
+      return false;
+    }
+    const normalized = normalizeForMatch(teamName);
+    return eliteTeamsNormalized.has(normalized);
+  };
+
+  /**
+   * Get elite team details for tooltip
+   */
+  const getEliteDetails = (teamName: string): EliteTeamData | undefined => {
+    const normalized = normalizeForMatch(teamName);
+    return eliteTeamsDetails.get(normalized);
+  };
 
   // Use selected bookmakers or default to all
   const displayBookmakers = selectedBookmakers && selectedBookmakers.length > 0 
@@ -187,7 +306,7 @@ export default function FuturesTable({
   };
 
   // Custom display for team cell based on whether it's Masters and screen size
-  const renderTeamCell = (team: string) => {
+  const renderTeamCell = (team: string, isElite: boolean = false, eliteDetails?: EliteTeamData) => {
     const teamLogoSrc = `/team-logos/${team.toLowerCase().replace(/\s+/g, '')}.png`;
     const lastName = getLastName(team);
     
@@ -219,7 +338,7 @@ export default function FuturesTable({
     } else {
       // For non-Masters tabs
       return (
-        <div className="flex items-center">
+        <div className="flex items-center gap-1">
           <img 
             src={teamLogoSrc}
             alt=""
@@ -232,6 +351,15 @@ export default function FuturesTable({
             <span>{team}</span>
           ) : (
             <span className="sm:inline hidden">{team}</span>
+          )}
+          {/* Elite badge for NCAAB */}
+          {isElite && (
+            <span 
+              className="hidden md:inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 border border-green-200"
+              title={eliteDetails ? `Top 25 in both Offense (#${eliteDetails.rankOE}) and Defense (#${eliteDetails.rankDE})` : 'Top 25 in both Offense and Defense'}
+            >
+              Elite
+            </span>
           )}
         </div>
       );
@@ -261,10 +389,29 @@ export default function FuturesTable({
           </p>
         </div>
       )}
+      
+      {/* Header with title and optional elite teams indicator */}
       <div className="p-3 md:p-4 border-b border-gray-200">
-        <h3 className="text-sm md:text-lg font-semibold text-gray-900">
-          {market.title}
-        </h3>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm md:text-lg font-semibold text-gray-900">
+            {market.title}
+          </h3>
+          {league === 'basketball_ncaab' && (
+            <div className="flex items-center gap-2 text-xs text-gray-600">
+              {eliteLoading ? (
+                <span className="flex items-center gap-1">
+                  <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                  Loading KenPom...
+                </span>
+              ) : eliteTeamsNormalized.size > 0 ? (
+                <span className="flex items-center gap-1">
+                  <span className="inline-block w-3 h-3 bg-green-100 border border-green-300 rounded"></span>
+                  Top 25 O &amp; D ({eliteTeamsNormalized.size})
+                </span>
+              ) : null}
+            </div>
+          )}
+        </div>
       </div>
       
       <div className="overflow-x-auto">
@@ -297,11 +444,19 @@ export default function FuturesTable({
                   }
                 }
               });
+
+              // Check if this team is elite (NCAAB only)
+              const teamIsElite = isEliteTeam(item.team);
+              const eliteDetails = teamIsElite ? getEliteDetails(item.team) : undefined;
               
               return (
-                <tr key={index}>
+                <tr 
+                  key={index}
+                  className={teamIsElite ? 'bg-green-50' : ''}
+                  title={eliteDetails ? `KenPom: O#${eliteDetails.rankOE}, D#${eliteDetails.rankDE}, Overall#${eliteDetails.rankEM}` : undefined}
+                >
                   <td className="px-2 md:px-4 py-3 whitespace-normal text-xs md:text-sm font-medium text-gray-900">
-                    {renderTeamCell(item.team)}
+                    {renderTeamCell(item.team, teamIsElite, eliteDetails)}
                   </td>
                   {displayBookmakers.map(book => {
                     const cellKey = `${item.team}-${book}`;
@@ -311,7 +466,9 @@ export default function FuturesTable({
                     return (
                       <td 
                         key={book} 
-                        className={`px-2 md:px-4 py-3 whitespace-nowrap text-center cursor-pointer select-none ${isThisCellHolding ? 'bg-blue-50' : ''}`}
+                        className={`px-2 md:px-4 py-3 whitespace-nowrap text-center cursor-pointer select-none ${
+                          isThisCellHolding ? 'bg-blue-50' : teamIsElite ? 'bg-green-50' : ''
+                        }`}
                         onTouchStart={() => hasOdds && handlePressStart(item.team, item.odds[book], book, cellKey)}
                         onTouchEnd={handlePressEnd}
                         onTouchMove={handlePressEnd}

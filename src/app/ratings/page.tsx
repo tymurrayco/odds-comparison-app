@@ -653,7 +653,55 @@ export default function RatingsPage() {
           let enrichedGames = initialCombinedGames.map(game => {
             const oddsMatch = findOddsMatch(game.homeTeam, game.awayTeam);
             
+            // Check if game has started based on time
+            const checkIfStarted = (): boolean => {
+              if (!game.isToday) return false; // Only check today's games
+              if (!game.gameTime) return false;
+              
+              try {
+                const now = new Date();
+                const timeStr = game.gameTime.trim();
+                
+                // Handle various time formats: "7:00 PM", "7:00PM", "19:00", "7:00"
+                let hour24: number;
+                let minutes: number = 0;
+                
+                // Check if it's 24-hour format (no AM/PM)
+                if (!timeStr.match(/[APap][Mm]$/)) {
+                  const parts = timeStr.split(':');
+                  hour24 = parseInt(parts[0], 10);
+                  minutes = parseInt(parts[1], 10) || 0;
+                } else {
+                  // 12-hour format with AM/PM
+                  const match = timeStr.match(/(\d+):?(\d*)\s*([APap][Mm])/);
+                  if (!match) return false;
+                  
+                  let hours = parseInt(match[1], 10);
+                  minutes = parseInt(match[2], 10) || 0;
+                  const period = match[3].toUpperCase();
+                  
+                  if (period === 'PM' && hours !== 12) {
+                    hour24 = hours + 12;
+                  } else if (period === 'AM' && hours === 12) {
+                    hour24 = 0;
+                  } else {
+                    hour24 = hours;
+                  }
+                }
+                
+                const gameDateTime = new Date();
+                gameDateTime.setHours(hour24, minutes, 0, 0);
+                
+                return now > gameDateTime;
+              } catch {
+                return false;
+              }
+            };
+            
+            const timeBasedStarted = checkIfStarted();
+            
             if (oddsMatch) {
+              const hasStarted = oddsMatch.hasStarted || timeBasedStarted;
               return {
                 ...game,
                 oddsGameId: oddsMatch.id,
@@ -661,8 +709,17 @@ export default function RatingsPage() {
                 openingSpread: oddsMatch.openingSpread,
                 total: oddsMatch.total,
                 spreadBookmaker: oddsMatch.spreadBookmaker,
-                hasStarted: oddsMatch.hasStarted,
-                isFrozen: oddsMatch.isFrozen || oddsMatch.hasStarted,
+                hasStarted: hasStarted,
+                isFrozen: oddsMatch.isFrozen || hasStarted,
+              };
+            }
+            
+            // Even without odds match, mark as started if time has passed
+            if (timeBasedStarted) {
+              return {
+                ...game,
+                hasStarted: true,
+                isFrozen: true,
               };
             }
             
@@ -672,12 +729,14 @@ export default function RatingsPage() {
           const matchedCount = enrichedGames.filter(g => g.oddsGameId !== null).length;
           console.log(`Enriched with live odds: ${matchedCount}/${enrichedGames.length} games matched`);
           
-          // For games that didn't match (likely finished), try to get closing lines from cache
-          const unmatchedTodayGames = enrichedGames.filter(g => g.isToday && g.oddsGameId === null);
+          // For games that didn't match OR matched but have no spread (started games), try closing lines
+          const gamesNeedingClosingLines = enrichedGames.filter(g => 
+            g.isToday && (g.oddsGameId === null || (g.hasStarted && g.spread === null))
+          );
           
-          if (unmatchedTodayGames.length > 0) {
-            console.log(`Fetching closing lines for ${unmatchedTodayGames.length} unmatched today games...`);
-            console.log('Unmatched games:', unmatchedTodayGames.map(g => `${g.awayTeam} @ ${g.homeTeam}`));
+          if (gamesNeedingClosingLines.length > 0) {
+            console.log(`Fetching closing lines for ${gamesNeedingClosingLines.length} games needing lines...`);
+            console.log('Games needing lines:', gamesNeedingClosingLines.map(g => `${g.awayTeam} @ ${g.homeTeam}`));
             
             try {
               // Get today's date in YYYY-MM-DD format
@@ -731,20 +790,24 @@ export default function RatingsPage() {
                   return null;
                 };
                 
-                // Update unmatched games with closing lines
+                // Update games that need closing lines
                 let closingMatchCount = 0;
                 enrichedGames = enrichedGames.map(game => {
-                  if (game.isToday && game.oddsGameId === null) {
+                  // Apply closing lines if: unmatched OR (started and no spread)
+                  const needsClosingLine = game.isToday && 
+                    (game.oddsGameId === null || (game.hasStarted && game.spread === null));
+                  
+                  if (needsClosingLine) {
                     const closingMatch = findClosingMatch(game.homeTeam, game.awayTeam);
                     
                     if (closingMatch) {
                       closingMatchCount++;
                       return {
                         ...game,
-                        oddsGameId: closingMatch.gameId,
+                        oddsGameId: closingMatch.gameId || game.oddsGameId,
                         spread: closingMatch.closingSpread,
                         openingSpread: closingMatch.openingSpread || closingMatch.closingSpread,
-                        total: closingMatch.total,
+                        total: closingMatch.total || game.total,
                         spreadBookmaker: closingMatch.closingSource,
                         hasStarted: true,
                         isFrozen: true,
@@ -754,12 +817,12 @@ export default function RatingsPage() {
                   return game;
                 });
                 
-                console.log(`Matched ${closingMatchCount} of ${unmatchedTodayGames.length} games with closing lines`);
+                console.log(`Matched ${closingMatchCount} of ${gamesNeedingClosingLines.length} games with closing lines`);
                 
-                // Log any that still didn't match
-                const stillUnmatched = enrichedGames.filter(g => g.isToday && g.oddsGameId === null);
-                if (stillUnmatched.length > 0) {
-                  console.log('Still unmatched after closing lines:', stillUnmatched.map(g => `${g.awayTeam} @ ${g.homeTeam}`));
+                // Log any that still don't have spread
+                const stillMissingSpread = enrichedGames.filter(g => g.isToday && g.hasStarted && g.spread === null);
+                if (stillMissingSpread.length > 0) {
+                  console.log('Still missing spread after closing lines:', stillMissingSpread.map(g => `${g.awayTeam} @ ${g.homeTeam}`));
                 }
               }
             } catch (closingErr) {
