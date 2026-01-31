@@ -676,7 +676,7 @@ export default function RatingsPage() {
                   const match = timeStr.match(/(\d+):?(\d*)\s*([APap][Mm])/);
                   if (!match) return false;
                   
-                  let hours = parseInt(match[1], 10);
+                const hours = parseInt(match[1], 10);
                   minutes = parseInt(match[2], 10) || 0;
                   const period = match[3].toUpperCase();
                   
