@@ -1535,18 +1535,23 @@ export default function RatingsPage() {
   const filteredHistoryGames = useMemo(() => {
     let games = [...historyGames];
     
-    // Apply date filter - compare using date strings to avoid timezone issues
-    // gameDate is stored as "2026-01-30 02:00:00+00" format
-    if (historyStartDate) {
+    // Apply date filter using local timezone (matches displayed date)
+    if (historyStartDate || historyEndDate) {
+      // Debug first game
+      if (games.length > 0) {
+        const g = games[0];
+        const gameDate = new Date(g.gameDate);
+        const localDateStr = gameDate.toLocaleDateString('en-CA');
+        console.log(`[Filter Debug] First game: stored=${g.gameDate}, local=${localDateStr}, filter=${historyStartDate} to ${historyEndDate}`);
+      }
+      
       games = games.filter(g => {
-        const gameDateStr = g.gameDate.substring(0, 10); // Extract "YYYY-MM-DD"
-        return gameDateStr >= historyStartDate;
-      });
-    }
-    if (historyEndDate) {
-      games = games.filter(g => {
-        const gameDateStr = g.gameDate.substring(0, 10); // Extract "YYYY-MM-DD"
-        return gameDateStr <= historyEndDate;
+        const gameDate = new Date(g.gameDate);
+        const localDateStr = gameDate.toLocaleDateString('en-CA'); // "YYYY-MM-DD" in local timezone
+        
+        if (historyStartDate && localDateStr < historyStartDate) return false;
+        if (historyEndDate && localDateStr > historyEndDate) return false;
+        return true;
       });
     }
     
