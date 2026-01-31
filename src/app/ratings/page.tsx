@@ -2498,9 +2498,9 @@ export default function RatingsPage() {
                   <p className="text-sm mt-2">Try refreshing BT data locally.</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto max-h-[70vh] overflow-y-auto">
                   <table className="w-full">
-                    <thead className="bg-gray-50">
+                    <thead className="bg-gray-50 sticky top-0 z-10">
                       <tr>
                         <th 
                           className="px-1 sm:px-4 py-3 text-left text-xs font-semibold text-gray-900 uppercase whitespace-nowrap w-10 sm:w-auto cursor-pointer hover:bg-gray-100"
@@ -2947,9 +2947,9 @@ export default function RatingsPage() {
                   <p className="text-sm mt-2">{historyGames.length > 0 ? 'Try adjusting the date filter.' : 'Sync games to build history.'}</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto max-h-[70vh] overflow-y-auto">
                   <table className="w-full">
-                    <thead className="bg-gray-50 sticky top-0">
+                    <thead className="bg-gray-50 sticky top-0 z-10">
                       <tr>
                         <th 
                           className="px-2 sm:px-4 py-3 text-left text-xs font-semibold text-gray-900 uppercase cursor-pointer hover:bg-gray-100"
