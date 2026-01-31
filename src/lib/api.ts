@@ -134,7 +134,7 @@ export const LEAGUES = [
   { id: 'icehockey_nhl', name: 'NHL', icon: '/league-icons/nhl.png', isActive: true },
   { id: 'basketball_nba', name: 'NBA', icon: '/league-icons/nba.png', isActive: true },
   { id: 'baseball_ncaa', name: 'CWS', icon: '/league-icons/cws.png', isActive: false }, // Hidden - out of season
-  { id: 'lacrosse_ncaa', name: 'NCAAL', icon: '/league-icons/ncaal.png', isActive: false }, // Hidden - out of season
+  { id: 'lacrosse_ncaa', name: 'NCAAL', icon: '/league-icons/ncaal.png', isActive: true }, // Hidden - out of season
 ];
 
 // Leagues that support props

@@ -412,6 +412,15 @@ export default function FuturesTable({
             </div>
           )}
         </div>
+        {/* Elite teams disclaimer for NCAAB */}
+        {league === 'basketball_ncaab' && eliteTeamsNormalized.size > 0 && (
+          <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-green-100 text-green-700 border border-green-200 font-medium">
+              Elite
+            </span>
+            <span>represents teams that can win it all based on Offensive &amp; Defensive Efficiency</span>
+          </div>
+        )}
       </div>
       
       <div className="overflow-x-auto">
