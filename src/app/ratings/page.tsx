@@ -1537,14 +1537,6 @@ export default function RatingsPage() {
     
     // Apply date filter using local timezone (matches displayed date)
     if (historyStartDate || historyEndDate) {
-      // Debug first game
-      if (games.length > 0) {
-        const g = games[0];
-        const gameDate = new Date(g.gameDate);
-        const localDateStr = gameDate.toLocaleDateString('en-CA');
-        console.log(`[Filter Debug] First game: stored=${g.gameDate}, local=${localDateStr}, filter=${historyStartDate} to ${historyEndDate}`);
-      }
-      
       games = games.filter(g => {
         const gameDate = new Date(g.gameDate);
         const localDateStr = gameDate.toLocaleDateString('en-CA'); // "YYYY-MM-DD" in local timezone
@@ -2675,6 +2667,7 @@ export default function RatingsPage() {
                         let highlightAwayClass = '';
                         let highlightHomeClass = '';
                         let highlightProjClass = '';
+                        let highlightBtClass = '';
                         
                         if (projectedSpread !== null && game.openingSpread !== null && game.spread !== null && game.openingSpread !== game.spread) {
                           const openDiff = Math.abs(projectedSpread - game.openingSpread);
@@ -2693,6 +2686,18 @@ export default function RatingsPage() {
                             highlightAwayClass = highlightClass;
                           }
                         }
+                        
+                        // BT projection highlighting (comparing line movement to BT projection)
+                        if (btSpread !== null && game.openingSpread !== null && game.spread !== null && game.openingSpread !== game.spread) {
+                          const openDiffBt = Math.abs(btSpread - game.openingSpread);
+                          const currentDiffBt = Math.abs(btSpread - game.spread);
+                          const lineMovement = Math.abs(game.spread - game.openingSpread);
+                          
+                          const movingTowardBt = currentDiffBt < openDiffBt;
+                          highlightBtClass = movingTowardBt ? getGreenHighlightClass(lineMovement) : getRedHighlightClass(lineMovement);
+                        }
+                        
+                        
                         
                         return (
                           <React.Fragment key={game.id}>
@@ -2760,7 +2765,7 @@ export default function RatingsPage() {
                                 {!homeRating && <span className="text-xs text-red-400 hidden sm:inline" title="Team not found in ratings">?</span>}
                               </div>
                             </td>
-                            <td className="px-2 sm:px-4 py-3 text-right">
+                            <td className={`px-2 sm:px-4 py-3 text-right ${highlightBtClass}`}>
                               {btSpread !== null ? (
                                 <span className="font-mono text-xs sm:text-sm font-semibold text-purple-600">
                                   {btSpread > 0 ? '+' : ''}{btSpread.toFixed(1)}
