@@ -2500,10 +2500,10 @@ export default function RatingsPage() {
               ) : (
                 <div className="overflow-x-auto max-h-[70vh] overflow-y-auto">
                   <table className="w-full">
-                    <thead className="bg-gray-50 sticky top-0 z-10">
+                    <thead className="bg-blue-900 sticky top-0 z-10">
                       <tr>
                         <th 
-                          className="px-1 sm:px-4 py-3 text-left text-xs font-semibold text-gray-900 uppercase whitespace-nowrap w-10 sm:w-auto cursor-pointer hover:bg-gray-100"
+                          className="px-1 sm:px-4 py-3 text-left text-xs font-semibold text-white uppercase whitespace-nowrap w-10 sm:w-auto cursor-pointer hover:bg-blue-800"
                           onClick={() => {
                             setScheduleSortBy('time');
                             setScheduleSortDir('asc');
@@ -2512,7 +2512,7 @@ export default function RatingsPage() {
                           Time {scheduleSortBy === 'time' && '↓'}
                         </th>
                         <th 
-                          className="px-1 sm:px-4 py-3 text-center text-xs font-semibold text-gray-900 uppercase min-w-[60px] sm:min-w-[120px] cursor-pointer hover:bg-gray-100"
+                          className="px-1 sm:px-4 py-3 text-center text-xs font-semibold text-white uppercase min-w-[60px] sm:min-w-[120px] cursor-pointer hover:bg-blue-800"
                           onClick={() => {
                             if (scheduleSortBy === 'awayMovement') {
                               setScheduleSortDir(scheduleSortDir === 'desc' ? 'asc' : 'desc');
@@ -2524,9 +2524,9 @@ export default function RatingsPage() {
                         >
                           Away {scheduleSortBy === 'awayMovement' && (scheduleSortDir === 'desc' ? '↓' : '↑')}
                         </th>
-                        <th className="px-1 py-3 text-center text-xs font-semibold text-gray-900 uppercase w-6 hidden sm:table-cell"></th>
+                        <th className="px-1 py-3 text-center text-xs font-semibold text-white uppercase w-6 hidden sm:table-cell"></th>
                         <th 
-                          className="px-1 sm:px-4 py-3 text-center text-xs font-semibold text-gray-900 uppercase min-w-[60px] sm:min-w-[120px] cursor-pointer hover:bg-gray-100"
+                          className="px-1 sm:px-4 py-3 text-center text-xs font-semibold text-white uppercase min-w-[60px] sm:min-w-[120px] cursor-pointer hover:bg-blue-800"
                           onClick={() => {
                             if (scheduleSortBy === 'homeMovement') {
                               setScheduleSortDir(scheduleSortDir === 'desc' ? 'asc' : 'desc');
@@ -2538,12 +2538,12 @@ export default function RatingsPage() {
                         >
                           Home {scheduleSortBy === 'homeMovement' && (scheduleSortDir === 'desc' ? '↓' : '↑')}
                         </th>
-                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-purple-600 uppercase whitespace-nowrap">BT</th>
-                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-900 uppercase whitespace-nowrap">Proj</th>
-                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-900 uppercase whitespace-nowrap">Open</th>
-                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-900 uppercase whitespace-nowrap">Curr</th>
+                        <th className="px-2 sm:px-4 py-3 text-center text-xs font-semibold text-white uppercase whitespace-nowrap" title="BT (upper-left) / Our Proj (lower-right)">BT/Proj</th>
+                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-white uppercase whitespace-nowrap" title="Weighted blend of BT and our projection">Blend</th>
+                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-white uppercase whitespace-nowrap">Open</th>
+                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-white uppercase whitespace-nowrap">Curr</th>
                         <th 
-                          className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-900 uppercase whitespace-nowrap cursor-pointer hover:bg-gray-100"
+                          className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-white uppercase whitespace-nowrap cursor-pointer hover:bg-blue-800"
                           onClick={() => {
                             if (scheduleSortBy === 'delta') {
                               setScheduleSortDir(scheduleSortDir === 'desc' ? 'asc' : 'desc');
@@ -2555,7 +2555,7 @@ export default function RatingsPage() {
                         >
                           Delta {scheduleSortBy === 'delta' && (scheduleSortDir === 'desc' ? '↓' : '↑')}
                         </th>
-                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-900 uppercase whitespace-nowrap hidden sm:table-cell">Total</th>
+                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-white uppercase whitespace-nowrap hidden sm:table-cell">Total</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -2668,6 +2668,12 @@ export default function RatingsPage() {
                         let highlightHomeClass = '';
                         let highlightProjClass = '';
                         let highlightBtClass = '';
+                        let highlightBlendClass = '';
+                        
+                        // Calculate weighted blend: 0.38022 + (BT * 0.355163) + (ourProj * 0.620901)
+                        const blendSpread = (btSpread !== null && projectedSpread !== null)
+                          ? 0.38022 + (btSpread * 0.355163) + (projectedSpread * 0.620901)
+                          : (projectedSpread !== null ? projectedSpread : null);
                         
                         if (projectedSpread !== null && game.openingSpread !== null && game.spread !== null && game.openingSpread !== game.spread) {
                           const openDiff = Math.abs(projectedSpread - game.openingSpread);
@@ -2695,6 +2701,16 @@ export default function RatingsPage() {
                           
                           const movingTowardBt = currentDiffBt < openDiffBt;
                           highlightBtClass = movingTowardBt ? getGreenHighlightClass(lineMovement) : getRedHighlightClass(lineMovement);
+                        }
+                        
+                        // Blend highlighting (comparing line movement to weighted blend)
+                        if (blendSpread !== null && game.openingSpread !== null && game.spread !== null && game.openingSpread !== game.spread) {
+                          const openDiffBlend = Math.abs(blendSpread - game.openingSpread);
+                          const currentDiffBlend = Math.abs(blendSpread - game.spread);
+                          const lineMovement = Math.abs(game.spread - game.openingSpread);
+                          
+                          const movingTowardBlend = currentDiffBlend < openDiffBlend;
+                          highlightBlendClass = movingTowardBlend ? getGreenHighlightClass(lineMovement) : getRedHighlightClass(lineMovement);
                         }
                         
                         
@@ -2765,22 +2781,40 @@ export default function RatingsPage() {
                                 {!homeRating && <span className="text-xs text-red-400 hidden sm:inline" title="Team not found in ratings">?</span>}
                               </div>
                             </td>
-                            <td className={`px-2 sm:px-4 py-3 text-right ${highlightBtClass}`}>
-                              {btSpread !== null ? (
-                                <span className="font-mono text-xs sm:text-sm font-semibold text-purple-600">
-                                  {btSpread > 0 ? '+' : ''}{btSpread.toFixed(1)}
+                            <td className="px-1 sm:px-2 py-1 text-center">
+                              {/* Combined BT/Proj cell with diagonal split */}
+                              <div className="relative w-16 h-10 mx-auto overflow-hidden rounded">
+                                {/* Upper-left triangle (BT) */}
+                                <div 
+                                  className={`absolute inset-0 ${highlightBtClass}`}
+                                  style={{ clipPath: 'polygon(0 0, 100% 0, 0 100%)' }}
+                                />
+                                {/* Lower-right triangle (Proj) */}
+                                <div 
+                                  className={`absolute inset-0 ${highlightProjClass}`}
+                                  style={{ clipPath: 'polygon(100% 0, 100% 100%, 0 100%)' }}
+                                />
+                                {/* Diagonal line using SVG for crisp rendering */}
+                                <svg className="absolute inset-0 w-full h-full pointer-events-none" preserveAspectRatio="none">
+                                  <line x1="0" y1="100%" x2="100%" y2="0" stroke="#9ca3af" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+                                </svg>
+                                {/* BT value (upper-left) */}
+                                <span className="absolute top-0 left-0.5 font-mono text-xs font-semibold text-purple-600">
+                                  {btSpread !== null ? (btSpread > 0 ? '+' : '') + btSpread.toFixed(1) : '—'}
+                                </span>
+                                {/* Proj value (lower-right) */}
+                                <span className={`absolute bottom-0 right-0.5 font-mono text-xs font-semibold ${projectedSpread !== null ? (projectedSpread < 0 ? 'text-green-600' : projectedSpread > 0 ? 'text-red-600' : 'text-gray-900') : 'text-gray-400'}`}>
+                                  {projectedSpread !== null ? (projectedSpread > 0 ? '+' : '') + projectedSpread.toFixed(1) : '—'}
+                                </span>
+                              </div>
+                            </td>
+                            <td className={`px-2 sm:px-4 py-3 text-right ${highlightBlendClass}`}>
+                              {blendSpread !== null ? (
+                                <span className={`font-mono text-xs sm:text-sm font-semibold ${blendSpread < 0 ? 'text-green-600' : blendSpread > 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                                  {blendSpread > 0 ? '+' : ''}{blendSpread.toFixed(1)}
                                 </span>
                               ) : (
                                 <span className="text-gray-400">—</span>
-                              )}
-                            </td>
-                            <td className={`px-2 sm:px-4 py-3 text-right ${highlightProjClass}`}>
-                              {projectedSpread !== null ? (
-                                <span className={`font-mono text-xs sm:text-sm font-semibold ${projectedSpread < 0 ? 'text-green-600' : projectedSpread > 0 ? 'text-red-600' : 'text-gray-900'}`}>
-                                  {projectedSpread > 0 ? '+' : ''}{projectedSpread.toFixed(1)}
-                                </span>
-                              ) : (
-                                <span className="text-gray-400 text-xs" title="Team not found in ratings">⚠️</span>
                               )}
                             </td>
                             <td className="px-2 sm:px-4 py-3 text-right">
@@ -2949,10 +2983,10 @@ export default function RatingsPage() {
               ) : (
                 <div className="overflow-x-auto max-h-[70vh] overflow-y-auto">
                   <table className="w-full">
-                    <thead className="bg-gray-50 sticky top-0 z-10">
+                    <thead className="bg-blue-900 sticky top-0 z-10">
                       <tr>
                         <th 
-                          className="px-2 sm:px-4 py-3 text-left text-xs font-semibold text-gray-900 uppercase cursor-pointer hover:bg-gray-100"
+                          className="px-2 sm:px-4 py-3 text-left text-xs font-semibold text-white uppercase cursor-pointer hover:bg-blue-800"
                           onClick={() => {
                             if (historySortField === 'date') {
                               setHistorySortDirection(d => d === 'asc' ? 'desc' : 'asc');
@@ -2965,7 +2999,7 @@ export default function RatingsPage() {
                           Date {historySortField === 'date' && (historySortDirection === 'desc' ? '↓' : '↑')}
                         </th>
                         <th 
-                          className="px-1 sm:px-4 py-3 text-center text-xs font-semibold text-gray-900 uppercase min-w-[60px] sm:min-w-[120px] cursor-pointer hover:bg-gray-100"
+                          className="px-1 sm:px-4 py-3 text-center text-xs font-semibold text-white uppercase min-w-[60px] sm:min-w-[120px] cursor-pointer hover:bg-blue-800"
                           onClick={() => {
                             if (historySortField === 'awayMovement') {
                               setHistorySortDirection(d => d === 'asc' ? 'desc' : 'asc');
@@ -2977,9 +3011,9 @@ export default function RatingsPage() {
                         >
                           Away {historySortField === 'awayMovement' && (historySortDirection === 'desc' ? '↓' : '↑')}
                         </th>
-                        <th className="px-1 py-3 text-center text-xs font-semibold text-gray-900 uppercase w-6 hidden sm:table-cell"></th>
+                        <th className="px-1 py-3 text-center text-xs font-semibold text-white uppercase w-6 hidden sm:table-cell"></th>
                         <th 
-                          className="px-1 sm:px-4 py-3 text-center text-xs font-semibold text-gray-900 uppercase min-w-[60px] sm:min-w-[120px] cursor-pointer hover:bg-gray-100"
+                          className="px-1 sm:px-4 py-3 text-center text-xs font-semibold text-white uppercase min-w-[60px] sm:min-w-[120px] cursor-pointer hover:bg-blue-800"
                           onClick={() => {
                             if (historySortField === 'homeMovement') {
                               setHistorySortDirection(d => d === 'asc' ? 'desc' : 'asc');
@@ -2991,13 +3025,12 @@ export default function RatingsPage() {
                         >
                           Home {historySortField === 'homeMovement' && (historySortDirection === 'desc' ? '↓' : '↑')}
                         </th>
-                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-purple-700 uppercase">BT</th>
-                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-900 uppercase">Proj</th>
-                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-900 uppercase">Open</th>
-                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-900 uppercase">Close</th>
-                        <th className="px-1 sm:px-2 py-3 text-center text-xs font-semibold text-gray-900 uppercase">+/-</th>
+                        <th className="px-2 sm:px-4 py-3 text-center text-xs font-semibold text-white uppercase whitespace-nowrap" title="BT (upper-left) / Our Proj (lower-right)">BT/Proj</th>
+                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-white uppercase whitespace-nowrap" title="Weighted blend of BT and our projection">Blend</th>
+                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-white uppercase">Open</th>
+                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-white uppercase">Close</th>
                         <th 
-                          className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-900 uppercase cursor-pointer hover:bg-gray-100"
+                          className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-white uppercase cursor-pointer hover:bg-blue-800"
                           onClick={() => {
                             if (historySortField === 'diff') {
                               setHistorySortDirection(d => d === 'asc' ? 'desc' : 'asc');
@@ -3042,15 +3075,24 @@ export default function RatingsPage() {
                         
                         let highlightAwayClass = '';
                         let highlightHomeClass = '';
-                        let lineMovedToward: boolean | null = null;
+                        let highlightProjClass = '';
+                        let highlightBtClass = '';
+                        let highlightBlendClass = '';
+                        
+                        // Calculate weighted blend: 0.38022 + (BT * 0.355163) + (ourProj * 0.620901)
+                        const blendSpread = (game.btSpread !== null && game.projectedSpread !== null)
+                          ? 0.38022 + (game.btSpread * 0.355163) + (game.projectedSpread * 0.620901)
+                          : (game.projectedSpread !== null ? game.projectedSpread : null);
                         
                         if (game.projectedSpread !== null && game.openingSpread !== null && game.closingSpread !== null && game.openingSpread !== game.closingSpread) {
                           const openDiff = Math.abs(game.projectedSpread - game.openingSpread);
                           const closeDiff = Math.abs(game.projectedSpread - game.closingSpread);
                           const lineMovement = Math.abs(game.closingSpread - game.openingSpread);
                           
-                          lineMovedToward = closeDiff < openDiff;
-                          const highlightClass = lineMovedToward ? getGreenHighlightClass(lineMovement) : getRedHighlightClass(lineMovement);
+                          const movingToward = closeDiff < openDiff;
+                          const highlightClass = movingToward ? getGreenHighlightClass(lineMovement) : getRedHighlightClass(lineMovement);
+                          
+                          highlightProjClass = highlightClass;
                           
                           // If spread decreased (e.g., -3 to -5), line moved toward home team
                           if (game.closingSpread < game.openingSpread) {
@@ -3058,6 +3100,26 @@ export default function RatingsPage() {
                           } else {
                             highlightAwayClass = highlightClass;
                           }
+                        }
+                        
+                        // BT projection highlighting
+                        if (game.btSpread !== null && game.openingSpread !== null && game.closingSpread !== null && game.openingSpread !== game.closingSpread) {
+                          const openDiffBt = Math.abs(game.btSpread - game.openingSpread);
+                          const closeDiffBt = Math.abs(game.btSpread - game.closingSpread);
+                          const lineMovement = Math.abs(game.closingSpread - game.openingSpread);
+                          
+                          const movingTowardBt = closeDiffBt < openDiffBt;
+                          highlightBtClass = movingTowardBt ? getGreenHighlightClass(lineMovement) : getRedHighlightClass(lineMovement);
+                        }
+                        
+                        // Blend highlighting
+                        if (blendSpread !== null && game.openingSpread !== null && game.closingSpread !== null && game.openingSpread !== game.closingSpread) {
+                          const openDiffBlend = Math.abs(blendSpread - game.openingSpread);
+                          const closeDiffBlend = Math.abs(blendSpread - game.closingSpread);
+                          const lineMovement = Math.abs(game.closingSpread - game.openingSpread);
+                          
+                          const movingTowardBlend = closeDiffBlend < openDiffBlend;
+                          highlightBlendClass = movingTowardBlend ? getGreenHighlightClass(lineMovement) : getRedHighlightClass(lineMovement);
                         }
                         
                         // Get logos
@@ -3094,15 +3156,41 @@ export default function RatingsPage() {
                                 <span className="text-sm font-medium text-gray-900 hidden sm:inline">{game.homeTeam}</span>
                               </div>
                             </td>
-                            <td className="px-2 sm:px-4 py-3 text-sm text-right font-mono text-purple-700">
-                              {game.btSpread !== null 
-                                ? (game.btSpread > 0 ? '+' : '') + game.btSpread.toFixed(1)
-                                : '—'}
+                            <td className="px-1 sm:px-2 py-1 text-center">
+                              {/* Combined BT/Proj cell with diagonal split */}
+                              <div className="relative w-16 h-10 mx-auto overflow-hidden rounded">
+                                {/* Upper-left triangle (BT) */}
+                                <div 
+                                  className={`absolute inset-0 ${highlightBtClass}`}
+                                  style={{ clipPath: 'polygon(0 0, 100% 0, 0 100%)' }}
+                                />
+                                {/* Lower-right triangle (Proj) */}
+                                <div 
+                                  className={`absolute inset-0 ${highlightProjClass}`}
+                                  style={{ clipPath: 'polygon(100% 0, 100% 100%, 0 100%)' }}
+                                />
+                                {/* Diagonal line using SVG for crisp rendering */}
+                                <svg className="absolute inset-0 w-full h-full pointer-events-none" preserveAspectRatio="none">
+                                  <line x1="0" y1="100%" x2="100%" y2="0" stroke="#9ca3af" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+                                </svg>
+                                {/* BT value (upper-left) */}
+                                <span className="absolute top-0 left-0.5 font-mono text-xs font-semibold text-purple-600">
+                                  {game.btSpread !== null ? (game.btSpread > 0 ? '+' : '') + game.btSpread.toFixed(1) : '—'}
+                                </span>
+                                {/* Proj value (lower-right) */}
+                                <span className={`absolute bottom-0 right-0.5 font-mono text-xs font-semibold ${game.projectedSpread !== null ? (game.projectedSpread < 0 ? 'text-green-600' : game.projectedSpread > 0 ? 'text-red-600' : 'text-gray-900') : 'text-gray-400'}`}>
+                                  {game.projectedSpread !== null ? (game.projectedSpread > 0 ? '+' : '') + game.projectedSpread.toFixed(1) : '—'}
+                                </span>
+                              </div>
                             </td>
-                            <td className="px-2 sm:px-4 py-3 text-sm text-right font-mono">
-                              {game.projectedSpread !== null 
-                                ? (game.projectedSpread > 0 ? '+' : '') + game.projectedSpread.toFixed(1)
-                                : '—'}
+                            <td className={`px-2 sm:px-4 py-3 text-right ${highlightBlendClass}`}>
+                              {blendSpread !== null ? (
+                                <span className={`font-mono text-xs sm:text-sm font-semibold ${blendSpread < 0 ? 'text-green-600' : blendSpread > 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                                  {blendSpread > 0 ? '+' : ''}{blendSpread.toFixed(1)}
+                                </span>
+                              ) : (
+                                <span className="text-gray-400">—</span>
+                              )}
                             </td>
                             <td className="px-2 sm:px-4 py-3 text-right">
                               {game.openingSpread !== null ? (
@@ -3127,15 +3215,6 @@ export default function RatingsPage() {
                               {game.closingSpread !== null 
                                 ? (game.closingSpread > 0 ? '+' : '') + game.closingSpread.toFixed(1)
                                 : '—'}
-                            </td>
-                            <td className="px-1 sm:px-2 py-3 text-center">
-                              {lineMovedToward === null ? (
-                                <span className="text-gray-300">—</span>
-                              ) : lineMovedToward ? (
-                                <span className="text-green-600 font-bold">+</span>
-                              ) : (
-                                <span className="text-red-600 font-bold">−</span>
-                              )}
                             </td>
                             <td className={`px-2 sm:px-4 py-3 text-sm text-right font-mono font-semibold ${
                               game.difference !== null 
