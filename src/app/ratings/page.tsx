@@ -206,6 +206,7 @@ export default function RatingsPage() {
   const [scheduleGames, setScheduleGames] = useState<ScheduleGame[]>([]);
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [oddsLoading, setOddsLoading] = useState(false);
+  const [oddsError, setOddsError] = useState<string | null>(null);
   const [scheduleFilter, setScheduleFilter] = useState<'all' | 'today' | 'tomorrow' | 'day2' | 'day3'>('all');
   const [scheduleSortBy, setScheduleSortBy] = useState<'time' | 'delta' | 'awayMovement' | 'homeMovement'>('time');
   const [scheduleSortDir, setScheduleSortDir] = useState<'asc' | 'desc'>('asc');
@@ -428,6 +429,7 @@ export default function RatingsPage() {
   const loadSchedule = async () => {
     setScheduleLoading(true);
     setOddsLoading(false); // Reset until we actually start fetching odds
+    setOddsError(null); // Reset error state
     try {
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
       const cacheBuster = Date.now();
@@ -770,10 +772,12 @@ export default function RatingsPage() {
         } else {
           console.log('Odds data not successful or no games returned');
           setOddsLoading(false);
+          setOddsError('No odds data returned');
         }
       } catch (err) {
         console.error('Failed to load odds data:', err);
         setOddsLoading(false);
+        setOddsError(err instanceof Error ? err.message : 'Failed to load odds');
         // BT games are already displayed, so this is non-fatal
       }
       
@@ -2887,7 +2891,12 @@ export default function RatingsPage() {
                     </tbody>
                   </table>
                   <div className="px-4 py-2 text-xs text-gray-900 border-t border-gray-100 bg-blue-50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
-                    <span>Open & Current spreads sourced from Pinnacle, with DraftKings/FanDuel/BetMGM/BetRivers average as fallback.</span>
+                    <span>
+                      Open & Current spreads sourced from Pinnacle, with DraftKings/FanDuel/BetMGM/BetRivers average as fallback.
+                      <span className="ml-2 text-gray-500">
+                        ({combinedScheduleGames.filter(g => g.spread !== null).length}/{combinedScheduleGames.length} with odds)
+                      </span>
+                    </span>
                     {oddsLoading ? (
                       <span className="flex items-center gap-1 text-blue-600">
                         <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
@@ -2895,6 +2904,16 @@ export default function RatingsPage() {
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                         </svg>
                         Loading odds...
+                      </span>
+                    ) : oddsError ? (
+                      <span className="flex items-center gap-2">
+                        <span className="text-red-600">⚠️ {oddsError}</span>
+                        <button 
+                          onClick={loadSchedule}
+                          className="text-blue-600 hover:text-blue-800 underline"
+                        >
+                          Retry
+                        </button>
                       </span>
                     ) : combinedScheduleGames.some(g => g.spread === null && !g.hasStarted) ? (
                       <button 
