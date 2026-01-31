@@ -7,17 +7,6 @@ import { createClient } from '@supabase/supabase-js';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-/**
- * History API Route
- * 
- * Fetches historical games with closing lines from Supabase.
- * Uses ncaab_game_adjustments which has projected spreads and opening spreads.
- * 
- * Query params:
- *   - limit: number of records to fetch (default 1000)
- *   - offset: starting position for pagination (default 0)
- */
-
 // Initialize Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -31,6 +20,7 @@ interface HistoryGame {
   spread: number | null;
   openingSpread: number | null;
   projectedSpread: number | null;
+  btSpread: number | null;
   total: number | null;
   spreadBookmaker: string | null;
   isToday: boolean;
@@ -45,49 +35,47 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '1000');
     const offset = parseInt(searchParams.get('offset') || '0');
     
-    // Fetch game adjustments which have projected spread, closing spread, opening spread, and team names
-    const { data: adjustments, error } = await supabase
-      .from('ncaab_game_adjustments')
-      .select('*')
-      .order('game_date', { ascending: false })
-      .range(offset, offset + limit - 1);
+    // Use raw SQL to join the tables properly - this works in Supabase
+    const { data, error } = await supabase.rpc('get_history_with_bt', {
+      p_limit: limit,
+      p_offset: offset
+    });
     
     if (error) {
-      console.error('[History] Supabase error:', error);
-      return NextResponse.json(
-        { error: 'Failed to fetch history' },
-        { status: 500 }
-      );
+      console.error('[History] RPC error, falling back to separate queries:', error);
+      // Fallback to separate queries
+      return await fallbackQuery(limit, offset);
     }
     
-    if (!adjustments || adjustments.length === 0) {
-      return NextResponse.json({
-        success: true,
-        games: [],
-        count: 0,
-      });
-    }
+    const games: HistoryGame[] = (data || []).map((row: {
+      game_id: string;
+      game_date: string;
+      home_team: string;
+      away_team: string;
+      closing_spread: number | null;
+      opening_spread: number | null;
+      projected_spread: number | null;
+      bt_spread: number | null;
+      closing_source: string | null;
+    }) => ({
+      id: row.game_id,
+      commenceTime: row.game_date,
+      homeTeam: row.home_team,
+      awayTeam: row.away_team,
+      spread: row.closing_spread,
+      openingSpread: row.opening_spread,
+      projectedSpread: row.projected_spread,
+      btSpread: row.bt_spread,
+      total: null,
+      spreadBookmaker: row.closing_source,
+      isToday: false,
+      isTomorrow: false,
+      hasStarted: true,
+      isFrozen: true,
+    }));
     
-    // Convert to HistoryGame format
-    const games: HistoryGame[] = adjustments
-      .filter(adj => adj.home_team && adj.away_team)
-      .map(adj => ({
-        id: adj.game_id,
-        commenceTime: adj.game_date,
-        homeTeam: adj.home_team,
-        awayTeam: adj.away_team,
-        spread: adj.closing_spread,
-        openingSpread: adj.opening_spread ?? null,
-        projectedSpread: adj.projected_spread,
-        total: null, // ncaab_game_adjustments doesn't have totals
-        spreadBookmaker: adj.closing_source,
-        isToday: false,
-        isTomorrow: false,
-        hasStarted: true,
-        isFrozen: true,
-      }));
-    
-    console.log(`[History] Returning ${games.length} historical games (offset: ${offset}, limit: ${limit})`);
+    const btMatchCount = games.filter(g => g.btSpread !== null).length;
+    console.log(`[History] Returning ${games.length} games, BT matches: ${btMatchCount}`);
     
     return NextResponse.json({
       success: true,
@@ -95,6 +83,7 @@ export async function GET(request: NextRequest) {
       count: games.length,
       offset,
       limit,
+      btMatchCount,
     }, {
       headers: {
         'Cache-Control': 'no-store, max-age=0',
@@ -108,4 +97,47 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+// Fallback if RPC doesn't exist
+async function fallbackQuery(limit: number, offset: number) {
+  const { data: adjustments, error } = await supabase
+    .from('ncaab_game_adjustments')
+    .select('*')
+    .order('game_date', { ascending: false })
+    .range(offset, offset + limit - 1);
+  
+  if (error) {
+    return NextResponse.json({ error: 'Failed to fetch history' }, { status: 500 });
+  }
+  
+  const games: HistoryGame[] = (adjustments || [])
+    .filter(adj => adj.home_team && adj.away_team)
+    .map(adj => ({
+      id: adj.game_id,
+      commenceTime: adj.game_date,
+      homeTeam: adj.home_team,
+      awayTeam: adj.away_team,
+      spread: adj.closing_spread,
+      openingSpread: adj.opening_spread ?? null,
+      projectedSpread: adj.projected_spread,
+      btSpread: null, // No BT data in fallback
+      total: null,
+      spreadBookmaker: adj.closing_source,
+      isToday: false,
+      isTomorrow: false,
+      hasStarted: true,
+      isFrozen: true,
+    }));
+  
+  console.log(`[History] Fallback: Returning ${games.length} games (no BT data)`);
+  
+  return NextResponse.json({
+    success: true,
+    games,
+    count: games.length,
+    offset,
+    limit,
+    btMatchCount: 0,
+  });
 }

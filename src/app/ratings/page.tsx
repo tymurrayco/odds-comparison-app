@@ -248,6 +248,7 @@ export default function RatingsPage() {
     openingSpread: number | null;
     closingSpread: number | null;
     closingSource: string | null;
+    btSpread: number | null;
     difference: number | null;
   }
   const [historyGames, setHistoryGames] = useState<HistoryGame[]>([]);
@@ -786,6 +787,7 @@ export default function RatingsPage() {
             awayTeam: string;
             projectedSpread: number | null;
             openingSpread: number | null;
+            btSpread: number | null;
             spread: number | null;
             spreadBookmaker: string | null;
           }) => ({
@@ -795,6 +797,7 @@ export default function RatingsPage() {
             awayTeam: g.awayTeam,
             projectedSpread: g.projectedSpread,
             openingSpread: g.openingSpread,
+            btSpread: g.btSpread,
             closingSpread: g.spread,
             closingSource: g.spreadBookmaker,
             difference: g.projectedSpread !== null && g.spread !== null 
@@ -2988,6 +2991,7 @@ export default function RatingsPage() {
                         >
                           Home {historySortField === 'homeMovement' && (historySortDirection === 'desc' ? '↓' : '↑')}
                         </th>
+                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-purple-700 uppercase">BT</th>
                         <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-900 uppercase">Proj</th>
                         <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-900 uppercase">Open</th>
                         <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-900 uppercase">Close</th>
@@ -3089,6 +3093,11 @@ export default function RatingsPage() {
                                 )}
                                 <span className="text-sm font-medium text-gray-900 hidden sm:inline">{game.homeTeam}</span>
                               </div>
+                            </td>
+                            <td className="px-2 sm:px-4 py-3 text-sm text-right font-mono text-purple-700">
+                              {game.btSpread !== null 
+                                ? (game.btSpread > 0 ? '+' : '') + game.btSpread.toFixed(1)
+                                : '—'}
                             </td>
                             <td className="px-2 sm:px-4 py-3 text-sm text-right font-mono">
                               {game.projectedSpread !== null 
