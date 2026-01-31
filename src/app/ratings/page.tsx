@@ -205,6 +205,7 @@ export default function RatingsPage() {
   }
   const [scheduleGames, setScheduleGames] = useState<ScheduleGame[]>([]);
   const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [oddsLoading, setOddsLoading] = useState(false);
   const [scheduleFilter, setScheduleFilter] = useState<'all' | 'today' | 'tomorrow' | 'day2' | 'day3'>('all');
   const [scheduleSortBy, setScheduleSortBy] = useState<'time' | 'delta' | 'awayMovement' | 'homeMovement'>('time');
   const [scheduleSortDir, setScheduleSortDir] = useState<'asc' | 'desc'>('asc');
@@ -426,6 +427,7 @@ export default function RatingsPage() {
 
   const loadSchedule = async () => {
     setScheduleLoading(true);
+    setOddsLoading(false); // Reset until we actually start fetching odds
     try {
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
       const cacheBuster = Date.now();
@@ -572,8 +574,17 @@ export default function RatingsPage() {
       console.log(`Displayed ${initialCombinedGames.length} BT games, now fetching odds...`);
       
       // Now fetch odds data in the background and merge when ready
+      setOddsLoading(true);
       try {
-        const oddsRes = await fetch(`/api/ratings/schedule?timezone=${encodeURIComponent(timezone)}&_t=${cacheBuster}`);
+        // Add timeout for mobile connections
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+        
+        const oddsRes = await fetch(`/api/ratings/schedule?timezone=${encodeURIComponent(timezone)}&_t=${cacheBuster}`, {
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        
         const oddsData = await oddsRes.json();
         
         if (oddsData.success && oddsData.games) {
@@ -649,7 +660,7 @@ export default function RatingsPage() {
                 total: oddsMatch.total,
                 spreadBookmaker: oddsMatch.spreadBookmaker,
                 hasStarted: oddsMatch.hasStarted,
-                isFrozen: oddsMatch.isFrozen,
+                isFrozen: oddsMatch.isFrozen || oddsMatch.hasStarted,
               };
             }
             
@@ -755,9 +766,14 @@ export default function RatingsPage() {
           }
           
           setCombinedScheduleGames(enrichedGames);
+          setOddsLoading(false);
+        } else {
+          console.log('Odds data not successful or no games returned');
+          setOddsLoading(false);
         }
       } catch (err) {
         console.error('Failed to load odds data:', err);
+        setOddsLoading(false);
         // BT games are already displayed, so this is non-fatal
       }
       
@@ -2870,8 +2886,24 @@ export default function RatingsPage() {
                       })}
                     </tbody>
                   </table>
-                  <div className="px-4 py-2 text-xs text-gray-900 border-t border-gray-100 bg-blue-50">
-                    Open & Current spreads sourced from Pinnacle, with DraftKings/FanDuel/BetMGM/BetRivers average as fallback.
+                  <div className="px-4 py-2 text-xs text-gray-900 border-t border-gray-100 bg-blue-50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                    <span>Open & Current spreads sourced from Pinnacle, with DraftKings/FanDuel/BetMGM/BetRivers average as fallback.</span>
+                    {oddsLoading ? (
+                      <span className="flex items-center gap-1 text-blue-600">
+                        <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                        Loading odds...
+                      </span>
+                    ) : combinedScheduleGames.some(g => g.spread === null && !g.hasStarted) ? (
+                      <button 
+                        onClick={loadSchedule}
+                        className="text-blue-600 hover:text-blue-800 underline"
+                      >
+                        Refresh odds
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               )}
