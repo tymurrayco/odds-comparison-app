@@ -1143,6 +1143,10 @@ export default function RatingsPage() {
       if (overrides.length === 0) {
         loadOverrides();
       }
+      // Also load history for stored projections (ensures Schedule matches History tab)
+      if (historyGames.length === 0) {
+        loadHistory();
+      }
     }
     if (activeTab === 'history' && historyGames.length === 0) {
       loadHistory();
@@ -2710,8 +2714,22 @@ export default function RatingsPage() {
                         const homeRating = findTeamRating(game.homeTeam);
                         const awayRating = findTeamRating(game.awayTeam);
                         
+                        // BT spread is already in game.btSpread
+                        const btSpread = game.btSpread;
+                        
+                        // Look up stored projection from history if available
+                        // This ensures consistency between Schedule and History tabs
+                        const historyMatch = historyGames.find(h => 
+                          h.homeTeam.toLowerCase() === game.homeTeam.toLowerCase() && 
+                          h.awayTeam.toLowerCase() === game.awayTeam.toLowerCase()
+                        );
+                        
                         let projectedSpread: number | null = null;
-                        if (homeRating && awayRating) {
+                        if (historyMatch?.projectedSpread !== null && historyMatch?.projectedSpread !== undefined) {
+                          // Use stored projection from history (calculated at sync time)
+                          projectedSpread = historyMatch.projectedSpread;
+                        } else if (homeRating && awayRating) {
+                          // Fallback to calculating on the fly for games not yet in history
                           projectedSpread = -((homeRating.rating - awayRating.rating) + hca);
                           projectedSpread = Math.round(projectedSpread * 100) / 100;
                         }
@@ -2722,9 +2740,6 @@ export default function RatingsPage() {
                           delta = Math.abs(projectedSpread - game.spread);
                           delta = Math.round(delta * 100) / 100;
                         }
-                        
-                        // BT spread is already in game.btSpread
-                        const btSpread = game.btSpread;
                         
                         // Line movement highlighting logic
                         const getGreenHighlightClass = (movement: number): string => {
