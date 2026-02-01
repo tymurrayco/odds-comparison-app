@@ -9,6 +9,16 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+// Type for ncaab_closing_lines rows
+interface FallbackRow {
+  game_id: string;
+  game_date: string;
+  home_team: string;
+  away_team: string;
+  closing_spread: number | null;
+  closing_source: string;
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const date = searchParams.get('date'); // YYYY-MM-DD format (in US Eastern) - optional
@@ -100,13 +110,13 @@ export async function GET(request: NextRequest) {
     }
     
     // Build a map of fallback data (Torvik names) by CANONICAL matchup key
-    const fallbackByMatchup = new Map<string, typeof fallbackData[0]>();
+    const fallbackByMatchup = new Map<string, FallbackRow>();
     if (fallbackData) {
       for (const row of fallbackData) {
         const canonicalHome = getCanonicalFromTorvik(row.home_team);
         const canonicalAway = getCanonicalFromTorvik(row.away_team);
         const matchupKey = `${canonicalHome}|${canonicalAway}`;
-        fallbackByMatchup.set(matchupKey, row);
+        fallbackByMatchup.set(matchupKey, row as FallbackRow);
       }
     }
     
