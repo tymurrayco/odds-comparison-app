@@ -20,10 +20,8 @@ export async function GET(request: NextRequest) {
     
     if (date) {
       const [year, month, day] = date.split('-').map(Number);
-      // For Eastern date, convert to UTC range
-      // Eastern noon = UTC 17:00, Eastern midnight = UTC 05:00 next day
-      startOfRange = new Date(Date.UTC(year, month - 1, day, 5, 0, 0)); // 5am UTC = midnight Eastern
-      endOfRange = new Date(Date.UTC(year, month - 1, day + 1, 8, 0, 0)); // 8am UTC next day = 3am Eastern
+      startOfRange = new Date(Date.UTC(year, month - 1, day, 5, 0, 0));
+      endOfRange = new Date(Date.UTC(year, month - 1, day + 1, 8, 0, 0));
       
       console.log(`[ClosingLines] Querying for date ${date}: ${startOfRange.toISOString()} to ${endOfRange.toISOString()}`);
     }
@@ -31,46 +29,41 @@ export async function GET(request: NextRequest) {
     // Load team overrides for name normalization
     const { data: overridesData } = await supabase
       .from('ncaab_team_overrides')
-      .select('source_name, kenpom_name, espn_name, odds_api_name, torvik_name');
+      .select('kenpom_name, odds_api_name, torvik_name');
     
-    // Build maps from various name formats to canonical (kenpom) name
-    const toCanonical = new Map<string, string>();
+    // Build lookup maps:
+    // - Odds API name -> kenpom (canonical)
+    // - Torvik name -> kenpom (canonical)
+    const oddsApiToCanonical = new Map<string, string>();
+    const torvikToCanonical = new Map<string, string>();
+    
     if (overridesData) {
       for (const override of overridesData) {
         const canonical = override.kenpom_name.toLowerCase();
         
-        // Map all variations to canonical name
-        if (override.source_name) {
-          toCanonical.set(override.source_name.toLowerCase(), canonical);
-        }
-        if (override.espn_name) {
-          toCanonical.set(override.espn_name.toLowerCase(), canonical);
-        }
         if (override.odds_api_name) {
-          toCanonical.set(override.odds_api_name.toLowerCase(), canonical);
+          oddsApiToCanonical.set(override.odds_api_name.toLowerCase(), canonical);
         }
         if (override.torvik_name) {
-          toCanonical.set(override.torvik_name.toLowerCase(), canonical);
+          torvikToCanonical.set(override.torvik_name.toLowerCase(), canonical);
         }
-        // Also map kenpom name to itself
-        toCanonical.set(canonical, canonical);
+        // Also map kenpom to itself
+        torvikToCanonical.set(canonical, canonical);
       }
     }
     
-    // Track unmatched names for debugging
-    const unmatchedNames = new Set<string>();
-    
-    // Function to get canonical team name
-    const getCanonicalName = (name: string): string => {
+    // Functions to get canonical name from each source
+    const getCanonicalFromOddsApi = (name: string): string => {
       const lower = name.toLowerCase();
-      const canonical = toCanonical.get(lower);
-      if (!canonical) {
-        unmatchedNames.add(name);
-      }
-      return canonical || lower;
+      return oddsApiToCanonical.get(lower) || lower;
     };
     
-    // Query primary table: closing_lines (real-time cached - has opening_spread but spread goes null when games start)
+    const getCanonicalFromTorvik = (name: string): string => {
+      const lower = name.toLowerCase();
+      return torvikToCanonical.get(lower) || lower;
+    };
+    
+    // Query primary table: closing_lines (Odds API names)
     let primaryQuery = supabase
       .from('closing_lines')
       .select('*')
@@ -88,7 +81,7 @@ export async function GET(request: NextRequest) {
       console.error('[ClosingLines] Primary table error:', primaryError);
     }
     
-    // Query fallback table: ncaab_closing_lines (historical/sync data - has closing_spread but no opening_spread)
+    // Query fallback table: ncaab_closing_lines (Barttorvik names)
     let fallbackQuery = supabase
       .from('ncaab_closing_lines')
       .select('*')
@@ -106,19 +99,16 @@ export async function GET(request: NextRequest) {
       console.error('[ClosingLines] Fallback table error:', fallbackError);
     }
     
-    // Build a map of fallback data by CANONICAL matchup key for merging
+    // Build a map of fallback data (Torvik names) by CANONICAL matchup key
     const fallbackByMatchup = new Map<string, typeof fallbackData[0]>();
     if (fallbackData) {
       for (const row of fallbackData) {
-        const canonicalHome = getCanonicalName(row.home_team);
-        const canonicalAway = getCanonicalName(row.away_team);
+        const canonicalHome = getCanonicalFromTorvik(row.home_team);
+        const canonicalAway = getCanonicalFromTorvik(row.away_team);
         const matchupKey = `${canonicalHome}|${canonicalAway}`;
         fallbackByMatchup.set(matchupKey, row);
       }
     }
-    
-    // Debug: Log some fallback matchup keys
-    console.log(`[ClosingLines] Sample fallback keys:`, Array.from(fallbackByMatchup.keys()).slice(0, 5));
     
     // Combine results - MERGE data from both tables using canonical names
     const seenMatchups = new Set<string>();
@@ -137,17 +127,17 @@ export async function GET(request: NextRequest) {
     // Track games that need closing spread but didn't get one
     const missingClosingSpread: string[] = [];
     
-    // Process primary table and merge with fallback where available
+    // Process primary table (Odds API names) and merge with fallback
     if (primaryData) {
       for (const row of primaryData) {
         if (row.home_team && row.away_team) {
-          // Use canonical names for matching
-          const canonicalHome = getCanonicalName(row.home_team);
-          const canonicalAway = getCanonicalName(row.away_team);
+          // Convert Odds API names to canonical
+          const canonicalHome = getCanonicalFromOddsApi(row.home_team);
+          const canonicalAway = getCanonicalFromOddsApi(row.away_team);
           const matchupKey = `${canonicalHome}|${canonicalAway}`;
           seenMatchups.add(matchupKey);
           
-          // Check if fallback has closing spread for this game (using canonical matching)
+          // Check if fallback (Torvik) has closing spread for this game
           const fallbackRow = fallbackByMatchup.get(matchupKey);
           
           // Use spread from primary if available, otherwise use closing_spread from fallback
@@ -173,11 +163,11 @@ export async function GET(request: NextRequest) {
       }
     }
     
-    // Add from fallback table any games not in primary (using canonical matching)
+    // Add from fallback table any games not in primary
     if (fallbackData) {
       for (const row of fallbackData) {
-        const canonicalHome = getCanonicalName(row.home_team);
-        const canonicalAway = getCanonicalName(row.away_team);
+        const canonicalHome = getCanonicalFromTorvik(row.home_team);
+        const canonicalAway = getCanonicalFromTorvik(row.away_team);
         const matchupKey = `${canonicalHome}|${canonicalAway}`;
         
         if (!seenMatchups.has(matchupKey)) {
@@ -188,8 +178,8 @@ export async function GET(request: NextRequest) {
             homeTeam: row.home_team,
             awayTeam: row.away_team,
             closingSpread: row.closing_spread,
-            openingSpread: null, // ncaab_closing_lines doesn't have opening spread
-            total: null, // ncaab_closing_lines doesn't have total
+            openingSpread: null,
+            total: null,
             closingSource: row.closing_source,
             source: 'ncaab_closing_lines',
           });
@@ -201,10 +191,11 @@ export async function GET(request: NextRequest) {
     const withClosingSpread = closingLines.filter(cl => cl.closingSpread !== null).length;
     const primaryNullSpread = primaryData?.filter(r => r.spread === null).length || 0;
     
-    console.log(`[ClosingLines] Found ${closingLines.length} closing lines (${primaryData?.length || 0} from primary, ${fallbackData?.length || 0} from fallback, ${mergedCount} merged, ${withClosingSpread} with closing spread, ${overridesData?.length || 0} overrides loaded)`);
+    console.log(`[ClosingLines] Found ${closingLines.length} closing lines (${primaryData?.length || 0} from primary, ${fallbackData?.length || 0} from fallback, ${mergedCount} merged, ${withClosingSpread} with closing spread)`);
     console.log(`[ClosingLines] Primary games with null spread: ${primaryNullSpread}`);
-    console.log(`[ClosingLines] Unmatched team names (not in overrides):`, Array.from(unmatchedNames).slice(0, 20));
-    console.log(`[ClosingLines] Games missing closing spread (first 10):`, missingClosingSpread.slice(0, 10));
+    if (missingClosingSpread.length > 0) {
+      console.log(`[ClosingLines] Games missing closing spread (${missingClosingSpread.length}):`, missingClosingSpread.slice(0, 5));
+    }
     
     return NextResponse.json({
       success: true,
