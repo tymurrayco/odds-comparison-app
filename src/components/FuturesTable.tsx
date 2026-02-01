@@ -145,6 +145,7 @@ export default function FuturesTable({
   const [eliteTeamsNormalized, setEliteTeamsNormalized] = useState<Set<string>>(new Set());
   const [eliteTeamsDetails, setEliteTeamsDetails] = useState<Map<string, EliteTeamData>>(new Map());
   const [eliteLoading, setEliteLoading] = useState(false);
+  const [showEliteOnly, setShowEliteOnly] = useState(false);
 
   // Fetch KenPom elite teams when league is NCAAB
   useEffect(() => {
@@ -412,13 +413,34 @@ export default function FuturesTable({
             </div>
           )}
         </div>
-        {/* Elite teams disclaimer for NCAAB */}
+        {/* Elite teams disclaimer and toggle for NCAAB */}
         {league === 'basketball_ncaab' && eliteTeamsNormalized.size > 0 && (
-          <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-green-100 text-green-700 border border-green-200 font-medium">
-              Elite
-            </span>
-            <span>represents teams that can win it all based on Offensive &amp; Defensive Efficiency</span>
+          <div className="mt-2 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2 text-xs text-gray-500">
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-green-100 text-green-700 border border-green-200 font-medium">
+                Elite
+              </span>
+              <span>represents teams that can win it all based on Offensive &amp; Defensive Efficiency</span>
+            </div>
+            {/* iPhone-style toggle */}
+            <button
+              onClick={() => setShowEliteOnly(!showEliteOnly)}
+              className="flex items-center gap-2 shrink-0"
+              aria-label="Show elite teams only"
+            >
+              <span className="text-xs text-gray-600 hidden sm:inline">Elite Only</span>
+              <div
+                className={`relative w-11 h-6 rounded-full transition-colors duration-200 ease-in-out ${
+                  showEliteOnly ? 'bg-green-500' : 'bg-gray-300'
+                }`}
+              >
+                <div
+                  className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md transform transition-transform duration-200 ease-in-out ${
+                    showEliteOnly ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </div>
+            </button>
           </div>
         )}
       </div>
@@ -438,7 +460,15 @@ export default function FuturesTable({
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {market.teams.map((item, index) => {
+            {market.teams
+              .filter(item => {
+                // If elite-only toggle is on, filter to only elite teams
+                if (showEliteOnly && league === 'basketball_ncaab') {
+                  return isEliteTeam(item.team);
+                }
+                return true;
+              })
+              .map((item, index) => {
               // Determine best odds (only among displayed bookmakers)
               let bestOddsValue = -Infinity;
               let bestOddsBooks: string[] = [];
