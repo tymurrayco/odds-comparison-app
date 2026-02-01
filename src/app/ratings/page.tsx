@@ -563,10 +563,32 @@ export default function RatingsPage() {
       });
       
       // Sort by date then time
+      // Parse time strings to comparable values (convert to minutes since midnight)
+      const parseTime = (timeStr: string): number => {
+        if (!timeStr) return 9999; // No time goes to end
+        
+        // Handle formats like "7:00 PM", "10:00 AM", "12:30 PM", etc.
+        const match = timeStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+        if (!match) return 9999;
+        
+        let hours = parseInt(match[1], 10);
+        const minutes = parseInt(match[2], 10);
+        const period = (match[3] || '').toUpperCase();
+        
+        // Convert to 24-hour format
+        if (period === 'PM' && hours !== 12) {
+          hours += 12;
+        } else if (period === 'AM' && hours === 12) {
+          hours = 0;
+        }
+        
+        return hours * 60 + minutes;
+      };
+      
       initialCombinedGames.sort((a, b) => {
         const dateCompare = a.gameDate.localeCompare(b.gameDate);
         if (dateCompare !== 0) return dateCompare;
-        return (a.gameTime || '').localeCompare(b.gameTime || '');
+        return parseTime(a.gameTime) - parseTime(b.gameTime);
       });
       
       // Show BT games immediately (without odds)
@@ -1828,7 +1850,30 @@ export default function RatingsPage() {
     return [...games].sort((a, b) => {
       const dateCompare = a.gameDate.localeCompare(b.gameDate);
       if (dateCompare !== 0) return dateCompare;
-      return (a.gameTime || '').localeCompare(b.gameTime || '');
+      
+      // Parse time strings to comparable values (convert to minutes since midnight)
+      const parseTime = (timeStr: string): number => {
+        if (!timeStr) return 9999; // No time goes to end
+        
+        // Handle formats like "7:00 PM", "10:00 AM", "12:30 PM", etc.
+        const match = timeStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+        if (!match) return 9999;
+        
+        let hours = parseInt(match[1], 10);
+        const minutes = parseInt(match[2], 10);
+        const period = (match[3] || '').toUpperCase();
+        
+        // Convert to 24-hour format
+        if (period === 'PM' && hours !== 12) {
+          hours += 12;
+        } else if (period === 'AM' && hours === 12) {
+          hours = 0;
+        }
+        
+        return hours * 60 + minutes;
+      };
+      
+      return parseTime(a.gameTime) - parseTime(b.gameTime);
     });
   }, [combinedScheduleGames, scheduleFilter, scheduleSortBy, scheduleSortDir, snapshot?.ratings, overrides, hca]);
   
