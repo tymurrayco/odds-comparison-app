@@ -600,9 +600,9 @@ export default function RatingsPage() {
       // Now fetch odds data in the background and merge when ready
       setOddsLoading(true);
       try {
-        // Add timeout for mobile connections
+        // Add timeout for mobile connections (30 seconds to handle slow connections)
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
         
         const oddsRes = await fetch(`/api/ratings/schedule?timezone=${encodeURIComponent(timezone)}&_t=${cacheBuster}`, {
           signal: controller.signal
@@ -862,7 +862,12 @@ export default function RatingsPage() {
       } catch (err) {
         console.error('Failed to load odds data:', err);
         setOddsLoading(false);
-        setOddsError(err instanceof Error ? err.message : 'Failed to load odds');
+        // Provide more helpful error message for timeout vs other errors
+        if (err instanceof Error && err.name === 'AbortError') {
+          setOddsError('Request timed out - tap to retry');
+        } else {
+          setOddsError(err instanceof Error ? err.message : 'Failed to load odds');
+        }
         // BT games are already displayed, so this is non-fatal
       }
       
@@ -1164,10 +1169,6 @@ export default function RatingsPage() {
       // Also load overrides for team name mapping if not already loaded
       if (overrides.length === 0) {
         loadOverrides();
-      }
-      // Also load history for stored projections (ensures Schedule matches History tab)
-      if (historyGames.length === 0) {
-        loadHistory();
       }
     }
     if (activeTab === 'history' && historyGames.length === 0) {
@@ -2762,19 +2763,9 @@ export default function RatingsPage() {
                         // BT spread is already in game.btSpread
                         const btSpread = game.btSpread;
                         
-                        // Look up stored projection from history if available
-                        // This ensures consistency between Schedule and History tabs
-                        const historyMatch = historyGames.find(h => 
-                          h.homeTeam.toLowerCase() === game.homeTeam.toLowerCase() && 
-                          h.awayTeam.toLowerCase() === game.awayTeam.toLowerCase()
-                        );
-                        
+                        // Calculate projection on the fly using current ratings
                         let projectedSpread: number | null = null;
-                        if (historyMatch?.projectedSpread !== null && historyMatch?.projectedSpread !== undefined) {
-                          // Use stored projection from history (calculated at sync time)
-                          projectedSpread = historyMatch.projectedSpread;
-                        } else if (homeRating && awayRating) {
-                          // Fallback to calculating on the fly for games not yet in history
+                        if (homeRating && awayRating) {
                           projectedSpread = -((homeRating.rating - awayRating.rating) + hca);
                           projectedSpread = Math.round(projectedSpread * 100) / 100;
                         }
