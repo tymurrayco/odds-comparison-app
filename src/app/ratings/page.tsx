@@ -2692,11 +2692,11 @@ export default function RatingsPage() {
                           Home {scheduleSortBy === 'homeMovement' && (scheduleSortDir === 'desc' ? '↓' : '↑')}
                         </th>
                         <th className="px-2 sm:px-4 py-3 text-center text-xs font-semibold text-white uppercase whitespace-nowrap" title="BT (upper-left) / Our Proj (lower-right)">BT/Proj</th>
-                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-white uppercase whitespace-nowrap" title="Weighted blend of BT and our projection">Blend</th>
-                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-white uppercase whitespace-nowrap">Open</th>
-                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-white uppercase whitespace-nowrap">Curr</th>
+                        <th className="px-2 sm:px-4 py-3 text-center text-xs font-semibold text-white uppercase whitespace-nowrap" title="Weighted blend of BT and our projection">Blend</th>
+                        <th className="px-2 sm:px-4 py-3 text-center text-xs font-semibold text-white uppercase whitespace-nowrap">Open</th>
+                        <th className="px-2 sm:px-4 py-3 text-center text-xs font-semibold text-white uppercase whitespace-nowrap">Curr</th>
                         <th 
-                          className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-white uppercase whitespace-nowrap cursor-pointer hover:bg-blue-800"
+                          className="px-2 sm:px-4 py-3 text-center text-xs font-semibold text-white uppercase whitespace-nowrap cursor-pointer hover:bg-blue-800"
                           onClick={() => {
                             if (scheduleSortBy === 'delta') {
                               setScheduleSortDir(scheduleSortDir === 'desc' ? 'asc' : 'desc');
@@ -2967,23 +2967,23 @@ export default function RatingsPage() {
                                   {btSpread !== null ? (btSpread > 0 ? '+' : '') + btSpread.toFixed(1) : '—'}
                                 </span>
                                 {/* Proj value (lower-right) */}
-                                <span className={`absolute bottom-0 right-0.5 font-mono text-xs font-semibold ${projectedSpread !== null ? (projectedSpread < 0 ? 'text-green-600' : projectedSpread > 0 ? 'text-red-600' : 'text-gray-900') : 'text-gray-400'}`}>
+                                <span className="absolute bottom-0 right-0.5 font-mono text-xs font-semibold text-gray-900">
                                   {projectedSpread !== null ? (projectedSpread > 0 ? '+' : '') + projectedSpread.toFixed(1) : '—'}
                                 </span>
                               </div>
                             </td>
-                            <td className={`px-2 sm:px-4 py-3 text-right ${highlightBlendClass}`}>
+                            <td className={`px-2 sm:px-4 py-3 text-center ${highlightBlendClass}`}>
                               {blendSpread !== null ? (
-                                <span className={`font-mono text-xs sm:text-sm font-semibold ${blendSpread < 0 ? 'text-green-600' : blendSpread > 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                                <span className="font-mono text-xs sm:text-sm font-semibold text-gray-900">
                                   {blendSpread > 0 ? '+' : ''}{blendSpread.toFixed(1)}
                                 </span>
                               ) : (
                                 <span className="text-gray-400">—</span>
                               )}
                             </td>
-                            <td className="px-2 sm:px-4 py-3 text-right">
+                            <td className="px-2 sm:px-4 py-3 text-center">
                               {game.openingSpread !== null ? (
-                                <div className="relative inline-flex items-center">
+                                <div className="relative inline-flex items-center justify-center">
                                   {game.openingSpread !== 0 && getTeamLogo(game.homeTeam) && (
                                     <img 
                                       src={getTeamLogo(game.homeTeam)!}
@@ -3000,7 +3000,7 @@ export default function RatingsPage() {
                                 <span className="text-gray-400">—</span>
                               )}
                             </td>
-                            <td className="px-2 sm:px-4 py-3 text-right">
+                            <td className="px-2 sm:px-4 py-3 text-center">
                               {game.spread !== null ? (
                                 <span className={`font-mono text-xs sm:text-sm font-semibold ${game.spread < 0 ? 'text-green-600' : game.spread > 0 ? 'text-red-600' : 'text-gray-900'}`}>
                                   {game.spread > 0 ? '+' : ''}{game.spread}
@@ -3010,7 +3010,7 @@ export default function RatingsPage() {
                                 <span className="text-gray-400 text-xs" title="No odds available yet">—</span>
                               )}
                             </td>
-                            <td className="px-2 sm:px-4 py-3 text-right">
+                            <td className="px-2 sm:px-4 py-3 text-center">
                               {delta !== null ? (
                                 <span className={`font-mono text-xs sm:text-sm font-semibold px-1 sm:px-2 py-1 rounded ${delta >= 3 ? 'bg-green-100' : 'bg-gray-100'}`}>
                                   {delta.toFixed(1)}
@@ -3203,11 +3203,11 @@ export default function RatingsPage() {
                           Home {historySortField === 'homeMovement' && (historySortDirection === 'desc' ? '↓' : '↑')}
                         </th>
                         <th className="px-2 sm:px-4 py-3 text-center text-xs font-semibold text-white uppercase whitespace-nowrap" title="BT (upper-left) / Our Proj (lower-right)">BT/Proj</th>
-                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-white uppercase whitespace-nowrap" title="Weighted blend of BT and our projection">Blend</th>
-                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-white uppercase">Open</th>
-                        <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-white uppercase">Close</th>
+                        <th className="px-2 sm:px-4 py-3 text-center text-xs font-semibold text-white uppercase whitespace-nowrap" title="Weighted blend of BT and our projection">Blend</th>
+                        <th className="px-2 sm:px-4 py-3 text-center text-xs font-semibold text-white uppercase">Open</th>
+                        <th className="px-2 sm:px-4 py-3 text-center text-xs font-semibold text-white uppercase">Close</th>
                         <th 
-                          className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-white uppercase cursor-pointer hover:bg-blue-800"
+                          className="px-2 sm:px-4 py-3 text-center text-xs font-semibold text-white uppercase cursor-pointer hover:bg-blue-800"
                           onClick={() => {
                             if (historySortField === 'diff') {
                               setHistorySortDirection(d => d === 'asc' ? 'desc' : 'asc');
@@ -3355,23 +3355,23 @@ export default function RatingsPage() {
                                   {game.btSpread !== null ? (game.btSpread > 0 ? '+' : '') + game.btSpread.toFixed(1) : '—'}
                                 </span>
                                 {/* Proj value (lower-right) */}
-                                <span className={`absolute bottom-0 right-0.5 font-mono text-xs font-semibold ${game.projectedSpread !== null ? (game.projectedSpread < 0 ? 'text-green-600' : game.projectedSpread > 0 ? 'text-red-600' : 'text-gray-900') : 'text-gray-400'}`}>
+                                <span className="absolute bottom-0 right-0.5 font-mono text-xs font-semibold text-gray-900">
                                   {game.projectedSpread !== null ? (game.projectedSpread > 0 ? '+' : '') + game.projectedSpread.toFixed(1) : '—'}
                                 </span>
                               </div>
                             </td>
-                            <td className={`px-2 sm:px-4 py-3 text-right ${highlightBlendClass}`}>
+                            <td className={`px-2 sm:px-4 py-3 text-center ${highlightBlendClass}`}>
                               {blendSpread !== null ? (
-                                <span className={`font-mono text-xs sm:text-sm font-semibold ${blendSpread < 0 ? 'text-green-600' : blendSpread > 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                                <span className="font-mono text-xs sm:text-sm font-semibold text-gray-900">
                                   {blendSpread > 0 ? '+' : ''}{blendSpread.toFixed(1)}
                                 </span>
                               ) : (
                                 <span className="text-gray-400">—</span>
                               )}
                             </td>
-                            <td className="px-2 sm:px-4 py-3 text-right">
+                            <td className="px-2 sm:px-4 py-3 text-center">
                               {game.openingSpread !== null ? (
-                                <div className="relative inline-flex items-center">
+                                <div className="relative inline-flex items-center justify-center">
                                   {game.openingSpread !== 0 && homeLogo && (
                                     <img 
                                       src={homeLogo}
@@ -3388,12 +3388,12 @@ export default function RatingsPage() {
                                 <span className="text-gray-400">—</span>
                               )}
                             </td>
-                            <td className="px-2 sm:px-4 py-3 text-sm text-right font-mono font-semibold">
+                            <td className="px-2 sm:px-4 py-3 text-sm text-center font-mono font-semibold">
                               {game.closingSpread !== null 
                                 ? (game.closingSpread > 0 ? '+' : '') + game.closingSpread.toFixed(1)
                                 : '—'}
                             </td>
-                            <td className={`px-2 sm:px-4 py-3 text-sm text-right font-mono font-semibold ${
+                            <td className={`px-2 sm:px-4 py-3 text-sm text-center font-mono font-semibold ${
                               game.difference !== null 
                                 ? game.difference > 0 ? 'text-red-600' : game.difference < 0 ? 'text-green-600' : 'text-gray-400'
                                 : 'text-gray-400'
