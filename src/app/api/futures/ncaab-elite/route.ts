@@ -152,18 +152,13 @@ export async function GET() {
     
     console.log(`[NCAAB Elite] Received ${ratings.length} team ratings`);
     
-    // Filter for teams that qualify (top 25 in BOTH Ortg AND Drtg)
-    const qualifyingTeams = ratings.filter(team => 
-      team.RankAdjOE <= 25 && team.RankAdjDE <= 25
-    );
-    
-    // Build response with tier classification
-    const eliteTeamData = qualifyingTeams.map(team => {
+    // Build response with tier classification for ALL teams
+    const allTeamData = ratings.map(team => {
       const tier = getEliteTier(team.RankAdjOE, team.RankAdjDE);
       return {
         name: team.TeamName,
         normalized: normalizeForMatch(team.TeamName),
-        tier: tier as EliteTier, // Will always be non-null since we filtered
+        tier: tier, // Can be 'elite', 'borderline', or null
         rankOE: team.RankAdjOE,
         rankDE: team.RankAdjDE,
         rankEM: team.RankAdjEM,
@@ -173,26 +168,31 @@ export async function GET() {
       };
     });
     
+    // Filter for qualifying teams (for counts and legacy fields)
+    const qualifyingTeams = allTeamData.filter(t => t.tier !== null);
+    
     // Count by tier
-    const eliteCount = eliteTeamData.filter(t => t.tier === 'elite').length;
-    const borderlineCount = eliteTeamData.filter(t => t.tier === 'borderline').length;
+    const eliteCount = allTeamData.filter(t => t.tier === 'elite').length;
+    const borderlineCount = allTeamData.filter(t => t.tier === 'borderline').length;
     
     console.log(`[NCAAB Elite] Found ${eliteCount} elite teams (Top 20 O & D)`);
     console.log(`[NCAAB Elite] Found ${borderlineCount} borderline teams (Top 25 O & D, one 21-25)`);
+    console.log(`[NCAAB Elite] Returning data for ${allTeamData.length} total teams`);
     
-    // Log teams for debugging
-    eliteTeamData.forEach(team => {
-      console.log(`[NCAAB Elite] ${team.name} [${team.tier.toUpperCase()}]: O#${team.rankOE}, D#${team.rankDE}, EM#${team.rankEM}`);
+    // Log elite/borderline teams for debugging
+    qualifyingTeams.forEach(team => {
+      console.log(`[NCAAB Elite] ${team.name} [${team.tier!.toUpperCase()}]: O#${team.rankOE}, D#${team.rankDE}, EM#${team.rankEM}`);
     });
     
     return NextResponse.json({
       success: true,
       count: qualifyingTeams.length,
+      totalTeams: allTeamData.length,
       eliteCount,
       borderlineCount,
-      eliteTeams: eliteTeamData.map(t => t.name),
-      eliteTeamsNormalized: eliteTeamData.map(t => t.normalized),
-      details: eliteTeamData
+      eliteTeams: qualifyingTeams.map(t => t.name),
+      eliteTeamsNormalized: qualifyingTeams.map(t => t.normalized),
+      details: allTeamData // All teams with their rankings
     });
     
   } catch (error) {

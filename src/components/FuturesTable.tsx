@@ -124,11 +124,11 @@ function normalizeForMatch(name: string): string {
 // Elite tier type
 type EliteTier = 'elite' | 'borderline';
 
-// Interface for elite team data from API
+// Interface for team data from API (includes all teams, not just elite)
 interface EliteTeamData {
   name: string;
   normalized: string;
-  tier: EliteTier;
+  tier: EliteTier | null; // null for non-qualifying teams
   rankOE: number;
   rankDE: number;
   rankEM: number;
@@ -145,19 +145,19 @@ export default function FuturesTable({
   const [holdingKey, setHoldingKey] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
-  // State for KenPom elite teams (NCAAB only)
+  // State for KenPom team data (NCAAB only)
   const [eliteTeamsNormalized, setEliteTeamsNormalized] = useState<Set<string>>(new Set());
-  const [eliteTeamsDetails, setEliteTeamsDetails] = useState<Map<string, EliteTeamData>>(new Map());
+  const [allTeamsDetails, setAllTeamsDetails] = useState<Map<string, EliteTeamData>>(new Map());
   const [eliteLoading, setEliteLoading] = useState(false);
   const [showEliteOnly, setShowEliteOnly] = useState(false);
   const [eliteCount, setEliteCount] = useState(0);
   const [borderlineCount, setBorderlineCount] = useState(0);
 
-  // Fetch KenPom elite teams when league is NCAAB
+  // Fetch KenPom team data when league is NCAAB
   useEffect(() => {
     if (league !== 'basketball_ncaab') {
       setEliteTeamsNormalized(new Set());
-      setEliteTeamsDetails(new Map());
+      setAllTeamsDetails(new Map());
       setEliteCount(0);
       setBorderlineCount(0);
       return;
@@ -174,16 +174,16 @@ export default function FuturesTable({
           setEliteCount(data.eliteCount || 0);
           setBorderlineCount(data.borderlineCount || 0);
           
-          // Build details map for tooltips
+          // Build details map for ALL teams (for rankings display)
           if (data.details) {
             const detailsMap = new Map<string, EliteTeamData>();
             data.details.forEach((team: EliteTeamData) => {
               detailsMap.set(team.normalized, team);
             });
-            setEliteTeamsDetails(detailsMap);
+            setAllTeamsDetails(detailsMap);
           }
           
-          console.log(`[FuturesTable] Loaded ${data.eliteCount} elite + ${data.borderlineCount} borderline teams for NCAAB`);
+          console.log(`[FuturesTable] Loaded ${data.eliteCount} elite + ${data.borderlineCount} borderline teams, ${data.totalTeams || data.details?.length || 0} total teams for NCAAB`);
         }
       } catch (error) {
         console.error('[FuturesTable] Error fetching elite teams:', error);
@@ -207,18 +207,21 @@ export default function FuturesTable({
   };
 
   /**
-   * Get elite team details including tier
+   * Get team details including rankings (works for all teams, not just elite)
    */
-  const getEliteDetails = (teamName: string): EliteTeamData | undefined => {
+  const getTeamDetails = (teamName: string): EliteTeamData | undefined => {
+    if (league !== 'basketball_ncaab' || allTeamsDetails.size === 0) {
+      return undefined;
+    }
     const normalized = normalizeForMatch(teamName);
-    return eliteTeamsDetails.get(normalized);
+    return allTeamsDetails.get(normalized);
   };
 
   /**
    * Get the tier for a team (elite, borderline, or null)
    */
   const getTeamTier = (teamName: string): EliteTier | null => {
-    const details = getEliteDetails(teamName);
+    const details = getTeamDetails(teamName);
     return details?.tier || null;
   };
 
@@ -356,7 +359,7 @@ export default function FuturesTable({
   };
 
   // Custom display for team cell based on whether it's Masters and screen size
-  const renderTeamCell = (team: string, tier: EliteTier | null, eliteDetails?: EliteTeamData) => {
+  const renderTeamCell = (team: string, tier: EliteTier | null, teamDetails?: EliteTeamData) => {
     const teamLogoSrc = `/team-logos/${team.toLowerCase().replace(/\s+/g, '')}.png`;
     const lastName = getLastName(team);
     
@@ -388,10 +391,10 @@ export default function FuturesTable({
     } else {
       // For non-Masters tabs
       const badgeStyles = tier ? getBadgeStyles(tier) : null;
-      const tooltipText = eliteDetails 
+      const tooltipText = teamDetails && tier
         ? tier === 'elite'
-          ? `Top 20 in both Offense (#${eliteDetails.rankOE}) and Defense (#${eliteDetails.rankDE})`
-          : `Top 25 in both Offense (#${eliteDetails.rankOE}) and Defense (#${eliteDetails.rankDE}) - one rank 21-25`
+          ? `Top 20 in both Offense (#${teamDetails.rankOE}) and Defense (#${teamDetails.rankDE})`
+          : `Top 25 in both Offense (#${teamDetails.rankOE}) and Defense (#${teamDetails.rankDE}) - one rank 21-25`
         : '';
       
       return (
@@ -409,10 +412,10 @@ export default function FuturesTable({
           ) : (
             <span className="sm:inline hidden">{team}</span>
           )}
-          {/* OE/DE Ranks for qualifying teams */}
-          {eliteDetails && (
-            <span className="text-[10px] text-gray-400 ml-1 whitespace-nowrap">
-              O:{eliteDetails.rankOE} D:{eliteDetails.rankDE}
+          {/* OE/DE Ranks for ALL teams with KenPom data */}
+          {teamDetails && (
+            <span className="text-[10px] text-gray-900 ml-1 whitespace-nowrap">
+              O:{teamDetails.rankOE} D:{teamDetails.rankDE}
             </span>
           )}
           {/* Elite/Borderline badge for NCAAB */}
@@ -558,16 +561,16 @@ export default function FuturesTable({
 
               // Get tier for this team (NCAAB only)
               const teamTier = getTeamTier(item.team);
-              const eliteDetails = teamTier ? getEliteDetails(item.team) : undefined;
+              const teamDetails = getTeamDetails(item.team);
               
               return (
                 <tr 
                   key={index}
                   className={getRowBgColor(teamTier)}
-                  title={eliteDetails ? `KenPom: O#${eliteDetails.rankOE}, D#${eliteDetails.rankDE}, Overall#${eliteDetails.rankEM}` : undefined}
+                  title={teamDetails ? `KenPom: O#${teamDetails.rankOE}, D#${teamDetails.rankDE}, Overall#${teamDetails.rankEM}` : undefined}
                 >
                   <td className="px-2 md:px-4 py-3 whitespace-normal text-xs md:text-sm font-medium text-gray-900">
-                    {renderTeamCell(item.team, teamTier, eliteDetails)}
+                    {renderTeamCell(item.team, teamTier, teamDetails)}
                   </td>
                   {displayBookmakers.map(book => {
                     const cellKey = `${item.team}-${book}`;
