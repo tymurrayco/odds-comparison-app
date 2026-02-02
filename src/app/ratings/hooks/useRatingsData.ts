@@ -355,7 +355,11 @@ export function useRatingsData(): UseRatingsDataReturn {
           spreadBookmaker: null,
           hasStarted: false,
           isFrozen: false,
-          ...dateInfo,
+          dateLabel: dateInfo.label,
+          isToday: dateInfo.isToday,
+          isTomorrow: dateInfo.isTomorrow,
+          isDay2: dateInfo.isDay2,
+          isDay3: dateInfo.isDay3,
         };
       });
       
