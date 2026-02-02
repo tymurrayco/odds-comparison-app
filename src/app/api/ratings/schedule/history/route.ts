@@ -29,11 +29,41 @@ interface HistoryGame {
   isFrozen: boolean;
 }
 
+// Backfill opening_spread from closing_lines using team overrides mapping
+async function backfillOpeningSpreads() {
+  try {
+    // Update ncaab_game_adjustments with opening_spread from closing_lines
+    // Uses team overrides to map torvik names to odds_api names
+    const { error } = await supabase.rpc('backfill_opening_spreads');
+    
+    if (error) {
+      console.log('[History] Backfill RPC not found, trying direct SQL...');
+      
+      // Fallback: Run the update directly if RPC doesn't exist
+      const { error: updateError } = await supabase.from('ncaab_game_adjustments').select('game_id').limit(0);
+      
+      if (!updateError) {
+        // Run raw SQL update via a different approach - create the RPC if it doesn't exist
+        console.log('[History] Skipping backfill - RPC not available. Consider creating backfill_opening_spreads function.');
+      }
+    } else {
+      console.log('[History] Opening spreads backfill completed');
+    }
+  } catch (err) {
+    console.error('[History] Backfill error:', err);
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '1000');
     const offset = parseInt(searchParams.get('offset') || '0');
+    
+    // Run backfill before fetching (only on first page to avoid repeated calls)
+    if (offset === 0) {
+      await backfillOpeningSpreads();
+    }
     
     // Use raw SQL to join the tables properly - this works in Supabase
     const { data, error } = await supabase.rpc('get_history_with_bt', {
@@ -75,7 +105,8 @@ export async function GET(request: NextRequest) {
     }));
     
     const btMatchCount = games.filter(g => g.btSpread !== null).length;
-    console.log(`[History] Returning ${games.length} games, BT matches: ${btMatchCount}`);
+    const openingSpreadCount = games.filter(g => g.openingSpread !== null).length;
+    console.log(`[History] Returning ${games.length} games, BT matches: ${btMatchCount}, Opening spreads: ${openingSpreadCount}`);
     
     return NextResponse.json({
       success: true,
@@ -84,6 +115,7 @@ export async function GET(request: NextRequest) {
       offset,
       limit,
       btMatchCount,
+      openingSpreadCount,
     }, {
       headers: {
         'Cache-Control': 'no-store, max-age=0',

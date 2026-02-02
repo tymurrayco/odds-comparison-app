@@ -6,11 +6,12 @@ import { KENPOM_API_BASE_URL } from '@/lib/ratings/constants';
 /**
  * NCAAB Elite Teams API
  * 
- * Fetches KenPom ratings and returns teams that are top 25 in BOTH:
- * - Adjusted Offensive Efficiency (AdjOE / RankAdjOE)
- * - Adjusted Defensive Efficiency (AdjDE / RankAdjDE)
+ * Fetches KenPom ratings and returns teams classified by tier:
  * 
- * These teams represent the "elite" programs with both strong offense and defense.
+ * ELITE (green): Top 20 in BOTH Adjusted Offensive & Defensive Efficiency
+ * BORDERLINE (yellow): Top 25 in both, but at least one rank is 21-25
+ * 
+ * These teams represent programs with strong offense and defense.
  * Used to highlight teams in the NCAAB Futures table.
  */
 
@@ -27,6 +28,8 @@ interface KenPomRating {
   AdjTempo: number;
   RankAdjTempo: number;
 }
+
+export type EliteTier = 'elite' | 'borderline';
 
 // Common mascots to strip for matching
 const MASCOTS = [
@@ -77,6 +80,27 @@ function normalizeForMatch(name: string): string {
   return normalized;
 }
 
+/**
+ * Determine elite tier based on offensive and defensive efficiency ranks
+ * - Elite: Both RankAdjOE and RankAdjDE are <= 20
+ * - Borderline: Both are <= 25, but at least one is 21-25
+ * - null: Does not qualify
+ */
+function getEliteTier(rankOE: number, rankDE: number): EliteTier | null {
+  // Must be top 25 in both to qualify at all
+  if (rankOE > 25 || rankDE > 25) {
+    return null;
+  }
+  
+  // Elite: Both top 20
+  if (rankOE <= 20 && rankDE <= 20) {
+    return 'elite';
+  }
+  
+  // Borderline: Both top 25, but at least one is 21-25
+  return 'borderline';
+}
+
 export async function GET() {
   const apiKey = process.env.KENPOM_API_KEY;
   
@@ -86,7 +110,8 @@ export async function GET() {
       success: false,
       error: 'KenPom API key not configured',
       eliteTeams: [],
-      eliteTeamsNormalized: []
+      eliteTeamsNormalized: [],
+      details: []
     });
   }
   
@@ -118,7 +143,8 @@ export async function GET() {
         success: false,
         error: `KenPom API error: ${response.status}`,
         eliteTeams: [],
-        eliteTeamsNormalized: []
+        eliteTeamsNormalized: [],
+        details: []
       });
     }
     
@@ -126,33 +152,44 @@ export async function GET() {
     
     console.log(`[NCAAB Elite] Received ${ratings.length} team ratings`);
     
-    // Filter for elite teams: top 25 in BOTH Ortg AND Drtg
-    const eliteTeams = ratings.filter(team => 
+    // Filter for teams that qualify (top 25 in BOTH Ortg AND Drtg)
+    const qualifyingTeams = ratings.filter(team => 
       team.RankAdjOE <= 25 && team.RankAdjDE <= 25
     );
     
-    console.log(`[NCAAB Elite] Found ${eliteTeams.length} elite teams (Top 25 O & D)`);
+    // Build response with tier classification
+    const eliteTeamData = qualifyingTeams.map(team => {
+      const tier = getEliteTier(team.RankAdjOE, team.RankAdjDE);
+      return {
+        name: team.TeamName,
+        normalized: normalizeForMatch(team.TeamName),
+        tier: tier as EliteTier, // Will always be non-null since we filtered
+        rankOE: team.RankAdjOE,
+        rankDE: team.RankAdjDE,
+        rankEM: team.RankAdjEM,
+        adjOE: team.AdjOE,
+        adjDE: team.AdjDE,
+        adjEM: team.AdjEM
+      };
+    });
     
-    // Build response with both original names and normalized versions for matching
-    const eliteTeamData = eliteTeams.map(team => ({
-      name: team.TeamName,
-      normalized: normalizeForMatch(team.TeamName),
-      rankOE: team.RankAdjOE,
-      rankDE: team.RankAdjDE,
-      rankEM: team.RankAdjEM,
-      adjOE: team.AdjOE,
-      adjDE: team.AdjDE,
-      adjEM: team.AdjEM
-    }));
+    // Count by tier
+    const eliteCount = eliteTeamData.filter(t => t.tier === 'elite').length;
+    const borderlineCount = eliteTeamData.filter(t => t.tier === 'borderline').length;
     
-    // Log elite teams for debugging
+    console.log(`[NCAAB Elite] Found ${eliteCount} elite teams (Top 20 O & D)`);
+    console.log(`[NCAAB Elite] Found ${borderlineCount} borderline teams (Top 25 O & D, one 21-25)`);
+    
+    // Log teams for debugging
     eliteTeamData.forEach(team => {
-      console.log(`[NCAAB Elite] ${team.name}: O#${team.rankOE}, D#${team.rankDE}, EM#${team.rankEM}`);
+      console.log(`[NCAAB Elite] ${team.name} [${team.tier.toUpperCase()}]: O#${team.rankOE}, D#${team.rankDE}, EM#${team.rankEM}`);
     });
     
     return NextResponse.json({
       success: true,
-      count: eliteTeams.length,
+      count: qualifyingTeams.length,
+      eliteCount,
+      borderlineCount,
       eliteTeams: eliteTeamData.map(t => t.name),
       eliteTeamsNormalized: eliteTeamData.map(t => t.normalized),
       details: eliteTeamData
@@ -164,7 +201,8 @@ export async function GET() {
       success: false,
       error: 'Failed to fetch KenPom data',
       eliteTeams: [],
-      eliteTeamsNormalized: []
+      eliteTeamsNormalized: [],
+      details: []
     });
   }
 }

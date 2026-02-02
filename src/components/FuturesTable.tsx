@@ -121,10 +121,14 @@ function normalizeForMatch(name: string): string {
   return normalized;
 }
 
+// Elite tier type
+type EliteTier = 'elite' | 'borderline';
+
 // Interface for elite team data from API
 interface EliteTeamData {
   name: string;
   normalized: string;
+  tier: EliteTier;
   rankOE: number;
   rankDE: number;
   rankEM: number;
@@ -146,12 +150,16 @@ export default function FuturesTable({
   const [eliteTeamsDetails, setEliteTeamsDetails] = useState<Map<string, EliteTeamData>>(new Map());
   const [eliteLoading, setEliteLoading] = useState(false);
   const [showEliteOnly, setShowEliteOnly] = useState(false);
+  const [eliteCount, setEliteCount] = useState(0);
+  const [borderlineCount, setBorderlineCount] = useState(0);
 
   // Fetch KenPom elite teams when league is NCAAB
   useEffect(() => {
     if (league !== 'basketball_ncaab') {
       setEliteTeamsNormalized(new Set());
       setEliteTeamsDetails(new Map());
+      setEliteCount(0);
+      setBorderlineCount(0);
       return;
     }
 
@@ -163,6 +171,8 @@ export default function FuturesTable({
         
         if (data.success && data.eliteTeamsNormalized) {
           setEliteTeamsNormalized(new Set(data.eliteTeamsNormalized));
+          setEliteCount(data.eliteCount || 0);
+          setBorderlineCount(data.borderlineCount || 0);
           
           // Build details map for tooltips
           if (data.details) {
@@ -173,7 +183,7 @@ export default function FuturesTable({
             setEliteTeamsDetails(detailsMap);
           }
           
-          console.log(`[FuturesTable] Loaded ${data.count} elite teams for NCAAB`);
+          console.log(`[FuturesTable] Loaded ${data.eliteCount} elite + ${data.borderlineCount} borderline teams for NCAAB`);
         }
       } catch (error) {
         console.error('[FuturesTable] Error fetching elite teams:', error);
@@ -186,9 +196,9 @@ export default function FuturesTable({
   }, [league]);
 
   /**
-   * Check if a team is elite (top 25 in both Ortg and Drtg)
+   * Check if a team qualifies (elite or borderline)
    */
-  const isEliteTeam = (teamName: string): boolean => {
+  const isQualifyingTeam = (teamName: string): boolean => {
     if (league !== 'basketball_ncaab' || eliteTeamsNormalized.size === 0) {
       return false;
     }
@@ -197,11 +207,19 @@ export default function FuturesTable({
   };
 
   /**
-   * Get elite team details for tooltip
+   * Get elite team details including tier
    */
   const getEliteDetails = (teamName: string): EliteTeamData | undefined => {
     const normalized = normalizeForMatch(teamName);
     return eliteTeamsDetails.get(normalized);
+  };
+
+  /**
+   * Get the tier for a team (elite, borderline, or null)
+   */
+  const getTeamTier = (teamName: string): EliteTier | null => {
+    const details = getEliteDetails(teamName);
+    return details?.tier || null;
   };
 
   // Use selected bookmakers or default to all
@@ -306,8 +324,39 @@ export default function FuturesTable({
     whiteSpace: 'nowrap' as const,
   };
 
+  // Get row background color based on tier
+  const getRowBgColor = (tier: EliteTier | null): string => {
+    if (tier === 'elite') return 'bg-green-50';
+    if (tier === 'borderline') return 'bg-yellow-50';
+    return '';
+  };
+
+  // Get cell background color based on tier (for holding state)
+  const getCellBgColor = (tier: EliteTier | null, isHolding: boolean): string => {
+    if (isHolding) return 'bg-blue-50';
+    return getRowBgColor(tier);
+  };
+
+  // Get badge styling based on tier
+  const getBadgeStyles = (tier: EliteTier): { bg: string; text: string; border: string; label: string } => {
+    if (tier === 'elite') {
+      return {
+        bg: 'bg-green-100',
+        text: 'text-green-700',
+        border: 'border-green-200',
+        label: 'Elite'
+      };
+    }
+    return {
+      bg: 'bg-yellow-100',
+      text: 'text-yellow-700',
+      border: 'border-yellow-300',
+      label: 'Borderline'
+    };
+  };
+
   // Custom display for team cell based on whether it's Masters and screen size
-  const renderTeamCell = (team: string, isElite: boolean = false, eliteDetails?: EliteTeamData) => {
+  const renderTeamCell = (team: string, tier: EliteTier | null, eliteDetails?: EliteTeamData) => {
     const teamLogoSrc = `/team-logos/${team.toLowerCase().replace(/\s+/g, '')}.png`;
     const lastName = getLastName(team);
     
@@ -338,6 +387,13 @@ export default function FuturesTable({
       );
     } else {
       // For non-Masters tabs
+      const badgeStyles = tier ? getBadgeStyles(tier) : null;
+      const tooltipText = eliteDetails 
+        ? tier === 'elite'
+          ? `Top 20 in both Offense (#${eliteDetails.rankOE}) and Defense (#${eliteDetails.rankDE})`
+          : `Top 25 in both Offense (#${eliteDetails.rankOE}) and Defense (#${eliteDetails.rankDE}) - one rank 21-25`
+        : '';
+      
       return (
         <div className="flex items-center gap-1">
           <img 
@@ -353,13 +409,19 @@ export default function FuturesTable({
           ) : (
             <span className="sm:inline hidden">{team}</span>
           )}
-          {/* Elite badge for NCAAB */}
-          {isElite && (
+          {/* OE/DE Ranks for qualifying teams */}
+          {eliteDetails && (
+            <span className="text-[10px] text-gray-400 ml-1 whitespace-nowrap">
+              O:{eliteDetails.rankOE} D:{eliteDetails.rankDE}
+            </span>
+          )}
+          {/* Elite/Borderline badge for NCAAB */}
+          {tier && badgeStyles && (
             <span 
-              className="hidden md:inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 border border-green-200"
-              title={eliteDetails ? `Top 25 in both Offense (#${eliteDetails.rankOE}) and Defense (#${eliteDetails.rankDE})` : 'Top 25 in both Offense and Defense'}
+              className={`hidden md:inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${badgeStyles.bg} ${badgeStyles.text} border ${badgeStyles.border}`}
+              title={tooltipText}
             >
-              Elite
+              {badgeStyles.label}
             </span>
           )}
         </div>
@@ -398,17 +460,23 @@ export default function FuturesTable({
             {market.title}
           </h3>
           {league === 'basketball_ncaab' && (
-            <div className="flex items-center gap-2 text-xs text-gray-600">
+            <div className="flex items-center gap-3 text-xs text-gray-600">
               {eliteLoading ? (
                 <span className="flex items-center gap-1">
                   <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin"></div>
                   Loading KenPom...
                 </span>
               ) : eliteTeamsNormalized.size > 0 ? (
-                <span className="flex items-center gap-1">
-                  <span className="inline-block w-3 h-3 bg-green-100 border border-green-300 rounded"></span>
-                  Top 25 O &amp; D ({eliteTeamsNormalized.size})
-                </span>
+                <>
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block w-3 h-3 bg-green-100 border border-green-300 rounded"></span>
+                    Elite ({eliteCount})
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block w-3 h-3 bg-yellow-100 border border-yellow-300 rounded"></span>
+                    Borderline ({borderlineCount})
+                  </span>
+                </>
               ) : null}
             </div>
           )}
@@ -416,11 +484,15 @@ export default function FuturesTable({
         {/* Elite teams disclaimer and toggle for NCAAB */}
         {league === 'basketball_ncaab' && eliteTeamsNormalized.size > 0 && (
           <div className="mt-2 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2 text-xs text-gray-500">
+            <div className="flex items-center gap-2 text-xs text-gray-500 flex-wrap">
               <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-green-100 text-green-700 border border-green-200 font-medium">
                 Elite
               </span>
-              <span>represents teams that can win it all based on Offensive &amp; Defensive Efficiency</span>
+              <span>Top 20 O &amp; D</span>
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-700 border border-yellow-300 font-medium">
+                Borderline
+              </span>
+              <span>Top 25 O &amp; D (one 21-25)</span>
             </div>
             {/* iPhone-style toggle */}
             <button
@@ -462,9 +534,9 @@ export default function FuturesTable({
           <tbody className="bg-white divide-y divide-gray-200">
             {market.teams
               .filter(item => {
-                // If elite-only toggle is on, filter to only elite teams
+                // If elite-only toggle is on, filter to only qualifying teams (elite or borderline)
                 if (showEliteOnly && league === 'basketball_ncaab') {
-                  return isEliteTeam(item.team);
+                  return isQualifyingTeam(item.team);
                 }
                 return true;
               })
@@ -484,18 +556,18 @@ export default function FuturesTable({
                 }
               });
 
-              // Check if this team is elite (NCAAB only)
-              const teamIsElite = isEliteTeam(item.team);
-              const eliteDetails = teamIsElite ? getEliteDetails(item.team) : undefined;
+              // Get tier for this team (NCAAB only)
+              const teamTier = getTeamTier(item.team);
+              const eliteDetails = teamTier ? getEliteDetails(item.team) : undefined;
               
               return (
                 <tr 
                   key={index}
-                  className={teamIsElite ? 'bg-green-50' : ''}
+                  className={getRowBgColor(teamTier)}
                   title={eliteDetails ? `KenPom: O#${eliteDetails.rankOE}, D#${eliteDetails.rankDE}, Overall#${eliteDetails.rankEM}` : undefined}
                 >
                   <td className="px-2 md:px-4 py-3 whitespace-normal text-xs md:text-sm font-medium text-gray-900">
-                    {renderTeamCell(item.team, teamIsElite, eliteDetails)}
+                    {renderTeamCell(item.team, teamTier, eliteDetails)}
                   </td>
                   {displayBookmakers.map(book => {
                     const cellKey = `${item.team}-${book}`;
@@ -506,7 +578,7 @@ export default function FuturesTable({
                       <td 
                         key={book} 
                         className={`px-2 md:px-4 py-3 whitespace-nowrap text-center cursor-pointer select-none ${
-                          isThisCellHolding ? 'bg-blue-50' : teamIsElite ? 'bg-green-50' : ''
+                          getCellBgColor(teamTier, isThisCellHolding)
                         }`}
                         onTouchStart={() => hasOdds && handlePressStart(item.team, item.odds[book], book, cellKey)}
                         onTouchEnd={handlePressEnd}

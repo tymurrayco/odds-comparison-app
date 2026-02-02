@@ -16,15 +16,14 @@ import {
   OverridesTab,
   BarttovikTab,
 } from './components';
-import SBROpenersTab from './components/SBROpenersTab';
 import type { TabType, ScheduleFilter, ScheduleSortField, SortDirection } from './types';
 
 export default function RatingsPage() {
   // Main data hook
   const data = useRatingsData();
   
-  // Tab state - added 'sbr-openers' to union type inline since TabType is in types.ts
-  const [activeTab, setActiveTab] = useState<TabType | 'sbr-openers'>('ratings');
+  // Tab state
+  const [activeTab, setActiveTab] = useState<TabType>('ratings');
   
   // Schedule tab state (kept here for coordination)
   const [scheduleFilter, setScheduleFilter] = useState<ScheduleFilter>('all');
@@ -223,7 +222,6 @@ export default function RatingsPage() {
                 { key: 'schedule' as const, label: 'Schedule', show: true },
                 { key: 'history' as const, label: 'History', show: true },
                 { key: 'hypotheticals' as const, label: 'Matchups', show: true },
-                { key: 'sbr-openers' as const, label: 'SBR Openers', show: data.isLocalhost, green: true },
                 { key: 'matching' as const, label: 'Matching', show: data.isLocalhost },
                 { key: 'overrides' as const, label: 'Overrides', show: data.isLocalhost },
                 { key: 'barttorvik' as const, label: 'Barttorvik', show: data.isLocalhost, purple: true },
@@ -233,11 +231,7 @@ export default function RatingsPage() {
                   onClick={() => setActiveTab(tab.key)}
                   className={`px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap ${
                     activeTab === tab.key 
-                      ? tab.purple 
-                        ? 'border-purple-600 text-purple-600' 
-                        : tab.green
-                          ? 'border-green-600 text-green-600'
-                          : 'border-blue-600 text-blue-600'
+                      ? tab.purple ? 'border-purple-600 text-purple-600' : 'border-blue-600 text-blue-600'
                       : 'border-transparent text-gray-900 hover:text-gray-900'
                   }`}
                 >
@@ -294,10 +288,6 @@ export default function RatingsPage() {
             />
           )}
 
-          {activeTab === 'sbr-openers' && (
-            <SBROpenersTab />
-          )}
-
           {data.isLocalhost && activeTab === 'matching' && (
             <MatchingLogsTab
               matchingLogs={data.matchingLogs}
@@ -323,10 +313,6 @@ export default function RatingsPage() {
               loadMatchingLogs={data.loadMatchingLogs}
               loadRatings={data.loadRatings}
               setSuccessMessage={data.setSuccessMessage}
-              setOverrides={data.setOverrides}
-              setKenpomTeams={data.setKenpomTeams}
-              setOddsApiTeams={data.setOddsApiTeams}
-              setTorvikTeams={data.setTorvikTeams}
             />
           )}
 
