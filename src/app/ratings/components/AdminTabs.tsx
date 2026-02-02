@@ -254,8 +254,6 @@ interface OverridesTabProps {
 export function OverridesTab({
   overrides,
   kenpomTeams,
-  oddsApiTeams: _oddsApiTeams,
-  torvikTeams: _torvikTeams,
   overridesLoading,
   loadOverrides,
   loadMatchingLogs,
