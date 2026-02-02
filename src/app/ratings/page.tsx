@@ -72,7 +72,7 @@ export default function RatingsPage() {
   };
 
   // For matching logs tab - need to open override modal
-  const [overrideModalSource, setOverrideModalSource] = useState<{ sourceName?: string; oddsApiName?: string } | null>(null);
+  const [_overrideModalSource, setOverrideModalSource] = useState<{ sourceName?: string; oddsApiName?: string } | null>(null);
 
   return (
     <div className="min-h-screen bg-blue-50 text-gray-900">

@@ -174,7 +174,7 @@ export async function GET(request: NextRequest) {
             gameTime
           });
           
-        } catch (e) {
+        } catch {
           // Skip errors
         }
       });
@@ -183,7 +183,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Strip rankings from team names
-    const cleanedGames: SBRGame[] = games.map((g: any) => ({
+    const cleanedGames: SBRGame[] = games.map((g: SBRGame) => ({
       awayTeam: stripRanking(g.awayTeam),
       homeTeam: stripRanking(g.homeTeam),
       openerSpread: g.openerSpread,

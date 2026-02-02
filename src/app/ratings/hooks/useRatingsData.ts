@@ -18,7 +18,6 @@ import type {
 } from '../types';
 import { 
   normalizeTeamName, 
-  normalizeForFuzzyMatch, 
   teamsMatch,
   parseTimeToMinutes,
   hasGameStarted,
