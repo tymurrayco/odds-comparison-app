@@ -320,18 +320,18 @@ export function HistoryTab({
                   const movingToward = closeDiff < openDiff;
                   const highlightClass = movingToward ? getGreenHighlightClass(lineMovement) : getRedHighlightClass(lineMovement);
                   
-                  // Value check: closing line is 1+ points FURTHER from projection than open was
-                  const distanceIncreased = (closeDiff - openDiff) >= 1;
+                  // Value check: closing line is 1+ points away from projection AND moved away AND moved 1+ point from open
+                  const showValueCheck = closeDiff >= 1 && closeDiff > openDiff && lineMovement >= 1;
                   
                   highlightProjClass = highlightClass;
                   if (game.closingSpread < game.openingSpread) {
                     highlightHomeClass = highlightClass;
-                    if (distanceIncreased) {
+                    if (showValueCheck) {
                       showHomeValueCheck = true;
                     }
                   } else {
                     highlightAwayClass = highlightClass;
-                    if (distanceIncreased) {
+                    if (showValueCheck) {
                       showAwayValueCheck = true;
                     }
                   }
