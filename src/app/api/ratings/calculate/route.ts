@@ -543,7 +543,6 @@ export async function POST(request: NextRequest) {
       const allSeenOddsApiTeams: Set<string> = new Set();
       
       // Cache Odds API responses by timestamp to avoid redundant calls
-      const pinnacleCache: Map<string, OddsAPIGame[]> = new Map();
       const usCache: Map<string, OddsAPIGame[]> = new Map();
       
       console.log(`[Calculate Ratings] Processing ${gamesToProcess.length} games...`);
@@ -584,11 +583,11 @@ export async function POST(request: NextRequest) {
           
           const cached = await getCachedClosingLine(game.id);
           
-          if (cached && cached.closing_source === config.closingSource) {
+          if (cached && cached.closing_source === 'us_average') {
             closingSpread = cached.closing_spread;
             bookmakers = cached.bookmakers || [];
           } else {
-            // Fetch from Odds API - Try Pinnacle first, fall back to US books
+            // Fetch from Odds API - US Consensus Average
             const gameTime = new Date(game.date);
             const closingTime = new Date(gameTime.getTime() - 5 * 60 * 1000);
             const closingTimeStr = closingTime.toISOString().replace('.000Z', 'Z');
@@ -599,88 +598,45 @@ export async function POST(request: NextRequest) {
             cacheKeyTime.setMinutes(0, 0, 0); // Round down to hour
             const cacheKey = cacheKeyTime.toISOString().replace('.000Z', 'Z');
             
-            // Preferred US books for fallback (DraftKings, FanDuel, BetMGM, BetRivers)
-            const FALLBACK_US_BOOKS = ['draftkings', 'fanduel', 'betmgm', 'betrivers'];
+            // US Consensus books
+            const US_CONSENSUS_BOOKS = ['draftkings', 'fanduel', 'betmgm', 'betrivers'];
             
             let matchingOddsGame: OddsAPIGame | null = null;
             let closingLine: { spread: number | null; bookmakers: string[] } = { spread: null, bookmakers: [] };
-            let usedSource: ClosingLineSource = config.closingSource;
+            const usedSource: ClosingLineSource = 'us_average';
             
-            // Step 1: Try Pinnacle first - use cache if available
-            let pinnacleGames: OddsAPIGame[] | undefined = pinnacleCache.get(cacheKey);
+            // Fetch US Consensus Average - use cache if available
+            let usGames: OddsAPIGame[] | undefined = usCache.get(cacheKey);
             
-            if (pinnacleGames === undefined) {
-              const pinnacleUrl = `${ODDS_API_BASE_URL}/historical/sports/${NCAAB_SPORT_KEY}/odds?` +
-                `apiKey=${oddsApiKey}&regions=eu&markets=spreads&oddsFormat=american` +
-                `&date=${closingTimeStr}&bookmakers=pinnacle`;
+            if (usGames === undefined) {
+              const usUrl = `${ODDS_API_BASE_URL}/historical/sports/${NCAAB_SPORT_KEY}/odds?` +
+                `apiKey=${oddsApiKey}&regions=us&markets=spreads&oddsFormat=american` +
+                `&date=${closingTimeStr}&bookmakers=${US_CONSENSUS_BOOKS.join(',')}`;
               
-              const pinnacleResponse = await fetch(pinnacleUrl);
+              const usResponse = await fetch(usUrl);
               
-              if (pinnacleResponse.ok) {
-                const pinnacleData = await pinnacleResponse.json();
-                const fetchedGames: OddsAPIGame[] = pinnacleData.data || [];
-                pinnacleGames = fetchedGames;
-                pinnacleCache.set(cacheKey, fetchedGames);
+              if (!usResponse.ok) {
+                usGames = [];
+                usCache.set(cacheKey, []);
+              } else {
+                const usData = await usResponse.json();
+                const fetchedUsGames: OddsAPIGame[] = usData.data || [];
+                usGames = fetchedUsGames;
+                usCache.set(cacheKey, fetchedUsGames);
                 
                 // Capture team names
-                for (const g of fetchedGames) {
+                for (const g of fetchedUsGames) {
                   allSeenOddsApiTeams.add(g.home_team);
                   allSeenOddsApiTeams.add(g.away_team);
                 }
-              } else {
-                pinnacleGames = [];
-                pinnacleCache.set(cacheKey, []);
               }
             }
             
-            if (pinnacleGames && pinnacleGames.length > 0) {
-              matchingOddsGame = findMatchingGame(game, pinnacleGames, oddsApiOverrideMap);
+            if (usGames && usGames.length > 0) {
+              matchingOddsGame = findMatchingGame(game, usGames, oddsApiOverrideMap);
               
               if (matchingOddsGame) {
-                closingLine = extractClosingSpread(matchingOddsGame, 'pinnacle', ['pinnacle']);
-                if (closingLine.spread !== null) {
-                  usedSource = 'pinnacle';
-                }
-              }
-            }
-            
-            // Step 2: Fall back to US books if Pinnacle didn't have a spread
-            if (closingLine.spread === null) {
-              let usGames: OddsAPIGame[] | undefined = usCache.get(cacheKey);
-              
-              if (usGames === undefined) {
-                const usUrl = `${ODDS_API_BASE_URL}/historical/sports/${NCAAB_SPORT_KEY}/odds?` +
-                  `apiKey=${oddsApiKey}&regions=us&markets=spreads&oddsFormat=american` +
-                  `&date=${closingTimeStr}&bookmakers=${FALLBACK_US_BOOKS.join(',')}`;
-                
-                const usResponse = await fetch(usUrl);
-                
-                if (!usResponse.ok) {
-                  usGames = [];
-                  usCache.set(cacheKey, []);
-                } else {
-                  const usData = await usResponse.json();
-                  const fetchedUsGames: OddsAPIGame[] = usData.data || [];
-                  usGames = fetchedUsGames;
-                  usCache.set(cacheKey, fetchedUsGames);
-                  
-                  // Capture team names
-                  for (const g of fetchedUsGames) {
-                    allSeenOddsApiTeams.add(g.home_team);
-                    allSeenOddsApiTeams.add(g.away_team);
-                  }
-                }
-              }
-              
-              if (usGames && usGames.length > 0) {
-                matchingOddsGame = findMatchingGame(game, usGames, oddsApiOverrideMap);
-                
-                if (matchingOddsGame) {
-                  closingLine = extractClosingSpread(matchingOddsGame, 'us_average', FALLBACK_US_BOOKS);
-                  if (closingLine.spread !== null) {
-                    usedSource = 'us_average';
-                  }
-                }
+                closingLine = extractClosingSpread(matchingOddsGame, 'us_average', US_CONSENSUS_BOOKS);
               }
             }
             
@@ -703,7 +659,7 @@ export async function POST(request: NextRequest) {
             closingSpread = closingLine.spread;
             bookmakers = closingLine.bookmakers;
             
-            // Cache it (note: usedSource tracks whether Pinnacle or US average was used)
+            // Cache it (using US Consensus Average)
             await cacheClosingLine(
               game.id,
               matchingOddsGame.id,
