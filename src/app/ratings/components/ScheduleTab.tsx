@@ -257,7 +257,7 @@ export function ScheduleTab({
 
       {/* Legend */}
       <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 flex flex-wrap items-center gap-4 text-xs">
-        <span className="text-gray-900 font-medium">Line Movement:</span>
+        <span className="text-gray-900 font-medium">Movement:</span>
         <div className="flex items-center gap-1">
           <div className="w-4 h-4 bg-green-200 rounded"></div>
           <span className="text-gray-900">Toward projection</span>
@@ -265,10 +265,6 @@ export function ScheduleTab({
         <div className="flex items-center gap-1">
           <div className="w-4 h-4 bg-red-200 rounded"></div>
           <span className="text-gray-900">Against projection</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <span className="text-green-600 text-sm">✓</span>
-          <span className="text-gray-900">Value (1+ pt away)</span>
         </div>
         <span className="text-gray-400 hidden sm:inline">| Intensity = magnitude of move</span>
       </div>
