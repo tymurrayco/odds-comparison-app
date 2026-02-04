@@ -397,17 +397,18 @@ export function ScheduleTab({
                   const movingToward = currentDiff < openDiff;
                   const highlightClass = movingToward ? getGreenHighlightClass(lineMovement) : getRedHighlightClass(lineMovement);
                   
+                  // Value check: current line is 1+ points FURTHER from projection than open was
+                  const distanceIncreased = (currentDiff - openDiff) >= 1;
+                  
                   highlightProjClass = highlightClass;
                   if (game.spread < game.openingSpread) {
                     highlightHomeClass = highlightClass;
-                    // Value check: moved AWAY from projection by 1+ points
-                    if (!movingToward && lineMovement >= 1) {
+                    if (distanceIncreased) {
                       showHomeValueCheck = true;
                     }
                   } else {
                     highlightAwayClass = highlightClass;
-                    // Value check: moved AWAY from projection by 1+ points
-                    if (!movingToward && lineMovement >= 1) {
+                    if (distanceIncreased) {
                       showAwayValueCheck = true;
                     }
                   }

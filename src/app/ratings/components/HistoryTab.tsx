@@ -209,6 +209,10 @@ export function HistoryTab({
           <div className="w-4 h-4 bg-red-200 rounded"></div>
           <span className="text-gray-900">Against projection</span>
         </div>
+        <div className="flex items-center gap-1">
+          <span className="text-green-600 text-sm">✓</span>
+          <span className="text-gray-900">Value (1+ pt away)</span>
+        </div>
         <span className="text-gray-400 ml-2">| Click column headers to sort</span>
       </div>
       
@@ -302,6 +306,8 @@ export function HistoryTab({
                 let highlightProjClass = '';
                 let highlightBtClass = '';
                 let highlightBlendClass = '';
+                let showAwayValueCheck = false;
+                let showHomeValueCheck = false;
                 
                 const blendSpread = (game.btSpread !== null && game.projectedSpread !== null)
                   ? 0.38022 + (game.btSpread * 0.355163) + (game.projectedSpread * 0.620901)
@@ -314,11 +320,20 @@ export function HistoryTab({
                   const movingToward = closeDiff < openDiff;
                   const highlightClass = movingToward ? getGreenHighlightClass(lineMovement) : getRedHighlightClass(lineMovement);
                   
+                  // Value check: closing line is 1+ points FURTHER from projection than open was
+                  const distanceIncreased = (closeDiff - openDiff) >= 1;
+                  
                   highlightProjClass = highlightClass;
                   if (game.closingSpread < game.openingSpread) {
                     highlightHomeClass = highlightClass;
+                    if (distanceIncreased) {
+                      showHomeValueCheck = true;
+                    }
                   } else {
                     highlightAwayClass = highlightClass;
+                    if (distanceIncreased) {
+                      showAwayValueCheck = true;
+                    }
                   }
                 }
                 
@@ -345,16 +360,22 @@ export function HistoryTab({
                   <tr key={`history-${index}`} className="hover:bg-gray-50">
                     <td className="px-2 sm:px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{dateStr}</td>
                     <td className={`px-1 sm:px-4 py-3 ${highlightAwayClass}`}>
-                      <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2">
+                      <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 relative">
                         <TeamLogo teamName={game.awayTeam} logoUrl={awayLogo} size="sm" />
                         <span className="text-sm font-medium text-gray-900 hidden sm:inline">{game.awayTeam}</span>
+                        {showAwayValueCheck && (
+                          <span className="absolute -bottom-1 -right-1 text-green-600 text-xs font-bold" title="Value: line moved 1+ pt away from projection">✓</span>
+                        )}
                       </div>
                     </td>
                     <td className="px-1 py-3 text-center text-gray-400 hidden sm:table-cell">@</td>
                     <td className={`px-1 sm:px-4 py-3 ${highlightHomeClass}`}>
-                      <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2">
+                      <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 relative">
                         <TeamLogo teamName={game.homeTeam} logoUrl={homeLogo} size="sm" />
                         <span className="text-sm font-medium text-gray-900 hidden sm:inline">{game.homeTeam}</span>
+                        {showHomeValueCheck && (
+                          <span className="absolute -bottom-1 -right-1 text-green-600 text-xs font-bold" title="Value: line moved 1+ pt away from projection">✓</span>
+                        )}
                       </div>
                     </td>
                     <td className="px-1 sm:px-2 py-1 text-center">
