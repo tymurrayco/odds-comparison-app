@@ -266,6 +266,10 @@ export function ScheduleTab({
           <div className="w-4 h-4 bg-red-200 rounded"></div>
           <span className="text-gray-900">Against projection</span>
         </div>
+        <div className="flex items-center gap-1">
+          <span className="text-green-600 text-sm">✓</span>
+          <span className="text-gray-900">Value (1+ pt away)</span>
+        </div>
         <span className="text-gray-400 hidden sm:inline">| Intensity = magnitude of move</span>
       </div>
 
@@ -383,6 +387,8 @@ export function ScheduleTab({
                 let highlightProjClass = '';
                 let highlightBtClass = '';
                 let highlightBlendClass = '';
+                let showAwayValueCheck = false;
+                let showHomeValueCheck = false;
                 
                 if (projectedSpread !== null && game.openingSpread !== null && game.spread !== null && game.openingSpread !== game.spread) {
                   const openDiff = Math.abs(projectedSpread - game.openingSpread);
@@ -394,8 +400,16 @@ export function ScheduleTab({
                   highlightProjClass = highlightClass;
                   if (game.spread < game.openingSpread) {
                     highlightHomeClass = highlightClass;
+                    // Value check: moved AWAY from projection by 1+ points
+                    if (!movingToward && lineMovement >= 1) {
+                      showHomeValueCheck = true;
+                    }
                   } else {
                     highlightAwayClass = highlightClass;
+                    // Value check: moved AWAY from projection by 1+ points
+                    if (!movingToward && lineMovement >= 1) {
+                      showAwayValueCheck = true;
+                    }
                   }
                 }
                 
@@ -439,20 +453,26 @@ export function ScheduleTab({
                         <div className="text-xs text-gray-900">{dayStr}</div>
                       </td>
                       <td className={`px-1 sm:px-4 py-3 ${highlightAwayClass}`}>
-                        <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2">
+                        <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 relative">
                           <TeamLogo teamName={game.awayTeam} logoUrl={getTeamLogo(game.awayTeam)} />
                           <span className="text-sm font-medium text-gray-900 hidden sm:inline">{game.awayTeam}</span>
                           {!awayRating && <span className="text-xs text-red-400 hidden sm:inline" title="Team not found in ratings">?</span>}
+                          {showAwayValueCheck && (
+                            <span className="absolute -bottom-1 -right-1 text-green-600 text-xs font-bold" title="Value: line moved 1+ pt away from projection">✓</span>
+                          )}
                         </div>
                       </td>
                       <td className="px-1 py-3 text-center hidden sm:table-cell">
                         <span className="text-gray-400 text-xs">@</span>
                       </td>
                       <td className={`px-1 sm:px-4 py-3 ${highlightHomeClass}`}>
-                        <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2">
+                        <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 relative">
                           <TeamLogo teamName={game.homeTeam} logoUrl={getTeamLogo(game.homeTeam)} />
                           <span className="text-sm font-medium text-gray-900 hidden sm:inline">{game.homeTeam}</span>
                           {!homeRating && <span className="text-xs text-red-400 hidden sm:inline" title="Team not found in ratings">?</span>}
+                          {showHomeValueCheck && (
+                            <span className="absolute -bottom-1 -right-1 text-green-600 text-xs font-bold" title="Value: line moved 1+ pt away from projection">✓</span>
+                          )}
                         </div>
                       </td>
                       <td className="px-1 sm:px-2 py-1 text-center">
