@@ -78,71 +78,48 @@ export interface ScheduleGame {
 }
 
 // Helper function to extract spread and total from a game's bookmakers
+// Uses US Consensus Average (DraftKings, FanDuel, BetMGM, BetRivers)
 const extractSpreadAndTotal = (game: OddsGame) => {
   let spread: number | null = null;
   let total: number | null = null;
   let spreadBookmaker: string | null = null;
   
-  // 1. Try Pinnacle first
-  const pinnacle = game.bookmakers.find(b => b.key === 'pinnacle');
-  if (pinnacle) {
-    const spreadsMarket = pinnacle.markets.find(m => m.key === 'spreads');
-    if (spreadsMarket) {
-      const homeOutcome = spreadsMarket.outcomes.find(o => o.name === game.home_team);
-      if (homeOutcome?.point !== undefined) {
-        spread = homeOutcome.point;
-        spreadBookmaker = 'Pinnacle';
+  // US Consensus Average
+  const usBooks = ['draftkings', 'fanduel', 'betmgm', 'betrivers'];
+  const spreads: number[] = [];
+  const totals: number[] = [];
+  const usedBooks: string[] = [];
+  
+  for (const bookKey of usBooks) {
+    const bookmaker = game.bookmakers.find(b => b.key === bookKey);
+    if (bookmaker) {
+      const spreadsMarket = bookmaker.markets.find(m => m.key === 'spreads');
+      if (spreadsMarket) {
+        const homeOutcome = spreadsMarket.outcomes.find(o => o.name === game.home_team);
+        if (homeOutcome?.point !== undefined) {
+          spreads.push(homeOutcome.point);
+          usedBooks.push(bookKey);
+        }
       }
-    }
-    const totalsMarket = pinnacle.markets.find(m => m.key === 'totals');
-    if (totalsMarket) {
-      const overOutcome = totalsMarket.outcomes.find(o => o.name === 'Over');
-      if (overOutcome?.point !== undefined) {
-        total = overOutcome.point;
+      const totalsMarket = bookmaker.markets.find(m => m.key === 'totals');
+      if (totalsMarket) {
+        const overOutcome = totalsMarket.outcomes.find(o => o.name === 'Over');
+        if (overOutcome?.point !== undefined) {
+          totals.push(overOutcome.point);
+        }
       }
     }
   }
   
-  // 2. Fall back to US books average if no Pinnacle spread
-  if (spread === null) {
-    const usBooks = ['draftkings', 'fanduel', 'betmgm', 'betrivers'];
-    const spreads: number[] = [];
-    const totals: number[] = [];
-    const usedBooks: string[] = [];
-    
-    for (const bookKey of usBooks) {
-      const bookmaker = game.bookmakers.find(b => b.key === bookKey);
-      if (bookmaker) {
-        const spreadsMarket = bookmaker.markets.find(m => m.key === 'spreads');
-        if (spreadsMarket) {
-          const homeOutcome = spreadsMarket.outcomes.find(o => o.name === game.home_team);
-          if (homeOutcome?.point !== undefined) {
-            spreads.push(homeOutcome.point);
-            usedBooks.push(bookKey);
-          }
-        }
-        if (total === null) {
-          const totalsMarket = bookmaker.markets.find(m => m.key === 'totals');
-          if (totalsMarket) {
-            const overOutcome = totalsMarket.outcomes.find(o => o.name === 'Over');
-            if (overOutcome?.point !== undefined) {
-              totals.push(overOutcome.point);
-            }
-          }
-        }
-      }
-    }
-    
-    if (spreads.length > 0) {
-      spread = spreads.reduce((a, b) => a + b, 0) / spreads.length;
-      spread = Math.round(spread * 2) / 2; // Round to nearest 0.5
-      spreadBookmaker = `US Avg (${usedBooks.length})`;
-    }
-    
-    if (total === null && totals.length > 0) {
-      total = totals.reduce((a, b) => a + b, 0) / totals.length;
-      total = Math.round(total * 2) / 2; // Round to nearest 0.5
-    }
+  if (spreads.length > 0) {
+    spread = spreads.reduce((a, b) => a + b, 0) / spreads.length;
+    spread = Math.round(spread * 2) / 2; // Round to nearest 0.5
+    spreadBookmaker = `US Avg (${usedBooks.length})`;
+  }
+  
+  if (totals.length > 0) {
+    total = totals.reduce((a, b) => a + b, 0) / totals.length;
+    total = Math.round(total * 2) / 2; // Round to nearest 0.5
   }
   
   return { spread, total, spreadBookmaker };
@@ -173,7 +150,7 @@ async function fetchClosingLines(
     try {
       const historicalParams = new URLSearchParams({
         apiKey,
-        regions: 'us,eu',
+        regions: 'us',
         markets: 'spreads,totals',
         oddsFormat: 'american',
         date: freezeTimeISO,
@@ -193,71 +170,46 @@ async function fetchClosingLines(
           const game = games[0];
           const homeTeam = homeTeams.get(gameId) || game.home_team;
           
-          // Extract spread and total using the same logic
+          // Extract spread and total using US Consensus Average
           let spread: number | null = null;
           let total: number | null = null;
           let spreadBookmaker: string | null = null;
           
-          // Try Pinnacle first
-          const pinnacle = game.bookmakers.find(b => b.key === 'pinnacle');
-          if (pinnacle) {
-            const spreadsMarket = pinnacle.markets.find(m => m.key === 'spreads');
-            if (spreadsMarket) {
-              const homeOutcome = spreadsMarket.outcomes.find(o => o.name === homeTeam);
-              if (homeOutcome?.point !== undefined) {
-                spread = homeOutcome.point;
-                spreadBookmaker = 'Pinnacle';
+          const usBooks = ['draftkings', 'fanduel', 'betmgm', 'betrivers'];
+          const spreads: number[] = [];
+          const totals: number[] = [];
+          const usedBooks: string[] = [];
+          
+          for (const bookKey of usBooks) {
+            const bookmaker = game.bookmakers.find(b => b.key === bookKey);
+            if (bookmaker) {
+              const spreadsMarket = bookmaker.markets.find(m => m.key === 'spreads');
+              if (spreadsMarket) {
+                const homeOutcome = spreadsMarket.outcomes.find(o => o.name === homeTeam);
+                if (homeOutcome?.point !== undefined) {
+                  spreads.push(homeOutcome.point);
+                  usedBooks.push(bookKey);
+                }
               }
-            }
-            const totalsMarket = pinnacle.markets.find(m => m.key === 'totals');
-            if (totalsMarket) {
-              const overOutcome = totalsMarket.outcomes.find(o => o.name === 'Over');
-              if (overOutcome?.point !== undefined) {
-                total = overOutcome.point;
+              const totalsMarket = bookmaker.markets.find(m => m.key === 'totals');
+              if (totalsMarket) {
+                const overOutcome = totalsMarket.outcomes.find(o => o.name === 'Over');
+                if (overOutcome?.point !== undefined) {
+                  totals.push(overOutcome.point);
+                }
               }
             }
           }
           
-          // Fall back to US books average
-          if (spread === null) {
-            const usBooks = ['draftkings', 'fanduel', 'betmgm', 'betrivers'];
-            const spreads: number[] = [];
-            const totals: number[] = [];
-            const usedBooks: string[] = [];
-            
-            for (const bookKey of usBooks) {
-              const bookmaker = game.bookmakers.find(b => b.key === bookKey);
-              if (bookmaker) {
-                const spreadsMarket = bookmaker.markets.find(m => m.key === 'spreads');
-                if (spreadsMarket) {
-                  const homeOutcome = spreadsMarket.outcomes.find(o => o.name === homeTeam);
-                  if (homeOutcome?.point !== undefined) {
-                    spreads.push(homeOutcome.point);
-                    usedBooks.push(bookKey);
-                  }
-                }
-                if (total === null) {
-                  const totalsMarket = bookmaker.markets.find(m => m.key === 'totals');
-                  if (totalsMarket) {
-                    const overOutcome = totalsMarket.outcomes.find(o => o.name === 'Over');
-                    if (overOutcome?.point !== undefined) {
-                      totals.push(overOutcome.point);
-                    }
-                  }
-                }
-              }
-            }
-            
-            if (spreads.length > 0) {
-              spread = spreads.reduce((a, b) => a + b, 0) / spreads.length;
-              spread = Math.round(spread * 2) / 2;
-              spreadBookmaker = `US Avg (${usedBooks.length})`;
-            }
-            
-            if (total === null && totals.length > 0) {
-              total = totals.reduce((a, b) => a + b, 0) / totals.length;
-              total = Math.round(total * 2) / 2;
-            }
+          if (spreads.length > 0) {
+            spread = spreads.reduce((a, b) => a + b, 0) / spreads.length;
+            spread = Math.round(spread * 2) / 2;
+            spreadBookmaker = `US Avg (${usedBooks.length})`;
+          }
+          
+          if (totals.length > 0) {
+            total = totals.reduce((a, b) => a + b, 0) / totals.length;
+            total = Math.round(total * 2) / 2;
           }
           
           closingLines.set(gameId, { spread, total, spreadBookmaker });
@@ -289,10 +241,10 @@ export async function GET(request: Request) {
   const timezone = searchParams.get('timezone') || 'America/New_York';
   
   try {
-    // Fetch upcoming games with spreads and totals from Pinnacle first, then US books
+    // Fetch upcoming games with spreads and totals from US books
     const params = new URLSearchParams({
       apiKey,
-      regions: 'us,eu',
+      regions: 'us',
       markets: 'spreads,totals',
       oddsFormat: 'american',
     });
@@ -487,7 +439,7 @@ export async function GET(request: Request) {
             
             const historicalParams = new URLSearchParams({
               apiKey,
-              regions: 'us,eu',
+              regions: 'us',
               markets: 'spreads',
               oddsFormat: 'american',
               date: dateStr,
@@ -506,20 +458,7 @@ export async function GET(request: Request) {
                 if (!gamesNeedingOpening.includes(hGame.id)) continue;
                 if (openingLines.has(hGame.id)) continue;
                 
-                // Try Pinnacle first
-                const pinnacle = hGame.bookmakers.find(b => b.key === 'pinnacle');
-                if (pinnacle) {
-                  const spreadsMarket = pinnacle.markets.find(m => m.key === 'spreads');
-                  if (spreadsMarket) {
-                    const homeOutcome = spreadsMarket.outcomes.find(o => o.name === hGame.home_team);
-                    if (homeOutcome?.point !== undefined) {
-                      openingLines.set(hGame.id, homeOutcome.point);
-                      continue;
-                    }
-                  }
-                }
-                
-                // Fall back to US books average
+                // US Consensus Average
                 const usBooks = ['draftkings', 'fanduel', 'betmgm', 'betrivers'];
                 const spreads: number[] = [];
                 
