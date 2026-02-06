@@ -74,12 +74,18 @@ export function HistoryTab({
   const filteredHistoryGames = useMemo(() => {
     let games = [...historyGames];
     
-    // Date filters
+    // Date filters (convert to local date to avoid UTC offset issues)
     if (historyStartDate) {
-      games = games.filter(g => g.gameDate >= historyStartDate);
+      games = games.filter(g => {
+        const localDate = new Date(g.gameDate).toLocaleDateString('en-CA'); // YYYY-MM-DD format
+        return localDate >= historyStartDate;
+      });
     }
     if (historyEndDate) {
-      games = games.filter(g => g.gameDate <= historyEndDate + 'T23:59:59');
+      games = games.filter(g => {
+        const localDate = new Date(g.gameDate).toLocaleDateString('en-CA'); // YYYY-MM-DD format
+        return localDate <= historyEndDate;
+      });
     }
     
     // Difference filter
@@ -208,10 +214,6 @@ export function HistoryTab({
         <div className="flex items-center gap-1">
           <div className="w-4 h-4 bg-red-200 rounded"></div>
           <span className="text-gray-900">Against projection</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <span className="text-green-600 text-sm">✓</span>
-          <span className="text-gray-900">Value (1+ pt away)</span>
         </div>
         <span className="text-gray-400 ml-2">| Click column headers to sort</span>
       </div>
