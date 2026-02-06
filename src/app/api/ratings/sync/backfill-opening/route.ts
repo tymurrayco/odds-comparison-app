@@ -18,7 +18,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
  * SBR openers are now the single source of truth for opening lines.
  * Use the SBR Openers tab to save opening lines instead.
  */
-export async function POST(_request: NextRequest) {
+export async function POST() {
   return NextResponse.json({
     success: false,
     message: 'Disabled — SBR openers are now the source of truth. Use the SBR Openers tab to save opening lines.',
