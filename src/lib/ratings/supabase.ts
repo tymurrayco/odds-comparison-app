@@ -726,6 +726,7 @@ export interface TeamOverride {
   espnName?: string;      // ESPN display name for logo lookup
   oddsApiName?: string;   // Odds API team name for game matching
   torvikName?: string;    // Barttorvik team name for BT schedule matching
+  sbrName?: string;       // SBR team name for opener matching
   source: string;
   notes?: string;
   createdAt?: string;
@@ -755,6 +756,7 @@ export async function loadTeamOverrides(): Promise<TeamOverride[]> {
     espnName: row.espn_name,
     oddsApiName: row.odds_api_name,
     torvikName: row.torvik_name,
+    sbrName: row.sbr_name,
     source: row.source,
     notes: row.notes,
     createdAt: row.created_at,
@@ -776,6 +778,7 @@ export async function addTeamOverride(override: TeamOverride): Promise<TeamOverr
       espn_name: override.espnName || null,
       odds_api_name: override.oddsApiName || null,
       torvik_name: override.torvikName || null,
+      sbr_name: override.sbrName || null,
       source: override.source || 'manual',
       notes: override.notes,
     }, {
@@ -816,6 +819,7 @@ export async function updateTeamOverride(id: number, override: Partial<TeamOverr
   if (override.espnName) updates.espn_name = override.espnName;
   if (override.oddsApiName) updates.odds_api_name = override.oddsApiName;
   if (override.torvikName) updates.torvik_name = override.torvikName;
+  if (override.sbrName) updates.sbr_name = override.sbrName;
   if (override.source) updates.source = override.source;
   if (override.notes) updates.notes = override.notes;
   

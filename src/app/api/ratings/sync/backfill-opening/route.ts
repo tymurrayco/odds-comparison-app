@@ -1,4 +1,6 @@
 // src/app/api/ratings/sync/backfill-opening/route.ts
+// DISABLED — SBR openers are now the single source of truth for opening lines.
+// This Odds API backfill is preserved but disabled to avoid wasting API calls.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
@@ -36,13 +38,23 @@ interface OddsAPIGame {
 /**
  * Backfill Opening Lines API
  * 
- * Fetches historical opening odds for a specific date and stores them.
+ * DISABLED — SBR openers are now the single source of truth.
+ * Use the SBR Openers tab to save opening lines instead.
  * 
  * POST /api/ratings/sync/backfill-opening
  * Body: { date: "2026-01-15" }  // YYYY-MM-DD format (Eastern time)
  */
 export async function POST(request: NextRequest) {
   try {
+    // SBR is now the single source of truth for opening lines.
+    // This Odds API backfill is disabled to avoid wasting API calls.
+    return NextResponse.json({
+      success: false,
+      message: 'Disabled — SBR openers are now the source of truth. Use the SBR Openers tab to save opening lines.',
+    }, { status: 410 });
+
+    // Original code preserved below for reference
+    // eslint-disable-next-line no-unreachable
     const body = await request.json();
     const { date } = body;
     

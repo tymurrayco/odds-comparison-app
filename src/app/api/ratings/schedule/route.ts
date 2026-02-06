@@ -15,8 +15,8 @@ export const revalidate = 0;
  * Returns games for today and tomorrow with spreads from major US books.
  * For games that have started, fetches and caches closing lines.
  * 
- * OPTIMIZATION: Opening lines are cached in Supabase to avoid repeated API calls.
- * If you visit the page twice a day, most games will already have cached opening lines.
+ * OPENING LINES: Read from closing_lines.opening_spread (written by SBR Openers tab).
+ * No Odds API historical calls are made for opening lines.
  */
 
 // Initialize Supabase client
@@ -383,20 +383,17 @@ export async function GET(request: Request) {
     }
     
     // ============================================================
-    // OPENING LINES - OPTIMIZED WITH CACHING
+    // OPENING LINES - READ FROM SUPABASE (SBR IS SOURCE OF TRUTH)
     // ============================================================
-    // 1. Check cache first for games that already have opening_spread
-    // 2. Only fetch from API for games without cached opening lines
-    // 3. Reduced lookback (removed 72h, 48h) since you visit frequently
-    // 4. Break early when all uncached games are found
+    // SBR openers are saved via the SBR Openers tab → /api/ratings/sbr-openers/save
+    // No Odds API calls needed — just read what SBR has already written.
     // ============================================================
     
     const openingLines: Map<string, number> = new Map();
     const allGameIds = filteredGames.map(g => g.id);
-    let cachedOpeningCount = 0; // Track for stats
+    let cachedOpeningCount = 0;
     
     if (allGameIds.length > 0) {
-      // Step 1: Check cache for existing opening spreads
       const { data: cachedOpenings, error: openingCacheError } = await supabase
         .from('closing_lines')
         .select('game_id, opening_spread')
@@ -404,7 +401,7 @@ export async function GET(request: Request) {
         .not('opening_spread', 'is', null);
       
       if (openingCacheError) {
-        console.warn('[Schedule] Opening spread cache lookup error:', openingCacheError);
+        console.warn('[Schedule] Opening spread lookup error:', openingCacheError);
       } else if (cachedOpenings) {
         for (const row of cachedOpenings) {
           if (row.opening_spread !== null) {
@@ -412,143 +409,12 @@ export async function GET(request: Request) {
           }
         }
         cachedOpeningCount = cachedOpenings.length;
-        console.log(`[Schedule] Found ${cachedOpenings.length} cached opening spreads`);
+        console.log(`[Schedule] Found ${cachedOpenings.length} SBR opening spreads`);
       }
       
-      // Step 2: Identify games that still need opening lines fetched
-      const gamesNeedingOpening = allGameIds.filter(id => !openingLines.has(id));
-      
-      if (gamesNeedingOpening.length > 0) {
-        console.log(`[Schedule] Need to fetch opening lines for ${gamesNeedingOpening.length} games`);
-        
-        // Step 3: Fetch from API with reduced lookback periods
-        // Removed 72h and 48h since you visit frequently (twice a day)
-        const lookbackHours = [24, 16, 12, 6, 3, 1];
-        
-        for (const hours of lookbackHours) {
-          // Early exit: if all games have opening lines, stop fetching
-          const stillNeeded = gamesNeedingOpening.filter(id => !openingLines.has(id));
-          if (stillNeeded.length === 0) {
-            console.log(`[Schedule] All games have opening lines, stopping early at ${hours}h lookback`);
-            break;
-          }
-          
-          try {
-            const historicalDate = new Date(now.getTime() - hours * 60 * 60 * 1000);
-            const dateStr = historicalDate.toISOString().replace(/\.\d{3}Z$/, 'Z');
-            
-            const historicalParams = new URLSearchParams({
-              apiKey,
-              regions: 'us',
-              markets: 'spreads',
-              oddsFormat: 'american',
-              date: dateStr,
-            });
-            
-            const historicalUrl = `${ODDS_API_BASE_URL}/historical/sports/${NCAAB_SPORT_KEY}/odds?${historicalParams.toString()}`;
-            
-            const historicalResponse = await fetch(historicalUrl);
-            
-            if (historicalResponse.ok) {
-              const historicalData = await historicalResponse.json();
-              const historicalGames: OddsGame[] = historicalData.data || [];
-              
-              for (const hGame of historicalGames) {
-                // Only process games we're looking for AND don't already have
-                if (!gamesNeedingOpening.includes(hGame.id)) continue;
-                if (openingLines.has(hGame.id)) continue;
-                
-                // US Consensus Average
-                const usBooks = ['draftkings', 'fanduel', 'betmgm', 'betrivers'];
-                const spreads: number[] = [];
-                
-                for (const bookKey of usBooks) {
-                  const bookmaker = hGame.bookmakers.find(b => b.key === bookKey);
-                  if (bookmaker) {
-                    const spreadsMarket = bookmaker.markets.find(m => m.key === 'spreads');
-                    if (spreadsMarket) {
-                      const homeOutcome = spreadsMarket.outcomes.find(o => o.name === hGame.home_team);
-                      if (homeOutcome?.point !== undefined) {
-                        spreads.push(homeOutcome.point);
-                      }
-                    }
-                  }
-                }
-                
-                if (spreads.length > 0) {
-                  let avgSpread = spreads.reduce((a, b) => a + b, 0) / spreads.length;
-                  avgSpread = Math.round(avgSpread * 2) / 2;
-                  openingLines.set(hGame.id, avgSpread);
-                }
-              }
-            }
-          } catch (err) {
-            console.warn(`[Schedule] Failed to fetch ${hours}h historical odds:`, err);
-          }
-        }
-        
-        console.log(`[Schedule] After API fetch, opening lines count: ${openingLines.size}`);
-      } else {
-        console.log(`[Schedule] All ${allGameIds.length} games already have cached opening spreads - 0 API calls needed!`);
-      }
-      
-      // Step 4: Cache newly found opening spreads
-      // Only update games that we just fetched (not already in cache)
-      const newlyFoundOpenings = Array.from(openingLines.entries())
-        .filter(([gameId]) => gamesNeedingOpening.includes(gameId));
-      
-      if (newlyFoundOpenings.length > 0) {
-        console.log(`[Schedule] Caching ${newlyFoundOpenings.length} new opening spreads`);
-        
-        // First, find which game_ids already have rows in closing_lines
-        const gameIdsToCache = newlyFoundOpenings.map(([id]) => id);
-        const { data: existingRows } = await supabase
-          .from('closing_lines')
-          .select('game_id')
-          .in('game_id', gameIdsToCache);
-        
-        const existingGameIds = new Set(existingRows?.map(r => r.game_id) || []);
-        
-        // Split into updates (existing rows) and inserts (new rows)
-        const toUpdate = newlyFoundOpenings.filter(([id]) => existingGameIds.has(id));
-        const toInsert = newlyFoundOpenings.filter(([id]) => !existingGameIds.has(id));
-        
-        // Update existing rows - just set opening_spread
-        for (const [gameId, openingSpread] of toUpdate) {
-          const { error } = await supabase
-            .from('closing_lines')
-            .update({ opening_spread: openingSpread })
-            .eq('game_id', gameId);
-          
-          if (error) {
-            console.warn(`[Schedule] Failed to update opening spread for ${gameId}:`, error);
-          }
-        }
-        
-        // Insert new rows for games without existing closing_lines entries
-        if (toInsert.length > 0) {
-          const rowsToInsert = toInsert.map(([gameId, openingSpread]) => {
-            const game = filteredGames.find(g => g.id === gameId);
-            return {
-              game_id: gameId,
-              opening_spread: openingSpread,
-              home_team: game?.home_team || null,
-              away_team: game?.away_team || null,
-              commence_time: game?.commence_time || null,
-              frozen_at: new Date().toISOString(), // Placeholder - will be updated when game starts
-            };
-          });
-          
-          const { error: insertError } = await supabase
-            .from('closing_lines')
-            .insert(rowsToInsert);
-          
-          if (insertError) {
-            console.warn(`[Schedule] Failed to insert opening spreads:`, insertError);
-          }
-        }
-        
-        console.log(`[Schedule] Cached opening spreads: ${toUpdate.length} updated, ${toInsert.length} inserted`);
+      const missing = allGameIds.length - openingLines.size;
+      if (missing > 0) {
+        console.log(`[Schedule] ${missing} games without opening spreads (save via SBR Openers tab)`);
       }
     }
     
@@ -623,11 +489,10 @@ export async function GET(request: Request) {
       frozenCount: scheduleGames.filter(g => g.isFrozen).length,
       totalFromApi: games.length,
       filteredCount: filteredGames.length,
-      // New: opening line cache stats
+      // Opening line stats (SBR is source of truth)
       openingLinesStats: {
         total: allGameIds.length,
-        fromCache: cachedOpeningCount,
-        fetchedNow: openingLines.size - cachedOpeningCount,
+        fromSBR: cachedOpeningCount,
         missing: allGameIds.length - openingLines.size,
       },
       debug: {
