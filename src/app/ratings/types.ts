@@ -153,8 +153,6 @@ export interface HistoryGame {
   closingSource: string | null;
   btSpread: number | null;
   difference: number | null;
-  awayScore: number | null;
-  homeScore: number | null;
 }
 
 // Tab type
@@ -162,8 +160,8 @@ export type TabType = 'ratings' | 'hypotheticals' | 'schedule' | 'history' | 'ma
 
 // Sort types
 export type RatingsSortField = 'rating' | 'name' | 'games' | 'change' | 'initial';
-export type HistorySortField = 'date' | 'diff' | 'awayMovement' | 'homeMovement';
-export type ScheduleSortField = 'time' | 'delta' | 'awayMovement' | 'homeMovement';
+export type HistorySortField = 'date' | 'diff' | 'vOpen' | 'awayMovement' | 'homeMovement';
+export type ScheduleSortField = 'time' | 'delta' | 'vOpen' | 'awayMovement' | 'homeMovement';
 export type SortDirection = 'asc' | 'desc';
 
 // Filter types

@@ -52,6 +52,7 @@ export function ScheduleTab({
   getTeamLogo,
 }: ScheduleTabProps) {
   const [showValueOnly, setShowValueOnly] = useState(false);
+  const [showVOpenOnly, setShowVOpenOnly] = useState(false);
   
   // Find team rating using BT team names
   const findTeamRating = (btTeamName: string) => {
@@ -202,15 +203,25 @@ export function ScheduleTab({
       gamesWithCalcs.sort((a, b) => {
         return scheduleSortDir === 'desc' ? b.homeMovement - a.homeMovement : a.homeMovement - b.homeMovement;
       });
+    } else if (scheduleSortBy === 'vOpen') {
+      gamesWithCalcs.sort((a, b) => {
+        const aVal = (a.projectedSpread !== null && a.openingSpread !== null) ? Math.abs(a.projectedSpread - a.openingSpread) : -999;
+        const bVal = (b.projectedSpread !== null && b.openingSpread !== null) ? Math.abs(b.projectedSpread - b.openingSpread) : -999;
+        return scheduleSortDir === 'desc' ? bVal - aVal : aVal - bVal;
+      });
     }
     
     // Filter to value checkmark games only if toggle is on
+    let result = gamesWithCalcs;
     if (showValueOnly) {
-      return gamesWithCalcs.filter(g => g.hasValueCheck);
+      result = result.filter(g => g.hasValueCheck);
+    }
+    if (showVOpenOnly) {
+      result = result.filter(g => g.projectedSpread !== null && g.openingSpread !== null && Math.abs(g.projectedSpread - g.openingSpread) >= 2);
     }
     
-    return gamesWithCalcs;
-  }, [combinedScheduleGames, scheduleFilter, scheduleSortBy, scheduleSortDir, historyGames, snapshot, overrides, hca, showValueOnly]);
+    return result;
+  }, [combinedScheduleGames, scheduleFilter, scheduleSortBy, scheduleSortDir, historyGames, snapshot, overrides, hca, showValueOnly, showVOpenOnly]);
 
   // Line movement highlighting helpers
   const getGreenHighlightClass = (movement: number): string => {
@@ -273,6 +284,17 @@ export function ScheduleTab({
               title="Show only games with value checkmarks"
             >
               <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${showValueOnly ? 'translate-x-[18px]' : 'translate-x-[2px]'}`} />
+            </button>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-blue-600 text-sm font-bold">▲</span>
+            <span className="text-xs text-gray-600">v. Open</span>
+            <button
+              onClick={() => setShowVOpenOnly(!showVOpenOnly)}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${showVOpenOnly ? 'bg-blue-500' : 'bg-gray-300'}`}
+              title="Show only games where |Proj - Open| ≥ 2"
+            >
+              <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${showVOpenOnly ? 'translate-x-[18px]' : 'translate-x-[2px]'}`} />
             </button>
           </div>
           <button
@@ -369,6 +391,19 @@ export function ScheduleTab({
                 </th>
                 <th className="px-2 sm:px-4 py-3 text-center text-xs font-semibold text-white uppercase whitespace-nowrap">Proj</th>
                 <th className="px-2 sm:px-4 py-3 text-center text-xs font-semibold text-white uppercase whitespace-nowrap">Open</th>
+                <th 
+                  className="px-2 sm:px-4 py-3 text-center text-xs font-semibold text-white uppercase whitespace-nowrap cursor-pointer hover:bg-blue-800"
+                  onClick={() => {
+                    if (scheduleSortBy === 'vOpen') {
+                      setScheduleSortDir(scheduleSortDir === 'desc' ? 'asc' : 'desc');
+                    } else {
+                      setScheduleSortBy('vOpen');
+                      setScheduleSortDir('desc');
+                    }
+                  }}
+                >
+                  v. Open {scheduleSortBy === 'vOpen' && (scheduleSortDir === 'desc' ? '↓' : '↑')}
+                </th>
                 <th className="px-2 sm:px-4 py-3 text-center text-xs font-semibold text-white uppercase whitespace-nowrap">Curr</th>
                 <th 
                   className="px-2 sm:px-4 py-3 text-center text-xs font-semibold text-white uppercase whitespace-nowrap cursor-pointer hover:bg-blue-800"
@@ -381,7 +416,7 @@ export function ScheduleTab({
                     }
                   }}
                 >
-                  Delta {scheduleSortBy === 'delta' && (scheduleSortDir === 'desc' ? '↓' : '↑')}
+                  v. Current {scheduleSortBy === 'delta' && (scheduleSortDir === 'desc' ? '↓' : '↑')}
                 </th>
                 <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-white uppercase whitespace-nowrap hidden sm:table-cell">Total</th>
               </tr>
@@ -437,7 +472,7 @@ export function ScheduleTab({
                   <React.Fragment key={game.id}>
                     {showDateHeader && (
                       <tr className="bg-blue-100">
-                        <td colSpan={9} className="px-4 py-2">
+                        <td colSpan={10} className="px-4 py-2">
                           <span className="font-semibold text-blue-800 text-sm">
                             {game.dateLabel}
                             {game.isToday && ' 📍'}
@@ -503,6 +538,15 @@ export function ScheduleTab({
                               {game.openingSpread > 0 ? '+' : ''}{game.openingSpread}
                             </span>
                           </div>
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-2 sm:px-4 py-3 text-center">
+                        {projectedSpread !== null && game.openingSpread !== null ? (
+                          <span className={`font-mono text-xs sm:text-sm font-semibold px-1 sm:px-2 py-1 rounded ${Math.abs(projectedSpread - game.openingSpread) >= 3 ? 'bg-green-100' : 'bg-gray-100'}`}>
+                            {Math.abs(projectedSpread - game.openingSpread).toFixed(1)}
+                          </span>
                         ) : (
                           <span className="text-gray-400">—</span>
                         )}

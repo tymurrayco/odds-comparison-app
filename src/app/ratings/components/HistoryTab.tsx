@@ -25,6 +25,7 @@ export function HistoryTab({
   const [historySortField, setHistorySortField] = useState<HistorySortField>('date');
   const [historySortDirection, setHistorySortDirection] = useState<SortDirection>('desc');
   const [showValueOnly, setShowValueOnly] = useState(false);
+  const [showVOpenOnly, setShowVOpenOnly] = useState(false);
 
   // Helper functions for highlighting
   const getGreenHighlightClass = (movement: number): string => {
@@ -128,14 +129,20 @@ export function HistoryTab({
             comparison = homeA.toward ? 1 : -1;
           }
           break;
+        case 'vOpen':
+          const vOpenA = (a.projectedSpread !== null && a.openingSpread !== null) ? Math.abs(a.projectedSpread - a.openingSpread) : -999;
+          const vOpenB = (b.projectedSpread !== null && b.openingSpread !== null) ? Math.abs(b.projectedSpread - b.openingSpread) : -999;
+          comparison = vOpenA - vOpenB;
+          break;
       }
       
       return historySortDirection === 'asc' ? comparison : -comparison;
     });
     
     // Filter to value checkmark games only if toggle is on
+    let result = games;
     if (showValueOnly) {
-      return games.filter(g => {
+      result = result.filter(g => {
         if (g.projectedSpread === null || g.openingSpread === null || g.closingSpread === null || g.openingSpread === g.closingSpread) return false;
         const _openDiff = Math.abs(g.projectedSpread - g.openingSpread);
         const _closeDiff = Math.abs(g.projectedSpread - g.closingSpread);
@@ -145,9 +152,12 @@ export function HistoryTab({
         return awayFromProj || towardProj;
       });
     }
+    if (showVOpenOnly) {
+      result = result.filter(g => g.projectedSpread !== null && g.openingSpread !== null && Math.abs(g.projectedSpread - g.openingSpread) >= 2);
+    }
     
-    return games;
-  }, [historyGames, historyStartDate, historyEndDate, historyDiffMin, historySortField, historySortDirection, showValueOnly]);
+    return result;
+  }, [historyGames, historyStartDate, historyEndDate, historyDiffMin, historySortField, historySortDirection, showValueOnly, showVOpenOnly]);
 
   return (
     <>
@@ -209,6 +219,17 @@ export function HistoryTab({
                 title="Show only games with value checkmarks"
               >
                 <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${showValueOnly ? 'translate-x-[18px]' : 'translate-x-[2px]'}`} />
+              </button>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-blue-600 text-sm font-bold">▲</span>
+              <span className="text-xs text-gray-600">v. Open</span>
+              <button
+                onClick={() => setShowVOpenOnly(!showVOpenOnly)}
+                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${showVOpenOnly ? 'bg-blue-500' : 'bg-gray-300'}`}
+                title="Show only games where |Proj - Open| ≥ 2"
+              >
+                <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${showVOpenOnly ? 'translate-x-[18px]' : 'translate-x-[2px]'}`} />
               </button>
             </div>
             <span className="text-sm text-gray-900">
@@ -309,6 +330,19 @@ export function HistoryTab({
                 </th>
                 <th className="px-2 sm:px-4 py-3 text-center text-xs font-semibold text-white uppercase whitespace-nowrap">Proj</th>
                 <th className="px-2 sm:px-4 py-3 text-center text-xs font-semibold text-white uppercase">Open</th>
+                <th 
+                  className="px-2 sm:px-4 py-3 text-center text-xs font-semibold text-white uppercase cursor-pointer hover:bg-blue-800"
+                  onClick={() => {
+                    if (historySortField === 'vOpen') {
+                      setHistorySortDirection(d => d === 'asc' ? 'desc' : 'asc');
+                    } else {
+                      setHistorySortField('vOpen');
+                      setHistorySortDirection('desc');
+                    }
+                  }}
+                >
+                  v. Open {historySortField === 'vOpen' && (historySortDirection === 'desc' ? '↓' : '↑')}
+                </th>
                 <th className="px-2 sm:px-4 py-3 text-center text-xs font-semibold text-white uppercase">Close</th>
                 <th 
                   className="px-2 sm:px-4 py-3 text-center text-xs font-semibold text-white uppercase cursor-pointer hover:bg-blue-800"
@@ -321,7 +355,7 @@ export function HistoryTab({
                     }
                   }}
                 >
-                  Diff {historySortField === 'diff' && (historySortDirection === 'desc' ? '↓' : '↑')}
+                  v. Close {historySortField === 'diff' && (historySortDirection === 'desc' ? '↓' : '↑')}
                 </th>
               </tr>
             </thead>
@@ -429,6 +463,15 @@ export function HistoryTab({
                         <span className="text-gray-400">—</span>
                       )}
                     </td>
+                    <td className="px-2 sm:px-4 py-3 text-center">
+                      {game.projectedSpread !== null && game.openingSpread !== null ? (
+                        <span className={`font-mono text-xs sm:text-sm font-semibold px-1 sm:px-2 py-1 rounded ${Math.abs(game.projectedSpread - game.openingSpread) >= 3 ? 'bg-green-100' : 'bg-gray-100'}`}>
+                          {Math.abs(game.projectedSpread - game.openingSpread).toFixed(1)}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
+                    </td>
                     <td className="px-2 sm:px-4 py-3 text-sm text-center font-mono font-semibold">
                       {game.closingSpread !== null ? (game.closingSpread > 0 ? '+' : '') + game.closingSpread.toFixed(1) : '—'}
                     </td>
@@ -445,7 +488,7 @@ export function HistoryTab({
             </tbody>
           </table>
           <div className="px-4 py-2 text-xs text-gray-900 border-t border-gray-100 bg-gray-50">
-            Diff = Close − Proj (negative = market moved toward our projection)
+            v. Close = |Close − Proj| (negative = market moved toward our projection)
           </div>
         </div>
       )}
