@@ -361,7 +361,7 @@ export function HistoryTab({
                 return (
                   <tr key={`history-${index}`} className="hover:bg-gray-50">
                     <td className="px-2 sm:px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{dateStr}</td>
-                    <td className={`px-1 sm:px-4 py-3 ${highlightAwayClass}`}>
+                    <td className={`px-1 sm:px-4 py-1 ${highlightAwayClass} relative`}>
                       <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 relative">
                         <TeamLogo teamName={game.awayTeam} logoUrl={awayLogo} size="sm" />
                         <span className="text-sm font-medium text-gray-900 hidden sm:inline">{game.awayTeam}</span>
@@ -369,9 +369,14 @@ export function HistoryTab({
                           <span className="absolute -bottom-1 -right-1 text-green-600 text-xs font-bold" title="Value: line moved 1+ pt away from projection">✓</span>
                         )}
                       </div>
+                      {game.awayScore !== null && (
+                        <span className={`absolute bottom-0.5 right-1 text-[10px] font-mono ${game.homeScore !== null && game.awayScore > game.homeScore ? 'font-bold text-green-700' : 'text-gray-400'}`}>
+                          {game.awayScore}
+                        </span>
+                      )}
                     </td>
                     <td className="px-1 py-3 text-center text-gray-400 hidden sm:table-cell">@</td>
-                    <td className={`px-1 sm:px-4 py-3 ${highlightHomeClass}`}>
+                    <td className={`px-1 sm:px-4 py-1 ${highlightHomeClass} relative`}>
                       <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 relative">
                         <TeamLogo teamName={game.homeTeam} logoUrl={homeLogo} size="sm" />
                         <span className="text-sm font-medium text-gray-900 hidden sm:inline">{game.homeTeam}</span>
@@ -379,6 +384,11 @@ export function HistoryTab({
                           <span className="absolute -bottom-1 -right-1 text-green-600 text-xs font-bold" title="Value: line moved 1+ pt away from projection">✓</span>
                         )}
                       </div>
+                      {game.homeScore !== null && (
+                        <span className={`absolute bottom-0.5 right-1 text-[10px] font-mono ${game.awayScore !== null && game.homeScore > game.awayScore ? 'font-bold text-green-700' : 'text-gray-400'}`}>
+                          {game.homeScore}
+                        </span>
+                      )}
                     </td>
                     <td className="px-1 sm:px-2 py-1 text-center">
                       <div className="relative w-16 h-10 mx-auto overflow-hidden rounded">

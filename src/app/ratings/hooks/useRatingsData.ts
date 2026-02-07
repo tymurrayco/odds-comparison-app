@@ -555,6 +555,8 @@ export function useRatingsData(): UseRatingsDataReturn {
             btSpread: number | null;
             spread: number | null;
             spreadBookmaker: string | null;
+            awayScore: number | null;
+            homeScore: number | null;
           }) => ({
             id: g.id,
             gameDate: g.commenceTime,
@@ -565,6 +567,8 @@ export function useRatingsData(): UseRatingsDataReturn {
             btSpread: g.btSpread,
             closingSpread: g.spread,
             closingSource: g.spreadBookmaker,
+            awayScore: g.awayScore ?? null,
+            homeScore: g.homeScore ?? null,
             difference: g.projectedSpread !== null && g.spread !== null 
               ? Math.round((g.spread - g.projectedSpread) * 100) / 100
               : null,

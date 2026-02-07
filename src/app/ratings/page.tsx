@@ -5,7 +5,6 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { CLOSING_LINE_SOURCES } from '@/lib/ratings/constants';
 import { useRatingsData } from './hooks/useRatingsData';
 import {
   RatingsTab,
@@ -97,7 +96,7 @@ export default function RatingsPage() {
             <span className="text-xs text-gray-900 bg-gray-100 px-2 py-1 rounded">2025-26 Season</span>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <div className="bg-gray-50 rounded-lg p-4">
               <div className="text-xs font-medium text-gray-900 uppercase tracking-wide mb-1">Initial Ratings Source</div>
               <div className="text-lg font-semibold text-gray-900">KenPom Final AdjEM</div>
@@ -111,13 +110,15 @@ export default function RatingsPage() {
             </div>
             
             <div className="bg-gray-50 rounded-lg p-4">
-              <div className="text-xs font-medium text-gray-900 uppercase tracking-wide mb-1">Closing Line Source</div>
-              <div className="text-lg font-semibold text-gray-900">
-                {CLOSING_LINE_SOURCES.find(s => s.value === data.closingSource)?.label || data.closingSource}
-              </div>
-              <div className="text-sm text-gray-900 mt-1">
-                {CLOSING_LINE_SOURCES.find(s => s.value === data.closingSource)?.description}
-              </div>
+              <div className="text-xs font-medium text-gray-900 uppercase tracking-wide mb-1">Opening Lines</div>
+              <div className="text-lg font-semibold text-gray-900">SBR Openers</div>
+              <div className="text-sm text-gray-900 mt-1">SportsbookReview.com opening spreads</div>
+            </div>
+            
+            <div className="bg-gray-50 rounded-lg p-4">
+              <div className="text-xs font-medium text-gray-900 uppercase tracking-wide mb-1">Closing Lines</div>
+              <div className="text-lg font-semibold text-gray-900">US Consensus Avg</div>
+              <div className="text-sm text-gray-900 mt-1">DraftKings, FanDuel, BetMGM, BetRivers</div>
             </div>
           </div>
           

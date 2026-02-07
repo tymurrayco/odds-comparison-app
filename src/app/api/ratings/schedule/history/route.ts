@@ -23,6 +23,8 @@ interface HistoryGame {
   btSpread: number | null;
   total: number | null;
   spreadBookmaker: string | null;
+  awayScore: number | null;
+  homeScore: number | null;
   isToday: boolean;
   isTomorrow: boolean;
   hasStarted: boolean;
@@ -87,6 +89,8 @@ export async function GET(request: NextRequest) {
       projected_spread: number | null;
       bt_spread: number | null;
       closing_source: string | null;
+      home_score: number | null;
+      away_score: number | null;
     }) => ({
       id: row.game_id,
       commenceTime: row.game_date,
@@ -98,6 +102,8 @@ export async function GET(request: NextRequest) {
       btSpread: row.bt_spread,
       total: null,
       spreadBookmaker: row.closing_source,
+      awayScore: row.away_score ?? null,
+      homeScore: row.home_score ?? null,
       isToday: false,
       isTomorrow: false,
       hasStarted: true,
@@ -156,6 +162,8 @@ async function fallbackQuery(limit: number, offset: number) {
       btSpread: null, // No BT data in fallback
       total: null,
       spreadBookmaker: adj.closing_source,
+      awayScore: adj.away_score ?? null,
+      homeScore: adj.home_score ?? null,
       isToday: false,
       isTomorrow: false,
       hasStarted: true,

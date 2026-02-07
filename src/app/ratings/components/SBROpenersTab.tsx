@@ -172,8 +172,8 @@ export default function SBROpenersTab() {
   const [savingOpeners, setSavingOpeners] = useState(false);
   const [saveResult, setSaveResult] = useState<{
     gamesSent: number;
-    gameAdjustments: { updated: number; skipped: number };
-    closingLines: { updated: number; skipped: number };
+    gameAdjustments: { updated: number; skipped: number; skippedGames?: string[] };
+    closingLines: { updated: number; skipped: number; skippedGames?: string[] };
     errors?: string[];
   } | null>(null);
 
@@ -270,6 +270,8 @@ export default function SBROpenersTab() {
           kenpomAway: getMappedName(g.awayTeam)!,
           kenpomHome: getMappedName(g.homeTeam)!,
           openerSpread: g.openerSpread!,
+          awayScore: g.awayScore,
+          homeScore: g.homeScore,
         })),
       };
 
@@ -439,6 +441,23 @@ export default function SBROpenersTab() {
               ×
             </button>
           </div>
+          {/* Show skipped game details */}
+          {(saveResult.gameAdjustments.skippedGames || saveResult.closingLines.skippedGames) && (
+            <div className="mt-2 pt-2 border-t border-purple-200 text-xs">
+              {saveResult.gameAdjustments.skippedGames && saveResult.gameAdjustments.skippedGames.length > 0 && (
+                <div className="mb-1">
+                  <span className="font-semibold">History skipped:</span>{' '}
+                  {saveResult.gameAdjustments.skippedGames.join(', ')}
+                </div>
+              )}
+              {saveResult.closingLines.skippedGames && saveResult.closingLines.skippedGames.length > 0 && (
+                <div>
+                  <span className="font-semibold">Schedule skipped:</span>{' '}
+                  {saveResult.closingLines.skippedGames.join(', ')}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

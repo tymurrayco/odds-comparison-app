@@ -11,6 +11,8 @@ interface SaveOpenerGame {
   kenpomAway: string;
   kenpomHome: string;
   openerSpread: number; // from home team perspective
+  awayScore: number | null;
+  homeScore: number | null;
 }
 
 export async function POST(request: NextRequest) {
@@ -37,9 +39,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Build timezone-aware UTC range for the Eastern date
-    // Games on Feb 6 EST could be stored as 2026-02-06T05:00:00Z through 2026-02-07T08:00:00Z
+    // Start at 3 AM UTC (10 PM ET prior night) to catch late-night Hawaii games
+    // End at 8 AM UTC next day (3 AM ET) to catch late tips
     const [year, month, day] = date.split('-').map(Number);
-    const startOfDay = new Date(Date.UTC(year, month - 1, day, 5, 0, 0));   // 5 AM UTC = midnight ET
+    const startOfDay = new Date(Date.UTC(year, month - 1, day, 3, 0, 0));   // 3 AM UTC = 10 PM ET prior night
     const endOfDay = new Date(Date.UTC(year, month - 1, day + 1, 8, 0, 0)); // 8 AM UTC next day = 3 AM ET
     const startISO = startOfDay.toISOString();
     const endISO = endOfDay.toISOString();
@@ -48,10 +51,25 @@ export async function POST(request: NextRequest) {
     let gameAdjSkipped = 0;
     let closingLinesUpdated = 0;
     let closingLinesSkipped = 0;
+    const gameAdjSkippedGames: string[] = [];
+    const closingLinesSkippedGames: string[] = [];
     const errors: string[] = [];
 
+    // Debug: log first 3 games to verify scores are arriving
+    console.log(`[SBR Save Debug] First 3 games payload:`, games.slice(0, 3).map(g => ({
+      away: g.kenpomAway,
+      home: g.kenpomHome,
+      opener: g.openerSpread,
+      awayScore: g.awayScore,
+      homeScore: g.homeScore,
+    })));
+
     for (const game of games) {
-      const { kenpomAway, kenpomHome, openerSpread } = game;
+      const { kenpomAway, kenpomHome, openerSpread, awayScore, homeScore } = game;
+      const gameLabel = `${kenpomAway} @ ${kenpomHome}`;
+
+      // Debug: log each game's scores
+      console.log(`[SBR Save Debug] ${gameLabel}: awayScore=${awayScore}, homeScore=${homeScore}`);
 
       // ---- Write to ncaab_game_adjustments (uses KenPom names + game_date timestamptz) ----
       try {
@@ -64,24 +82,32 @@ export async function POST(request: NextRequest) {
           .lt('game_date', endISO);
 
         if (adjSelectErr) {
-          errors.push(`[adj] Select error for ${kenpomAway}@${kenpomHome}: ${adjSelectErr.message}`);
+          errors.push(`[adj] Select error for ${gameLabel}: ${adjSelectErr.message}`);
         } else if (adjRows && adjRows.length > 0) {
           const gameIds = adjRows.map(r => r.game_id);
+          const updatePayload: Record<string, number | null> = { opening_spread: openerSpread };
+          if (awayScore !== null) updatePayload.away_score = awayScore;
+          if (homeScore !== null) updatePayload.home_score = homeScore;
+
+          // Debug: log the actual payload being sent to Supabase
+          console.log(`[SBR Save Debug] ${gameLabel} updatePayload:`, updatePayload);
+          
           const { error: adjUpdateErr } = await supabase
             .from('ncaab_game_adjustments')
-            .update({ opening_spread: openerSpread })
+            .update(updatePayload)
             .in('game_id', gameIds);
 
           if (adjUpdateErr) {
-            errors.push(`[adj] Update error for ${kenpomAway}@${kenpomHome}: ${adjUpdateErr.message}`);
+            errors.push(`[adj] Update error for ${gameLabel}: ${adjUpdateErr.message}`);
           } else {
             gameAdjUpdated += adjRows.length;
           }
         } else {
           gameAdjSkipped++;
+          gameAdjSkippedGames.push(gameLabel);
         }
       } catch (err) {
-        errors.push(`[adj] Exception for ${kenpomAway}@${kenpomHome}: ${err}`);
+        errors.push(`[adj] Exception for ${gameLabel}: ${err}`);
       }
 
       // ---- Write to closing_lines (uses Odds API names + commence_time timestamptz) ----
@@ -114,9 +140,14 @@ export async function POST(request: NextRequest) {
             }
           } else {
             closingLinesSkipped++;
+            closingLinesSkippedGames.push(`${gameLabel} (as ${oddsApiAway} @ ${oddsApiHome})`);
           }
         } else {
           closingLinesSkipped++;
+          const missing = [];
+          if (!oddsApiHome) missing.push(`home: ${kenpomHome}`);
+          if (!oddsApiAway) missing.push(`away: ${kenpomAway}`);
+          closingLinesSkippedGames.push(`${gameLabel} (no Odds API mapping for ${missing.join(', ')})`);
         }
       } catch (err) {
         errors.push(`[cl] Exception for ${kenpomAway}@${kenpomHome}: ${err}`);
@@ -126,7 +157,13 @@ export async function POST(request: NextRequest) {
     console.log(`[SBR Save Openers] Date: ${date} | Range: ${startISO} to ${endISO}`);
     console.log(`[SBR Save Openers] Games sent: ${games.length}`);
     console.log(`[SBR Save Openers] game_adjustments: ${gameAdjUpdated} updated, ${gameAdjSkipped} skipped`);
+    if (gameAdjSkippedGames.length > 0) {
+      console.log(`[SBR Save Openers] game_adjustments skipped:`, gameAdjSkippedGames);
+    }
     console.log(`[SBR Save Openers] closing_lines: ${closingLinesUpdated} updated, ${closingLinesSkipped} skipped`);
+    if (closingLinesSkippedGames.length > 0) {
+      console.log(`[SBR Save Openers] closing_lines skipped:`, closingLinesSkippedGames);
+    }
     if (errors.length > 0) {
       console.log(`[SBR Save Openers] Errors: ${errors.length}`, errors.slice(0, 5));
     }
@@ -135,8 +172,16 @@ export async function POST(request: NextRequest) {
       success: true,
       date,
       gamesSent: games.length,
-      gameAdjustments: { updated: gameAdjUpdated, skipped: gameAdjSkipped },
-      closingLines: { updated: closingLinesUpdated, skipped: closingLinesSkipped },
+      gameAdjustments: {
+        updated: gameAdjUpdated,
+        skipped: gameAdjSkipped,
+        skippedGames: gameAdjSkippedGames.length > 0 ? gameAdjSkippedGames : undefined,
+      },
+      closingLines: {
+        updated: closingLinesUpdated,
+        skipped: closingLinesSkipped,
+        skippedGames: closingLinesSkippedGames.length > 0 ? closingLinesSkippedGames : undefined,
+      },
       errors: errors.length > 0 ? errors : undefined,
     });
   } catch (error) {
