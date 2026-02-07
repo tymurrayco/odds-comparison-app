@@ -136,15 +136,14 @@ async function fetchClosingLines(
   
   if (gameIds.length === 0) return closingLines;
   
-  console.log(`[Schedule] Fetching closing lines for ${gameIds.length} started games`);
+  console.log(`[Schedule] Fetching closing lines for ${gameIds.length} started games (parallel)`);
   
-  // Fetch historical odds for each game individually (5 min before start)
-  for (const gameId of gameIds) {
+  async function fetchOne(gameId: string) {
     const commenceTime = commenceTimes.get(gameId);
-    if (!commenceTime) continue;
+    if (!commenceTime) return;
     
     const gameStart = new Date(commenceTime);
-    const freezeTime = new Date(gameStart.getTime() - 5 * 60 * 1000); // 5 min before
+    const freezeTime = new Date(gameStart.getTime() - 5 * 60 * 1000);
     const freezeTimeISO = freezeTime.toISOString().replace(/\.\d{3}Z$/, 'Z');
     
     try {
@@ -159,7 +158,6 @@ async function fetchClosingLines(
       
       const historicalUrl = `${ODDS_API_BASE_URL}/historical/sports/${NCAAB_SPORT_KEY}/odds?${historicalParams.toString()}`;
       
-      console.log(`[Schedule] Fetching closing line for ${gameId} at ${freezeTimeISO}`);
       const response = await fetch(historicalUrl);
       
       if (response.ok) {
@@ -170,7 +168,6 @@ async function fetchClosingLines(
           const game = games[0];
           const homeTeam = homeTeams.get(gameId) || game.home_team;
           
-          // Extract spread and total using US Consensus Average
           let spread: number | null = null;
           let total: number | null = null;
           let spreadBookmaker: string | null = null;
@@ -181,19 +178,19 @@ async function fetchClosingLines(
           const usedBooks: string[] = [];
           
           for (const bookKey of usBooks) {
-            const bookmaker = game.bookmakers.find(b => b.key === bookKey);
+            const bookmaker = game.bookmakers.find((b: OddsBookmaker) => b.key === bookKey);
             if (bookmaker) {
-              const spreadsMarket = bookmaker.markets.find(m => m.key === 'spreads');
+              const spreadsMarket = bookmaker.markets.find((m: OddsMarket) => m.key === 'spreads');
               if (spreadsMarket) {
-                const homeOutcome = spreadsMarket.outcomes.find(o => o.name === homeTeam);
+                const homeOutcome = spreadsMarket.outcomes.find((o: OddsOutcome) => o.name === homeTeam);
                 if (homeOutcome?.point !== undefined) {
                   spreads.push(homeOutcome.point);
                   usedBooks.push(bookKey);
                 }
               }
-              const totalsMarket = bookmaker.markets.find(m => m.key === 'totals');
+              const totalsMarket = bookmaker.markets.find((m: OddsMarket) => m.key === 'totals');
               if (totalsMarket) {
-                const overOutcome = totalsMarket.outcomes.find(o => o.name === 'Over');
+                const overOutcome = totalsMarket.outcomes.find((o: OddsOutcome) => o.name === 'Over');
                 if (overOutcome?.point !== undefined) {
                   totals.push(overOutcome.point);
                 }
@@ -221,6 +218,13 @@ async function fetchClosingLines(
     } catch (err) {
       console.warn(`[Schedule] Error fetching closing line for ${gameId}:`, err);
     }
+  }
+  
+  // Process in parallel batches of 5
+  const BATCH_SIZE = 5;
+  for (let i = 0; i < gameIds.length; i += BATCH_SIZE) {
+    const batch = gameIds.slice(i, i + BATCH_SIZE);
+    await Promise.allSettled(batch.map(id => fetchOne(id)));
   }
   
   return closingLines;
@@ -355,8 +359,14 @@ export async function GET(request: Request) {
       console.log(`[Schedule] Need to fetch closing lines for ${uncachedGameIds.length} games`);
     }
     
+    // Cap at 10 per request to avoid Vercel timeout — rest will cache on next refresh
+    const fetchBatch = uncachedGameIds.slice(0, 10);
+    if (uncachedGameIds.length > 10) {
+      console.log(`[Schedule] Capping fetch to 10 of ${uncachedGameIds.length} uncached games`);
+    }
+    
     // Fetch closing lines for uncached started games
-    const freshClosingLines = await fetchClosingLines(uncachedGameIds, commenceTimes, homeTeams, apiKey);
+    const freshClosingLines = await fetchClosingLines(fetchBatch, commenceTimes, homeTeams, apiKey);
     
     // Cache the newly fetched closing lines (include team names for later retrieval)
     if (freshClosingLines.size > 0) {
