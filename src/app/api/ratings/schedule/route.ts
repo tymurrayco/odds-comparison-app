@@ -360,16 +360,57 @@ export async function GET(request: Request) {
     
     // Cache the newly fetched closing lines (include team names for later retrieval)
     if (freshClosingLines.size > 0) {
-      const rowsToInsert = Array.from(freshClosingLines.entries()).map(([gameId, line]) => ({
-        game_id: gameId,
-        spread: line.spread,
-        total: line.total,
-        spread_bookmaker: line.spreadBookmaker,
-        frozen_at: new Date(new Date(commenceTimes.get(gameId)!).getTime() - 5 * 60 * 1000).toISOString(),
-        home_team: homeTeams.get(gameId) || null,
-        away_team: awayTeams.get(gameId) || null,
-        commence_time: commenceTimes.get(gameId) || null,
-      }));
+      // Before inserting real rows, grab openers from any synthetic SBR rows for these teams
+      const sbrOpeners = new Map<string, number>(); // "away|home" → opener
+      const sbrIdsToDelete: string[] = [];
+      
+      const freshTeamKeys = Array.from(freshClosingLines.keys()).map(gameId => ({
+        gameId,
+        home: homeTeams.get(gameId)?.toLowerCase(),
+        away: awayTeams.get(gameId)?.toLowerCase(),
+      })).filter(g => g.home && g.away);
+      
+      if (freshTeamKeys.length > 0) {
+        const startOfDay = new Date(Date.UTC(year, month - 1, day, 3, 0, 0));
+        const endOfDay = new Date(Date.UTC(year, month - 1, day + 1, 8, 0, 0));
+        
+        const { data: sbrRows } = await supabase
+          .from('closing_lines')
+          .select('game_id, home_team, away_team, opening_spread')
+          .like('game_id', 'sbr-%')
+          .gte('commence_time', startOfDay.toISOString())
+          .lt('commence_time', endOfDay.toISOString())
+          .not('opening_spread', 'is', null);
+        
+        if (sbrRows) {
+          for (const row of sbrRows) {
+            if (row.home_team && row.away_team && row.opening_spread !== null) {
+              const key = `${row.away_team.toLowerCase()}|${row.home_team.toLowerCase()}`;
+              sbrOpeners.set(key, row.opening_spread);
+              sbrIdsToDelete.push(row.game_id);
+            }
+          }
+        }
+      }
+      
+      const rowsToInsert = Array.from(freshClosingLines.entries()).map(([gameId, line]) => {
+        const home = homeTeams.get(gameId) || null;
+        const away = awayTeams.get(gameId) || null;
+        const key = home && away ? `${away.toLowerCase()}|${home.toLowerCase()}` : '';
+        const sbrOpener = sbrOpeners.get(key) ?? null;
+        
+        return {
+          game_id: gameId,
+          spread: line.spread,
+          total: line.total,
+          spread_bookmaker: line.spreadBookmaker,
+          frozen_at: new Date(new Date(commenceTimes.get(gameId)!).getTime() - 5 * 60 * 1000).toISOString(),
+          home_team: home,
+          away_team: away,
+          commence_time: commenceTimes.get(gameId) || null,
+          opening_spread: sbrOpener, // Merge opener from synthetic SBR row
+        };
+      });
       
       const { error: insertError } = await supabase
         .from('closing_lines')
@@ -379,6 +420,20 @@ export async function GET(request: Request) {
         console.warn('[Schedule] Failed to cache closing lines:', insertError);
       } else {
         console.log(`[Schedule] Cached ${rowsToInsert.length} closing lines with team names`);
+        
+        // Delete synthetic SBR rows that were merged into real rows
+        if (sbrIdsToDelete.length > 0) {
+          const { error: deleteErr } = await supabase
+            .from('closing_lines')
+            .delete()
+            .in('game_id', sbrIdsToDelete);
+          
+          if (deleteErr) {
+            console.warn('[Schedule] Failed to cleanup synthetic SBR rows:', deleteErr);
+          } else {
+            console.log(`[Schedule] Cleaned up ${sbrIdsToDelete.length} synthetic SBR rows`);
+          }
+        }
       }
     }
     
