@@ -30,6 +30,9 @@ export default function RatingsPage() {
   const [scheduleSortBy, setScheduleSortBy] = useState<ScheduleSortField>('time');
   const [scheduleSortDir, setScheduleSortDir] = useState<SortDirection>('asc');
   
+  // Initial Configuration collapse state
+  const [configCollapsed, setConfigCollapsed] = useState(true);
+  
   // Sync config state
   const [syncStartDate, setSyncStartDate] = useState('');
   const [syncEndDate, setSyncEndDate] = useState('');
@@ -80,7 +83,7 @@ export default function RatingsPage() {
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Power Ratings</h1>
+              <h1 className="text-2xl font-bold text-gray-900">Ratings</h1>
               <p className="text-sm text-gray-900">Market-adjusted NCAAB power ratings</p>
             </div>
             <Link href="/" className="text-blue-600 hover:text-blue-700 text-sm font-medium">← Back to Odds</Link>
@@ -91,12 +94,27 @@ export default function RatingsPage() {
       <main className="max-w-7xl mx-auto px-4 py-6">
         {/* Initial Configuration */}
         <div className="bg-white rounded-xl p-6 mb-4 border border-gray-200 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">Initial Configuration</h2>
+          <div
+            className="flex items-center justify-between cursor-pointer select-none"
+            onClick={() => setConfigCollapsed(!configCollapsed)}
+          >
+            <div className="flex items-center gap-2">
+              <svg
+                className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${configCollapsed ? '' : 'rotate-90'}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+              <h2 className="text-lg font-semibold text-gray-900">Initial Configuration</h2>
+            </div>
             <span className="text-xs text-gray-900 bg-gray-100 px-2 py-1 rounded">2025-26 Season</span>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {!configCollapsed && (
+          <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-4">
             <div className="bg-gray-50 rounded-lg p-4">
               <div className="text-xs font-medium text-gray-900 uppercase tracking-wide mb-1">Initial Ratings Source</div>
               <div className="text-lg font-semibold text-gray-900">KenPom Final AdjEM</div>
@@ -148,6 +166,8 @@ export default function RatingsPage() {
                 )}
               </div>
             </div>
+          )}
+          </>
           )}
         </div>
 
