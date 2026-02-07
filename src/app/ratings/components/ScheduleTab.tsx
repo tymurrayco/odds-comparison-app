@@ -1,7 +1,7 @@
 // src/app/ratings/components/ScheduleTab.tsx
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { TeamLogo } from './TeamLogo';
 import type { 
   CombinedScheduleGame, 
@@ -53,6 +53,13 @@ export function ScheduleTab({
 }: ScheduleTabProps) {
   const [showValueOnly, setShowValueOnly] = useState(false);
   const [showVOpenOnly, setShowVOpenOnly] = useState(false);
+  const [teamSearch, setTeamSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(teamSearch), 400);
+    return () => clearTimeout(timer);
+  }, [teamSearch]);
   
   // Find team rating using BT team names
   const findTeamRating = (btTeamName: string) => {
@@ -219,9 +226,13 @@ export function ScheduleTab({
     if (showVOpenOnly) {
       result = result.filter(g => g.projectedSpread !== null && g.openingSpread !== null && Math.abs(g.projectedSpread - g.openingSpread) >= 2);
     }
+    if (debouncedSearch.trim()) {
+      const q = debouncedSearch.trim().toLowerCase();
+      result = result.filter(g => g.homeTeam.toLowerCase().includes(q) || g.awayTeam.toLowerCase().includes(q));
+    }
     
     return result;
-  }, [combinedScheduleGames, scheduleFilter, scheduleSortBy, scheduleSortDir, historyGames, snapshot, overrides, hca, showValueOnly, showVOpenOnly]);
+  }, [combinedScheduleGames, scheduleFilter, scheduleSortBy, scheduleSortDir, historyGames, snapshot, overrides, hca, showValueOnly, showVOpenOnly, debouncedSearch]);
 
   // Line movement highlighting helpers
   const getGreenHighlightClass = (movement: number): string => {
@@ -276,6 +287,21 @@ export function ScheduleTab({
           </div>
         </div>
         <div className="flex items-center gap-4">
+          <div className="relative">
+            <input
+              type="text"
+              value={teamSearch}
+              onChange={(e) => setTeamSearch(e.target.value)}
+              placeholder="Search team..."
+              className="w-36 sm:w-44 px-2 py-1 pl-7 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+            />
+            <svg className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            {teamSearch && (
+              <button onClick={() => setTeamSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs">✕</button>
+            )}
+          </div>
           <div className="flex items-center gap-1.5">
             <span className="text-green-600 text-sm font-bold">✓</span>
             <button
@@ -297,19 +323,11 @@ export function ScheduleTab({
               <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${showVOpenOnly ? 'translate-x-[18px]' : 'translate-x-[2px]'}`} />
             </button>
           </div>
-          <button
-            onClick={loadSchedule}
-            disabled={scheduleLoading}
-            className="text-blue-600 hover:text-blue-700 text-sm font-medium"
-          >
-            {scheduleLoading ? 'Loading...' : 'Refresh'}
-          </button>
         </div>
       </div>
 
       {/* Legend */}
       <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 flex flex-wrap items-center gap-4 text-xs">
-        <span className="text-gray-900 font-medium">Movement:</span>
         <div className="flex items-center gap-1">
           <div className="w-4 h-4 bg-green-200 rounded"></div>
           <span className="text-gray-900">Toward projection</span>
@@ -319,6 +337,13 @@ export function ScheduleTab({
           <span className="text-gray-900">Against projection</span>
         </div>
         <span className="text-gray-400 hidden sm:inline">| Intensity = magnitude of move</span>
+        <button
+          onClick={loadSchedule}
+          disabled={scheduleLoading}
+          className="text-blue-600 hover:text-blue-700 text-xs font-medium ml-auto"
+        >
+          {scheduleLoading ? 'Loading...' : 'Refresh'}
+        </button>
       </div>
 
       {/* Odds loading status */}
