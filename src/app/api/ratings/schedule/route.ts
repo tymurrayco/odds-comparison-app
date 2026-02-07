@@ -387,6 +387,7 @@ export async function GET(request: Request) {
     // ============================================================
     // SBR openers are saved via the SBR Openers tab → /api/ratings/sbr-openers/save
     // No Odds API calls needed — just read what SBR has already written.
+    // Two lookups: 1) by Odds API game_id, 2) by team name for SBR-inserted rows
     // ============================================================
     
     const openingLines: Map<string, number> = new Map();
@@ -394,6 +395,7 @@ export async function GET(request: Request) {
     let cachedOpeningCount = 0;
     
     if (allGameIds.length > 0) {
+      // Lookup 1: Match by Odds API game_id (for games where SBR updated existing rows)
       const { data: cachedOpenings, error: openingCacheError } = await supabase
         .from('closing_lines')
         .select('game_id, opening_spread')
@@ -409,7 +411,49 @@ export async function GET(request: Request) {
           }
         }
         cachedOpeningCount = cachedOpenings.length;
-        console.log(`[Schedule] Found ${cachedOpenings.length} SBR opening spreads`);
+        console.log(`[Schedule] Found ${cachedOpenings.length} SBR opening spreads by game_id`);
+      }
+      
+      // Lookup 2: For games still missing openers, check SBR-inserted rows by team name
+      const gamesNeedingOpeners = filteredGames.filter(g => !openingLines.has(g.id));
+      
+      if (gamesNeedingOpeners.length > 0) {
+        // Date range covering today + tomorrow (since filteredGames includes both)
+        const startOfDay = new Date(Date.UTC(year, month - 1, day, 3, 0, 0));
+        const endOfRange = new Date(Date.UTC(year, month - 1, day + 2, 8, 0, 0));
+        
+        const { data: sbrRows, error: sbrError } = await supabase
+          .from('closing_lines')
+          .select('home_team, away_team, opening_spread')
+          .gte('commence_time', startOfDay.toISOString())
+          .lt('commence_time', endOfRange.toISOString())
+          .not('opening_spread', 'is', null);
+        
+        if (sbrError) {
+          console.warn('[Schedule] SBR opener team-name lookup error:', sbrError);
+        } else if (sbrRows) {
+          // Build a lookup by "away|home" (lowercase)
+          const teamLookup = new Map<string, number>();
+          for (const row of sbrRows) {
+            if (row.opening_spread !== null && row.home_team && row.away_team) {
+              const key = `${row.away_team.toLowerCase()}|${row.home_team.toLowerCase()}`;
+              teamLookup.set(key, row.opening_spread);
+            }
+          }
+          
+          let teamMatchCount = 0;
+          for (const game of gamesNeedingOpeners) {
+            const key = `${game.away_team.toLowerCase()}|${game.home_team.toLowerCase()}`;
+            const opener = teamLookup.get(key);
+            if (opener !== undefined) {
+              openingLines.set(game.id, opener);
+              teamMatchCount++;
+            }
+          }
+          
+          cachedOpeningCount += teamMatchCount;
+          console.log(`[Schedule] Found ${teamMatchCount} additional SBR opening spreads by team name`);
+        }
       }
       
       const missing = allGameIds.length - openingLines.size;

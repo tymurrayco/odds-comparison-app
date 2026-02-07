@@ -1,6 +1,7 @@
 // src/app/api/ratings/sbr-openers/save/route.ts
 // Saves SBR opener spreads to both ncaab_game_adjustments and closing_lines tables
 // This makes SBR the single source of truth for opening lines across Schedule + History
+// For games without existing closing_lines rows, INSERTs new rows so Schedule tab can display openers
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseClient, loadTeamOverrides } from '@/lib/ratings/supabase';
@@ -47,29 +48,21 @@ export async function POST(request: NextRequest) {
     const startISO = startOfDay.toISOString();
     const endISO = endOfDay.toISOString();
 
+    // Default commence_time for inserted rows: noon ET of the game date (5 PM UTC)
+    const defaultCommenceTime = new Date(Date.UTC(year, month - 1, day, 17, 0, 0)).toISOString();
+
     let gameAdjUpdated = 0;
     let gameAdjSkipped = 0;
     let closingLinesUpdated = 0;
+    let closingLinesInserted = 0;
     let closingLinesSkipped = 0;
     const gameAdjSkippedGames: string[] = [];
     const closingLinesSkippedGames: string[] = [];
     const errors: string[] = [];
 
-    // Debug: log first 3 games to verify scores are arriving
-    console.log(`[SBR Save Debug] First 3 games payload:`, games.slice(0, 3).map(g => ({
-      away: g.kenpomAway,
-      home: g.kenpomHome,
-      opener: g.openerSpread,
-      awayScore: g.awayScore,
-      homeScore: g.homeScore,
-    })));
-
     for (const game of games) {
       const { kenpomAway, kenpomHome, openerSpread, awayScore, homeScore } = game;
       const gameLabel = `${kenpomAway} @ ${kenpomHome}`;
-
-      // Debug: log each game's scores
-      console.log(`[SBR Save Debug] ${gameLabel}: awayScore=${awayScore}, homeScore=${homeScore}`);
 
       // ---- Write to ncaab_game_adjustments (uses KenPom names + game_date timestamptz) ----
       try {
@@ -88,9 +81,6 @@ export async function POST(request: NextRequest) {
           const updatePayload: Record<string, number | null> = { opening_spread: openerSpread };
           if (awayScore !== null) updatePayload.away_score = awayScore;
           if (homeScore !== null) updatePayload.home_score = homeScore;
-
-          // Debug: log the actual payload being sent to Supabase
-          console.log(`[SBR Save Debug] ${gameLabel} updatePayload:`, updatePayload);
           
           const { error: adjUpdateErr } = await supabase
             .from('ncaab_game_adjustments')
@@ -127,6 +117,7 @@ export async function POST(request: NextRequest) {
           if (clSelectErr) {
             errors.push(`[cl] Select error for ${oddsApiAway}@${oddsApiHome}: ${clSelectErr.message}`);
           } else if (clRows && clRows.length > 0) {
+            // UPDATE existing row
             const gameIds = clRows.map(r => r.game_id);
             const { error: clUpdateErr } = await supabase
               .from('closing_lines')
@@ -139,8 +130,30 @@ export async function POST(request: NextRequest) {
               closingLinesUpdated += clRows.length;
             }
           } else {
-            closingLinesSkipped++;
-            closingLinesSkippedGames.push(`${gameLabel} (as ${oddsApiAway} @ ${oddsApiHome})`);
+            // INSERT new row so Schedule tab can display the opener
+            const sanitize = (s: string) => s.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 40);
+            const syntheticId = `sbr-${date}-${sanitize(oddsApiHome)}-${sanitize(oddsApiAway)}`;
+
+            const { error: insertErr } = await supabase
+              .from('closing_lines')
+              .upsert({
+                game_id: syntheticId,
+                home_team: oddsApiHome,
+                away_team: oddsApiAway,
+                commence_time: defaultCommenceTime,
+                opening_spread: openerSpread,
+                spread: null,
+                total: null,
+                spread_bookmaker: null,
+                frozen_at: defaultCommenceTime,
+              }, { onConflict: 'game_id' });
+
+            if (insertErr) {
+              console.error(`[SBR Save] INSERT FAILED for ${oddsApiAway}@${oddsApiHome}:`, insertErr.message, insertErr.details, insertErr.hint);
+              errors.push(`[cl] Insert error for ${oddsApiAway}@${oddsApiHome}: ${insertErr.message}`);
+            } else {
+              closingLinesInserted++;
+            }
           }
         } else {
           closingLinesSkipped++;
@@ -160,12 +173,15 @@ export async function POST(request: NextRequest) {
     if (gameAdjSkippedGames.length > 0) {
       console.log(`[SBR Save Openers] game_adjustments skipped:`, gameAdjSkippedGames);
     }
-    console.log(`[SBR Save Openers] closing_lines: ${closingLinesUpdated} updated, ${closingLinesSkipped} skipped`);
+    console.log(`[SBR Save Openers] closing_lines: ${closingLinesUpdated} updated, ${closingLinesInserted} inserted, ${closingLinesSkipped} skipped`);
     if (closingLinesSkippedGames.length > 0) {
       console.log(`[SBR Save Openers] closing_lines skipped:`, closingLinesSkippedGames);
     }
     if (errors.length > 0) {
-      console.log(`[SBR Save Openers] Errors: ${errors.length}`, errors.slice(0, 5));
+      console.error(`[SBR Save Openers] ❌ ${errors.length} ERRORS:`);
+      for (const err of errors) {
+        console.error(`  ${err}`);
+      }
     }
 
     return NextResponse.json({
@@ -179,6 +195,7 @@ export async function POST(request: NextRequest) {
       },
       closingLines: {
         updated: closingLinesUpdated,
+        inserted: closingLinesInserted,
         skipped: closingLinesSkipped,
         skippedGames: closingLinesSkippedGames.length > 0 ? closingLinesSkippedGames : undefined,
       },
