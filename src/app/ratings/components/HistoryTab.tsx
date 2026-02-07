@@ -24,6 +24,7 @@ export function HistoryTab({
   const [historyDiffMinDisplay, setHistoryDiffMinDisplay] = useState(0);
   const [historySortField, setHistorySortField] = useState<HistorySortField>('date');
   const [historySortDirection, setHistorySortDirection] = useState<SortDirection>('desc');
+  const [showValueOnly, setShowValueOnly] = useState(false);
 
   // Helper functions for highlighting
   const getGreenHighlightClass = (movement: number): string => {
@@ -132,8 +133,21 @@ export function HistoryTab({
       return historySortDirection === 'asc' ? comparison : -comparison;
     });
     
+    // Filter to value checkmark games only if toggle is on
+    if (showValueOnly) {
+      return games.filter(g => {
+        if (g.projectedSpread === null || g.openingSpread === null || g.closingSpread === null || g.openingSpread === g.closingSpread) return false;
+        const _openDiff = Math.abs(g.projectedSpread - g.openingSpread);
+        const _closeDiff = Math.abs(g.projectedSpread - g.closingSpread);
+        const _lineMovement = Math.abs(g.closingSpread - g.openingSpread);
+        const awayFromProj = _closeDiff >= 1 && _closeDiff > _openDiff && _lineMovement >= 1;
+        const towardProj = (_openDiff - _closeDiff) >= 1 && _closeDiff < _openDiff && _lineMovement >= 1;
+        return awayFromProj || towardProj;
+      });
+    }
+    
     return games;
-  }, [historyGames, historyStartDate, historyEndDate, historyDiffMin, historySortField, historySortDirection]);
+  }, [historyGames, historyStartDate, historyEndDate, historyDiffMin, historySortField, historySortDirection, showValueOnly]);
 
   return (
     <>
@@ -187,6 +201,16 @@ export function HistoryTab({
             )}
           </div>
           <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <span className="text-green-600 text-sm font-bold">✓</span>
+              <button
+                onClick={() => setShowValueOnly(!showValueOnly)}
+                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${showValueOnly ? 'bg-green-500' : 'bg-gray-300'}`}
+                title="Show only games with value checkmarks"
+              >
+                <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${showValueOnly ? 'translate-x-[18px]' : 'translate-x-[2px]'}`} />
+              </button>
+            </div>
             <span className="text-sm text-gray-900">
               Showing {filteredHistoryGames.length} of {historyGames.length} games
             </span>
@@ -327,20 +351,22 @@ export function HistoryTab({
                   const movingToward = closeDiff < openDiff;
                   const highlightClass = movingToward ? getGreenHighlightClass(lineMovement) : getRedHighlightClass(lineMovement);
                   
-                  // Value check: closing line is 1+ points away from projection AND moved away AND moved 1+ point from open
+                  // Value check: closing line is 1+ points further from projection than open was
                   const showValueCheck = closeDiff >= 1 && closeDiff > openDiff && lineMovement >= 1;
+                  // Toward check: line moved 1+ points closer to projection
+                  const showTowardCheck = (openDiff - closeDiff) >= 1 && closeDiff < openDiff && lineMovement >= 1;
                   
                   highlightProjClass = highlightClass;
                   if (game.closingSpread < game.openingSpread) {
+                    // Line moved toward home
                     highlightHomeClass = highlightClass;
-                    if (showValueCheck) {
-                      showHomeValueCheck = true;
-                    }
+                    if (showValueCheck) showHomeValueCheck = true;
+                    if (showTowardCheck) showAwayValueCheck = true;  // mark team line moved away from
                   } else {
+                    // Line moved toward away
                     highlightAwayClass = highlightClass;
-                    if (showValueCheck) {
-                      showAwayValueCheck = true;
-                    }
+                    if (showValueCheck) showAwayValueCheck = true;
+                    if (showTowardCheck) showHomeValueCheck = true;  // mark team line moved away from
                   }
                 }
                 
@@ -371,7 +397,7 @@ export function HistoryTab({
                         <TeamLogo teamName={game.awayTeam} logoUrl={awayLogo} size="sm" />
                         <span className="text-sm font-medium text-gray-900 hidden sm:inline">{game.awayTeam}</span>
                         {showAwayValueCheck && (
-                          <span className="absolute -bottom-1 -right-1 text-green-600 text-xs font-bold" title="Value: line moved 1+ pt away from projection">✓</span>
+                          <span className="absolute -bottom-1 -right-1 text-green-600 text-xs font-bold" title="Value: 1+ pt move from projection">✓</span>
                         )}
                       </div>
                       {game.awayScore !== null && (
@@ -386,7 +412,7 @@ export function HistoryTab({
                         <TeamLogo teamName={game.homeTeam} logoUrl={homeLogo} size="sm" />
                         <span className="text-sm font-medium text-gray-900 hidden sm:inline">{game.homeTeam}</span>
                         {showHomeValueCheck && (
-                          <span className="absolute -bottom-1 -right-1 text-green-600 text-xs font-bold" title="Value: line moved 1+ pt away from projection">✓</span>
+                          <span className="absolute -bottom-1 -right-1 text-green-600 text-xs font-bold" title="Value: 1+ pt move from projection">✓</span>
                         )}
                       </div>
                       {game.homeScore !== null && (

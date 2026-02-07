@@ -1,7 +1,7 @@
 // src/app/ratings/components/ScheduleTab.tsx
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { TeamLogo } from './TeamLogo';
 import type { 
   CombinedScheduleGame, 
@@ -51,6 +51,7 @@ export function ScheduleTab({
   loadSchedule,
   getTeamLogo,
 }: ScheduleTabProps) {
+  const [showValueOnly, setShowValueOnly] = useState(false);
   
   // Find team rating using BT team names
   const findTeamRating = (btTeamName: string) => {
@@ -165,7 +166,19 @@ export function ScheduleTab({
         }
       }
       
-      return { ...game, projectedSpread, delta, awayMovement, homeMovement };
+      // Compute whether this game qualifies for a value checkmark
+      let hasValueCheck = false;
+      if (projectedSpread !== null && game.openingSpread !== null && game.spread !== null && game.openingSpread !== game.spread) {
+        const _openDiff = Math.abs(projectedSpread - game.openingSpread);
+        const _currentDiff = Math.abs(projectedSpread - game.spread);
+        const _lineMovement = Math.abs(game.spread - game.openingSpread);
+        
+        const awayFromProj = _currentDiff >= 1 && _currentDiff > _openDiff && _lineMovement >= 1;
+        const towardProj = (_openDiff - _currentDiff) >= 1 && _currentDiff < _openDiff && _lineMovement >= 1;
+        hasValueCheck = awayFromProj || towardProj;
+      }
+      
+      return { ...game, projectedSpread, delta, awayMovement, homeMovement, hasValueCheck };
     });
     
     // Sort
@@ -191,8 +204,13 @@ export function ScheduleTab({
       });
     }
     
+    // Filter to value checkmark games only if toggle is on
+    if (showValueOnly) {
+      return gamesWithCalcs.filter(g => g.hasValueCheck);
+    }
+    
     return gamesWithCalcs;
-  }, [combinedScheduleGames, scheduleFilter, scheduleSortBy, scheduleSortDir, historyGames, snapshot, overrides, hca]);
+  }, [combinedScheduleGames, scheduleFilter, scheduleSortBy, scheduleSortDir, historyGames, snapshot, overrides, hca, showValueOnly]);
 
   // Line movement highlighting helpers
   const getGreenHighlightClass = (movement: number): string => {
@@ -246,13 +264,25 @@ export function ScheduleTab({
             })}
           </div>
         </div>
-        <button
-          onClick={loadSchedule}
-          disabled={scheduleLoading}
-          className="text-blue-600 hover:text-blue-700 text-sm font-medium"
-        >
-          {scheduleLoading ? 'Loading...' : 'Refresh'}
-        </button>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1.5">
+            <span className="text-green-600 text-sm font-bold">✓</span>
+            <button
+              onClick={() => setShowValueOnly(!showValueOnly)}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${showValueOnly ? 'bg-green-500' : 'bg-gray-300'}`}
+              title="Show only games with value checkmarks"
+            >
+              <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${showValueOnly ? 'translate-x-[18px]' : 'translate-x-[2px]'}`} />
+            </button>
+          </div>
+          <button
+            onClick={loadSchedule}
+            disabled={scheduleLoading}
+            className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+          >
+            {scheduleLoading ? 'Loading...' : 'Refresh'}
+          </button>
+        </div>
       </div>
 
       {/* Legend */}
@@ -393,20 +423,22 @@ export function ScheduleTab({
                   const movingToward = currentDiff < openDiff;
                   const highlightClass = movingToward ? getGreenHighlightClass(lineMovement) : getRedHighlightClass(lineMovement);
                   
-                  // Value check: current line is 1+ points away from projection AND moved away AND moved 1+ point from open
+                  // Value check: current line is 1+ points further from projection than open was
                   const showValueCheck = currentDiff >= 1 && currentDiff > openDiff && lineMovement >= 1;
+                  // Toward check: line moved 1+ points closer to projection
+                  const showTowardCheck = (openDiff - currentDiff) >= 1 && currentDiff < openDiff && lineMovement >= 1;
                   
                   highlightProjClass = highlightClass;
                   if (game.spread < game.openingSpread) {
+                    // Line moved toward home
                     highlightHomeClass = highlightClass;
-                    if (showValueCheck) {
-                      showHomeValueCheck = true;
-                    }
+                    if (showValueCheck) showHomeValueCheck = true;
+                    if (showTowardCheck) showAwayValueCheck = true;  // mark team line moved away from
                   } else {
+                    // Line moved toward away
                     highlightAwayClass = highlightClass;
-                    if (showValueCheck) {
-                      showAwayValueCheck = true;
-                    }
+                    if (showValueCheck) showAwayValueCheck = true;
+                    if (showTowardCheck) showHomeValueCheck = true;  // mark team line moved away from
                   }
                 }
                 
@@ -455,7 +487,7 @@ export function ScheduleTab({
                           <span className="text-sm font-medium text-gray-900 hidden sm:inline">{game.awayTeam}</span>
                           {!awayRating && <span className="text-xs text-red-400 hidden sm:inline" title="Team not found in ratings">?</span>}
                           {showAwayValueCheck && (
-                            <span className="absolute -bottom-1 -right-1 text-green-600 text-xs font-bold" title="Value: line moved 1+ pt away from projection">✓</span>
+                            <span className="absolute -bottom-1 -right-1 text-green-600 text-xs font-bold" title="Value: 1+ pt move from projection">✓</span>
                           )}
                         </div>
                       </td>
@@ -468,7 +500,7 @@ export function ScheduleTab({
                           <span className="text-sm font-medium text-gray-900 hidden sm:inline">{game.homeTeam}</span>
                           {!homeRating && <span className="text-xs text-red-400 hidden sm:inline" title="Team not found in ratings">?</span>}
                           {showHomeValueCheck && (
-                            <span className="absolute -bottom-1 -right-1 text-green-600 text-xs font-bold" title="Value: line moved 1+ pt away from projection">✓</span>
+                            <span className="absolute -bottom-1 -right-1 text-green-600 text-xs font-bold" title="Value: 1+ pt move from projection">✓</span>
                           )}
                         </div>
                       </td>
