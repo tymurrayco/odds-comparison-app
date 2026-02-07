@@ -307,8 +307,7 @@ export function HistoryTab({
                 >
                   Home {historySortField === 'homeMovement' && (historySortDirection === 'desc' ? '↓' : '↑')}
                 </th>
-                <th className="px-2 sm:px-4 py-3 text-center text-xs font-semibold text-white uppercase whitespace-nowrap" title="BT (upper-left) / Our Proj (lower-right)">BT/Proj</th>
-                <th className="px-2 sm:px-4 py-3 text-center text-xs font-semibold text-white uppercase whitespace-nowrap" title="Weighted blend">Blend</th>
+                <th className="px-2 sm:px-4 py-3 text-center text-xs font-semibold text-white uppercase whitespace-nowrap">Proj</th>
                 <th className="px-2 sm:px-4 py-3 text-center text-xs font-semibold text-white uppercase">Open</th>
                 <th className="px-2 sm:px-4 py-3 text-center text-xs font-semibold text-white uppercase">Close</th>
                 <th 
@@ -335,14 +334,8 @@ export function HistoryTab({
                 let highlightAwayClass = '';
                 let highlightHomeClass = '';
                 let highlightProjClass = '';
-                let highlightBtClass = '';
-                let highlightBlendClass = '';
                 let showAwayValueCheck = false;
                 let showHomeValueCheck = false;
-                
-                const blendSpread = (game.btSpread !== null && game.projectedSpread !== null)
-                  ? 0.38022 + (game.btSpread * 0.355163) + (game.projectedSpread * 0.620901)
-                  : (game.projectedSpread !== null ? game.projectedSpread : null);
                 
                 if (game.projectedSpread !== null && game.openingSpread !== null && game.closingSpread !== null && game.openingSpread !== game.closingSpread) {
                   const openDiff = Math.abs(game.projectedSpread - game.openingSpread);
@@ -370,24 +363,16 @@ export function HistoryTab({
                   }
                 }
                 
-                if (game.btSpread !== null && game.openingSpread !== null && game.closingSpread !== null && game.openingSpread !== game.closingSpread) {
-                  const openDiffBt = Math.abs(game.btSpread - game.openingSpread);
-                  const closeDiffBt = Math.abs(game.btSpread - game.closingSpread);
-                  const lineMovement = Math.abs(game.closingSpread - game.openingSpread);
-                  const movingTowardBt = closeDiffBt < openDiffBt;
-                  highlightBtClass = movingTowardBt ? getGreenHighlightClass(lineMovement) : getRedHighlightClass(lineMovement);
-                }
-                
-                if (blendSpread !== null && game.openingSpread !== null && game.closingSpread !== null && game.openingSpread !== game.closingSpread) {
-                  const openDiffBlend = Math.abs(blendSpread - game.openingSpread);
-                  const closeDiffBlend = Math.abs(blendSpread - game.closingSpread);
-                  const lineMovement = Math.abs(game.closingSpread - game.openingSpread);
-                  const movingTowardBlend = closeDiffBlend < openDiffBlend;
-                  highlightBlendClass = movingTowardBlend ? getGreenHighlightClass(lineMovement) : getRedHighlightClass(lineMovement);
-                }
-                
                 const homeLogo = getTeamLogo(game.homeTeam);
                 const awayLogo = getTeamLogo(game.awayTeam);
+                
+                // Determine if each team covered the closing spread
+                const actualMargin = (game.homeScore !== null && game.awayScore !== null)
+                  ? game.homeScore - game.awayScore : null;
+                const spreadResult = (actualMargin !== null && game.closingSpread !== null)
+                  ? actualMargin + game.closingSpread : null;
+                const homeCovered = spreadResult !== null && spreadResult > 0;
+                const awayCovered = spreadResult !== null && spreadResult < 0;
                 
                 return (
                   <tr key={`history-${index}`} className="hover:bg-gray-50">
@@ -397,7 +382,7 @@ export function HistoryTab({
                         <TeamLogo teamName={game.awayTeam} logoUrl={awayLogo} size="sm" />
                         <span className="text-sm font-medium text-gray-900 hidden sm:inline">{game.awayTeam}</span>
                         {showAwayValueCheck && (
-                          <span className="absolute -bottom-1 -right-1 text-green-600 text-xs font-bold" title="Value: 1+ pt move from projection">✓</span>
+                          <span className={`absolute -bottom-1 -right-1 text-green-600 text-xs font-bold ${awayCovered ? 'border border-green-600 rounded-full w-4 h-4 flex items-center justify-center bg-white' : ''}`} title={`Value: 1+ pt move from projection${awayCovered ? ' (covered)' : ''}`}>✓</span>
                         )}
                       </div>
                       {game.awayScore !== null && (
@@ -412,7 +397,7 @@ export function HistoryTab({
                         <TeamLogo teamName={game.homeTeam} logoUrl={homeLogo} size="sm" />
                         <span className="text-sm font-medium text-gray-900 hidden sm:inline">{game.homeTeam}</span>
                         {showHomeValueCheck && (
-                          <span className="absolute -bottom-1 -right-1 text-green-600 text-xs font-bold" title="Value: 1+ pt move from projection">✓</span>
+                          <span className={`absolute -bottom-1 -right-1 text-green-600 text-xs font-bold ${homeCovered ? 'border border-green-600 rounded-full w-4 h-4 flex items-center justify-center bg-white' : ''}`} title={`Value: 1+ pt move from projection${homeCovered ? ' (covered)' : ''}`}>✓</span>
                         )}
                       </div>
                       {game.homeScore !== null && (
@@ -421,29 +406,14 @@ export function HistoryTab({
                         </span>
                       )}
                     </td>
-                    <td className="px-1 sm:px-2 py-1 text-center">
-                      <div className="relative w-16 h-10 mx-auto overflow-hidden rounded">
-                        <div className={`absolute inset-0 ${highlightBtClass}`} style={{ clipPath: 'polygon(0 0, 100% 0, 0 100%)' }} />
-                        <div className={`absolute inset-0 ${highlightProjClass}`} style={{ clipPath: 'polygon(100% 0, 100% 100%, 0 100%)' }} />
-                        <svg className="absolute inset-0 w-full h-full pointer-events-none" preserveAspectRatio="none">
-                          <line x1="0" y1="100%" x2="100%" y2="0" stroke="#9ca3af" strokeWidth="1" vectorEffect="non-scaling-stroke" />
-                        </svg>
-                        <span className="absolute top-0 left-0.5 font-mono text-xs font-semibold text-purple-600">
-                          {game.btSpread !== null ? (game.btSpread > 0 ? '+' : '') + game.btSpread.toFixed(1) : '—'}
-                        </span>
-                        <span className="absolute bottom-0 right-0.5 font-mono text-xs font-semibold text-gray-900">
-                          {game.projectedSpread !== null ? (game.projectedSpread > 0 ? '+' : '') + game.projectedSpread.toFixed(1) : '—'}
-                        </span>
-                      </div>
-                    </td>
-                    <td className={`px-2 sm:px-4 py-3 text-center ${highlightBlendClass}`}>
-                      {blendSpread !== null ? (
-                        <span className="font-mono text-xs sm:text-sm font-semibold text-gray-900">
-                          {blendSpread > 0 ? '+' : ''}{blendSpread.toFixed(1)}
-                        </span>
-                      ) : (
-                        <span className="text-gray-400">—</span>
-                      )}
+                    <td className={`px-2 sm:px-4 py-3 text-center ${highlightProjClass}`}>
+                        {game.projectedSpread !== null ? (
+                          <span className="font-mono text-xs sm:text-sm font-semibold text-gray-900">
+                            {game.projectedSpread > 0 ? '+' : ''}{game.projectedSpread.toFixed(1)}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
                     </td>
                     <td className="px-2 sm:px-4 py-3 text-center">
                       {game.openingSpread !== null ? (

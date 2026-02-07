@@ -367,8 +367,7 @@ export function ScheduleTab({
                 >
                   Home {scheduleSortBy === 'homeMovement' && (scheduleSortDir === 'desc' ? '↓' : '↑')}
                 </th>
-                <th className="px-2 sm:px-4 py-3 text-center text-xs font-semibold text-white uppercase whitespace-nowrap" title="BT (upper-left) / Our Proj (lower-right)">BT/Proj</th>
-                <th className="px-2 sm:px-4 py-3 text-center text-xs font-semibold text-white uppercase whitespace-nowrap" title="Weighted blend of BT and our projection">Blend</th>
+                <th className="px-2 sm:px-4 py-3 text-center text-xs font-semibold text-white uppercase whitespace-nowrap">Proj</th>
                 <th className="px-2 sm:px-4 py-3 text-center text-xs font-semibold text-white uppercase whitespace-nowrap">Open</th>
                 <th className="px-2 sm:px-4 py-3 text-center text-xs font-semibold text-white uppercase whitespace-nowrap">Curr</th>
                 <th 
@@ -398,21 +397,13 @@ export function ScheduleTab({
                 
                 const homeRating = findTeamRating(game.homeTeam);
                 const awayRating = findTeamRating(game.awayTeam);
-                const btSpread = game.btSpread;
                 const projectedSpread = game.projectedSpread;
                 const delta = game.delta;
-                
-                // Calculate blend
-                const blendSpread = (btSpread !== null && projectedSpread !== null)
-                  ? 0.38022 + (btSpread * 0.355163) + (projectedSpread * 0.620901)
-                  : (projectedSpread !== null ? projectedSpread : null);
                 
                 // Highlighting logic
                 let highlightAwayClass = '';
                 let highlightHomeClass = '';
                 let highlightProjClass = '';
-                let highlightBtClass = '';
-                let highlightBlendClass = '';
                 let showAwayValueCheck = false;
                 let showHomeValueCheck = false;
                 
@@ -442,27 +433,11 @@ export function ScheduleTab({
                   }
                 }
                 
-                if (btSpread !== null && game.openingSpread !== null && game.spread !== null && game.openingSpread !== game.spread) {
-                  const openDiffBt = Math.abs(btSpread - game.openingSpread);
-                  const currentDiffBt = Math.abs(btSpread - game.spread);
-                  const lineMovement = Math.abs(game.spread - game.openingSpread);
-                  const movingTowardBt = currentDiffBt < openDiffBt;
-                  highlightBtClass = movingTowardBt ? getGreenHighlightClass(lineMovement) : getRedHighlightClass(lineMovement);
-                }
-                
-                if (blendSpread !== null && game.openingSpread !== null && game.spread !== null && game.openingSpread !== game.spread) {
-                  const openDiffBlend = Math.abs(blendSpread - game.openingSpread);
-                  const currentDiffBlend = Math.abs(blendSpread - game.spread);
-                  const lineMovement = Math.abs(game.spread - game.openingSpread);
-                  const movingTowardBlend = currentDiffBlend < openDiffBlend;
-                  highlightBlendClass = movingTowardBlend ? getGreenHighlightClass(lineMovement) : getRedHighlightClass(lineMovement);
-                }
-                
                 return (
                   <React.Fragment key={game.id}>
                     {showDateHeader && (
                       <tr className="bg-blue-100">
-                        <td colSpan={10} className="px-4 py-2">
+                        <td colSpan={9} className="px-4 py-2">
                           <span className="font-semibold text-blue-800 text-sm">
                             {game.dateLabel}
                             {game.isToday && ' 📍'}
@@ -504,26 +479,10 @@ export function ScheduleTab({
                           )}
                         </div>
                       </td>
-                      <td className="px-1 sm:px-2 py-1 text-center">
-                        {/* Combined BT/Proj cell with diagonal split */}
-                        <div className="relative w-16 h-10 mx-auto overflow-hidden rounded">
-                          <div className={`absolute inset-0 ${highlightBtClass}`} style={{ clipPath: 'polygon(0 0, 100% 0, 0 100%)' }} />
-                          <div className={`absolute inset-0 ${highlightProjClass}`} style={{ clipPath: 'polygon(100% 0, 100% 100%, 0 100%)' }} />
-                          <svg className="absolute inset-0 w-full h-full pointer-events-none" preserveAspectRatio="none">
-                            <line x1="0" y1="100%" x2="100%" y2="0" stroke="#9ca3af" strokeWidth="1" vectorEffect="non-scaling-stroke" />
-                          </svg>
-                          <span className="absolute top-0 left-0.5 font-mono text-xs font-semibold text-purple-600">
-                            {btSpread !== null ? (btSpread > 0 ? '+' : '') + btSpread.toFixed(1) : '—'}
-                          </span>
-                          <span className="absolute bottom-0 right-0.5 font-mono text-xs font-semibold text-gray-900">
-                            {projectedSpread !== null ? (projectedSpread > 0 ? '+' : '') + projectedSpread.toFixed(1) : '—'}
-                          </span>
-                        </div>
-                      </td>
-                      <td className={`px-2 sm:px-4 py-3 text-center ${highlightBlendClass}`}>
-                        {blendSpread !== null ? (
+                      <td className={`px-2 sm:px-4 py-3 text-center ${highlightProjClass}`}>
+                        {projectedSpread !== null ? (
                           <span className="font-mono text-xs sm:text-sm font-semibold text-gray-900">
-                            {blendSpread > 0 ? '+' : ''}{blendSpread.toFixed(1)}
+                            {projectedSpread > 0 ? '+' : ''}{projectedSpread.toFixed(1)}
                           </span>
                         ) : (
                           <span className="text-gray-400">—</span>
