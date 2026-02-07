@@ -1,7 +1,7 @@
 // src/app/ratings/components/ScheduleTab.tsx
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useDeferredValue, useMemo, useState } from 'react';
 import { TeamLogo } from './TeamLogo';
 import type { 
   CombinedScheduleGame, 
@@ -54,12 +54,7 @@ export function ScheduleTab({
   const [showValueOnly, setShowValueOnly] = useState(false);
   const [showVOpenOnly, setShowVOpenOnly] = useState(false);
   const [teamSearch, setTeamSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(teamSearch), 400);
-    return () => clearTimeout(timer);
-  }, [teamSearch]);
+  const deferredSearch = useDeferredValue(teamSearch);
   
   // Find team rating using BT team names
   const findTeamRating = (btTeamName: string) => {
@@ -226,13 +221,13 @@ export function ScheduleTab({
     if (showVOpenOnly) {
       result = result.filter(g => g.projectedSpread !== null && g.openingSpread !== null && Math.abs(g.projectedSpread - g.openingSpread) >= 2);
     }
-    if (debouncedSearch.trim()) {
-      const q = debouncedSearch.trim().toLowerCase();
+    if (deferredSearch.trim()) {
+      const q = deferredSearch.trim().toLowerCase();
       result = result.filter(g => g.homeTeam.toLowerCase().includes(q) || g.awayTeam.toLowerCase().includes(q));
     }
     
     return result;
-  }, [combinedScheduleGames, scheduleFilter, scheduleSortBy, scheduleSortDir, historyGames, snapshot, overrides, hca, showValueOnly, showVOpenOnly, debouncedSearch]);
+  }, [combinedScheduleGames, scheduleFilter, scheduleSortBy, scheduleSortDir, historyGames, snapshot, overrides, hca, showValueOnly, showVOpenOnly, deferredSearch]);
 
   // Line movement highlighting helpers
   const getGreenHighlightClass = (movement: number): string => {

@@ -1,7 +1,7 @@
 // src/app/ratings/components/HistoryTab.tsx
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useDeferredValue, useMemo, useState } from 'react';
 import { TeamLogo } from './TeamLogo';
 import type { HistoryGame, HistorySortField, SortDirection } from '../types';
 
@@ -27,12 +27,7 @@ export function HistoryTab({
   const [showValueOnly, setShowValueOnly] = useState(false);
   const [showVOpenOnly, setShowVOpenOnly] = useState(false);
   const [teamSearch, setTeamSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(teamSearch), 400);
-    return () => clearTimeout(timer);
-  }, [teamSearch]);
+  const deferredSearch = useDeferredValue(teamSearch);
 
   // Helper functions for highlighting
   const getGreenHighlightClass = (movement: number): string => {
@@ -162,13 +157,13 @@ export function HistoryTab({
     if (showVOpenOnly) {
       result = result.filter(g => g.projectedSpread !== null && g.openingSpread !== null && Math.abs(g.projectedSpread - g.openingSpread) >= 2);
     }
-    if (debouncedSearch.trim()) {
-      const q = debouncedSearch.trim().toLowerCase();
+    if (deferredSearch.trim()) {
+      const q = deferredSearch.trim().toLowerCase();
       result = result.filter(g => g.homeTeam.toLowerCase().includes(q) || g.awayTeam.toLowerCase().includes(q));
     }
     
     return result;
-  }, [historyGames, historyStartDate, historyEndDate, historyDiffMin, historySortField, historySortDirection, showValueOnly, showVOpenOnly, debouncedSearch]);
+  }, [historyGames, historyStartDate, historyEndDate, historyDiffMin, historySortField, historySortDirection, showValueOnly, showVOpenOnly, deferredSearch]);
 
   return (
     <>
