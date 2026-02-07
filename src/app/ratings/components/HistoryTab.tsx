@@ -74,17 +74,22 @@ export function HistoryTab({
   const filteredHistoryGames = useMemo(() => {
     let games = [...historyGames];
     
-    // Date filters (convert to local date to avoid UTC offset issues)
+    // Helper to get Eastern date as YYYY-MM-DD string
+    const getEasternDate = (dateStr: string): string => {
+      return new Date(dateStr).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    };
+    
+    // Date filters (convert to Eastern time to match game dates)
     if (historyStartDate) {
       games = games.filter(g => {
-        const localDate = new Date(g.gameDate).toLocaleDateString('en-CA'); // YYYY-MM-DD format
-        return localDate >= historyStartDate;
+        const easternDate = getEasternDate(g.gameDate);
+        return easternDate >= historyStartDate;
       });
     }
     if (historyEndDate) {
       games = games.filter(g => {
-        const localDate = new Date(g.gameDate).toLocaleDateString('en-CA'); // YYYY-MM-DD format
-        return localDate <= historyEndDate;
+        const easternDate = getEasternDate(g.gameDate);
+        return easternDate <= historyEndDate;
       });
     }
     
@@ -300,7 +305,7 @@ export function HistoryTab({
             <tbody className="divide-y divide-gray-100">
               {filteredHistoryGames.map((game, index) => {
                 const gameDate = new Date(game.gameDate);
-                const dateStr = gameDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                const dateStr = gameDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' });
                 
                 // Calculate highlights
                 let highlightAwayClass = '';
@@ -370,7 +375,7 @@ export function HistoryTab({
                         )}
                       </div>
                       {game.awayScore !== null && (
-                        <span className={`absolute bottom-0.5 right-1 text-[10px] font-mono ${game.homeScore !== null && game.awayScore > game.homeScore ? 'font-bold text-green-700' : 'text-gray-400'}`}>
+                        <span className={`absolute bottom-0.5 right-1 text-[10px] font-mono ${game.homeScore !== null && game.awayScore > game.homeScore ? 'font-bold text-green-700' : 'text-gray-600'}`}>
                           {game.awayScore}
                         </span>
                       )}
@@ -385,7 +390,7 @@ export function HistoryTab({
                         )}
                       </div>
                       {game.homeScore !== null && (
-                        <span className={`absolute bottom-0.5 right-1 text-[10px] font-mono ${game.awayScore !== null && game.homeScore > game.awayScore ? 'font-bold text-green-700' : 'text-gray-400'}`}>
+                        <span className={`absolute bottom-0.5 right-1 text-[10px] font-mono ${game.awayScore !== null && game.homeScore > game.awayScore ? 'font-bold text-green-700' : 'text-gray-600'}`}>
                           {game.homeScore}
                         </span>
                       )}
