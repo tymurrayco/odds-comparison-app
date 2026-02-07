@@ -153,6 +153,8 @@ export interface HistoryGame {
   closingSource: string | null;
   btSpread: number | null;
   difference: number | null;
+  homeScore: number | null;
+  awayScore: number | null;
 }
 
 // Tab type
