@@ -149,9 +149,18 @@ export function HistoryTab({
         const _openDiff = Math.abs(g.projectedSpread - g.openingSpread);
         const _closeDiff = Math.abs(g.projectedSpread - g.closingSpread);
         const _lineMovement = Math.abs(g.closingSpread - g.openingSpread);
-        const awayFromProj = _closeDiff >= 1 && _closeDiff > _openDiff && _lineMovement >= 1;
-        const towardProj = (_openDiff - _closeDiff) >= 1 && _closeDiff < _openDiff && _lineMovement >= 1;
-        return awayFromProj || towardProj;
+        // New signal: value check fires + opener agreed + side moved away from is the underdog
+        const valueFires = _closeDiff >= 1 && _closeDiff > _openDiff && _lineMovement >= 1;
+        const openerAgreed = _openDiff <= 1.5;
+        if (!valueFires || !openerAgreed) return false;
+        // Check that the side moved away from is the underdog
+        if (g.closingSpread < g.openingSpread) {
+          // Line moved toward home → away is the "away from" side → dog only if close < 0
+          return g.closingSpread < 0;
+        } else {
+          // Line moved toward away → home is the "away from" side → dog only if close > 0
+          return g.closingSpread > 0;
+        }
       });
     }
     if (showVOpenOnly) {
@@ -164,6 +173,62 @@ export function HistoryTab({
     
     return result;
   }, [historyGames, historyStartDate, historyEndDate, historyDiffMin, historySortField, historySortDirection, showValueOnly, showVOpenOnly, deferredSearch]);
+
+  // Compute W-L record for games with new value checkmarks in the filtered set
+  const checkmarkRecord = useMemo(() => {
+    let wins = 0;
+    let losses = 0;
+    let pushes = 0;
+    
+    for (const game of filteredHistoryGames) {
+      if (game.projectedSpread === null || game.openingSpread === null || game.closingSpread === null || game.openingSpread === game.closingSpread) continue;
+      
+      const openDiff = Math.abs(game.projectedSpread - game.openingSpread);
+      const closeDiff = Math.abs(game.projectedSpread - game.closingSpread);
+      const lineMovement = Math.abs(game.closingSpread - game.openingSpread);
+      
+      // New signal: value check fires + opener agreed + underdog on the "away from" side
+      const valueFires = closeDiff >= 1 && closeDiff > openDiff && lineMovement >= 1;
+      const openerAgreed = openDiff <= 1.5;
+      if (!valueFires || !openerAgreed) continue;
+      
+      const actualMargin = (game.homeScore !== null && game.awayScore !== null)
+        ? game.homeScore - game.awayScore : null;
+      const spreadResult = (actualMargin !== null && game.closingSpread !== null)
+        ? actualMargin + game.closingSpread : null;
+      
+      if (spreadResult === null) continue;
+      
+      let hasCheck = false;
+      let dogCovered = false;
+      
+      if (game.closingSpread < game.openingSpread) {
+        // Line moved toward home → away is "away from" side → dog only if close < 0
+        if (game.closingSpread < 0) {
+          hasCheck = true;
+          dogCovered = spreadResult < 0;
+        }
+      } else {
+        // Line moved toward away → home is "away from" side → dog only if close > 0
+        if (game.closingSpread > 0) {
+          hasCheck = true;
+          dogCovered = spreadResult > 0;
+        }
+      }
+      
+      if (!hasCheck) continue;
+      
+      if (spreadResult === 0) {
+        pushes++;
+      } else if (dogCovered) {
+        wins++;
+      } else {
+        losses++;
+      }
+    }
+    
+    return { wins, losses, pushes, total: wins + losses + pushes };
+  }, [filteredHistoryGames]);
 
   return (
     <>
@@ -255,6 +320,11 @@ export function HistoryTab({
             </div>
             <span className="text-sm text-gray-900">
               Showing {filteredHistoryGames.length} of {historyGames.length} games
+              {checkmarkRecord.total > 0 && (
+                <span className="ml-2 text-green-700 font-semibold">
+                  ✓ {checkmarkRecord.wins}-{checkmarkRecord.losses}{checkmarkRecord.pushes > 0 ? `-${checkmarkRecord.pushes}` : ''}
+                </span>
+              )}
             </span>
             <button
               onClick={loadHistory}
@@ -399,22 +469,25 @@ export function HistoryTab({
                   const movingToward = closeDiff < openDiff;
                   const highlightClass = movingToward ? getGreenHighlightClass(lineMovement) : getRedHighlightClass(lineMovement);
                   
-                  // Value check: closing line is 1+ points further from projection than open was
-                  const showValueCheck = closeDiff >= 1 && closeDiff > openDiff && lineMovement >= 1;
-                  // Toward check: line moved 1+ points closer to projection
-                  const showTowardCheck = (openDiff - closeDiff) >= 1 && closeDiff < openDiff && lineMovement >= 1;
+                  // New value signal: line moved away from projection + opener agreed + underdog
+                  const valueFires = closeDiff >= 1 && closeDiff > openDiff && lineMovement >= 1;
+                  const openerAgreed = openDiff <= 1.5;
                   
                   highlightProjClass = highlightClass;
                   if (game.closingSpread < game.openingSpread) {
                     // Line moved toward home
                     highlightHomeClass = highlightClass;
-                    if (showValueCheck) showHomeValueCheck = true;
-                    if (showTowardCheck) showAwayValueCheck = true;  // mark team line moved away from
+                    // Check on away (the "away from" side) only if away is the dog (close < 0 = home favored)
+                    if (valueFires && openerAgreed && game.closingSpread < 0) {
+                      showAwayValueCheck = true;
+                    }
                   } else {
                     // Line moved toward away
                     highlightAwayClass = highlightClass;
-                    if (showValueCheck) showAwayValueCheck = true;
-                    if (showTowardCheck) showHomeValueCheck = true;  // mark team line moved away from
+                    // Check on home (the "away from" side) only if home is the dog (close > 0 = away favored)
+                    if (valueFires && openerAgreed && game.closingSpread > 0) {
+                      showHomeValueCheck = true;
+                    }
                   }
                 }
                 
@@ -437,7 +510,7 @@ export function HistoryTab({
                         <TeamLogo teamName={game.awayTeam} logoUrl={awayLogo} size="sm" />
                         <span className="text-sm font-medium text-gray-900 hidden sm:inline">{game.awayTeam}</span>
                         {showAwayValueCheck && (
-                          <span className={`absolute -bottom-1 -right-1 text-green-600 text-xs font-bold ${awayCovered ? 'border border-green-600 rounded-full w-4 h-4 flex items-center justify-center bg-white' : ''}`} title={`Value: 1+ pt move from projection${awayCovered ? ' (covered)' : ''}`}>✓</span>
+                          <span className={`absolute -bottom-1 -right-1 text-green-600 text-xs font-bold ${awayCovered ? 'border border-green-600 rounded-full w-4 h-4 flex items-center justify-center bg-white' : ''}`} title={`Opener agreed, line moved away — bet this dog${awayCovered ? ' (covered)' : ''}`}>✓</span>
                         )}
                       </div>
                       {game.awayScore !== null && (
@@ -452,7 +525,7 @@ export function HistoryTab({
                         <TeamLogo teamName={game.homeTeam} logoUrl={homeLogo} size="sm" />
                         <span className="text-sm font-medium text-gray-900 hidden sm:inline">{game.homeTeam}</span>
                         {showHomeValueCheck && (
-                          <span className={`absolute -bottom-1 -right-1 text-green-600 text-xs font-bold ${homeCovered ? 'border border-green-600 rounded-full w-4 h-4 flex items-center justify-center bg-white' : ''}`} title={`Value: 1+ pt move from projection${homeCovered ? ' (covered)' : ''}`}>✓</span>
+                          <span className={`absolute -bottom-1 -right-1 text-green-600 text-xs font-bold ${homeCovered ? 'border border-green-600 rounded-full w-4 h-4 flex items-center justify-center bg-white' : ''}`} title={`Opener agreed, line moved away — bet this dog${homeCovered ? ' (covered)' : ''}`}>✓</span>
                         )}
                       </div>
                       {game.homeScore !== null && (

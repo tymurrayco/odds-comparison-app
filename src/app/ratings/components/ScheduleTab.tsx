@@ -2,6 +2,7 @@
 'use client';
 
 import React, { useDeferredValue, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { TeamLogo } from './TeamLogo';
 import type { 
   CombinedScheduleGame, 
@@ -51,6 +52,7 @@ export function ScheduleTab({
   loadSchedule,
   getTeamLogo,
 }: ScheduleTabProps) {
+  const router = useRouter();
   const [showValueOnly, setShowValueOnly] = useState(false);
   const [showVOpenOnly, setShowVOpenOnly] = useState(false);
   const [teamSearch, setTeamSearch] = useState('');
@@ -169,16 +171,25 @@ export function ScheduleTab({
         }
       }
       
-      // Compute whether this game qualifies for a value checkmark
+      // Compute whether this game qualifies for the new value checkmark
+      // Signal: opener agreed (within 1.5), line moved away from projection, and the "away from" side is the underdog
       let hasValueCheck = false;
       if (projectedSpread !== null && game.openingSpread !== null && game.spread !== null && game.openingSpread !== game.spread) {
         const _openDiff = Math.abs(projectedSpread - game.openingSpread);
         const _currentDiff = Math.abs(projectedSpread - game.spread);
         const _lineMovement = Math.abs(game.spread - game.openingSpread);
         
-        const awayFromProj = _currentDiff >= 1 && _currentDiff > _openDiff && _lineMovement >= 1;
-        const towardProj = (_openDiff - _currentDiff) >= 1 && _currentDiff < _openDiff && _lineMovement >= 1;
-        hasValueCheck = awayFromProj || towardProj;
+        const valueFires = _currentDiff >= 1 && _currentDiff > _openDiff && _lineMovement >= 1;
+        const openerAgreed = _openDiff <= 1.5;
+        if (valueFires && openerAgreed) {
+          if (game.spread < game.openingSpread) {
+            // Line moved toward home → away is "away from" side → dog only if spread < 0
+            hasValueCheck = game.spread < 0;
+          } else {
+            // Line moved toward away → home is "away from" side → dog only if spread > 0
+            hasValueCheck = game.spread > 0;
+          }
+        }
       }
       
       return { ...game, projectedSpread, delta, awayMovement, homeMovement, hasValueCheck };
@@ -469,22 +480,25 @@ export function ScheduleTab({
                   const movingToward = currentDiff < openDiff;
                   const highlightClass = movingToward ? getGreenHighlightClass(lineMovement) : getRedHighlightClass(lineMovement);
                   
-                  // Value check: current line is 1+ points further from projection than open was
-                  const showValueCheck = currentDiff >= 1 && currentDiff > openDiff && lineMovement >= 1;
-                  // Toward check: line moved 1+ points closer to projection
-                  const showTowardCheck = (openDiff - currentDiff) >= 1 && currentDiff < openDiff && lineMovement >= 1;
+                  // New value signal: line moved away + opener agreed + underdog
+                  const valueFires = currentDiff >= 1 && currentDiff > openDiff && lineMovement >= 1;
+                  const openerAgreed = openDiff <= 1.5;
                   
                   highlightProjClass = highlightClass;
                   if (game.spread < game.openingSpread) {
                     // Line moved toward home
                     highlightHomeClass = highlightClass;
-                    if (showValueCheck) showHomeValueCheck = true;
-                    if (showTowardCheck) showAwayValueCheck = true;  // mark team line moved away from
+                    // Check on away (the "away from" side) only if away is the dog (spread < 0 = home favored)
+                    if (valueFires && openerAgreed && game.spread < 0) {
+                      showAwayValueCheck = true;
+                    }
                   } else {
                     // Line moved toward away
                     highlightAwayClass = highlightClass;
-                    if (showValueCheck) showAwayValueCheck = true;
-                    if (showTowardCheck) showHomeValueCheck = true;  // mark team line moved away from
+                    // Check on home (the "away from" side) only if home is the dog (spread > 0 = away favored)
+                    if (valueFires && openerAgreed && game.spread > 0) {
+                      showHomeValueCheck = true;
+                    }
                   }
                 }
                 
@@ -503,7 +517,14 @@ export function ScheduleTab({
                         </td>
                       </tr>
                     )}
-                    <tr className="hover:bg-gray-50">
+                    <tr 
+                      className="hover:bg-gray-50 cursor-pointer"
+                      onClick={() => {
+                        sessionStorage.setItem('ratingsNav', JSON.stringify({ league: 'basketball_ncaab', search: game.awayTeam }));
+                        router.push('/');
+                      }}
+                      title={`View odds for ${game.awayTeam} @ ${game.homeTeam}`}
+                    >
                       <td className="px-1 sm:px-4 py-3">
                         <div className="text-xs sm:text-sm font-medium text-gray-900">
                           <span className="sm:hidden">{timeStrMobile}</span>
@@ -517,7 +538,7 @@ export function ScheduleTab({
                           <span className="text-sm font-medium text-gray-900 hidden sm:inline">{game.awayTeam}</span>
                           {!awayRating && <span className="text-xs text-red-400 hidden sm:inline" title="Team not found in ratings">?</span>}
                           {showAwayValueCheck && (
-                            <span className="absolute -bottom-1 -right-1 text-green-600 text-xs font-bold" title="Value: 1+ pt move from projection">✓</span>
+                            <span className="absolute -bottom-1 -right-1 text-green-600 text-xs font-bold" title="Opener agreed, line moved away — bet this dog">✓</span>
                           )}
                         </div>
                       </td>
@@ -530,7 +551,7 @@ export function ScheduleTab({
                           <span className="text-sm font-medium text-gray-900 hidden sm:inline">{game.homeTeam}</span>
                           {!homeRating && <span className="text-xs text-red-400 hidden sm:inline" title="Team not found in ratings">?</span>}
                           {showHomeValueCheck && (
-                            <span className="absolute -bottom-1 -right-1 text-green-600 text-xs font-bold" title="Value: 1+ pt move from projection">✓</span>
+                            <span className="absolute -bottom-1 -right-1 text-green-600 text-xs font-bold" title="Opener agreed, line moved away — bet this dog">✓</span>
                           )}
                         </div>
                       </td>

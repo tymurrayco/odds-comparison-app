@@ -51,6 +51,7 @@ function HomeContent() {
   const searchParams = useSearchParams();
   const pressTimer = useRef<NodeJS.Timeout | null>(null);
   const [isHolding, setIsHolding] = useState(false);
+  const crossNavSearchRef = useRef(false);
   
   const [activeLeague, setActiveLeague] = useState('basketball_nba');
   const [activeView, setActiveView] = useState<'games' | 'futures' | 'props' | 'mybets'>('games');
@@ -95,10 +96,25 @@ function HomeContent() {
   useEffect(() => {
     setIsClient(true);
     
-    // Load saved league from localStorage after client-side hydration
-    const savedLeague = localStorage.getItem('activeLeague');
-    if (savedLeague) {
-      setActiveLeague(savedLeague);
+    // Check for cross-navigation from ratings Schedule tab
+    const ratingsNav = sessionStorage.getItem('ratingsNav');
+    if (ratingsNav) {
+      sessionStorage.removeItem('ratingsNav');
+      try {
+        const { league, search } = JSON.parse(ratingsNav);
+        if (league) setActiveLeague(league);
+        if (search) setTeamFilter(search);
+        setActiveView('games');
+        crossNavSearchRef.current = true;
+      } catch (e) {
+        console.error('Error parsing ratingsNav:', e);
+      }
+    } else {
+      // Load saved league from localStorage after client-side hydration
+      const savedLeague = localStorage.getItem('activeLeague');
+      if (savedLeague) {
+        setActiveLeague(savedLeague);
+      }
     }
     
     // Load saved bookmaker selection from localStorage
@@ -169,7 +185,11 @@ function HomeContent() {
     if (activeView === 'props' && !PROPS_SUPPORTED_LEAGUES.includes(activeLeague)) {
       setActiveView('games');
     }
-    setTeamFilter('');
+    if (crossNavSearchRef.current) {
+      crossNavSearchRef.current = false;
+    } else {
+      setTeamFilter('');
+    }
     setSelectedConferences([]);
     setSelectedPropsEvent(null);
     setPropsData([]);
