@@ -470,8 +470,8 @@ export function ScheduleTab({
                 let highlightAwayClass = '';
                 let highlightHomeClass = '';
                 let highlightProjClass = '';
-                let showAwayValueCheck = false;
-                let showHomeValueCheck = false;
+                let awayValueTier = 0;  // 0=none, 1=✓, 2=✓✓ (5+), 3=✓✓✓ (7+)
+                let homeValueTier = 0;
                 
                 if (projectedSpread !== null && game.openingSpread !== null && game.spread !== null && game.openingSpread !== game.spread) {
                   const openDiff = Math.abs(projectedSpread - game.openingSpread);
@@ -483,21 +483,21 @@ export function ScheduleTab({
                   // New value signal: line moved away + opener agreed + underdog
                   const valueFires = currentDiff >= 1 && currentDiff > openDiff && lineMovement >= 1;
                   const openerAgreed = openDiff <= 1.5;
+                  const absSpread = Math.abs(game.spread);
+                  const tier = absSpread >= 7 ? 3 : absSpread >= 5 ? 2 : 1;
                   
                   highlightProjClass = highlightClass;
                   if (game.spread < game.openingSpread) {
                     // Line moved toward home
                     highlightHomeClass = highlightClass;
-                    // Check on away (the "away from" side) only if away is the dog (spread < 0 = home favored)
                     if (valueFires && openerAgreed && game.spread < 0) {
-                      showAwayValueCheck = true;
+                      awayValueTier = tier;
                     }
                   } else {
                     // Line moved toward away
                     highlightAwayClass = highlightClass;
-                    // Check on home (the "away from" side) only if home is the dog (spread > 0 = away favored)
                     if (valueFires && openerAgreed && game.spread > 0) {
-                      showHomeValueCheck = true;
+                      homeValueTier = tier;
                     }
                   }
                 }
@@ -537,8 +537,8 @@ export function ScheduleTab({
                           <TeamLogo teamName={game.awayTeam} logoUrl={getTeamLogo(game.awayTeam)} />
                           <span className="text-sm font-medium text-gray-900 hidden sm:inline">{game.awayTeam}</span>
                           {!awayRating && <span className="text-xs text-red-400 hidden sm:inline" title="Team not found in ratings">?</span>}
-                          {showAwayValueCheck && (
-                            <span className="absolute -bottom-1 -right-1 text-green-600 text-xs font-bold" title="Opener agreed, line moved away — bet this dog">✓</span>
+                          {awayValueTier > 0 && (
+                            <span className="absolute -bottom-1 -right-1 text-green-600 text-xs font-bold" title={`Opener agreed, line moved away — bet this dog${awayValueTier >= 3 ? ' (7+)' : awayValueTier >= 2 ? ' (5+)' : ''}`}>{'✓'.repeat(awayValueTier)}</span>
                           )}
                         </div>
                       </td>
@@ -550,8 +550,8 @@ export function ScheduleTab({
                           <TeamLogo teamName={game.homeTeam} logoUrl={getTeamLogo(game.homeTeam)} />
                           <span className="text-sm font-medium text-gray-900 hidden sm:inline">{game.homeTeam}</span>
                           {!homeRating && <span className="text-xs text-red-400 hidden sm:inline" title="Team not found in ratings">?</span>}
-                          {showHomeValueCheck && (
-                            <span className="absolute -bottom-1 -right-1 text-green-600 text-xs font-bold" title="Opener agreed, line moved away — bet this dog">✓</span>
+                          {homeValueTier > 0 && (
+                            <span className="absolute -bottom-1 -right-1 text-green-600 text-xs font-bold" title={`Opener agreed, line moved away — bet this dog${homeValueTier >= 3 ? ' (7+)' : homeValueTier >= 2 ? ' (5+)' : ''}`}>{'✓'.repeat(homeValueTier)}</span>
                           )}
                         </div>
                       </td>
