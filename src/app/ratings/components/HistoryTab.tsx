@@ -221,12 +221,12 @@ export function HistoryTab({
         pushes++;
       } else if (dogCovered) {
         wins++;
-        if (tier >= 2) wins2++;
         if (tier >= 3) wins3++;
+        else if (tier >= 2) wins2++;
       } else {
         losses++;
-        if (tier >= 2) losses2++;
         if (tier >= 3) losses3++;
+        else if (tier >= 2) losses2++;
       }
     }
     
@@ -321,20 +321,6 @@ export function HistoryTab({
                 <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${showVOpenOnly ? 'translate-x-[18px]' : 'translate-x-[2px]'}`} />
               </button>
             </div>
-            <span className="text-sm text-gray-900">
-              Showing {filteredHistoryGames.length} of {historyGames.length} games
-              {checkmarkRecord.total > 0 && (
-                <span className="ml-2 text-green-700 font-semibold">
-                  ✓ {checkmarkRecord.wins}-{checkmarkRecord.losses}{checkmarkRecord.pushes > 0 ? `-${checkmarkRecord.pushes}` : ''}
-                  {(checkmarkRecord.wins2 + checkmarkRecord.losses2) > 0 && (
-                    <span className="ml-1.5 text-green-800">✓✓ {checkmarkRecord.wins2}-{checkmarkRecord.losses2}</span>
-                  )}
-                  {(checkmarkRecord.wins3 + checkmarkRecord.losses3) > 0 && (
-                    <span className="ml-1.5 text-green-900">✓✓✓ {checkmarkRecord.wins3}-{checkmarkRecord.losses3}</span>
-                  )}
-                </span>
-              )}
-            </span>
             <button
               onClick={loadHistory}
               disabled={historyLoading}
@@ -352,11 +338,27 @@ export function HistoryTab({
             </button>
           </div>
         </div>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-2 text-sm">
+          <span className="text-gray-900">{filteredHistoryGames.length}/{historyGames.length}</span>
+          {checkmarkRecord.total > 0 && (
+            <span className="text-green-700 font-semibold whitespace-nowrap">
+              ✓ {checkmarkRecord.wins - checkmarkRecord.wins2 - checkmarkRecord.wins3}-{checkmarkRecord.losses - checkmarkRecord.losses2 - checkmarkRecord.losses3}{checkmarkRecord.pushes > 0 ? `-${checkmarkRecord.pushes}` : ''}
+            </span>
+          )}
+          {(checkmarkRecord.wins2 + checkmarkRecord.losses2) > 0 && (
+            <span className="text-green-800 font-semibold whitespace-nowrap">
+              ✓✓ {checkmarkRecord.wins2}-{checkmarkRecord.losses2}
+            </span>
+          )}
+          {(checkmarkRecord.wins3 + checkmarkRecord.losses3) > 0 && (
+            <span className="text-green-900 font-semibold whitespace-nowrap">
+              ✓✓✓ {checkmarkRecord.wins3}-{checkmarkRecord.losses3}
+            </span>
+          )}
+        </div>
       </div>
-
       {/* Legend */}
       <div className="px-4 py-2 text-xs flex flex-wrap items-center gap-2 sm:gap-4 bg-gray-50 border-b border-gray-100">
-        <span className="text-gray-900">Line Movement:</span>
         <div className="flex items-center gap-1">
           <div className="w-4 h-4 bg-green-200 rounded"></div>
           <span className="text-gray-900">Toward projection</span>
