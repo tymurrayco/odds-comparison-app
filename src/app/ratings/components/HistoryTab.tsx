@@ -145,20 +145,23 @@ export function HistoryTab({
     let result = games;
     if (showValueOnly) {
       result = result.filter(g => {
-        if (g.projectedSpread === null || g.openingSpread === null || g.closingSpread === null || g.openingSpread === g.closingSpread) return false;
+        if (g.projectedSpread === null || g.openingSpread === null || g.closingSpread === null) return false;
         const _openDiff = Math.abs(g.projectedSpread - g.openingSpread);
+        
+        // Signal #4: opener disagrees with projection by 5+
+        if (_openDiff >= 5) return true;
+        
+        // Steam signal: opener agreed, line moved away, bet dog, 5+ spread only
+        if (g.openingSpread === g.closingSpread) return false;
         const _closeDiff = Math.abs(g.projectedSpread - g.closingSpread);
         const _lineMovement = Math.abs(g.closingSpread - g.openingSpread);
-        // New signal: value check fires + opener agreed + side moved away from is the underdog
         const valueFires = _closeDiff >= 1 && _closeDiff > _openDiff && _lineMovement >= 1;
         const openerAgreed = _openDiff <= 1.5;
-        if (!valueFires || !openerAgreed) return false;
-        // Check that the side moved away from is the underdog
+        const absSpread = Math.abs(g.closingSpread);
+        if (!valueFires || !openerAgreed || absSpread < 5) return false;
         if (g.closingSpread < g.openingSpread) {
-          // Line moved toward home → away is the "away from" side → dog only if close < 0
           return g.closingSpread < 0;
         } else {
-          // Line moved toward away → home is the "away from" side → dog only if close > 0
           return g.closingSpread > 0;
         }
       });
@@ -174,22 +177,15 @@ export function HistoryTab({
     return result;
   }, [historyGames, historyStartDate, historyEndDate, historyDiffMin, historySortField, historySortDirection, showValueOnly, showVOpenOnly, deferredSearch]);
 
-  // Compute W-L record for games with new value checkmarks in the filtered set
+  // Compute W-L record for games with value checkmarks in the filtered set
   const checkmarkRecord = useMemo(() => {
-    let wins = 0, losses = 0, pushes = 0;
-    let wins2 = 0, losses2 = 0;  // 5+ (tiers 2-3)
-    let wins3 = 0, losses3 = 0;  // 7+ (tier 3)
+    let wins1 = 0, losses1 = 0;  // Signal 1: opener 5+ off projection (single ✓)
+    let wins2 = 0, losses2 = 0;  // Steam signal 5-6.9 (✓✓)
+    let wins3 = 0, losses3 = 0;  // Steam signal 7+ (✓✓✓)
+    let pushes = 0;
     
     for (const game of filteredHistoryGames) {
-      if (game.projectedSpread === null || game.openingSpread === null || game.closingSpread === null || game.openingSpread === game.closingSpread) continue;
-      
-      const openDiff = Math.abs(game.projectedSpread - game.openingSpread);
-      const closeDiff = Math.abs(game.projectedSpread - game.closingSpread);
-      const lineMovement = Math.abs(game.closingSpread - game.openingSpread);
-      
-      const valueFires = closeDiff >= 1 && closeDiff > openDiff && lineMovement >= 1;
-      const openerAgreed = openDiff <= 1.5;
-      if (!valueFires || !openerAgreed) continue;
+      if (game.projectedSpread === null || game.openingSpread === null || game.closingSpread === null) continue;
       
       const actualMargin = (game.homeScore !== null && game.awayScore !== null)
         ? game.homeScore - game.awayScore : null;
@@ -198,39 +194,69 @@ export function HistoryTab({
       
       if (spreadResult === null) continue;
       
-      let hasCheck = false;
-      let dogCovered = false;
-      const absSpread = Math.abs(game.closingSpread);
-      const tier = absSpread >= 7 ? 3 : absSpread >= 5 ? 2 : 1;
+      const openDiff = Math.abs(game.projectedSpread - game.openingSpread);
       
-      if (game.closingSpread < game.openingSpread) {
-        if (game.closingSpread < 0) {
-          hasCheck = true;
-          dogCovered = spreadResult < 0;
+      // Signal #4: opener disagrees with projection by 5+ — bet our side
+      if (openDiff >= 5) {
+        // Our side: if proj < close, we favor home; if proj > close, we favor away
+        let ourSideCovered = false;
+        if (game.projectedSpread < game.closingSpread) {
+          ourSideCovered = spreadResult > 0; // home covers
+        } else if (game.projectedSpread > game.closingSpread) {
+          ourSideCovered = spreadResult < 0; // away covers
         }
-      } else {
-        if (game.closingSpread > 0) {
-          hasCheck = true;
-          dogCovered = spreadResult > 0;
+        if (spreadResult === 0) {
+          pushes++;
+        } else if (ourSideCovered) {
+          wins1++;
+        } else {
+          losses1++;
         }
       }
       
-      if (!hasCheck) continue;
-      
-      if (spreadResult === 0) {
-        pushes++;
-      } else if (dogCovered) {
-        wins++;
-        if (tier >= 3) wins3++;
-        else if (tier >= 2) wins2++;
-      } else {
-        losses++;
-        if (tier >= 3) losses3++;
-        else if (tier >= 2) losses2++;
+      // Steam signal: opener agreed, line moved away, bet the dog (5+ only)
+      if (game.openingSpread !== game.closingSpread) {
+        const closeDiff = Math.abs(game.projectedSpread - game.closingSpread);
+        const lineMovement = Math.abs(game.closingSpread - game.openingSpread);
+        const valueFires = closeDiff >= 1 && closeDiff > openDiff && lineMovement >= 1;
+        const openerAgreed = openDiff <= 1.5;
+        
+        if (valueFires && openerAgreed) {
+          const absSpread = Math.abs(game.closingSpread);
+          if (absSpread >= 5) {
+            let hasCheck = false;
+            let dogCovered = false;
+            
+            if (game.closingSpread < game.openingSpread) {
+              if (game.closingSpread < 0) {
+                hasCheck = true;
+                dogCovered = spreadResult < 0;
+              }
+            } else {
+              if (game.closingSpread > 0) {
+                hasCheck = true;
+                dogCovered = spreadResult > 0;
+              }
+            }
+            
+            if (hasCheck) {
+              if (spreadResult === 0) {
+                pushes++;
+              } else if (dogCovered) {
+                if (absSpread >= 7) wins3++; else wins2++;
+              } else {
+                if (absSpread >= 7) losses3++; else losses2++;
+              }
+            }
+          }
+        }
       }
     }
     
-    return { wins, losses, pushes, total: wins + losses + pushes, wins2, losses2, wins3, losses3 };
+    const wins = wins1 + wins2 + wins3;
+    const losses = losses1 + losses2 + losses3;
+    const total = wins + losses + pushes;
+    return { wins, losses, pushes, total, wins1, losses1, wins2, losses2, wins3, losses3 };
   }, [filteredHistoryGames]);
 
   return (
@@ -340,18 +366,18 @@ export function HistoryTab({
         </div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-2 text-sm">
           <span className="text-gray-900">{filteredHistoryGames.length}/{historyGames.length}</span>
-          {checkmarkRecord.total > 0 && (
-            <span className="text-green-700 font-semibold whitespace-nowrap">
-              ✓ {checkmarkRecord.wins - checkmarkRecord.wins2 - checkmarkRecord.wins3}-{checkmarkRecord.losses - checkmarkRecord.losses2 - checkmarkRecord.losses3}{checkmarkRecord.pushes > 0 ? `-${checkmarkRecord.pushes}` : ''}
+          {(checkmarkRecord.wins1 + checkmarkRecord.losses1) > 0 && (
+            <span className="text-blue-700 font-semibold whitespace-nowrap cursor-help" title="Mismatch: Our projection is 5+ pts off the opener. Market has the game wrong — bet our side.">
+              ✓ {checkmarkRecord.wins1}-{checkmarkRecord.losses1}
             </span>
           )}
           {(checkmarkRecord.wins2 + checkmarkRecord.losses2) > 0 && (
-            <span className="text-green-800 font-semibold whitespace-nowrap">
+            <span className="text-green-800 font-semibold whitespace-nowrap cursor-help" title="Steam (5-6.9): Opener agreed with our projection, then the line steamed 1+ pts away. Bet the dog.">
               ✓✓ {checkmarkRecord.wins2}-{checkmarkRecord.losses2}
             </span>
           )}
           {(checkmarkRecord.wins3 + checkmarkRecord.losses3) > 0 && (
-            <span className="text-green-900 font-semibold whitespace-nowrap">
+            <span className="text-green-900 font-semibold whitespace-nowrap cursor-help" title="Steam (7+): Opener agreed with our projection, then the line steamed 1+ pts away on a big spread. Bet the dog.">
               ✓✓✓ {checkmarkRecord.wins3}-{checkmarkRecord.losses3}
             </span>
           )}
@@ -470,36 +496,47 @@ export function HistoryTab({
                 let highlightAwayClass = '';
                 let highlightHomeClass = '';
                 let highlightProjClass = '';
-                let awayValueTier = 0;  // 0=none, 1=✓, 2=✓✓ (5+), 3=✓✓✓ (7+)
+                let awayValueTier = 0;  // 0=none, 2=✓✓ (5-6.9), 3=✓✓✓ (7+) — steam signal
                 let homeValueTier = 0;
+                let awayMismatchCheck = false;  // Signal #4: opener 5+ off projection
+                let homeMismatchCheck = false;
                 
-                if (game.projectedSpread !== null && game.openingSpread !== null && game.closingSpread !== null && game.openingSpread !== game.closingSpread) {
+                if (game.projectedSpread !== null && game.openingSpread !== null && game.closingSpread !== null) {
                   const openDiff = Math.abs(game.projectedSpread - game.openingSpread);
                   const closeDiff = Math.abs(game.projectedSpread - game.closingSpread);
                   const lineMovement = Math.abs(game.closingSpread - game.openingSpread);
                   const movingToward = closeDiff < openDiff;
-                  const highlightClass = movingToward ? getGreenHighlightClass(lineMovement) : getRedHighlightClass(lineMovement);
+                  const highlightClass = game.openingSpread !== game.closingSpread
+                    ? (movingToward ? getGreenHighlightClass(lineMovement) : getRedHighlightClass(lineMovement))
+                    : '';
                   
-                  // New value signal: line moved away from projection + opener agreed + underdog
-                  const valueFires = closeDiff >= 1 && closeDiff > openDiff && lineMovement >= 1;
-                  const openerAgreed = openDiff <= 1.5;
-                  const absSpread = Math.abs(game.closingSpread);
-                  const tier = absSpread >= 7 ? 3 : absSpread >= 5 ? 2 : 1;
-                  
-                  highlightProjClass = highlightClass;
-                  if (game.closingSpread < game.openingSpread) {
-                    // Line moved toward home
-                    highlightHomeClass = highlightClass;
-                    // Check on away (the "away from" side) only if away is the dog (close < 0 = home favored)
-                    if (valueFires && openerAgreed && game.closingSpread < 0) {
-                      awayValueTier = tier;
+                  // Signal #4: opener disagrees with projection by 5+ — bet our side
+                  if (openDiff >= 5) {
+                    if (game.projectedSpread < game.closingSpread) {
+                      homeMismatchCheck = true;  // we favor home
+                    } else if (game.projectedSpread > game.closingSpread) {
+                      awayMismatchCheck = true;  // we favor away
                     }
-                  } else {
-                    // Line moved toward away
-                    highlightAwayClass = highlightClass;
-                    // Check on home (the "away from" side) only if home is the dog (close > 0 = away favored)
-                    if (valueFires && openerAgreed && game.closingSpread > 0) {
-                      homeValueTier = tier;
+                  }
+                  
+                  // Steam signal: opener agreed, line moved away, bet the dog (5+ only)
+                  if (game.openingSpread !== game.closingSpread) {
+                    const valueFires = closeDiff >= 1 && closeDiff > openDiff && lineMovement >= 1;
+                    const openerAgreed = openDiff <= 1.5;
+                    const absSpread = Math.abs(game.closingSpread);
+                    const tier = absSpread >= 7 ? 3 : absSpread >= 5 ? 2 : 0;  // no tier 1
+                    
+                    highlightProjClass = highlightClass;
+                    if (game.closingSpread < game.openingSpread) {
+                      highlightHomeClass = highlightClass;
+                      if (valueFires && openerAgreed && game.closingSpread < 0 && tier >= 2) {
+                        awayValueTier = tier;
+                      }
+                    } else {
+                      highlightAwayClass = highlightClass;
+                      if (valueFires && openerAgreed && game.closingSpread > 0 && tier >= 2) {
+                        homeValueTier = tier;
+                      }
                     }
                   }
                 }
@@ -523,7 +560,10 @@ export function HistoryTab({
                         <TeamLogo teamName={game.awayTeam} logoUrl={awayLogo} size="sm" />
                         <span className="text-sm font-medium text-gray-900 hidden sm:inline">{game.awayTeam}</span>
                         {awayValueTier > 0 && (
-                          <span className={`absolute -bottom-1 -right-1 text-green-600 text-xs font-bold ${awayCovered ? 'border border-green-600 rounded-full px-0.5 flex items-center justify-center bg-white' : ''}`} title={`Opener agreed, line moved away — bet this dog${awayValueTier >= 3 ? ' (7+)' : awayValueTier >= 2 ? ' (5+)' : ''}${awayCovered ? ' ✓covered' : ''}`}>{'✓'.repeat(awayValueTier)}</span>
+                          <span className={`absolute -bottom-1 -right-1 text-green-600 text-xs font-bold ${awayCovered ? 'border border-green-600 rounded-full px-0.5 flex items-center justify-center bg-white' : ''}`} title={`Steam signal: opener agreed, line moved away — bet dog${awayValueTier >= 3 ? ' (7+)' : ' (5+)'}${awayCovered ? ' ✓covered' : ''}`}>{'✓'.repeat(awayValueTier)}</span>
+                        )}
+                        {awayMismatchCheck && !awayValueTier && (
+                          <span className={`absolute -bottom-1 -right-1 text-blue-600 text-xs font-bold ${awayCovered ? 'border border-blue-600 rounded-full px-0.5 flex items-center justify-center bg-white' : ''}`} title={`Mismatch signal: projection 5+ off opener — bet our side${awayCovered ? ' ✓covered' : ''}`}>✓</span>
                         )}
                       </div>
                       {game.awayScore !== null && (
@@ -538,7 +578,10 @@ export function HistoryTab({
                         <TeamLogo teamName={game.homeTeam} logoUrl={homeLogo} size="sm" />
                         <span className="text-sm font-medium text-gray-900 hidden sm:inline">{game.homeTeam}</span>
                         {homeValueTier > 0 && (
-                          <span className={`absolute -bottom-1 -right-1 text-green-600 text-xs font-bold ${homeCovered ? 'border border-green-600 rounded-full px-0.5 flex items-center justify-center bg-white' : ''}`} title={`Opener agreed, line moved away — bet this dog${homeValueTier >= 3 ? ' (7+)' : homeValueTier >= 2 ? ' (5+)' : ''}${homeCovered ? ' ✓covered' : ''}`}>{'✓'.repeat(homeValueTier)}</span>
+                          <span className={`absolute -bottom-1 -right-1 text-green-600 text-xs font-bold ${homeCovered ? 'border border-green-600 rounded-full px-0.5 flex items-center justify-center bg-white' : ''}`} title={`Steam signal: opener agreed, line moved away — bet dog${homeValueTier >= 3 ? ' (7+)' : ' (5+)'}${homeCovered ? ' ✓covered' : ''}`}>{'✓'.repeat(homeValueTier)}</span>
+                        )}
+                        {homeMismatchCheck && !homeValueTier && (
+                          <span className={`absolute -bottom-1 -right-1 text-blue-600 text-xs font-bold ${homeCovered ? 'border border-blue-600 rounded-full px-0.5 flex items-center justify-center bg-white' : ''}`} title={`Mismatch signal: projection 5+ off opener — bet our side${homeCovered ? ' ✓covered' : ''}`}>✓</span>
                         )}
                       </div>
                       {game.homeScore !== null && (

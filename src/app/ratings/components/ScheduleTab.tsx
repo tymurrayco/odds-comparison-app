@@ -171,28 +171,36 @@ export function ScheduleTab({
         }
       }
       
-      // Compute whether this game qualifies for the new value checkmark
-      // Signal: opener agreed (within 1.5), line moved away from projection, and the "away from" side is the underdog
-      let hasValueCheck = false;
-      if (projectedSpread !== null && game.openingSpread !== null && game.spread !== null && game.openingSpread !== game.spread) {
+      // Compute whether this game qualifies for value checkmarks
+      let hasValueCheck = false;  // steam signal 5+
+      let hasMismatchCheck = false;  // opener 5+ off projection
+      
+      if (projectedSpread !== null && game.openingSpread !== null && game.spread !== null) {
         const _openDiff = Math.abs(projectedSpread - game.openingSpread);
-        const _currentDiff = Math.abs(projectedSpread - game.spread);
-        const _lineMovement = Math.abs(game.spread - game.openingSpread);
         
-        const valueFires = _currentDiff >= 1 && _currentDiff > _openDiff && _lineMovement >= 1;
-        const openerAgreed = _openDiff <= 1.5;
-        if (valueFires && openerAgreed) {
-          if (game.spread < game.openingSpread) {
-            // Line moved toward home → away is "away from" side → dog only if spread < 0
-            hasValueCheck = game.spread < 0;
-          } else {
-            // Line moved toward away → home is "away from" side → dog only if spread > 0
-            hasValueCheck = game.spread > 0;
+        // Signal #4: opener disagrees with projection by 5+
+        if (_openDiff >= 5) {
+          hasMismatchCheck = true;
+        }
+        
+        // Steam signal: opener agreed, line moved away, bet the dog, 5+ only
+        if (game.openingSpread !== game.spread) {
+          const _currentDiff = Math.abs(projectedSpread - game.spread);
+          const _lineMovement = Math.abs(game.spread - game.openingSpread);
+          const valueFires = _currentDiff >= 1 && _currentDiff > _openDiff && _lineMovement >= 1;
+          const openerAgreed = _openDiff <= 1.5;
+          const absSpread = Math.abs(game.spread);
+          if (valueFires && openerAgreed && absSpread >= 5) {
+            if (game.spread < game.openingSpread) {
+              hasValueCheck = game.spread < 0;
+            } else {
+              hasValueCheck = game.spread > 0;
+            }
           }
         }
       }
       
-      return { ...game, projectedSpread, delta, awayMovement, homeMovement, hasValueCheck };
+      return { ...game, projectedSpread, delta, awayMovement, homeMovement, hasValueCheck, hasMismatchCheck };
     });
     
     // Sort
@@ -227,7 +235,7 @@ export function ScheduleTab({
     // Filter to value checkmark games only if toggle is on
     let result = gamesWithCalcs;
     if (showValueOnly) {
-      result = result.filter(g => g.hasValueCheck);
+      result = result.filter(g => g.hasValueCheck || g.hasMismatchCheck);
     }
     if (showVOpenOnly) {
       result = result.filter(g => g.projectedSpread !== null && g.openingSpread !== null && Math.abs(g.projectedSpread - g.openingSpread) >= 2);
@@ -470,34 +478,47 @@ export function ScheduleTab({
                 let highlightAwayClass = '';
                 let highlightHomeClass = '';
                 let highlightProjClass = '';
-                let awayValueTier = 0;  // 0=none, 1=✓, 2=✓✓ (5+), 3=✓✓✓ (7+)
+                let awayValueTier = 0;  // 0=none, 2=✓✓ (5-6.9), 3=✓✓✓ (7+) — steam signal
                 let homeValueTier = 0;
+                let awayMismatchCheck = false;  // Signal #4: opener 5+ off projection
+                let homeMismatchCheck = false;
                 
-                if (projectedSpread !== null && game.openingSpread !== null && game.spread !== null && game.openingSpread !== game.spread) {
+                if (projectedSpread !== null && game.openingSpread !== null && game.spread !== null) {
                   const openDiff = Math.abs(projectedSpread - game.openingSpread);
                   const currentDiff = Math.abs(projectedSpread - game.spread);
                   const lineMovement = Math.abs(game.spread - game.openingSpread);
                   const movingToward = currentDiff < openDiff;
-                  const highlightClass = movingToward ? getGreenHighlightClass(lineMovement) : getRedHighlightClass(lineMovement);
+                  const highlightClass = game.openingSpread !== game.spread
+                    ? (movingToward ? getGreenHighlightClass(lineMovement) : getRedHighlightClass(lineMovement))
+                    : '';
                   
-                  // New value signal: line moved away + opener agreed + underdog
-                  const valueFires = currentDiff >= 1 && currentDiff > openDiff && lineMovement >= 1;
-                  const openerAgreed = openDiff <= 1.5;
-                  const absSpread = Math.abs(game.spread);
-                  const tier = absSpread >= 7 ? 3 : absSpread >= 5 ? 2 : 1;
-                  
-                  highlightProjClass = highlightClass;
-                  if (game.spread < game.openingSpread) {
-                    // Line moved toward home
-                    highlightHomeClass = highlightClass;
-                    if (valueFires && openerAgreed && game.spread < 0) {
-                      awayValueTier = tier;
+                  // Signal #4: opener disagrees with projection by 5+ — bet our side
+                  if (openDiff >= 5) {
+                    if (projectedSpread < game.spread) {
+                      homeMismatchCheck = true;  // we favor home
+                    } else if (projectedSpread > game.spread) {
+                      awayMismatchCheck = true;  // we favor away
                     }
-                  } else {
-                    // Line moved toward away
-                    highlightAwayClass = highlightClass;
-                    if (valueFires && openerAgreed && game.spread > 0) {
-                      homeValueTier = tier;
+                  }
+                  
+                  // Steam signal: opener agreed, line moved away, bet the dog (5+ only)
+                  if (game.openingSpread !== game.spread) {
+                    const valueFires = currentDiff >= 1 && currentDiff > openDiff && lineMovement >= 1;
+                    const openerAgreed = openDiff <= 1.5;
+                    const absSpread = Math.abs(game.spread);
+                    const tier = absSpread >= 7 ? 3 : absSpread >= 5 ? 2 : 0;  // no tier 1
+                    
+                    highlightProjClass = highlightClass;
+                    if (game.spread < game.openingSpread) {
+                      highlightHomeClass = highlightClass;
+                      if (valueFires && openerAgreed && game.spread < 0 && tier >= 2) {
+                        awayValueTier = tier;
+                      }
+                    } else {
+                      highlightAwayClass = highlightClass;
+                      if (valueFires && openerAgreed && game.spread > 0 && tier >= 2) {
+                        homeValueTier = tier;
+                      }
                     }
                   }
                 }
@@ -538,7 +559,10 @@ export function ScheduleTab({
                           <span className="text-sm font-medium text-gray-900 hidden sm:inline">{game.awayTeam}</span>
                           {!awayRating && <span className="text-xs text-red-400 hidden sm:inline" title="Team not found in ratings">?</span>}
                           {awayValueTier > 0 && (
-                            <span className="absolute -bottom-1 -right-1 text-green-600 text-xs font-bold" title={`Opener agreed, line moved away — bet this dog${awayValueTier >= 3 ? ' (7+)' : awayValueTier >= 2 ? ' (5+)' : ''}`}>{'✓'.repeat(awayValueTier)}</span>
+                            <span className="absolute -bottom-1 -right-1 text-green-600 text-xs font-bold" title={`Steam signal: opener agreed, line moved away — bet dog${awayValueTier >= 3 ? ' (7+)' : ' (5+)'}`}>{'✓'.repeat(awayValueTier)}</span>
+                          )}
+                          {awayMismatchCheck && !awayValueTier && (
+                            <span className="absolute -bottom-1 -right-1 text-blue-600 text-xs font-bold" title="Mismatch signal: projection 5+ off opener — bet our side">✓</span>
                           )}
                         </div>
                       </td>
@@ -551,7 +575,10 @@ export function ScheduleTab({
                           <span className="text-sm font-medium text-gray-900 hidden sm:inline">{game.homeTeam}</span>
                           {!homeRating && <span className="text-xs text-red-400 hidden sm:inline" title="Team not found in ratings">?</span>}
                           {homeValueTier > 0 && (
-                            <span className="absolute -bottom-1 -right-1 text-green-600 text-xs font-bold" title={`Opener agreed, line moved away — bet this dog${homeValueTier >= 3 ? ' (7+)' : homeValueTier >= 2 ? ' (5+)' : ''}`}>{'✓'.repeat(homeValueTier)}</span>
+                            <span className="absolute -bottom-1 -right-1 text-green-600 text-xs font-bold" title={`Steam signal: opener agreed, line moved away — bet dog${homeValueTier >= 3 ? ' (7+)' : ' (5+)'}`}>{'✓'.repeat(homeValueTier)}</span>
+                          )}
+                          {homeMismatchCheck && !homeValueTier && (
+                            <span className="absolute -bottom-1 -right-1 text-blue-600 text-xs font-bold" title="Mismatch signal: projection 5+ off opener — bet our side">✓</span>
                           )}
                         </div>
                       </td>
