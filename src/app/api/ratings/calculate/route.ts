@@ -385,9 +385,12 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
     
-    // Check for recalculate action first
+    // Check for recalculate actions first
     if (body.action === 'recalculate') {
       return await handleRecalculate(request, body);
+    }
+    if (body.action === 'recalculate-from') {
+      return await handleRecalculateFrom(body);
     }
     
     const config: RatingsConfig = {
@@ -1010,10 +1013,115 @@ async function handleRecalculate(request: NextRequest, body: Record<string, unkn
   }
   
   console.log(`[Recalculate] Complete!`);
-  
+
   return NextResponse.json({
     success: true,
     message: `Recalculated ratings from ${gamesProcessed} games`,
     gamesProcessed,
+  });
+}
+
+/**
+ * Handle recalculate-from action - replays all adjustments but only saves
+ * changes from the specified date forward. Much faster than full recalculate.
+ */
+async function handleRecalculateFrom(body: Record<string, unknown>) {
+  const season = (body.season as number) || 2026;
+  const hca = (body.hca as number) || DEFAULT_RATINGS_CONFIG.hca;
+  const fromDate = body.fromDate as string;
+
+  if (!fromDate || !/^\d{4}-\d{2}-\d{2}$/.test(fromDate)) {
+    return NextResponse.json({
+      success: false,
+      error: 'fromDate is required (YYYY-MM-DD)',
+    }, { status: 400 });
+  }
+
+  console.log(`[RecalculateFrom] Starting partial recalculation from ${fromDate} for season ${season}`);
+
+  // Step 1: Load all adjustments (sorted by date)
+  const adjustments = await loadAdjustments(season);
+
+  if (adjustments.length === 0) {
+    return NextResponse.json({
+      success: false,
+      error: 'No game adjustments found',
+    });
+  }
+
+  // Step 2: Load ratings and reset to initial values
+  const ratings = await loadRatings(season);
+
+  for (const [, rating] of ratings) {
+    rating.rating = rating.initialRating;
+    rating.gamesProcessed = 0;
+  }
+
+  // Step 3: Replay all adjustments, but only save from fromDate forward
+  // Compare using date strings (YYYY-MM-DD) to avoid timezone issues
+
+  let gamesReplayed = 0;
+  let gamesSaved = 0;
+
+  for (const adj of adjustments) {
+    const homeRating = ratings.get(adj.homeTeam);
+    const awayRating = ratings.get(adj.awayTeam);
+
+    if (!homeRating || !awayRating) {
+      continue;
+    }
+
+    const homeRatingBefore = homeRating.rating;
+    const awayRatingBefore = awayRating.rating;
+
+    const projectedSpread = awayRating.rating - homeRating.rating - (adj.isNeutralSite ? 0 : hca);
+    const difference = adj.closingSpread - projectedSpread;
+    const adjustment = difference / 2;
+
+    homeRating.rating -= adjustment;
+    awayRating.rating += adjustment;
+    homeRating.gamesProcessed++;
+    awayRating.gamesProcessed++;
+
+    gamesReplayed++;
+
+    // Only save adjustments from the target date forward
+    const adjDateStr = adj.date.substring(0, 10); // Extract YYYY-MM-DD
+    if (adjDateStr >= fromDate) {
+      console.log(`[RecalculateFrom] Saving ${adj.awayTeam} @ ${adj.homeTeam} (${adjDateStr}): close=${adj.closingSpread}, proj=${projectedSpread.toFixed(2)}, diff=${difference.toFixed(2)}, adj=${adjustment.toFixed(2)}`);
+      const updatedAdj: GameAdjustment = {
+        gameId: adj.gameId,
+        date: adj.date,
+        homeTeam: adj.homeTeam,
+        awayTeam: adj.awayTeam,
+        isNeutralSite: adj.isNeutralSite,
+        projectedSpread,
+        closingSpread: adj.closingSpread,
+        closingSource: adj.closingSource,
+        difference,
+        adjustment,
+        homeRatingBefore,
+        homeRatingAfter: homeRating.rating,
+        awayRatingBefore,
+        awayRatingAfter: awayRating.rating,
+      };
+
+      await saveGameAdjustment(updatedAdj, season);
+      gamesSaved++;
+    }
+  }
+
+  // Step 4: Save all ratings (they all need updating since changes cascade)
+  for (const [, rating] of ratings) {
+    await saveRating(rating, season);
+  }
+
+  console.log(`[RecalculateFrom] Complete! Replayed ${gamesReplayed} games, saved ${gamesSaved} adjustments from ${fromDate} forward`);
+
+  return NextResponse.json({
+    success: true,
+    message: `Recalculated from ${fromDate}: ${gamesSaved} adjustments updated`,
+    gamesReplayed,
+    gamesSaved,
   });
 }

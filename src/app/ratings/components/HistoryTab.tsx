@@ -28,6 +28,58 @@ export function HistoryTab({
   const [showVOpenOnly, setShowVOpenOnly] = useState(false);
   const [teamSearch, setTeamSearch] = useState('');
   const deferredSearch = useDeferredValue(teamSearch);
+  const [backfillLoading, setBackfillLoading] = useState(false);
+  const [backfillMessage, setBackfillMessage] = useState('');
+
+  const handleBackfill = async () => {
+    if (!historyStartDate) {
+      setBackfillMessage('Set a start date first');
+      setTimeout(() => setBackfillMessage(''), 3000);
+      return;
+    }
+    setBackfillLoading(true);
+    setBackfillMessage('');
+    try {
+      // Step 1: Backfill closing lines
+      setBackfillMessage('Backfilling closing lines...');
+      const response = await fetch('/api/ratings/sync/backfill-closing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: historyStartDate }),
+      });
+      const data = await response.json();
+      if (!data.success) {
+        setBackfillMessage(`Error: ${data.error}`);
+        return;
+      }
+
+      // Step 2: Recalculate ratings from the backfilled date forward
+      setBackfillMessage(`Updated ${data.gamesUpdated} games, recalculating ratings...`);
+      const recalcResponse = await fetch('/api/ratings/calculate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'recalculate-from',
+          fromDate: historyStartDate,
+          season: 2026,
+        }),
+      });
+      const recalcData = await recalcResponse.json();
+
+      if (recalcData.success) {
+        setBackfillMessage(`Done! ${data.gamesUpdated} lines updated, ${recalcData.gamesSaved} ratings recalculated`);
+      } else {
+        setBackfillMessage(`Lines updated but recalc failed: ${recalcData.error}`);
+      }
+
+      loadHistory();
+    } catch (err: any) {
+      setBackfillMessage(`Error: ${err.message}`);
+    } finally {
+      setBackfillLoading(false);
+      setTimeout(() => setBackfillMessage(''), 8000);
+    }
+  };
 
   // Helper functions for highlighting
   const getGreenHighlightClass = (movement: number): string => {
@@ -362,6 +414,27 @@ export function HistoryTab({
                 </span>
               ) : 'Refresh'}
             </button>
+            <button
+              onClick={handleBackfill}
+              disabled={backfillLoading || !historyStartDate}
+              className="px-3 py-1 text-sm bg-green-100 hover:bg-green-200 text-green-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Re-fetch closing lines for the selected start date"
+            >
+              {backfillLoading ? (
+                <span className="flex items-center gap-1">
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  Backfilling...
+                </span>
+              ) : 'Backfill Closing'}
+            </button>
+            {backfillMessage && (
+              <span className={`text-xs ${backfillMessage.startsWith('Error') ? 'text-red-600' : 'text-green-600'}`}>
+                {backfillMessage}
+              </span>
+            )}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-2 text-sm">

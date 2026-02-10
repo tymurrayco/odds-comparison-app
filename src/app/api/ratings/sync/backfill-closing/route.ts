@@ -138,6 +138,43 @@ export async function POST(request: NextRequest) {
               bookmaker: result.bookmaker,
             });
             console.log(`[Backfill Closing] Updated ${game.away_team} @ ${game.home_team}: ${game.spread} -> ${result.spread} (${result.bookmaker})`);
+
+            // Also update ncaab_game_adjustments so ratings use the corrected spread
+            // closing_lines uses Odds API names, game_adjustments uses KenPom names — translate via overrides
+            try {
+              const { data: homeOverride } = await supabase
+                .from('ncaab_team_overrides')
+                .select('kenpom_name')
+                .eq('odds_api_name', game.home_team)
+                .single();
+
+              const { data: awayOverride } = await supabase
+                .from('ncaab_team_overrides')
+                .select('kenpom_name')
+                .eq('odds_api_name', game.away_team)
+                .single();
+
+              if (homeOverride?.kenpom_name && awayOverride?.kenpom_name) {
+                const { error: adjError } = await supabase
+                  .from('ncaab_game_adjustments')
+                  .update({
+                    closing_spread: result.spread,
+                    closing_source: result.bookmaker,
+                  })
+                  .eq('home_team', homeOverride.kenpom_name)
+                  .eq('away_team', awayOverride.kenpom_name)
+                  .gte('game_date', startOfDay.toISOString())
+                  .lt('game_date', endOfDay.toISOString());
+
+                if (adjError) {
+                  console.warn(`[Backfill Closing] Failed to update game_adjustments for ${game.away_team} @ ${game.home_team}:`, adjError);
+                } else {
+                  console.log(`[Backfill Closing] Also updated game_adjustments for ${awayOverride.kenpom_name} @ ${homeOverride.kenpom_name}`);
+                }
+              }
+            } catch {
+              console.warn(`[Backfill Closing] Could not update game_adjustments for ${game.away_team} @ ${game.home_team}`);
+            }
           }
         } else {
           gamesSkipped++;
@@ -184,70 +221,23 @@ async function fetchClosingLine(
   homeTeam: string
 ): Promise<{ spread: number; bookmaker: string } | null> {
   
-  // Try with Pinnacle first
-  try {
-    const pinnacleUrl = `${ODDS_API_BASE_URL}/historical/sports/${NCAAB_SPORT_KEY}/odds?` +
-      `apiKey=${apiKey}&regions=eu&markets=spreads&oddsFormat=american` +
-      `&date=${timestamp}&eventIds=${gameId}&bookmakers=pinnacle`;
-    
-    const response = await fetch(pinnacleUrl);
-    
-    if (response.ok) {
-      const data = await response.json();
-      const games: OddsAPIGame[] = data.data || [];
-      
-      if (games.length > 0) {
-        const game = games[0];
-        const pinnacle = game.bookmakers.find(b => b.key === 'pinnacle');
-        
-        if (pinnacle) {
-          const spreadsMarket = pinnacle.markets.find(m => m.key === 'spreads');
-          if (spreadsMarket) {
-            const homeOutcome = spreadsMarket.outcomes.find(o => o.name === homeTeam);
-            if (homeOutcome?.point !== undefined) {
-              return { spread: homeOutcome.point, bookmaker: 'pinnacle' };
-            }
-          }
-        }
-      }
-    }
-  } catch (err) {
-    console.warn(`[Backfill Closing] Pinnacle fetch failed for ${gameId}:`, err);
-  }
-  
-  // Fall back to US books
+  // Fetch US books average (consistent with schedule route)
   try {
     const usUrl = `${ODDS_API_BASE_URL}/historical/sports/${NCAAB_SPORT_KEY}/odds?` +
       `apiKey=${apiKey}&regions=us&markets=spreads&oddsFormat=american` +
       `&date=${timestamp}&eventIds=${gameId}&bookmakers=draftkings,fanduel,betmgm,betrivers`;
-    
+
     const response = await fetch(usUrl);
-    
+
     if (response.ok) {
       const data = await response.json();
       const games: OddsAPIGame[] = data.data || [];
-      
+
       if (games.length > 0) {
         const game = games[0];
-        
-        // Try each book in order
-        for (const bookKey of ['draftkings', 'fanduel', 'betmgm', 'betrivers']) {
-          const book = game.bookmakers.find(b => b.key === bookKey);
-          if (book) {
-            const spreadsMarket = book.markets.find(m => m.key === 'spreads');
-            if (spreadsMarket) {
-              const homeOutcome = spreadsMarket.outcomes.find(o => o.name === homeTeam);
-              if (homeOutcome?.point !== undefined) {
-                return { spread: homeOutcome.point, bookmaker: bookKey };
-              }
-            }
-          }
-        }
-        
-        // If no single book, try averaging
         const spreads: number[] = [];
         const usedBooks: string[] = [];
-        
+
         for (const bookKey of ['draftkings', 'fanduel', 'betmgm', 'betrivers']) {
           const book = game.bookmakers.find(b => b.key === bookKey);
           if (book) {
@@ -261,7 +251,7 @@ async function fetchClosingLine(
             }
           }
         }
-        
+
         if (spreads.length > 0) {
           let avgSpread = spreads.reduce((a, b) => a + b, 0) / spreads.length;
           avgSpread = Math.round(avgSpread * 2) / 2; // Round to nearest 0.5
@@ -272,7 +262,7 @@ async function fetchClosingLine(
   } catch (err) {
     console.warn(`[Backfill Closing] US books fetch failed for ${gameId}:`, err);
   }
-  
+
   return null;
 }
 
