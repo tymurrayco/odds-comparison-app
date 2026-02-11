@@ -680,21 +680,21 @@ function HomeContent() {
       <header className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
-            <h1 className="text-xl font-bold text-blue-600">odds.day</h1>
-            
-            <div className="flex items-center gap-3">
+            <h1 className="text-base sm:text-xl font-bold text-blue-600 shrink-0">odds.day</h1>
+
+            <div className="flex items-center gap-1.5 sm:gap-3">
               {activeView !== 'mybets' && (
                 <BookmakerSelector
                   selectedBookmakers={selectedBookmakers}
                   onSelectionChange={setSelectedBookmakers}
                 />
               )}
-              
+
               {/* Ratings Button - Only show for NCAAB */}
               {activeLeague === 'basketball_ncaab' && (
                 <button
                   onClick={() => router.push('/ratings')}
-                  className="px-3 py-2 rounded-xl text-sm font-medium transition-all select-none border border-gray-200 shadow-sm bg-purple-100 text-purple-700 hover:bg-purple-200"
+                  className="px-2 sm:px-3 py-2 rounded-xl text-sm font-medium transition-all select-none border border-gray-200 shadow-sm bg-purple-100 text-purple-700 hover:bg-purple-200 whitespace-nowrap"
                 >
                   📈 Ratings
                 </button>
@@ -740,7 +740,7 @@ function HomeContent() {
                     setActiveView(activeView === 'mybets' ? 'games' : 'mybets');
                   }
                 }}
-                className={`px-3 py-2 rounded-xl text-sm font-medium transition-all select-none border border-gray-200 shadow-sm ${
+                className={`px-2 sm:px-3 py-2 rounded-xl text-sm font-medium transition-all select-none border border-gray-200 shadow-sm whitespace-nowrap ${
                   activeView === 'mybets'
                     ? 'bg-blue-600 text-white'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
