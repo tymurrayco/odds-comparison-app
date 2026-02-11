@@ -415,6 +415,46 @@ export function HistoryTab({
               ) : 'Refresh'}
             </button>
             <button
+              onClick={() => {
+                const escapeCSV = (v: string | number | null) => {
+                  if (v === null || v === undefined) return '';
+                  const s = String(v);
+                  return (s.includes(',') || s.includes('"') || s.includes('\n')) ? `"${s.replace(/"/g, '""')}"` : s;
+                };
+                const header = ['Date', 'Away', 'Away Score', 'Home', 'Home Score', 'Projected', 'Open', 'v. Open', 'Close', 'v. Close'];
+                const rows = filteredHistoryGames.map(g => {
+                  const dateStr = new Date(g.gameDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/New_York' });
+                  const vOpen = (g.projectedSpread !== null && g.openingSpread !== null) ? Math.abs(g.projectedSpread - g.openingSpread).toFixed(1) : '';
+                  return [
+                    dateStr,
+                    g.awayTeam,
+                    g.awayScore ?? '',
+                    g.homeTeam,
+                    g.homeScore ?? '',
+                    g.projectedSpread !== null ? g.projectedSpread.toFixed(1) : '',
+                    g.openingSpread !== null ? g.openingSpread.toFixed(1) : '',
+                    vOpen,
+                    g.closingSpread !== null ? g.closingSpread.toFixed(1) : '',
+                    g.difference !== null ? g.difference.toFixed(1) : '',
+                  ].map(escapeCSV);
+                });
+                const csv = [header, ...rows].map(r => r.join(',')).join('\n');
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = `history_${historyStartDate || 'all'}_${historyEndDate || 'all'}_${new Date().toISOString().split('T')[0]}.csv`;
+                link.click();
+              }}
+              disabled={filteredHistoryGames.length === 0}
+              className="hidden sm:inline-flex px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed items-center gap-1"
+              title="Export filtered history to CSV"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+              Export
+            </button>
+            <button
               onClick={handleBackfill}
               disabled={backfillLoading || !historyStartDate}
               className="px-3 py-1 text-sm bg-green-100 hover:bg-green-200 text-green-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
