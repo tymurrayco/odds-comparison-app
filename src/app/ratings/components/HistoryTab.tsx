@@ -73,8 +73,8 @@ export function HistoryTab({
       }
 
       loadHistory();
-    } catch (err: any) {
-      setBackfillMessage(`Error: ${err.message}`);
+    } catch (err: unknown) {
+      setBackfillMessage(`Error: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setBackfillLoading(false);
       setTimeout(() => setBackfillMessage(''), 8000);
