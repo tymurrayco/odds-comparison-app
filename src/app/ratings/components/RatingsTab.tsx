@@ -133,15 +133,72 @@ export function RatingsTab({ snapshot, hca, getTeamLogo }: RatingsTabProps) {
 
   return (
     <>
-      {/* Search */}
-      <div className="p-4 border-b border-gray-200">
+      {/* Search + Export */}
+      <div className="p-4 border-b border-gray-200 flex items-center gap-2">
         <input
           type="text"
           placeholder="Search teams or conferences..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
+        <button
+          onClick={() => {
+            const escapeCSV = (v: string | number | null) => {
+              if (v === null || v === undefined) return '';
+              const s = String(v);
+              return (s.includes(',') || s.includes('"') || s.includes('\n')) ? `"${s.replace(/"/g, '""')}"` : s;
+            };
+            const header = ['Rank', 'Team', 'Conference', 'Rating', 'Initial', 'Initial Rank', 'Change', 'Games', 'Date', 'Opponent', 'Location', 'Neutral', 'Team Rating Before', 'Opp Rating Before', 'HCA', 'Projected Spread', 'Closing Spread', 'Rating After', 'Impact'];
+            const rows: string[][] = [];
+            filteredRatings.forEach((team, index) => {
+              const rank = sortBy === 'rating'
+                ? (sortDir === 'desc' ? index + 1 : filteredRatings.length - index)
+                : snapshot.ratings.findIndex(r => r.teamName === team.teamName) + 1;
+              const change = team.rating - team.initialRating;
+              const teamGames = teamAdjustmentsMap.get(team.teamName) || [];
+              if (teamGames.length === 0) {
+                rows.push([
+                  String(rank), team.teamName, team.conference || '', team.rating.toFixed(2),
+                  team.initialRating.toFixed(2), String(initialRankMap.get(team.teamName) || ''),
+                  change.toFixed(2), String(team.gamesProcessed),
+                  '', '', '', '', '', '', '', '', '', '', '',
+                ].map(escapeCSV));
+              } else {
+                teamGames.forEach((adj) => {
+                  const details = getTeamGameDetails(adj, team.teamName);
+                  const oppRating = details.isHome ? adj.awayRatingBefore : adj.homeRatingBefore;
+                  const hcaApplied = adj.isNeutralSite ? 0 : (details.isHome ? hca : -hca);
+                  const teamSpread = details.isHome ? adj.projectedSpread : -adj.projectedSpread;
+                  const dateStr = new Date(adj.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                  rows.push([
+                    String(rank), team.teamName, team.conference || '', team.rating.toFixed(2),
+                    team.initialRating.toFixed(2), String(initialRankMap.get(team.teamName) || ''),
+                    change.toFixed(2), String(team.gamesProcessed),
+                    dateStr, details.opponent, details.location, adj.isNeutralSite ? 'Y' : '',
+                    details.ratingBefore.toFixed(2), oppRating.toFixed(2), hcaApplied.toFixed(1),
+                    teamSpread.toFixed(1), adj.closingSpread !== null ? adj.closingSpread.toFixed(1) : '',
+                    details.ratingAfter.toFixed(2), details.ratingChange.toFixed(2),
+                  ].map(escapeCSV));
+                });
+              }
+            });
+            const csv = [header, ...rows].map(r => r.join(',')).join('\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `ratings_${new Date().toISOString().split('T')[0]}.csv`;
+            link.click();
+          }}
+          disabled={filteredRatings.length === 0}
+          className="hidden sm:inline-flex px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed items-center gap-1"
+          title="Export ratings and game details to CSV"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+          </svg>
+          Export
+        </button>
       </div>
       
       {/* Table */}
