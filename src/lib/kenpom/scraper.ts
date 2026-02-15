@@ -15,6 +15,7 @@ async function launchStealthBrowser(): Promise<Browser> {
   const StealthPlugin = (await import('puppeteer-extra-plugin-stealth')).default;
   puppeteerExtra.use(StealthPlugin());
   return puppeteerExtra.launch({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     headless: 'new' as any,
     args: ['--no-sandbox', '--disable-setuid-sandbox'],
   }) as unknown as Browser;
