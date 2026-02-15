@@ -287,17 +287,19 @@ export async function saveGameAdjustment(adjustment: GameAdjustment, season: num
   
   try {
     // Get Odds API names from overrides for both teams
-    const { data: homeOverride } = await supabase
+    const { data: homeOverrides } = await supabase
       .from('ncaab_team_overrides')
       .select('odds_api_name')
       .eq('kenpom_name', adjustment.homeTeam)
-      .single();
-    
-    const { data: awayOverride } = await supabase
+      .limit(1);
+    const homeOverride = homeOverrides?.[0] ?? null;
+
+    const { data: awayOverrides } = await supabase
       .from('ncaab_team_overrides')
       .select('odds_api_name')
       .eq('kenpom_name', adjustment.awayTeam)
-      .single();
+      .limit(1);
+    const awayOverride = awayOverrides?.[0] ?? null;
     
     if (homeOverride?.odds_api_name && awayOverride?.odds_api_name) {
       // Query closing_lines using Odds API names

@@ -142,17 +142,19 @@ export async function POST(request: NextRequest) {
             // Also update ncaab_game_adjustments so ratings use the corrected spread
             // closing_lines uses Odds API names, game_adjustments uses KenPom names — translate via overrides
             try {
-              const { data: homeOverride } = await supabase
+              const { data: homeOverrides } = await supabase
                 .from('ncaab_team_overrides')
                 .select('kenpom_name')
                 .eq('odds_api_name', game.home_team)
-                .single();
+                .limit(1);
+              const homeOverride = homeOverrides?.[0] ?? null;
 
-              const { data: awayOverride } = await supabase
+              const { data: awayOverrides } = await supabase
                 .from('ncaab_team_overrides')
                 .select('kenpom_name')
                 .eq('odds_api_name', game.away_team)
-                .single();
+                .limit(1);
+              const awayOverride = awayOverrides?.[0] ?? null;
 
               if (homeOverride?.kenpom_name && awayOverride?.kenpom_name) {
                 const { error: adjError } = await supabase
@@ -254,7 +256,7 @@ async function fetchClosingLine(
 
         if (spreads.length > 0) {
           let avgSpread = spreads.reduce((a, b) => a + b, 0) / spreads.length;
-          avgSpread = Math.round(avgSpread * 2) / 2; // Round to nearest 0.5
+          avgSpread = Math.round(avgSpread * 10) / 10; // Round to nearest 0.1
           return { spread: avgSpread, bookmaker: `US Avg (${usedBooks.length})` };
         }
       }

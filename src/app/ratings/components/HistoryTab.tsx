@@ -231,10 +231,9 @@ export function HistoryTab({
 
   // Compute W-L record for games with value checkmarks in the filtered set
   const checkmarkRecord = useMemo(() => {
-    let wins1 = 0, losses1 = 0;  // Signal 1: opener 5+ off projection (single ✓)
-    let wins2 = 0, losses2 = 0;  // Steam signal 5-6.9 (✓✓)
-    let wins3 = 0, losses3 = 0;  // Steam signal 7+ (✓✓✓)
-    let pushes = 0;
+    let wins1 = 0, losses1 = 0, pushes1 = 0;  // Signal 1: opener 5+ off projection (single ✓)
+    let wins2 = 0, losses2 = 0, pushes2 = 0;  // Steam signal 5-6.9 (✓✓)
+    let wins3 = 0, losses3 = 0, pushes3 = 0;  // Steam signal 7+ (✓✓✓)
     
     for (const game of filteredHistoryGames) {
       if (game.projectedSpread === null || game.openingSpread === null || game.closingSpread === null) continue;
@@ -258,7 +257,7 @@ export function HistoryTab({
           ourSideCovered = spreadResult < 0; // away covers
         }
         if (spreadResult === 0) {
-          pushes++;
+          pushes1++;
         } else if (ourSideCovered) {
           wins1++;
         } else {
@@ -293,7 +292,7 @@ export function HistoryTab({
             
             if (hasCheck) {
               if (spreadResult === 0) {
-                pushes++;
+                if (absSpread >= 7) pushes3++; else pushes2++;
               } else if (dogCovered) {
                 if (absSpread >= 7) wins3++; else wins2++;
               } else {
@@ -307,8 +306,9 @@ export function HistoryTab({
     
     const wins = wins1 + wins2 + wins3;
     const losses = losses1 + losses2 + losses3;
+    const pushes = pushes1 + pushes2 + pushes3;
     const total = wins + losses + pushes;
-    return { wins, losses, pushes, total, wins1, losses1, wins2, losses2, wins3, losses3 };
+    return { wins, losses, pushes, total, wins1, losses1, pushes1, wins2, losses2, pushes2, wins3, losses3, pushes3 };
   }, [filteredHistoryGames]);
 
   return (
@@ -479,19 +479,19 @@ export function HistoryTab({
         </div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-2 text-sm">
           <span className="text-gray-900">{filteredHistoryGames.length}/{historyGames.length}</span>
-          {(checkmarkRecord.wins1 + checkmarkRecord.losses1) > 0 && (
+          {(checkmarkRecord.wins1 + checkmarkRecord.losses1 + checkmarkRecord.pushes1) > 0 && (
             <span className="text-blue-700 font-semibold whitespace-nowrap cursor-help" title="Mismatch: Our projection is 5+ pts off the opener. Market has the game wrong — bet our side.">
-              ✓ {checkmarkRecord.wins1}-{checkmarkRecord.losses1}
+              ✓ {checkmarkRecord.wins1}-{checkmarkRecord.losses1}{checkmarkRecord.pushes1 > 0 ? `-${checkmarkRecord.pushes1}` : ''}
             </span>
           )}
-          {(checkmarkRecord.wins2 + checkmarkRecord.losses2) > 0 && (
+          {(checkmarkRecord.wins2 + checkmarkRecord.losses2 + checkmarkRecord.pushes2) > 0 && (
             <span className="text-green-800 font-semibold whitespace-nowrap cursor-help" title="Steam (5-6.9): Opener agreed with our projection, then the line steamed 1+ pts away. Bet the dog.">
-              ✓✓ {checkmarkRecord.wins2}-{checkmarkRecord.losses2}
+              ✓✓ {checkmarkRecord.wins2}-{checkmarkRecord.losses2}{checkmarkRecord.pushes2 > 0 ? `-${checkmarkRecord.pushes2}` : ''}
             </span>
           )}
-          {(checkmarkRecord.wins3 + checkmarkRecord.losses3) > 0 && (
+          {(checkmarkRecord.wins3 + checkmarkRecord.losses3 + checkmarkRecord.pushes3) > 0 && (
             <span className="text-green-900 font-semibold whitespace-nowrap cursor-help" title="Steam (7+): Opener agreed with our projection, then the line steamed 1+ pts away on a big spread. Bet the dog.">
-              ✓✓✓ {checkmarkRecord.wins3}-{checkmarkRecord.losses3}
+              ✓✓✓ {checkmarkRecord.wins3}-{checkmarkRecord.losses3}{checkmarkRecord.pushes3 > 0 ? `-${checkmarkRecord.pushes3}` : ''}
             </span>
           )}
         </div>
@@ -664,6 +664,7 @@ export function HistoryTab({
                   ? actualMargin + game.closingSpread : null;
                 const homeCovered = spreadResult !== null && spreadResult > 0;
                 const awayCovered = spreadResult !== null && spreadResult < 0;
+                const isPush = spreadResult !== null && spreadResult === 0;
                 
                 return (
                   <tr key={`history-${index}`} className="hover:bg-gray-50">
@@ -673,10 +674,10 @@ export function HistoryTab({
                         <TeamLogo teamName={game.awayTeam} logoUrl={awayLogo} size="sm" />
                         <span className="text-sm font-medium text-gray-900 hidden sm:inline">{game.awayTeam}</span>
                         {awayValueTier > 0 && (
-                          <span className={`absolute -bottom-1 -right-1 text-green-600 text-xs font-bold ${awayCovered ? 'border border-green-600 rounded-full px-0.5 flex items-center justify-center bg-white' : ''}`} title={`Steam signal: opener agreed, line moved away — bet dog${awayValueTier >= 3 ? ' (7+)' : ' (5+)'}${awayCovered ? ' ✓covered' : ''}`}>{'✓'.repeat(awayValueTier)}</span>
+                          <span className={`absolute -bottom-1 -right-1 text-green-600 text-xs font-bold ${awayCovered ? 'border border-green-600 rounded-full px-0.5 flex items-center justify-center bg-white' : isPush ? 'border border-gray-400 rounded-full px-0.5 flex items-center justify-center bg-white text-gray-400' : ''}`} title={`Steam signal: opener agreed, line moved away — bet dog${awayValueTier >= 3 ? ' (7+)' : ' (5+)'}${awayCovered ? ' ✓covered' : isPush ? ' push' : ''}`}>{'✓'.repeat(awayValueTier)}</span>
                         )}
                         {awayMismatchCheck && !awayValueTier && (
-                          <span className={`absolute -bottom-1 -right-1 text-blue-600 text-xs font-bold ${awayCovered ? 'border border-blue-600 rounded-full px-0.5 flex items-center justify-center bg-white' : ''}`} title={`Mismatch signal: projection 5+ off opener — bet our side${awayCovered ? ' ✓covered' : ''}`}>✓</span>
+                          <span className={`absolute -bottom-1 -right-1 text-blue-600 text-xs font-bold ${awayCovered ? 'border border-blue-600 rounded-full px-0.5 flex items-center justify-center bg-white' : isPush ? 'border border-gray-400 rounded-full px-0.5 flex items-center justify-center bg-white text-gray-400' : ''}`} title={`Mismatch signal: projection 5+ off opener — bet our side${awayCovered ? ' ✓covered' : isPush ? ' push' : ''}`}>✓</span>
                         )}
                       </div>
                       {game.awayScore !== null && (
@@ -691,10 +692,10 @@ export function HistoryTab({
                         <TeamLogo teamName={game.homeTeam} logoUrl={homeLogo} size="sm" />
                         <span className="text-sm font-medium text-gray-900 hidden sm:inline">{game.homeTeam}</span>
                         {homeValueTier > 0 && (
-                          <span className={`absolute -bottom-1 -right-1 text-green-600 text-xs font-bold ${homeCovered ? 'border border-green-600 rounded-full px-0.5 flex items-center justify-center bg-white' : ''}`} title={`Steam signal: opener agreed, line moved away — bet dog${homeValueTier >= 3 ? ' (7+)' : ' (5+)'}${homeCovered ? ' ✓covered' : ''}`}>{'✓'.repeat(homeValueTier)}</span>
+                          <span className={`absolute -bottom-1 -right-1 text-green-600 text-xs font-bold ${homeCovered ? 'border border-green-600 rounded-full px-0.5 flex items-center justify-center bg-white' : isPush ? 'border border-gray-400 rounded-full px-0.5 flex items-center justify-center bg-white text-gray-400' : ''}`} title={`Steam signal: opener agreed, line moved away — bet dog${homeValueTier >= 3 ? ' (7+)' : ' (5+)'}${homeCovered ? ' ✓covered' : isPush ? ' push' : ''}`}>{'✓'.repeat(homeValueTier)}</span>
                         )}
                         {homeMismatchCheck && !homeValueTier && (
-                          <span className={`absolute -bottom-1 -right-1 text-blue-600 text-xs font-bold ${homeCovered ? 'border border-blue-600 rounded-full px-0.5 flex items-center justify-center bg-white' : ''}`} title={`Mismatch signal: projection 5+ off opener — bet our side${homeCovered ? ' ✓covered' : ''}`}>✓</span>
+                          <span className={`absolute -bottom-1 -right-1 text-blue-600 text-xs font-bold ${homeCovered ? 'border border-blue-600 rounded-full px-0.5 flex items-center justify-center bg-white' : isPush ? 'border border-gray-400 rounded-full px-0.5 flex items-center justify-center bg-white text-gray-400' : ''}`} title={`Mismatch signal: projection 5+ off opener — bet our side${homeCovered ? ' ✓covered' : isPush ? ' push' : ''}`}>✓</span>
                         )}
                       </div>
                       {game.homeScore !== null && (

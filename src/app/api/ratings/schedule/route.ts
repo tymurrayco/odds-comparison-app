@@ -113,13 +113,13 @@ const extractSpreadAndTotal = (game: OddsGame) => {
   
   if (spreads.length > 0) {
     spread = spreads.reduce((a, b) => a + b, 0) / spreads.length;
-    spread = Math.round(spread * 2) / 2; // Round to nearest 0.5
+    spread = Math.round(spread * 10) / 10; // Round to nearest 0.1
     spreadBookmaker = `US Avg (${usedBooks.length})`;
   }
-  
+
   if (totals.length > 0) {
     total = totals.reduce((a, b) => a + b, 0) / totals.length;
-    total = Math.round(total * 2) / 2; // Round to nearest 0.5
+    total = Math.round(total * 10) / 10; // Round to nearest 0.1
   }
   
   return { spread, total, spreadBookmaker };
@@ -200,13 +200,13 @@ async function fetchClosingLines(
           
           if (spreads.length > 0) {
             spread = spreads.reduce((a, b) => a + b, 0) / spreads.length;
-            spread = Math.round(spread * 2) / 2;
+            spread = Math.round(spread * 10) / 10;
             spreadBookmaker = `US Avg (${usedBooks.length})`;
           }
-          
+
           if (totals.length > 0) {
             total = totals.reduce((a, b) => a + b, 0) / totals.length;
-            total = Math.round(total * 2) / 2;
+            total = Math.round(total * 10) / 10;
           }
           
           closingLines.set(gameId, { spread, total, spreadBookmaker });

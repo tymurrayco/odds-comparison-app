@@ -314,7 +314,7 @@ export function processGames(
 export function extractClosingSpread(
   game: OddsAPIGame,
   source: ClosingLineSource,
-  usBookmakerKeys: string[] = ['draftkings', 'fanduel', 'betmgm', 'betrivers', 'williamhill_us']
+  usBookmakerKeys: string[] = ['draftkings', 'fanduel', 'betmgm', 'betrivers']
 ): ClosingLineResult {
   const result: ClosingLineResult = {
     spread: null,

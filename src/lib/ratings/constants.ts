@@ -35,7 +35,6 @@ export const US_AVERAGE_BOOKMAKERS = [
   { key: 'fanduel', title: 'FanDuel' },
   { key: 'betmgm', title: 'BetMGM' },
   { key: 'betrivers', title: 'BetRivers' },
-  { key: 'williamhill_us', title: 'Caesars' },
 ];
 
 export const US_AVERAGE_BOOKMAKER_KEYS = US_AVERAGE_BOOKMAKERS.map(b => b.key);
