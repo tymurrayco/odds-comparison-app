@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { scrapeKenpomDateRange, backfillBoxScores } from '@/lib/kenpom/scraper';
 import { saveKenpomGames, loadKenpomGames } from '@/lib/kenpom/supabase';
 
-export const maxDuration = 300; // 5 min for Vercel (incremental)
+export const maxDuration = 60; // Max for Vercel hobby plan
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
