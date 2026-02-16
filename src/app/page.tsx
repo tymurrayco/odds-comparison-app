@@ -699,6 +699,16 @@ function HomeContent() {
                   📈 Ratings
                 </button>
               )}
+
+              {/* Ratings Button - Only show for NCAAL */}
+              {activeLeague === 'lacrosse_ncaa' && (
+                <button
+                  onClick={() => router.push('/lacrosse-ratings')}
+                  className="px-2 sm:px-3 py-2 rounded-xl text-sm font-medium transition-all select-none border border-gray-200 shadow-sm bg-purple-100 text-purple-700 hover:bg-purple-200 whitespace-nowrap"
+                >
+                  📈 Ratings
+                </button>
+              )}
               
               <button
                 onMouseDown={(e) => {
