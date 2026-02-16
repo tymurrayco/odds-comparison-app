@@ -429,7 +429,6 @@ export async function POST(request: NextRequest) {
     console.log(`[Lacrosse Sync] ${allGames.length} total ESPN games, ${newGames.length} new`);
 
     if (newGames.length === 0) {
-      const adjustments = await loadAdjustments(config.season);
       return NextResponse.json({
         success: true,
         message: 'No new games to process',

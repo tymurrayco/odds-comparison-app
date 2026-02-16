@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { DEFAULT_LACROSSE_CONFIG } from '@/lib/lacrosse/constants';
-import type { RatingsSnapshot, ClosingLineSource } from '@/lib/lacrosse/types';
+import type { RatingsSnapshot } from '@/lib/lacrosse/types';
 
 export interface UseLacrosseDataReturn {
   loading: boolean;
