@@ -1,7 +1,7 @@
 // src/app/ratings/utils/tournamentProjection.ts
 
 import { projectSpread, formatSpread } from '@/lib/ratings/engine';
-import type { BracketMatchup, BracketTeam } from '../types/tournament';
+import type { BracketMatchup, BracketTeam, BracketTemplate } from '../types/tournament';
 
 // ============================================
 // Win Probability
