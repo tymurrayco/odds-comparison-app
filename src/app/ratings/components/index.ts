@@ -6,3 +6,4 @@ export { HistoryTab } from './HistoryTab';
 export { HypotheticalsTab } from './HypotheticalsTab';
 export { OverridesTab } from './OverridesTab';
 export { MatchingLogsTab, BarttovikTab } from './AdminTabs';
+export { TournamentsTab } from './TournamentsTab';

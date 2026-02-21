@@ -158,7 +158,7 @@ export interface HistoryGame {
 }
 
 // Tab type
-export type TabType = 'ratings' | 'hypotheticals' | 'schedule' | 'history' | 'matching' | 'overrides' | 'barttorvik';
+export type TabType = 'ratings' | 'hypotheticals' | 'schedule' | 'history' | 'tournaments' | 'matching' | 'overrides' | 'barttorvik';
 
 // Sort types
 export type RatingsSortField = 'rating' | 'name' | 'games' | 'change' | 'initial';

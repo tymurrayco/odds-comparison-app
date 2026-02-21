@@ -14,6 +14,7 @@ import {
   MatchingLogsTab,
   OverridesTab,
   BarttovikTab,
+  TournamentsTab,
 } from './components';
 import SBROpenersTab from './components/SBROpenersTab';
 import type { TabType, ScheduleFilter, ScheduleSortField, SortDirection } from './types';
@@ -244,6 +245,7 @@ export default function RatingsPage() {
                 { key: 'schedule' as const, label: 'Schedule', show: true },
                 { key: 'history' as const, label: 'History', show: true },
                 { key: 'hypotheticals' as const, label: 'Matchups', show: true },
+                { key: 'tournaments' as const, label: 'Tournaments', show: true },
                 { key: 'sbr-openers' as const, label: 'SBR Openers', show: data.isLocalhost, green: true },
                 { key: 'matching' as const, label: 'Matching', show: data.isLocalhost },
                 { key: 'overrides' as const, label: 'Overrides', show: data.isLocalhost },
@@ -309,6 +311,14 @@ export default function RatingsPage() {
 
           {activeTab === 'hypotheticals' && (
             <HypotheticalsTab
+              snapshot={data.snapshot}
+              hca={data.hca}
+              getTeamLogo={data.getTeamLogo}
+            />
+          )}
+
+          {activeTab === 'tournaments' && (
+            <TournamentsTab
               snapshot={data.snapshot}
               hca={data.hca}
               getTeamLogo={data.getTeamLogo}
