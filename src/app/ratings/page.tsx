@@ -92,6 +92,8 @@ export default function RatingsPage() {
             <div>
               <h1
                 className={`text-2xl font-bold text-gray-900 select-none ${isHolding ? 'opacity-60' : ''}`}
+                style={{ WebkitTouchCallout: 'none', touchAction: 'none' }}
+                onContextMenu={(e) => e.preventDefault()}
                 onMouseDown={(e) => {
                   e.preventDefault();
                   setIsHolding(true);
@@ -125,6 +127,13 @@ export default function RatingsPage() {
                   }, 2000);
                 }}
                 onTouchEnd={() => {
+                  setIsHolding(false);
+                  if (pressTimer.current) {
+                    clearTimeout(pressTimer.current);
+                    pressTimer.current = null;
+                  }
+                }}
+                onTouchCancel={() => {
                   setIsHolding(false);
                   if (pressTimer.current) {
                     clearTimeout(pressTimer.current);
