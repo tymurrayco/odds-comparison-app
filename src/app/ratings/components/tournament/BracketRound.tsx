@@ -10,7 +10,6 @@ interface BracketRoundProps {
   onPickWinner: (matchupId: string, side: 'top' | 'bottom') => void;
   getTeamLogo: (teamName: string) => string | null;
   roundIndex: number;
-  totalRounds: number;
 }
 
 export function BracketRound({
@@ -19,7 +18,6 @@ export function BracketRound({
   onPickWinner,
   getTeamLogo,
   roundIndex,
-  totalRounds,
 }: BracketRoundProps) {
   // Spacing increases per round so matchups align with their feeder games
   // First round: tight. Each subsequent round doubles spacing.

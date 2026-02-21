@@ -5,7 +5,6 @@ import type { RatingsSnapshot } from '@/lib/ratings/types';
 import type { BracketTeam, BracketMatchup, BracketConfig } from '../types/tournament';
 import {
   BRACKET_TEMPLATES,
-  CONFERENCE_DEFAULTS,
   getDefaultTemplate,
   getDefaultBracketName,
 } from '../utils/bracketTemplates';

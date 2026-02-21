@@ -48,7 +48,6 @@ export function BracketVisualization({
               onPickWinner={onPickWinner}
               getTeamLogo={getTeamLogo}
               roundIndex={idx}
-              totalRounds={rounds.length}
             />
           ))}
 
