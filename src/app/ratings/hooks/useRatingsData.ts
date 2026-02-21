@@ -1,7 +1,7 @@
 // src/app/ratings/hooks/useRatingsData.ts
 // Main data management hook for ratings page
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { DEFAULT_RATINGS_CONFIG } from '@/lib/ratings/constants';
 import type {
   RatingsSnapshot,
@@ -135,6 +135,7 @@ export function useRatingsData(): UseRatingsDataReturn {
   // Schedule
   const [scheduleGames, setScheduleGames] = useState<ScheduleGame[]>([]);
   const [combinedScheduleGames, setCombinedScheduleGames] = useState<CombinedScheduleGame[]>([]);
+  const combinedScheduleGamesRef = useRef<CombinedScheduleGame[]>([]);
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [oddsLoading, setOddsLoading] = useState(false);
   const [oddsError, setOddsError] = useState<string | null>(null);
@@ -149,6 +150,11 @@ export function useRatingsData(): UseRatingsDataReturn {
   const [btLoading, setBtLoading] = useState(false);
   const [btError, setBtError] = useState<string | null>(null);
   
+  // Keep ref in sync for use inside loadSchedule callback
+  useEffect(() => {
+    combinedScheduleGamesRef.current = combinedScheduleGames;
+  }, [combinedScheduleGames]);
+
   // Check if running locally
   useEffect(() => {
     setIsLocalhost(window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
@@ -334,6 +340,13 @@ export function useRatingsData(): UseRatingsDataReturn {
         }
       }
       
+      // Capture previous state to preserve spread data for started games
+      const prevGameMap = new Map<string, CombinedScheduleGame>();
+      for (const g of combinedScheduleGamesRef.current) {
+        const key = `${g.awayTeam}|${g.homeTeam}|${g.gameDate}`;
+        prevGameMap.set(key, g);
+      }
+
       // Build initial combined games
       const initialCombinedGames: CombinedScheduleGame[] = btGamesRaw.map((bt) => {
         const dateInfo = getDateInfo(bt.gameDate);
@@ -370,7 +383,6 @@ export function useRatingsData(): UseRatingsDataReturn {
         return parseTimeToMinutes(a.gameTime) - parseTimeToMinutes(b.gameTime);
       });
       
-      setCombinedScheduleGames(initialCombinedGames);
       setScheduleLoading(false);
       
       // Fetch odds in background
@@ -428,25 +440,42 @@ export function useRatingsData(): UseRatingsDataReturn {
           let enrichedGames = initialCombinedGames.map(game => {
             const oddsMatch = findOddsMatch(game.homeTeam, game.awayTeam);
             const timeBasedStarted = hasGameStarted(game.gameTime, game.isToday);
-            
+            const prevKey = `${game.awayTeam}|${game.homeTeam}|${game.gameDate}`;
+            const prev = prevGameMap.get(prevKey);
+
             if (oddsMatch) {
               const started = oddsMatch.hasStarted || timeBasedStarted;
+              // For started games with null spread, preserve previous spread data
+              const useSpread = (started && oddsMatch.spread === null && prev?.spread !== null && prev?.spread !== undefined)
+                ? prev.spread : oddsMatch.spread;
+              const useOpeningSpread = (started && oddsMatch.spread === null && prev?.openingSpread !== null && prev?.openingSpread !== undefined)
+                ? prev.openingSpread : oddsMatch.openingSpread;
               return {
                 ...game,
                 oddsGameId: oddsMatch.id,
-                spread: oddsMatch.spread,
-                openingSpread: oddsMatch.openingSpread,
+                spread: useSpread,
+                openingSpread: useOpeningSpread,
                 total: oddsMatch.total,
-                spreadBookmaker: oddsMatch.spreadBookmaker,
+                spreadBookmaker: oddsMatch.spreadBookmaker || (started && oddsMatch.spread === null ? prev?.spreadBookmaker : null),
                 hasStarted: started,
                 isFrozen: oddsMatch.isFrozen || started,
               };
             }
-            
+
             if (timeBasedStarted) {
-              return { ...game, hasStarted: true, isFrozen: true };
+              // Preserve previous spread data for time-based started games
+              return {
+                ...game,
+                spread: prev?.spread ?? null,
+                openingSpread: prev?.openingSpread ?? null,
+                total: prev?.total ?? null,
+                spreadBookmaker: prev?.spreadBookmaker ?? null,
+                oddsGameId: prev?.oddsGameId ?? null,
+                hasStarted: true,
+                isFrozen: true,
+              };
             }
-            
+
             return game;
           });
           
@@ -501,6 +530,21 @@ export function useRatingsData(): UseRatingsDataReturn {
                           spreadBookmaker: cl.closingSource,
                           hasStarted: true,
                           isFrozen: true,
+                        };
+                      }
+                    }
+                    // No closing line match — preserve previous spread data for started games
+                    if (game.hasStarted && game.spread === null) {
+                      const prevKey = `${game.awayTeam}|${game.homeTeam}|${game.gameDate}`;
+                      const prev = prevGameMap.get(prevKey);
+                      if (prev?.spread !== null && prev?.spread !== undefined) {
+                        return {
+                          ...game,
+                          spread: prev.spread,
+                          openingSpread: prev.openingSpread ?? game.openingSpread,
+                          total: prev.total ?? game.total,
+                          spreadBookmaker: prev.spreadBookmaker ?? game.spreadBookmaker,
+                          oddsGameId: prev.oddsGameId ?? game.oddsGameId,
                         };
                       }
                     }
