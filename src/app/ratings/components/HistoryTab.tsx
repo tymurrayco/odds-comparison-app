@@ -200,8 +200,12 @@ export function HistoryTab({
         if (g.projectedSpread === null || g.openingSpread === null || g.closingSpread === null) return false;
         const _openDiff = Math.abs(g.projectedSpread - g.openingSpread);
         
-        // Signal #4: opener disagrees with projection by 5+
+        // Blue: opener 5+ off projection
         if (_openDiff >= 5) return true;
+
+        // Purple: projection 4+ off closing spread
+        const _closeDiffForMismatch = Math.abs(g.projectedSpread - g.closingSpread);
+        if (_closeDiffForMismatch >= 4) return true;
         
         // Steam signal: opener agreed, line moved away, bet dog, 5+ spread only
         if (g.openingSpread === g.closingSpread) return false;
@@ -231,25 +235,46 @@ export function HistoryTab({
 
   // Compute W-L record for games with value checkmarks in the filtered set
   const checkmarkRecord = useMemo(() => {
-    let wins1 = 0, losses1 = 0, pushes1 = 0;  // Signal 1: opener 5+ off projection (single ✓)
-    let wins2 = 0, losses2 = 0, pushes2 = 0;  // Steam signal 5-6.9 (✓✓)
-    let wins3 = 0, losses3 = 0, pushes3 = 0;  // Steam signal 7+ (✓✓✓)
-    
+    // Blue: opener 5+ off projection
+    let winsB = 0, lossesB = 0, pushesB = 0;
+    // Purple: projection 4+ off closing spread
+    let winsM = 0, lossesM = 0, pushesM = 0;
+    // Steam tiers: s2 = 5-6.9, s3 = 7+
+    let winsS2 = 0, lossesS2 = 0, pushesS2 = 0;
+    let winsS3 = 0, lossesS3 = 0, pushesS3 = 0;
+
     for (const game of filteredHistoryGames) {
       if (game.projectedSpread === null || game.openingSpread === null || game.closingSpread === null) continue;
-      
+
       const actualMargin = (game.homeScore !== null && game.awayScore !== null)
         ? game.homeScore - game.awayScore : null;
       const spreadResult = (actualMargin !== null && game.closingSpread !== null)
         ? actualMargin + game.closingSpread : null;
-      
+
       if (spreadResult === null) continue;
-      
+
       const openDiff = Math.abs(game.projectedSpread - game.openingSpread);
-      
-      // Signal #4: opener disagrees with projection by 5+ — bet our side
+      const closeDiffAbs = Math.abs(game.projectedSpread - game.closingSpread);
+
+      // Blue: opener 5+ off projection — bet our side
       if (openDiff >= 5) {
-        // Our side: if proj < close, we favor home; if proj > close, we favor away
+        let ourSideCovered = false;
+        if (game.projectedSpread < game.closingSpread) {
+          ourSideCovered = spreadResult > 0;
+        } else if (game.projectedSpread > game.closingSpread) {
+          ourSideCovered = spreadResult < 0;
+        }
+        if (spreadResult === 0) {
+          pushesB++;
+        } else if (ourSideCovered) {
+          winsB++;
+        } else {
+          lossesB++;
+        }
+      }
+
+      // Purple: projection 4+ off closing spread — bet our side
+      if (closeDiffAbs >= 4) {
         let ourSideCovered = false;
         if (game.projectedSpread < game.closingSpread) {
           ourSideCovered = spreadResult > 0; // home covers
@@ -257,11 +282,11 @@ export function HistoryTab({
           ourSideCovered = spreadResult < 0; // away covers
         }
         if (spreadResult === 0) {
-          pushes1++;
+          pushesM++;
         } else if (ourSideCovered) {
-          wins1++;
+          winsM++;
         } else {
-          losses1++;
+          lossesM++;
         }
       }
       
@@ -271,13 +296,13 @@ export function HistoryTab({
         const lineMovement = Math.abs(game.closingSpread - game.openingSpread);
         const valueFires = closeDiff >= 1 && closeDiff > openDiff && lineMovement >= 1;
         const openerAgreed = openDiff <= 1.5;
-        
+
         if (valueFires && openerAgreed) {
           const absSpread = Math.abs(game.closingSpread);
           if (absSpread >= 5) {
             let hasCheck = false;
             let dogCovered = false;
-            
+
             if (game.closingSpread < game.openingSpread) {
               if (game.closingSpread < 0) {
                 hasCheck = true;
@@ -289,26 +314,26 @@ export function HistoryTab({
                 dogCovered = spreadResult > 0;
               }
             }
-            
+
             if (hasCheck) {
               if (spreadResult === 0) {
-                if (absSpread >= 7) pushes3++; else pushes2++;
+                if (absSpread >= 7) pushesS3++; else pushesS2++;
               } else if (dogCovered) {
-                if (absSpread >= 7) wins3++; else wins2++;
+                if (absSpread >= 7) winsS3++; else winsS2++;
               } else {
-                if (absSpread >= 7) losses3++; else losses2++;
+                if (absSpread >= 7) lossesS3++; else lossesS2++;
               }
             }
           }
         }
       }
     }
-    
-    const wins = wins1 + wins2 + wins3;
-    const losses = losses1 + losses2 + losses3;
-    const pushes = pushes1 + pushes2 + pushes3;
-    const total = wins + losses + pushes;
-    return { wins, losses, pushes, total, wins1, losses1, pushes1, wins2, losses2, pushes2, wins3, losses3, pushes3 };
+
+    return {
+      winsB, lossesB, pushesB,
+      winsM, lossesM, pushesM,
+      winsS2, lossesS2, pushesS2, winsS3, lossesS3, pushesS3,
+    };
   }, [filteredHistoryGames]);
 
   return (
@@ -421,10 +446,76 @@ export function HistoryTab({
                   const s = String(v);
                   return (s.includes(',') || s.includes('"') || s.includes('\n')) ? `"${s.replace(/"/g, '""')}"` : s;
                 };
-                const header = ['Date', 'Away', 'Away Score', 'Home', 'Home Score', 'Projected', 'Open', 'v. Open', 'Close', 'v. Close'];
+                const header = ['Date', 'Away', 'Away Score', 'Home', 'Home Score', 'Projected', 'Open', 'v. Open', 'Close', 'v. Close', 'Signal', 'Signal Team', 'Result'];
                 const rows = filteredHistoryGames.map(g => {
                   const dateStr = new Date(g.gameDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/New_York' });
                   const vOpen = (g.projectedSpread !== null && g.openingSpread !== null) ? Math.abs(g.projectedSpread - g.openingSpread).toFixed(1) : '';
+
+                  // Determine signal type and team
+                  let signal = '';
+                  let signalTeam = '';
+                  if (g.projectedSpread !== null && g.openingSpread !== null && g.closingSpread !== null) {
+                    const openDiff = Math.abs(g.projectedSpread - g.openingSpread);
+                    const closeDiff = Math.abs(g.projectedSpread - g.closingSpread);
+                    const lineMovement = Math.abs(g.closingSpread - g.openingSpread);
+
+                    // Steam signal
+                    if (g.openingSpread !== g.closingSpread) {
+                      const valueFires = closeDiff >= 1 && closeDiff > openDiff && lineMovement >= 1;
+                      const openerAgreed = openDiff <= 1.5;
+                      const absSpread = Math.abs(g.closingSpread);
+                      const tier = absSpread >= 7 ? 3 : absSpread >= 5 ? 2 : 0;
+                      if (valueFires && openerAgreed && tier >= 2) {
+                        if (g.closingSpread < g.openingSpread && g.closingSpread < 0) {
+                          signal = tier === 3 ? 'Steam 7+' : 'Steam 5+';
+                          signalTeam = g.awayTeam;
+                        } else if (g.closingSpread > g.openingSpread && g.closingSpread > 0) {
+                          signal = tier === 3 ? 'Steam 7+' : 'Steam 5+';
+                          signalTeam = g.homeTeam;
+                        }
+                      }
+                    }
+
+                    // Blue: opener 5+ off projection (only if no steam)
+                    if (!signal && openDiff >= 5) {
+                      if (g.projectedSpread < g.closingSpread) {
+                        signal = 'Blue';
+                        signalTeam = g.homeTeam;
+                      } else if (g.projectedSpread > g.closingSpread) {
+                        signal = 'Blue';
+                        signalTeam = g.awayTeam;
+                      }
+                    }
+
+                    // Purple: projection 4+ off closing spread (only if no steam and no blue)
+                    if (!signal && closeDiff >= 4) {
+                      if (g.projectedSpread < g.closingSpread) {
+                        signal = 'Purple';
+                        signalTeam = g.homeTeam;
+                      } else if (g.projectedSpread > g.closingSpread) {
+                        signal = 'Purple';
+                        signalTeam = g.awayTeam;
+                      }
+                    }
+                  }
+
+                  // Determine result
+                  let result = '';
+                  if (signal && g.homeScore !== null && g.awayScore !== null && g.closingSpread !== null) {
+                    const actualMargin = g.homeScore - g.awayScore;
+                    const spreadResult = actualMargin + g.closingSpread;
+                    const homeCovered = spreadResult > 0;
+                    const awayCovered = spreadResult < 0;
+                    const isPush = spreadResult === 0;
+                    if (isPush) {
+                      result = 'Push';
+                    } else if (signalTeam === g.homeTeam) {
+                      result = homeCovered ? 'Win' : 'Loss';
+                    } else {
+                      result = awayCovered ? 'Win' : 'Loss';
+                    }
+                  }
+
                   return [
                     dateStr,
                     g.awayTeam,
@@ -436,6 +527,9 @@ export function HistoryTab({
                     vOpen,
                     g.closingSpread !== null ? g.closingSpread.toFixed(1) : '',
                     g.difference !== null ? g.difference.toFixed(1) : '',
+                    signal,
+                    signalTeam,
+                    result,
                   ].map(escapeCSV);
                 });
                 const csv = [header, ...rows].map(r => r.join(',')).join('\n');
@@ -479,19 +573,24 @@ export function HistoryTab({
         </div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-2 text-sm">
           <span className="text-gray-900">{filteredHistoryGames.length}/{historyGames.length}</span>
-          {(checkmarkRecord.wins1 + checkmarkRecord.losses1 + checkmarkRecord.pushes1) > 0 && (
-            <span className="text-blue-700 font-semibold whitespace-nowrap cursor-help" title="Mismatch: Our projection is 5+ pts off the opener. Market has the game wrong — bet our side.">
-              ✓ {checkmarkRecord.wins1}-{checkmarkRecord.losses1}{checkmarkRecord.pushes1 > 0 ? `-${checkmarkRecord.pushes1}` : ''}
+          {(checkmarkRecord.winsB + checkmarkRecord.lossesB + checkmarkRecord.pushesB) > 0 && (
+            <span className="text-blue-700 font-semibold whitespace-nowrap cursor-help" title="Opener 5+ off projection. Bet our side.">
+              <span className="text-blue-600">✓</span> {checkmarkRecord.winsB}-{checkmarkRecord.lossesB}{checkmarkRecord.pushesB > 0 ? `-${checkmarkRecord.pushesB}` : ''}
             </span>
           )}
-          {(checkmarkRecord.wins2 + checkmarkRecord.losses2 + checkmarkRecord.pushes2) > 0 && (
+          {(checkmarkRecord.winsM + checkmarkRecord.lossesM + checkmarkRecord.pushesM) > 0 && (
+            <span className="text-purple-700 font-semibold whitespace-nowrap cursor-help" title="Projection 4+ off closing spread. Bet our side.">
+              <span className="text-purple-600">✓</span> {checkmarkRecord.winsM}-{checkmarkRecord.lossesM}{checkmarkRecord.pushesM > 0 ? `-${checkmarkRecord.pushesM}` : ''}
+            </span>
+          )}
+          {(checkmarkRecord.winsS2 + checkmarkRecord.lossesS2 + checkmarkRecord.pushesS2) > 0 && (
             <span className="text-green-800 font-semibold whitespace-nowrap cursor-help" title="Steam (5-6.9): Opener agreed with our projection, then the line steamed 1+ pts away. Bet the dog.">
-              ✓✓ {checkmarkRecord.wins2}-{checkmarkRecord.losses2}{checkmarkRecord.pushes2 > 0 ? `-${checkmarkRecord.pushes2}` : ''}
+              <span className="text-green-700">✓✓</span> {checkmarkRecord.winsS2}-{checkmarkRecord.lossesS2}{checkmarkRecord.pushesS2 > 0 ? `-${checkmarkRecord.pushesS2}` : ''}
             </span>
           )}
-          {(checkmarkRecord.wins3 + checkmarkRecord.losses3 + checkmarkRecord.pushes3) > 0 && (
+          {(checkmarkRecord.winsS3 + checkmarkRecord.lossesS3 + checkmarkRecord.pushesS3) > 0 && (
             <span className="text-green-900 font-semibold whitespace-nowrap cursor-help" title="Steam (7+): Opener agreed with our projection, then the line steamed 1+ pts away on a big spread. Bet the dog.">
-              ✓✓✓ {checkmarkRecord.wins3}-{checkmarkRecord.losses3}{checkmarkRecord.pushes3 > 0 ? `-${checkmarkRecord.pushes3}` : ''}
+              <span className="text-green-800">✓✓✓</span> {checkmarkRecord.winsS3}-{checkmarkRecord.lossesS3}{checkmarkRecord.pushesS3 > 0 ? `-${checkmarkRecord.pushesS3}` : ''}
             </span>
           )}
         </div>
@@ -611,7 +710,9 @@ export function HistoryTab({
                 let highlightProjClass = '';
                 let awayValueTier = 0;  // 0=none, 2=✓✓ (5-6.9), 3=✓✓✓ (7+) — steam signal
                 let homeValueTier = 0;
-                let awayMismatchCheck = false;  // Signal #4: opener 5+ off projection
+                let awayBlueCheck = false;   // opener 5+ off projection
+                let homeBlueCheck = false;
+                let awayMismatchCheck = false;  // projection 4+ off closing spread
                 let homeMismatchCheck = false;
                 
                 if (game.projectedSpread !== null && game.openingSpread !== null && game.closingSpread !== null) {
@@ -623,12 +724,21 @@ export function HistoryTab({
                     ? (movingToward ? getGreenHighlightClass(lineMovement) : getRedHighlightClass(lineMovement))
                     : '';
                   
-                  // Signal #4: opener disagrees with projection by 5+ — bet our side
+                  // Blue: opener 5+ off projection — bet our side
                   if (openDiff >= 5) {
                     if (game.projectedSpread < game.closingSpread) {
-                      homeMismatchCheck = true;  // we favor home
+                      homeBlueCheck = true;
                     } else if (game.projectedSpread > game.closingSpread) {
-                      awayMismatchCheck = true;  // we favor away
+                      awayBlueCheck = true;
+                    }
+                  }
+
+                  // Purple: projection 4+ off closing spread — bet our side
+                  if (closeDiff >= 4) {
+                    if (game.projectedSpread < game.closingSpread) {
+                      homeMismatchCheck = true;
+                    } else if (game.projectedSpread > game.closingSpread) {
+                      awayMismatchCheck = true;
                     }
                   }
                   
@@ -676,8 +786,11 @@ export function HistoryTab({
                         {awayValueTier > 0 && (
                           <span className={`absolute -bottom-1 -right-1 text-green-600 text-xs font-bold ${awayCovered ? 'border border-green-600 rounded-full px-0.5 flex items-center justify-center bg-white' : isPush ? 'border border-gray-400 rounded-full px-0.5 flex items-center justify-center bg-white text-gray-400' : ''}`} title={`Steam signal: opener agreed, line moved away — bet dog${awayValueTier >= 3 ? ' (7+)' : ' (5+)'}${awayCovered ? ' ✓covered' : isPush ? ' push' : ''}`}>{'✓'.repeat(awayValueTier)}</span>
                         )}
-                        {awayMismatchCheck && !awayValueTier && (
-                          <span className={`absolute -bottom-1 -right-1 text-blue-600 text-xs font-bold ${awayCovered ? 'border border-blue-600 rounded-full px-0.5 flex items-center justify-center bg-white' : isPush ? 'border border-gray-400 rounded-full px-0.5 flex items-center justify-center bg-white text-gray-400' : ''}`} title={`Mismatch signal: projection 5+ off opener — bet our side${awayCovered ? ' ✓covered' : isPush ? ' push' : ''}`}>✓</span>
+                        {awayBlueCheck && !awayValueTier && (
+                          <span className={`absolute -bottom-1 -right-1 text-blue-600 text-xs font-bold ${awayCovered ? 'border border-blue-600 rounded-full px-0.5 flex items-center justify-center bg-white' : isPush ? 'border border-gray-400 rounded-full px-0.5 flex items-center justify-center bg-white text-gray-400' : ''}`} title={`Opener 5+ off projection — bet our side${awayCovered ? ' ✓covered' : isPush ? ' push' : ''}`}>✓</span>
+                        )}
+                        {awayMismatchCheck && !awayValueTier && !awayBlueCheck && (
+                          <span className={`absolute -bottom-1 -right-1 text-purple-600 text-xs font-bold ${awayCovered ? 'border border-purple-600 rounded-full px-0.5 flex items-center justify-center bg-white' : isPush ? 'border border-gray-400 rounded-full px-0.5 flex items-center justify-center bg-white text-gray-400' : ''}`} title={`Projection 4+ off close — bet our side${awayCovered ? ' ✓covered' : isPush ? ' push' : ''}`}>✓</span>
                         )}
                       </div>
                       {game.awayScore !== null && (
@@ -694,8 +807,11 @@ export function HistoryTab({
                         {homeValueTier > 0 && (
                           <span className={`absolute -bottom-1 -right-1 text-green-600 text-xs font-bold ${homeCovered ? 'border border-green-600 rounded-full px-0.5 flex items-center justify-center bg-white' : isPush ? 'border border-gray-400 rounded-full px-0.5 flex items-center justify-center bg-white text-gray-400' : ''}`} title={`Steam signal: opener agreed, line moved away — bet dog${homeValueTier >= 3 ? ' (7+)' : ' (5+)'}${homeCovered ? ' ✓covered' : isPush ? ' push' : ''}`}>{'✓'.repeat(homeValueTier)}</span>
                         )}
-                        {homeMismatchCheck && !homeValueTier && (
-                          <span className={`absolute -bottom-1 -right-1 text-blue-600 text-xs font-bold ${homeCovered ? 'border border-blue-600 rounded-full px-0.5 flex items-center justify-center bg-white' : isPush ? 'border border-gray-400 rounded-full px-0.5 flex items-center justify-center bg-white text-gray-400' : ''}`} title={`Mismatch signal: projection 5+ off opener — bet our side${homeCovered ? ' ✓covered' : isPush ? ' push' : ''}`}>✓</span>
+                        {homeBlueCheck && !homeValueTier && (
+                          <span className={`absolute -bottom-1 -right-1 text-blue-600 text-xs font-bold ${homeCovered ? 'border border-blue-600 rounded-full px-0.5 flex items-center justify-center bg-white' : isPush ? 'border border-gray-400 rounded-full px-0.5 flex items-center justify-center bg-white text-gray-400' : ''}`} title={`Opener 5+ off projection — bet our side${homeCovered ? ' ✓covered' : isPush ? ' push' : ''}`}>✓</span>
+                        )}
+                        {homeMismatchCheck && !homeValueTier && !homeBlueCheck && (
+                          <span className={`absolute -bottom-1 -right-1 text-purple-600 text-xs font-bold ${homeCovered ? 'border border-purple-600 rounded-full px-0.5 flex items-center justify-center bg-white' : isPush ? 'border border-gray-400 rounded-full px-0.5 flex items-center justify-center bg-white text-gray-400' : ''}`} title={`Projection 4+ off close — bet our side${homeCovered ? ' ✓covered' : isPush ? ' push' : ''}`}>✓</span>
                         )}
                       </div>
                       {game.homeScore !== null && (

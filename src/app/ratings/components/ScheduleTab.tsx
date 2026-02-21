@@ -173,13 +173,20 @@ export function ScheduleTab({
       
       // Compute whether this game qualifies for value checkmarks
       let hasValueCheck = false;  // steam signal 5+
-      let hasMismatchCheck = false;  // opener 5+ off projection
-      
+      let hasBlueCheck = false;     // opener 5+ off projection
+      let hasMismatchCheck = false;  // projection 4+ off current spread
+
       if (projectedSpread !== null && game.openingSpread !== null && game.spread !== null) {
         const _openDiff = Math.abs(projectedSpread - game.openingSpread);
-        
-        // Signal #4: opener disagrees with projection by 5+
+        const _currentDiffForMismatch = Math.abs(projectedSpread - game.spread);
+
+        // Blue: opener 5+ off projection
         if (_openDiff >= 5) {
+          hasBlueCheck = true;
+        }
+
+        // Purple: projection 4+ off current spread
+        if (_currentDiffForMismatch >= 4) {
           hasMismatchCheck = true;
         }
         
@@ -200,7 +207,7 @@ export function ScheduleTab({
         }
       }
       
-      return { ...game, projectedSpread, delta, awayMovement, homeMovement, hasValueCheck, hasMismatchCheck };
+      return { ...game, projectedSpread, delta, awayMovement, homeMovement, hasValueCheck, hasBlueCheck, hasMismatchCheck };
     });
     
     // Sort
@@ -235,7 +242,7 @@ export function ScheduleTab({
     // Filter to value checkmark games only if toggle is on
     let result = gamesWithCalcs;
     if (showValueOnly) {
-      result = result.filter(g => g.hasValueCheck || g.hasMismatchCheck);
+      result = result.filter(g => g.hasValueCheck || g.hasBlueCheck || g.hasMismatchCheck);
     }
     if (showVOpenOnly) {
       result = result.filter(g => g.projectedSpread !== null && g.openingSpread !== null && Math.abs(g.projectedSpread - g.openingSpread) >= 2);
@@ -480,7 +487,9 @@ export function ScheduleTab({
                 let highlightProjClass = '';
                 let awayValueTier = 0;  // 0=none, 2=✓✓ (5-6.9), 3=✓✓✓ (7+) — steam signal
                 let homeValueTier = 0;
-                let awayMismatchCheck = false;  // Signal #4: opener 5+ off projection
+                let awayBlueCheck = false;   // opener 5+ off projection
+                let homeBlueCheck = false;
+                let awayMismatchCheck = false;  // projection 4+ off current spread
                 let homeMismatchCheck = false;
                 
                 if (projectedSpread !== null && game.openingSpread !== null && game.spread !== null) {
@@ -492,12 +501,21 @@ export function ScheduleTab({
                     ? (movingToward ? getGreenHighlightClass(lineMovement) : getRedHighlightClass(lineMovement))
                     : '';
                   
-                  // Signal #4: opener disagrees with projection by 5+ — bet our side
+                  // Blue: opener 5+ off projection — bet our side
                   if (openDiff >= 5) {
                     if (projectedSpread < game.spread) {
-                      homeMismatchCheck = true;  // we favor home
+                      homeBlueCheck = true;
                     } else if (projectedSpread > game.spread) {
-                      awayMismatchCheck = true;  // we favor away
+                      awayBlueCheck = true;
+                    }
+                  }
+
+                  // Purple: projection 4+ off current spread — bet our side
+                  if (currentDiff >= 4) {
+                    if (projectedSpread < game.spread) {
+                      homeMismatchCheck = true;
+                    } else if (projectedSpread > game.spread) {
+                      awayMismatchCheck = true;
                     }
                   }
                   
@@ -561,8 +579,11 @@ export function ScheduleTab({
                           {awayValueTier > 0 && (
                             <span className="absolute -bottom-1 -right-1 text-green-600 text-xs font-bold" title={`Steam signal: opener agreed, line moved away — bet dog${awayValueTier >= 3 ? ' (7+)' : ' (5+)'}`}>{'✓'.repeat(awayValueTier)}</span>
                           )}
-                          {awayMismatchCheck && !awayValueTier && (
-                            <span className="absolute -bottom-1 -right-1 text-blue-600 text-xs font-bold" title="Mismatch signal: projection 5+ off opener — bet our side">✓</span>
+                          {awayBlueCheck && !awayValueTier && (
+                            <span className="absolute -bottom-1 -right-1 text-blue-600 text-xs font-bold" title="Opener 5+ off projection — bet our side">✓</span>
+                          )}
+                          {awayMismatchCheck && !awayValueTier && !awayBlueCheck && (
+                            <span className="absolute -bottom-1 -right-1 text-purple-600 text-xs font-bold" title="Projection 4+ off current spread — bet our side">✓</span>
                           )}
                         </div>
                       </td>
@@ -577,8 +598,11 @@ export function ScheduleTab({
                           {homeValueTier > 0 && (
                             <span className="absolute -bottom-1 -right-1 text-green-600 text-xs font-bold" title={`Steam signal: opener agreed, line moved away — bet dog${homeValueTier >= 3 ? ' (7+)' : ' (5+)'}`}>{'✓'.repeat(homeValueTier)}</span>
                           )}
-                          {homeMismatchCheck && !homeValueTier && (
-                            <span className="absolute -bottom-1 -right-1 text-blue-600 text-xs font-bold" title="Mismatch signal: projection 5+ off opener — bet our side">✓</span>
+                          {homeBlueCheck && !homeValueTier && (
+                            <span className="absolute -bottom-1 -right-1 text-blue-600 text-xs font-bold" title="Opener 5+ off projection — bet our side">✓</span>
+                          )}
+                          {homeMismatchCheck && !homeValueTier && !homeBlueCheck && (
+                            <span className="absolute -bottom-1 -right-1 text-purple-600 text-xs font-bold" title="Projection 4+ off current spread — bet our side">✓</span>
                           )}
                         </div>
                       </td>
