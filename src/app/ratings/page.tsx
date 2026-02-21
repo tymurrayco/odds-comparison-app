@@ -3,7 +3,7 @@
 
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRatingsData } from './hooks/useRatingsData';
 import {
@@ -31,6 +31,12 @@ export default function RatingsPage() {
   const [scheduleSortBy, setScheduleSortBy] = useState<ScheduleSortField>('time');
   const [scheduleSortDir, setScheduleSortDir] = useState<SortDirection>('asc');
   
+  // Admin mode (long-press toggle for mobile access)
+  const [adminMode, setAdminMode] = useState(false);
+  const [isHolding, setIsHolding] = useState(false);
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showAdmin = data.isLocalhost || adminMode;
+
   // Initial Configuration collapse state
   const [configCollapsed, setConfigCollapsed] = useState(true);
   
@@ -41,10 +47,10 @@ export default function RatingsPage() {
 
   // Load data when switching tabs
   useEffect(() => {
-    if (data.isLocalhost && activeTab === 'matching' && data.matchingLogs.length === 0) {
+    if (showAdmin && activeTab === 'matching' && data.matchingLogs.length === 0) {
       data.loadMatchingLogs();
     }
-    if (data.isLocalhost && activeTab === 'overrides' && data.overrides.length === 0) {
+    if (showAdmin && activeTab === 'overrides' && data.overrides.length === 0) {
       data.loadOverrides();
     }
     if (activeTab === 'schedule') {
@@ -61,10 +67,10 @@ export default function RatingsPage() {
     if (activeTab === 'history' && data.historyGames.length === 0) {
       data.loadHistory();
     }
-    if (data.isLocalhost && activeTab === 'barttorvik' && data.btGames.length === 0 && data.btRatings.length === 0) {
+    if (showAdmin && activeTab === 'barttorvik' && data.btGames.length === 0 && data.btRatings.length === 0) {
       data.loadBarttorvik();
     }
-  }, [activeTab, data.isLocalhost]);
+  }, [activeTab, showAdmin]);
 
   const handleCalculate = () => {
     data.calculateRatings({
@@ -84,7 +90,50 @@ export default function RatingsPage() {
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Ratings</h1>
+              <h1
+                className={`text-2xl font-bold text-gray-900 select-none ${isHolding ? 'opacity-60' : ''}`}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setIsHolding(true);
+                  pressTimer.current = setTimeout(() => {
+                    setIsHolding(false);
+                    pressTimer.current = null;
+                    setAdminMode(prev => !prev);
+                  }, 2000);
+                }}
+                onMouseUp={() => {
+                  setIsHolding(false);
+                  if (pressTimer.current) {
+                    clearTimeout(pressTimer.current);
+                    pressTimer.current = null;
+                  }
+                }}
+                onMouseLeave={() => {
+                  setIsHolding(false);
+                  if (pressTimer.current) {
+                    clearTimeout(pressTimer.current);
+                    pressTimer.current = null;
+                  }
+                }}
+                onTouchStart={(e) => {
+                  e.preventDefault();
+                  setIsHolding(true);
+                  pressTimer.current = setTimeout(() => {
+                    setIsHolding(false);
+                    pressTimer.current = null;
+                    setAdminMode(prev => !prev);
+                  }, 2000);
+                }}
+                onTouchEnd={() => {
+                  setIsHolding(false);
+                  if (pressTimer.current) {
+                    clearTimeout(pressTimer.current);
+                    pressTimer.current = null;
+                  }
+                }}
+              >
+                Ratings{adminMode && !data.isLocalhost && <span className="inline-block w-2 h-2 bg-blue-500 rounded-full ml-2 align-middle" />}
+              </h1>
               <p className="text-sm text-gray-900">Market-adjusted NCAAB power ratings</p>
             </div>
             <Link href="/" className="text-blue-600 hover:text-blue-700 text-sm font-medium">← Back to Odds</Link>
@@ -187,8 +236,8 @@ export default function RatingsPage() {
           </div>
         )}
 
-        {/* Sync Controls (localhost only) */}
-        {data.isLocalhost && (
+        {/* Sync Controls (admin only) */}
+        {showAdmin && (
           <div className="bg-white rounded-xl p-4 mb-4 border border-gray-200 shadow-sm">
             <div className="flex flex-wrap items-center gap-4">
               <div className="flex items-center gap-2">
@@ -246,10 +295,10 @@ export default function RatingsPage() {
                 { key: 'history' as const, label: 'History', show: true },
                 { key: 'hypotheticals' as const, label: 'Matchups', show: true },
                 { key: 'tournaments' as const, label: 'Tournaments', show: true },
-                { key: 'sbr-openers' as const, label: 'SBR Openers', show: data.isLocalhost, green: true },
-                { key: 'matching' as const, label: 'Matching', show: data.isLocalhost },
-                { key: 'overrides' as const, label: 'Overrides', show: data.isLocalhost },
-                { key: 'barttorvik' as const, label: 'Barttorvik', show: data.isLocalhost, purple: true },
+                { key: 'sbr-openers' as const, label: 'SBR Openers', show: showAdmin, green: true },
+                { key: 'matching' as const, label: 'Matching', show: showAdmin },
+                { key: 'overrides' as const, label: 'Overrides', show: showAdmin },
+                { key: 'barttorvik' as const, label: 'Barttorvik', show: showAdmin, purple: true },
               ].filter(t => t.show).map(tab => (
                 <button
                   key={tab.key}
@@ -329,7 +378,7 @@ export default function RatingsPage() {
             <SBROpenersTab />
           )}
 
-          {data.isLocalhost && activeTab === 'matching' && (
+          {showAdmin && activeTab === 'matching' && (
             <MatchingLogsTab
               matchingLogs={data.matchingLogs}
               matchingStats={data.matchingStats}
@@ -343,7 +392,7 @@ export default function RatingsPage() {
             />
           )}
 
-          {data.isLocalhost && activeTab === 'overrides' && (
+          {showAdmin && activeTab === 'overrides' && (
             <OverridesTab
               overrides={data.overrides}
               kenpomTeams={data.kenpomTeams}
@@ -361,7 +410,7 @@ export default function RatingsPage() {
             />
           )}
 
-          {data.isLocalhost && activeTab === 'barttorvik' && (
+          {showAdmin && activeTab === 'barttorvik' && (
             <BarttovikTab
               btGames={data.btGames}
               btRatings={data.btRatings}
