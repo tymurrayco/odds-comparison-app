@@ -437,7 +437,7 @@ export function useRatingsData(): UseRatingsDataReturn {
           };
           
           // Merge odds into games
-          let enrichedGames = initialCombinedGames.map(game => {
+          let enrichedGames: CombinedScheduleGame[] = initialCombinedGames.map(game => {
             const oddsMatch = findOddsMatch(game.homeTeam, game.awayTeam);
             const timeBasedStarted = hasGameStarted(game.gameTime, game.isToday);
             const prevKey = `${game.awayTeam}|${game.homeTeam}|${game.gameDate}`;
@@ -456,7 +456,7 @@ export function useRatingsData(): UseRatingsDataReturn {
                 spread: useSpread,
                 openingSpread: useOpeningSpread,
                 total: oddsMatch.total,
-                spreadBookmaker: oddsMatch.spreadBookmaker || (started && oddsMatch.spread === null ? prev?.spreadBookmaker : null),
+                spreadBookmaker: oddsMatch.spreadBookmaker || (started && oddsMatch.spread === null ? (prev?.spreadBookmaker ?? null) : null),
                 hasStarted: started,
                 isFrozen: oddsMatch.isFrozen || started,
               };
@@ -537,7 +537,7 @@ export function useRatingsData(): UseRatingsDataReturn {
                     if (game.hasStarted && game.spread === null) {
                       const prevKey = `${game.awayTeam}|${game.homeTeam}|${game.gameDate}`;
                       const prev = prevGameMap.get(prevKey);
-                      if (prev?.spread !== null && prev?.spread !== undefined) {
+                      if (prev && prev.spread !== null) {
                         return {
                           ...game,
                           spread: prev.spread,
