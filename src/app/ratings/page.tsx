@@ -35,7 +35,46 @@ export default function RatingsPage() {
   const [adminMode, setAdminMode] = useState(false);
   const [isHolding, setIsHolding] = useState(false);
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
   const showAdmin = data.isLocalhost || adminMode;
+
+  // Attach non-passive touch listeners for long-press (React registers passive by default)
+  useEffect(() => {
+    const el = titleRef.current;
+    if (!el) return;
+
+    const clearPress = () => {
+      setIsHolding(false);
+      if (pressTimer.current) {
+        clearTimeout(pressTimer.current);
+        pressTimer.current = null;
+      }
+    };
+
+    const onTouchStart = (e: TouchEvent) => {
+      e.preventDefault();
+      setIsHolding(true);
+      pressTimer.current = setTimeout(() => {
+        setIsHolding(false);
+        pressTimer.current = null;
+        setAdminMode(prev => !prev);
+      }, 2000);
+    };
+
+    const onContextMenu = (e: Event) => e.preventDefault();
+
+    el.addEventListener('touchstart', onTouchStart, { passive: false });
+    el.addEventListener('touchend', clearPress);
+    el.addEventListener('touchcancel', clearPress);
+    el.addEventListener('contextmenu', onContextMenu);
+
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchend', clearPress);
+      el.removeEventListener('touchcancel', clearPress);
+      el.removeEventListener('contextmenu', onContextMenu);
+    };
+  }, []);
 
   // Initial Configuration collapse state
   const [configCollapsed, setConfigCollapsed] = useState(true);
@@ -91,9 +130,9 @@ export default function RatingsPage() {
           <div className="flex items-center justify-between">
             <div>
               <h1
+                ref={titleRef}
                 className={`text-2xl font-bold text-gray-900 select-none ${isHolding ? 'opacity-60' : ''}`}
                 style={{ WebkitTouchCallout: 'none', touchAction: 'none' }}
-                onContextMenu={(e) => e.preventDefault()}
                 onMouseDown={(e) => {
                   e.preventDefault();
                   setIsHolding(true);
@@ -111,29 +150,6 @@ export default function RatingsPage() {
                   }
                 }}
                 onMouseLeave={() => {
-                  setIsHolding(false);
-                  if (pressTimer.current) {
-                    clearTimeout(pressTimer.current);
-                    pressTimer.current = null;
-                  }
-                }}
-                onTouchStart={(e) => {
-                  e.preventDefault();
-                  setIsHolding(true);
-                  pressTimer.current = setTimeout(() => {
-                    setIsHolding(false);
-                    pressTimer.current = null;
-                    setAdminMode(prev => !prev);
-                  }, 2000);
-                }}
-                onTouchEnd={() => {
-                  setIsHolding(false);
-                  if (pressTimer.current) {
-                    clearTimeout(pressTimer.current);
-                    pressTimer.current = null;
-                  }
-                }}
-                onTouchCancel={() => {
                   setIsHolding(false);
                   if (pressTimer.current) {
                     clearTimeout(pressTimer.current);
