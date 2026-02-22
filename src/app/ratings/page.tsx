@@ -38,7 +38,7 @@ export default function RatingsPage() {
   const titleRef = useRef<HTMLHeadingElement>(null);
   const showAdmin = data.isLocalhost || adminMode;
 
-  // Attach non-passive touch listeners for long-press (React registers passive by default)
+  // Long-press via pointer events (works for both touch and mouse, non-passive by default)
   useEffect(() => {
     const el = titleRef.current;
     if (!el) return;
@@ -51,7 +51,7 @@ export default function RatingsPage() {
       }
     };
 
-    const onTouchStart = (e: TouchEvent) => {
+    const onPointerDown = (e: PointerEvent) => {
       e.preventDefault();
       setIsHolding(true);
       pressTimer.current = setTimeout(() => {
@@ -63,15 +63,17 @@ export default function RatingsPage() {
 
     const onContextMenu = (e: Event) => e.preventDefault();
 
-    el.addEventListener('touchstart', onTouchStart, { passive: false });
-    el.addEventListener('touchend', clearPress);
-    el.addEventListener('touchcancel', clearPress);
+    el.addEventListener('pointerdown', onPointerDown);
+    el.addEventListener('pointerup', clearPress);
+    el.addEventListener('pointercancel', clearPress);
+    el.addEventListener('pointerleave', clearPress);
     el.addEventListener('contextmenu', onContextMenu);
 
     return () => {
-      el.removeEventListener('touchstart', onTouchStart);
-      el.removeEventListener('touchend', clearPress);
-      el.removeEventListener('touchcancel', clearPress);
+      el.removeEventListener('pointerdown', onPointerDown);
+      el.removeEventListener('pointerup', clearPress);
+      el.removeEventListener('pointercancel', clearPress);
+      el.removeEventListener('pointerleave', clearPress);
       el.removeEventListener('contextmenu', onContextMenu);
     };
   }, []);
@@ -133,29 +135,6 @@ export default function RatingsPage() {
                 ref={titleRef}
                 className={`text-2xl font-bold text-gray-900 select-none ${isHolding ? 'opacity-60' : ''}`}
                 style={{ WebkitTouchCallout: 'none', touchAction: 'none' }}
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  setIsHolding(true);
-                  pressTimer.current = setTimeout(() => {
-                    setIsHolding(false);
-                    pressTimer.current = null;
-                    setAdminMode(prev => !prev);
-                  }, 2000);
-                }}
-                onMouseUp={() => {
-                  setIsHolding(false);
-                  if (pressTimer.current) {
-                    clearTimeout(pressTimer.current);
-                    pressTimer.current = null;
-                  }
-                }}
-                onMouseLeave={() => {
-                  setIsHolding(false);
-                  if (pressTimer.current) {
-                    clearTimeout(pressTimer.current);
-                    pressTimer.current = null;
-                  }
-                }}
               >
                 Ratings{adminMode && !data.isLocalhost && <span className="inline-block w-2 h-2 bg-blue-500 rounded-full ml-2 align-middle" />}
               </h1>
