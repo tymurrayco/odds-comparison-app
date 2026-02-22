@@ -693,10 +693,49 @@ function HomeContent() {
               {/* Ratings Button - Only show for NCAAB */}
               {activeLeague === 'basketball_ncaab' && (
                 <button
-                  onClick={() => router.push('/ratings')}
-                  className="px-2 sm:px-3 py-2 rounded-xl text-sm font-medium transition-all select-none border border-gray-200 shadow-sm bg-purple-100 text-purple-700 hover:bg-purple-200 whitespace-nowrap"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    setIsHolding(true);
+                    pressTimer.current = setTimeout(() => {
+                      setIsHolding(false);
+                      router.push('/ratings?admin=true');
+                    }, 2000);
+                  }}
+                  onMouseUp={() => {
+                    setIsHolding(false);
+                    if (pressTimer.current) {
+                      clearTimeout(pressTimer.current);
+                      pressTimer.current = null;
+                      router.push('/ratings');
+                    }
+                  }}
+                  onMouseLeave={() => {
+                    setIsHolding(false);
+                    if (pressTimer.current) {
+                      clearTimeout(pressTimer.current);
+                      pressTimer.current = null;
+                    }
+                  }}
+                  onTouchStart={(e) => {
+                    e.preventDefault();
+                    setIsHolding(true);
+                    pressTimer.current = setTimeout(() => {
+                      setIsHolding(false);
+                      router.push('/ratings?admin=true');
+                    }, 2000);
+                  }}
+                  onTouchEnd={() => {
+                    setIsHolding(false);
+                    if (pressTimer.current) {
+                      clearTimeout(pressTimer.current);
+                      pressTimer.current = null;
+                      router.push('/ratings');
+                    }
+                  }}
+                  className={`px-2 sm:px-3 py-2 rounded-xl text-sm font-medium transition-all select-none border border-gray-200 shadow-sm bg-purple-100 text-purple-700 hover:bg-purple-200 whitespace-nowrap ${isHolding ? 'scale-95 ring-2 ring-purple-400' : ''}`}
+                  style={{ userSelect: 'none' }}
                 >
-                  📈 Ratings
+                  📈 Ratings {isHolding && '...'}
                 </button>
               )}
 

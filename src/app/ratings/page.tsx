@@ -3,7 +3,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRatingsData } from './hooks/useRatingsData';
 import {
@@ -31,12 +31,13 @@ export default function RatingsPage() {
   const [scheduleSortBy, setScheduleSortBy] = useState<ScheduleSortField>('time');
   const [scheduleSortDir, setScheduleSortDir] = useState<SortDirection>('asc');
   
-  // Admin mode (long-press toggle for mobile access)
+  // Admin mode via query param (from long-press on main page)
   const [adminMode, setAdminMode] = useState(false);
-  const [isHolding, setIsHolding] = useState(false);
-  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('admin') === 'true') setAdminMode(true);
+  }, []);
   const showAdmin = data.isLocalhost || adminMode;
-
 
   // Initial Configuration collapse state
   const [configCollapsed, setConfigCollapsed] = useState(true);
@@ -91,56 +92,8 @@ export default function RatingsPage() {
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <button
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  setIsHolding(true);
-                  pressTimer.current = setTimeout(() => {
-                    setIsHolding(false);
-                    pressTimer.current = null;
-                    setAdminMode(prev => !prev);
-                  }, 2000);
-                }}
-                onMouseUp={() => {
-                  setIsHolding(false);
-                  if (pressTimer.current) {
-                    clearTimeout(pressTimer.current);
-                    pressTimer.current = null;
-                  }
-                }}
-                onMouseLeave={() => {
-                  setIsHolding(false);
-                  if (pressTimer.current) {
-                    clearTimeout(pressTimer.current);
-                    pressTimer.current = null;
-                  }
-                }}
-                onTouchStart={(e) => {
-                  e.preventDefault();
-                  setIsHolding(true);
-                  pressTimer.current = setTimeout(() => {
-                    setIsHolding(false);
-                    pressTimer.current = null;
-                    setAdminMode(prev => !prev);
-                  }, 2000);
-                }}
-                onTouchEnd={() => {
-                  setIsHolding(false);
-                  if (pressTimer.current) {
-                    clearTimeout(pressTimer.current);
-                    pressTimer.current = null;
-                  }
-                }}
-                className={`px-3 py-2 rounded-xl text-2xl font-bold transition-all select-none border border-gray-200 shadow-sm ${
-                  adminMode
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
-                } ${isHolding ? 'scale-95 ring-2 ring-blue-400' : ''}`}
-                style={{ userSelect: 'none' }}
-              >
-                📊 Ratings {isHolding && '...'}
-              </button>
-              <p className="text-sm text-gray-900 mt-1">Market-adjusted NCAAB power ratings</p>
+              <h1 className="text-2xl font-bold text-gray-900">Ratings</h1>
+              <p className="text-sm text-gray-900">Market-adjusted NCAAB power ratings</p>
             </div>
             <Link href="/" className="text-blue-600 hover:text-blue-700 text-sm font-medium">← Back to Odds</Link>
           </div>
