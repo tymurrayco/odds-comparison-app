@@ -35,48 +35,15 @@ export default function RatingsPage() {
   const [adminMode, setAdminMode] = useState(false);
   const [isHolding, setIsHolding] = useState(false);
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const titleRef = useRef<HTMLHeadingElement>(null);
   const showAdmin = data.isLocalhost || adminMode;
 
-  // Long-press via pointer events (works for both touch and mouse, non-passive by default)
-  useEffect(() => {
-    const el = titleRef.current;
-    if (!el) return;
-
-    const clearPress = () => {
-      setIsHolding(false);
-      if (pressTimer.current) {
-        clearTimeout(pressTimer.current);
-        pressTimer.current = null;
-      }
-    };
-
-    const onPointerDown = (e: PointerEvent) => {
-      e.preventDefault();
-      setIsHolding(true);
-      pressTimer.current = setTimeout(() => {
-        setIsHolding(false);
-        pressTimer.current = null;
-        setAdminMode(prev => !prev);
-      }, 2000);
-    };
-
-    const onContextMenu = (e: Event) => e.preventDefault();
-
-    el.addEventListener('pointerdown', onPointerDown);
-    el.addEventListener('pointerup', clearPress);
-    el.addEventListener('pointercancel', clearPress);
-    el.addEventListener('pointerleave', clearPress);
-    el.addEventListener('contextmenu', onContextMenu);
-
-    return () => {
-      el.removeEventListener('pointerdown', onPointerDown);
-      el.removeEventListener('pointerup', clearPress);
-      el.removeEventListener('pointercancel', clearPress);
-      el.removeEventListener('pointerleave', clearPress);
-      el.removeEventListener('contextmenu', onContextMenu);
-    };
-  }, []);
+  const clearPress = () => {
+    setIsHolding(false);
+    if (pressTimer.current) {
+      clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+  };
 
   // Initial Configuration collapse state
   const [configCollapsed, setConfigCollapsed] = useState(true);
@@ -131,13 +98,34 @@ export default function RatingsPage() {
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1
-                ref={titleRef}
-                className={`text-2xl font-bold text-gray-900 select-none ${isHolding ? 'opacity-60' : ''}`}
-                style={{ WebkitTouchCallout: 'none', touchAction: 'none' }}
+              <button
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setIsHolding(true);
+                  pressTimer.current = setTimeout(() => {
+                    setIsHolding(false);
+                    pressTimer.current = null;
+                    setAdminMode(prev => !prev);
+                  }, 2000);
+                }}
+                onMouseUp={clearPress}
+                onMouseLeave={clearPress}
+                onTouchStart={(e) => {
+                  e.preventDefault();
+                  setIsHolding(true);
+                  pressTimer.current = setTimeout(() => {
+                    setIsHolding(false);
+                    pressTimer.current = null;
+                    setAdminMode(prev => !prev);
+                  }, 2000);
+                }}
+                onTouchEnd={clearPress}
+                className={`text-2xl font-bold text-gray-900 select-none bg-transparent border-none p-0 cursor-default ${isHolding ? 'opacity-60' : ''}`}
+                style={{ userSelect: 'none' }}
               >
                 Ratings{adminMode && !data.isLocalhost && <span className="inline-block w-2 h-2 bg-blue-500 rounded-full ml-2 align-middle" />}
-              </h1>
+                {isHolding && <span className="text-sm font-normal text-gray-400 ml-2">...</span>}
+              </button>
               <p className="text-sm text-gray-900">Market-adjusted NCAAB power ratings</p>
             </div>
             <Link href="/" className="text-blue-600 hover:text-blue-700 text-sm font-medium">← Back to Odds</Link>
