@@ -91,59 +91,56 @@ export default function RatingsPage() {
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-bold text-gray-900">Ratings</h1>
-                <button
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    setIsHolding(true);
-                    pressTimer.current = setTimeout(() => {
-                      setIsHolding(false);
-                      pressTimer.current = null;
-                      setAdminMode(prev => !prev);
-                    }, 2000);
-                  }}
-                  onMouseUp={() => {
+              <button
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setIsHolding(true);
+                  pressTimer.current = setTimeout(() => {
                     setIsHolding(false);
-                    if (pressTimer.current) {
-                      clearTimeout(pressTimer.current);
-                      pressTimer.current = null;
-                    }
-                  }}
-                  onMouseLeave={() => {
+                    pressTimer.current = null;
+                    setAdminMode(prev => !prev);
+                  }, 2000);
+                }}
+                onMouseUp={() => {
+                  setIsHolding(false);
+                  if (pressTimer.current) {
+                    clearTimeout(pressTimer.current);
+                    pressTimer.current = null;
+                  }
+                }}
+                onMouseLeave={() => {
+                  setIsHolding(false);
+                  if (pressTimer.current) {
+                    clearTimeout(pressTimer.current);
+                    pressTimer.current = null;
+                  }
+                }}
+                onTouchStart={(e) => {
+                  e.preventDefault();
+                  setIsHolding(true);
+                  pressTimer.current = setTimeout(() => {
                     setIsHolding(false);
-                    if (pressTimer.current) {
-                      clearTimeout(pressTimer.current);
-                      pressTimer.current = null;
-                    }
-                  }}
-                  onTouchStart={(e) => {
-                    e.preventDefault();
-                    setIsHolding(true);
-                    pressTimer.current = setTimeout(() => {
-                      setIsHolding(false);
-                      pressTimer.current = null;
-                      setAdminMode(prev => !prev);
-                    }, 2000);
-                  }}
-                  onTouchEnd={() => {
-                    setIsHolding(false);
-                    if (pressTimer.current) {
-                      clearTimeout(pressTimer.current);
-                      pressTimer.current = null;
-                    }
-                  }}
-                  className={`px-2 py-1 rounded-lg text-xs font-medium transition-all select-none border border-gray-200 shadow-sm whitespace-nowrap ${
-                    adminMode
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  } ${isHolding ? 'scale-95 ring-2 ring-blue-400' : ''}`}
-                  style={{ userSelect: 'none' }}
-                >
-                  ⚙️ Admin {isHolding && '...'}
-                </button>
-              </div>
-              <p className="text-sm text-gray-900">Market-adjusted NCAAB power ratings</p>
+                    pressTimer.current = null;
+                    setAdminMode(prev => !prev);
+                  }, 2000);
+                }}
+                onTouchEnd={() => {
+                  setIsHolding(false);
+                  if (pressTimer.current) {
+                    clearTimeout(pressTimer.current);
+                    pressTimer.current = null;
+                  }
+                }}
+                className={`px-3 py-2 rounded-xl text-2xl font-bold transition-all select-none border border-gray-200 shadow-sm ${
+                  adminMode
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
+                } ${isHolding ? 'scale-95 ring-2 ring-blue-400' : ''}`}
+                style={{ userSelect: 'none' }}
+              >
+                📊 Ratings {isHolding && '...'}
+              </button>
+              <p className="text-sm text-gray-900 mt-1">Market-adjusted NCAAB power ratings</p>
             </div>
             <Link href="/" className="text-blue-600 hover:text-blue-700 text-sm font-medium">← Back to Odds</Link>
           </div>
