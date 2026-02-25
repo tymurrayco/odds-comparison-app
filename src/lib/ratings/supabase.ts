@@ -302,14 +302,22 @@ export async function saveGameAdjustment(adjustment: GameAdjustment, season: num
     const awayOverride = awayOverrides?.[0] ?? null;
     
     if (homeOverride?.odds_api_name && awayOverride?.odds_api_name) {
-      // Query closing_lines using Odds API names
+      // Query closing_lines using Odds API names, scoped to game date
+      // Without a date filter, .single() fails when teams have multiple games this season
+      const gameDate = new Date(adjustment.date);
+      const dayStart = new Date(Date.UTC(gameDate.getUTCFullYear(), gameDate.getUTCMonth(), gameDate.getUTCDate(), 3, 0, 0));
+      const dayEnd = new Date(Date.UTC(gameDate.getUTCFullYear(), gameDate.getUTCMonth(), gameDate.getUTCDate() + 1, 8, 0, 0));
+
       const { data: closingLine } = await supabase
         .from('closing_lines')
         .select('opening_spread')
         .eq('home_team', homeOverride.odds_api_name)
         .eq('away_team', awayOverride.odds_api_name)
+        .gte('commence_time', dayStart.toISOString())
+        .lt('commence_time', dayEnd.toISOString())
+        .limit(1)
         .single();
-      
+
       if (closingLine?.opening_spread !== undefined) {
         openingSpread = closingLine.opening_spread;
       }
