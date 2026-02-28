@@ -126,9 +126,18 @@ export function HistoryTab({
     }
   };
 
+  // Round a spread to the nearest half-point (away from zero)
+  // e.g. 7.2 → 7.5, -7.2 → -7.5, 7.0 → 7.0, 7.8 → 8.0
+  const roundToHalf = (value: number): number => {
+    return Math.sign(value) * Math.ceil(Math.abs(value) * 2) / 2;
+  };
+
   // Filter and sort history games
   const filteredHistoryGames = useMemo(() => {
-    let games = [...historyGames];
+    let games = historyGames.map(g => ({
+      ...g,
+      closingSpread: g.closingSpread !== null ? roundToHalf(g.closingSpread) : null,
+    }));
     
     // Helper to get Eastern date as YYYY-MM-DD string
     const getEasternDate = (dateStr: string): string => {
