@@ -77,7 +77,7 @@ export function BracketMatchupCard({ matchup, onPickWinner, getTeamLogo }: Brack
 
   return (
     <div
-      className={`w-48 rounded border bg-white shadow-sm ${
+      className={`w-40 sm:w-48 rounded border bg-white shadow-sm ${
         matchup.isManualOverride ? 'border-yellow-400 ring-1 ring-yellow-200' : 'border-gray-200'
       }`}
     >

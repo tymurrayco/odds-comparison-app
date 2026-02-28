@@ -41,7 +41,7 @@ export function SeedingPanel({ teams, maxSeeds, onReorder, getTeamLogo }: Seedin
       <div className="text-xs font-medium text-gray-500 mb-2">
         Seeding ({displayTeams.length} of {teams.length} teams)
       </div>
-      <div className="space-y-0.5 max-h-[500px] overflow-y-auto">
+      <div className="space-y-0.5 max-h-[300px] sm:max-h-[500px] overflow-y-auto">
         {displayTeams.map((team, idx) => (
           <div
             key={team.teamName}
@@ -52,7 +52,7 @@ export function SeedingPanel({ teams, maxSeeds, onReorder, getTeamLogo }: Seedin
               <button
                 onClick={() => moveSeed(idx, 'up')}
                 disabled={idx === 0}
-                className="text-gray-300 hover:text-gray-600 disabled:opacity-20 text-xs p-0.5"
+                className="text-gray-300 hover:text-gray-600 disabled:opacity-20 text-xs p-1.5 -m-1"
                 title="Move up"
               >
                 ▲
@@ -60,7 +60,7 @@ export function SeedingPanel({ teams, maxSeeds, onReorder, getTeamLogo }: Seedin
               <button
                 onClick={() => moveSeed(idx, 'down')}
                 disabled={idx === displayTeams.length - 1}
-                className="text-gray-300 hover:text-gray-600 disabled:opacity-20 text-xs p-0.5"
+                className="text-gray-300 hover:text-gray-600 disabled:opacity-20 text-xs p-1.5 -m-1"
                 title="Move down"
               >
                 ▼

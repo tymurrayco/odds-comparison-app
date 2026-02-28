@@ -25,12 +25,12 @@ export function BracketRound({
 
   return (
     <div className="flex flex-col items-center flex-shrink-0">
-      <div className="text-xs font-medium text-gray-500 mb-3 whitespace-nowrap">
+      <div className="text-[10px] sm:text-xs font-medium text-gray-500 mb-2 sm:mb-3 whitespace-nowrap">
         {roundName}
       </div>
       <div
         className="flex flex-col justify-around flex-1"
-        style={{ gap: `${gapMultiplier * 16}px` }}
+        style={{ gap: `${gapMultiplier * 12}px` }}
       >
         {matchups.map(matchup => (
           <div key={matchup.id} className="flex items-center">

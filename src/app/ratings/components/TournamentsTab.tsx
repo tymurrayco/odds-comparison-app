@@ -267,10 +267,10 @@ export function TournamentsTab({ snapshot, hca, getTeamLogo }: TournamentsTabPro
   }
 
   return (
-    <div className="p-6">
-      <div className="flex gap-6">
+    <div className="p-3 sm:p-6">
+      <div className="flex flex-col md:flex-row gap-4 md:gap-6">
         {/* Left sidebar: controls */}
-        <div className="w-64 flex-shrink-0 space-y-4">
+        <div className="w-full md:w-64 md:flex-shrink-0 space-y-4">
           <ConferenceSelector
             conferences={conferences}
             selectedConference={selectedConference}

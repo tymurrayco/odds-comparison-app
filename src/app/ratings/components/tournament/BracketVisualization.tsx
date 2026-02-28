@@ -39,7 +39,7 @@ export function BracketVisualization({
     <div className="w-full">
       {/* Bracket grid - horizontal scroll */}
       <div className="overflow-x-auto pb-4">
-        <div className="flex items-stretch gap-8 min-w-max px-4 py-4">
+        <div className="flex items-stretch gap-4 sm:gap-8 min-w-max px-2 sm:px-4 py-4">
           {rounds.map((round, idx) => (
             <BracketRound
               key={round.round}
