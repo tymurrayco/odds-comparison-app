@@ -282,8 +282,8 @@ export function HistoryTab({
         }
       }
 
-      // Purple: projection 4+ off closing spread — bet our side
-      if (closeDiffAbs >= 4) {
+      // Purple: projection 4+ off closing spread — bet our side (exclude Blue games)
+      if (closeDiffAbs >= 4 && openDiff < 5) {
         let ourSideCovered = false;
         if (game.projectedSpread < game.closingSpread) {
           ourSideCovered = spreadResult > 0; // home covers
