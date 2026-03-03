@@ -27,6 +27,7 @@ interface HistoryGame {
   homeScore: number | null;
   isToday: boolean;
   isTomorrow: boolean;
+  isNeutralSite: boolean;
   hasStarted: boolean;
   isFrozen: boolean;
 }
@@ -91,6 +92,7 @@ export async function GET(request: NextRequest) {
       closing_source: string | null;
       home_score: number | null;
       away_score: number | null;
+      is_neutral_site: boolean;
     }) => ({
       id: row.game_id,
       commenceTime: row.game_date,
@@ -104,12 +106,13 @@ export async function GET(request: NextRequest) {
       spreadBookmaker: row.closing_source,
       awayScore: row.away_score ?? null,
       homeScore: row.home_score ?? null,
+      isNeutralSite: row.is_neutral_site ?? false,
       isToday: false,
       isTomorrow: false,
       hasStarted: true,
       isFrozen: true,
     }));
-    
+
     const btMatchCount = games.filter(g => g.btSpread !== null).length;
     const openingSpreadCount = games.filter(g => g.openingSpread !== null).length;
     console.log(`[History] Returning ${games.length} games, BT matches: ${btMatchCount}, Opening spreads: ${openingSpreadCount}`);
@@ -164,12 +167,13 @@ async function fallbackQuery(limit: number, offset: number) {
       spreadBookmaker: adj.closing_source,
       awayScore: adj.away_score ?? null,
       homeScore: adj.home_score ?? null,
+      isNeutralSite: adj.is_neutral_site ?? false,
       isToday: false,
       isTomorrow: false,
       hasStarted: true,
       isFrozen: true,
     }));
-  
+
   console.log(`[History] Fallback: Returning ${games.length} games (no BT data)`);
   
   return NextResponse.json({

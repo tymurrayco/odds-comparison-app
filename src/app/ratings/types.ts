@@ -139,6 +139,7 @@ export interface CombinedScheduleGame {
   isDay2: boolean;
   isDay3: boolean;
   dateLabel: string; // "Today", "Tomorrow", "Jan 31", etc.
+  isNeutralSite: boolean;
 }
 
 // History interface
@@ -155,6 +156,7 @@ export interface HistoryGame {
   difference: number | null;
   homeScore: number | null;
   awayScore: number | null;
+  isNeutralSite: boolean;
 }
 
 // Tab type

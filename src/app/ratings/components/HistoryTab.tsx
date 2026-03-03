@@ -808,7 +808,12 @@ export function HistoryTab({
                         </span>
                       )}
                     </td>
-                    <td className="px-1 py-3 text-center text-gray-400 hidden sm:table-cell">@</td>
+                    <td className="px-1 py-3 text-center hidden sm:table-cell">
+                      {game.isNeutralSite
+                        ? <span className="text-amber-600 font-semibold" title="Neutral site">N</span>
+                        : <span className="text-gray-400">@</span>
+                      }
+                    </td>
                     <td className={`px-1 sm:px-4 py-1 ${highlightHomeClass} relative`}>
                       <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 relative">
                         <TeamLogo teamName={game.homeTeam} logoUrl={homeLogo} size="sm" />

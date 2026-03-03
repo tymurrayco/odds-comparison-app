@@ -132,17 +132,9 @@ export function ScheduleTab({
       const homeRating = findTeamRating(game.homeTeam);
       const awayRating = findTeamRating(game.awayTeam);
       
-      // Look up stored projection from history
-      const historyMatch = historyGames.find(h => 
-        h.homeTeam.toLowerCase() === game.homeTeam.toLowerCase() && 
-        h.awayTeam.toLowerCase() === game.awayTeam.toLowerCase()
-      );
-      
       let projectedSpread: number | null = null;
-      if (historyMatch?.projectedSpread !== null && historyMatch?.projectedSpread !== undefined) {
-        projectedSpread = historyMatch.projectedSpread;
-      } else if (homeRating && awayRating) {
-        projectedSpread = -((homeRating.rating - awayRating.rating) + hca);
+      if (homeRating && awayRating) {
+        projectedSpread = -((homeRating.rating - awayRating.rating) + (game.isNeutralSite ? 0 : hca));
         projectedSpread = Math.round(projectedSpread * 100) / 100;
       }
       
@@ -588,7 +580,10 @@ export function ScheduleTab({
                         </div>
                       </td>
                       <td className="px-1 py-3 text-center hidden sm:table-cell">
-                        <span className="text-gray-400 text-xs">@</span>
+                        {game.isNeutralSite
+                          ? <span className="text-amber-600 font-semibold text-xs" title="Neutral site">N</span>
+                          : <span className="text-gray-400 text-xs">@</span>
+                        }
                       </td>
                       <td className={`px-1 sm:px-4 py-3 ${highlightHomeClass}`}>
                         <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 relative">

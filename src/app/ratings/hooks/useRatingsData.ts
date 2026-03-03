@@ -306,8 +306,9 @@ export function useRatingsData(): UseRatingsDataReturn {
         predictedTotal?: number;
         homeWinProb?: number;
         awayWinProb?: number;
+        isNeutralSite?: boolean;
       }> = [];
-      
+
       if (btGames.length > 0) {
         btGamesRaw = btGames.map(g => ({
           gameDate: g.date,
@@ -318,6 +319,7 @@ export function useRatingsData(): UseRatingsDataReturn {
           predictedTotal: g.predicted_total,
           homeWinProb: g.home_win_prob,
           awayWinProb: g.away_win_prob,
+          isNeutralSite: g.neutral,
         }));
       } else {
         const btRes = await fetch('/api/ratings/bt-schedule');
@@ -373,6 +375,7 @@ export function useRatingsData(): UseRatingsDataReturn {
           isTomorrow: dateInfo.isTomorrow,
           isDay2: dateInfo.isDay2,
           isDay3: dateInfo.isDay3,
+          isNeutralSite: bt.isNeutralSite ?? false,
         };
       });
       
@@ -557,6 +560,24 @@ export function useRatingsData(): UseRatingsDataReturn {
             }
           }
           
+          // Fetch neutral site flags from ESPN
+          try {
+            const gameDates = [...new Set(enrichedGames.map(g => g.gameDate))];
+            const neutralRes = await fetch(`/api/ratings/neutral-sites?dates=${gameDates.join(',')}`);
+            const neutralData = await neutralRes.json();
+            if (neutralData.success && neutralData.neutralGames?.length > 0) {
+              enrichedGames = enrichedGames.map(game => {
+                const isNeutral = neutralData.neutralGames.some(
+                  (ng: { homeTeam: string; awayTeam: string }) =>
+                    teamsMatch(game.homeTeam, ng.homeTeam) && teamsMatch(game.awayTeam, ng.awayTeam)
+                );
+                return isNeutral ? { ...game, isNeutralSite: true } : game;
+              });
+            }
+          } catch {
+            // Non-critical — skip neutral site enrichment
+          }
+
           setCombinedScheduleGames(enrichedGames);
           setOddsLoading(false);
         } else {
@@ -601,6 +622,7 @@ export function useRatingsData(): UseRatingsDataReturn {
             spreadBookmaker: string | null;
             awayScore: number | null;
             homeScore: number | null;
+            isNeutralSite: boolean;
           }) => ({
             id: g.id,
             gameDate: g.commenceTime,
@@ -613,7 +635,8 @@ export function useRatingsData(): UseRatingsDataReturn {
             closingSource: g.spreadBookmaker,
             awayScore: g.awayScore ?? null,
             homeScore: g.homeScore ?? null,
-            difference: g.projectedSpread !== null && g.spread !== null 
+            isNeutralSite: g.isNeutralSite ?? false,
+            difference: g.projectedSpread !== null && g.spread !== null
               ? Math.round((g.spread - g.projectedSpread) * 100) / 100
               : null,
           }));

@@ -1125,6 +1125,7 @@ export interface BTScheduleGame {
   predictedTotal?: number;
   awayWinProb?: number;
   homeWinProb?: number;
+  isNeutralSite?: boolean;
 }
 
 /**
@@ -1213,12 +1214,32 @@ export async function loadBTSchedule(date?: string): Promise<BTScheduleGame[]> {
   }
   
   const { data, error } = await query;
-  
+
   if (error) {
     console.error('[Supabase] Error loading BT schedule:', error);
     return [];
   }
-  
+
+  // Fetch neutral site flags from game adjustments for the same dates
+  // Adjustments store game_date as a timestamp, BT schedule stores YYYY-MM-DD
+  const gameDates = [...new Set((data || []).map(r => r.game_date))];
+  const neutralMap = new Map<string, boolean>();
+  if (gameDates.length > 0) {
+    const minDate = gameDates[0];
+    const maxDate = gameDates[gameDates.length - 1];
+    const { data: adjRows } = await supabase
+      .from('ncaab_game_adjustments')
+      .select('home_team, away_team, game_date, is_neutral_site')
+      .gte('game_date', `${minDate}T00:00:00`)
+      .lte('game_date', `${maxDate}T23:59:59`)
+      .eq('is_neutral_site', true);
+    for (const row of adjRows || []) {
+      // Extract YYYY-MM-DD from the timestamp for matching
+      const dateStr = row.game_date.substring(0, 10);
+      neutralMap.set(`${row.away_team}|${row.home_team}|${dateStr}`, true);
+    }
+  }
+
   return (data || []).map(row => ({
     id: row.id,
     gameDate: row.game_date,
@@ -1229,5 +1250,6 @@ export async function loadBTSchedule(date?: string): Promise<BTScheduleGame[]> {
     predictedTotal: row.predicted_total,
     awayWinProb: row.away_win_prob,
     homeWinProb: row.home_win_prob,
+    isNeutralSite: neutralMap.has(`${row.away_team}|${row.home_team}|${row.game_date}`),
   }));
 }
