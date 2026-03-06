@@ -30,6 +30,7 @@ export interface BracketConfig {
   templateId: string;          // which bracket template
   teams: BracketTeam[];
   matchups: BracketMatchup[];
+  notes?: string;
   updatedAt: string;
 }
 

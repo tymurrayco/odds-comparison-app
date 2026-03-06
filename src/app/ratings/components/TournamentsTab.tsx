@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import type { RatingsSnapshot } from '@/lib/ratings/types';
 import type { BracketTeam, BracketMatchup, BracketConfig } from '../types/tournament';
 import {
@@ -37,6 +37,102 @@ interface SavedBracketRow {
   updatedAt: string;
 }
 
+/** Render simple markdown: **bold**, *italic*, newlines */
+function renderSimpleMarkdown(text: string): React.ReactNode[] {
+  return text.split('\n').map((line, li) => {
+    // Process inline formatting
+    const parts: React.ReactNode[] = [];
+    let remaining = line;
+    let key = 0;
+
+    while (remaining.length > 0) {
+      // Bold: **text**
+      const boldMatch = remaining.match(/^(.*?)\*\*(.+?)\*\*(.*)/);
+      if (boldMatch) {
+        if (boldMatch[1]) parts.push(<span key={key++}>{boldMatch[1]}</span>);
+        parts.push(<strong key={key++}>{boldMatch[2]}</strong>);
+        remaining = boldMatch[3];
+        continue;
+      }
+      // Italic: *text*
+      const italicMatch = remaining.match(/^(.*?)\*(.+?)\*(.*)/);
+      if (italicMatch) {
+        if (italicMatch[1]) parts.push(<span key={key++}>{italicMatch[1]}</span>);
+        parts.push(<em key={key++}>{italicMatch[2]}</em>);
+        remaining = italicMatch[3];
+        continue;
+      }
+      // No more matches
+      parts.push(<span key={key++}>{remaining}</span>);
+      break;
+    }
+
+    return (
+      <React.Fragment key={li}>
+        {li > 0 && <br />}
+        {parts}
+      </React.Fragment>
+    );
+  });
+}
+
+function BracketNotes({ notes, onChange }: { notes: string; onChange: (v: string) => void }) {
+  const [editing, setEditing] = React.useState(false);
+  const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+
+  // Auto-size textarea to fit content
+  const autoResize = React.useCallback(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = 'auto';
+    ta.style.height = `${ta.scrollHeight}px`;
+  }, []);
+
+  React.useEffect(() => {
+    if (editing && textareaRef.current) {
+      textareaRef.current.focus();
+      textareaRef.current.selectionStart = textareaRef.current.value.length;
+      autoResize();
+    }
+  }, [editing, autoResize]);
+
+  if (editing) {
+    return (
+      <div className="mt-2 max-w-xl">
+        <textarea
+          ref={textareaRef}
+          value={notes}
+          onChange={(e) => { onChange(e.target.value); autoResize(); }}
+          onBlur={() => setEditing(false)}
+          placeholder="Add notes... (**bold**, *italic*)"
+          rows={1}
+          className="w-full text-sm text-gray-900 bg-white border border-gray-900 rounded-lg px-3 py-1.5 resize-y focus:outline-none focus:ring-1 focus:ring-blue-400 focus:border-blue-400 placeholder:text-gray-400"
+        />
+      </div>
+    );
+  }
+
+  if (!notes) {
+    return (
+      <button
+        onClick={() => setEditing(true)}
+        className="mt-2 text-sm text-gray-400 hover:text-gray-600 transition-colors"
+      >
+        + Add notes
+      </button>
+    );
+  }
+
+  return (
+    <div
+      onClick={() => setEditing(true)}
+      className="mt-2 max-w-xl text-sm text-gray-900 bg-white border border-gray-900 rounded-lg px-3 py-1.5 cursor-text hover:bg-gray-50 transition-colors"
+    >
+      {renderSimpleMarkdown(notes)}
+    </div>
+  );
+}
+
 export function TournamentsTab({ snapshot, hca, getTeamLogo }: TournamentsTabProps) {
   // State
   const [selectedConference, setSelectedConference] = useState<string | null>(null);
@@ -46,6 +142,7 @@ export function TournamentsTab({ snapshot, hca, getTeamLogo }: TournamentsTabPro
   const [savedBrackets, setSavedBrackets] = useState<SavedBracketRow[]>([]);
   const [saving, setSaving] = useState(false);
   const [loadingBrackets, setLoadingBrackets] = useState(true);
+  const [notes, setNotes] = useState<string>('');
 
   // Derived data
   const conferences = useMemo(() => {
@@ -99,6 +196,7 @@ export function TournamentsTab({ snapshot, hca, getTeamLogo }: TournamentsTabPro
       const config = saved.configJson;
       setTemplateId(config.templateId);
       setTeams(config.teams);
+      setNotes(config.notes || '');
       // Re-project to restore matchups (in case ratings changed)
       const template = BRACKET_TEMPLATES[config.templateId];
       if (template) {
@@ -106,6 +204,8 @@ export function TournamentsTab({ snapshot, hca, getTeamLogo }: TournamentsTabPro
         setMatchups(config.matchups);
         return;
       }
+    } else {
+      setNotes('');
     }
 
     // Fresh setup: get teams sorted by rating for this conference
@@ -198,6 +298,7 @@ export function TournamentsTab({ snapshot, hca, getTeamLogo }: TournamentsTabPro
         templateId,
         teams,
         matchups,
+        notes,
         updatedAt: new Date().toISOString(),
       };
 
@@ -239,16 +340,16 @@ export function TournamentsTab({ snapshot, hca, getTeamLogo }: TournamentsTabPro
     } finally {
       setSaving(false);
     }
-  }, [selectedConference, matchups, teams, templateId]);
+  }, [selectedConference, matchups, teams, templateId, notes]);
 
-  // Auto-save when matchups change (debounced)
+  // Auto-save when matchups or notes change (debounced)
   useEffect(() => {
     if (!selectedConference || matchups.length === 0) return;
     const timer = setTimeout(() => {
       saveBracket();
     }, 1000);
     return () => clearTimeout(timer);
-  }, [matchups, saveBracket, selectedConference]);
+  }, [matchups, notes, saveBracket, selectedConference]);
 
   // Delete bracket
   async function handleDeleteBracket(id: string) {
@@ -263,6 +364,7 @@ export function TournamentsTab({ snapshot, hca, getTeamLogo }: TournamentsTabPro
           setSelectedConference(null);
           setMatchups([]);
           setTeams([]);
+          setNotes('');
         }
       }
     } catch (err) {
@@ -356,15 +458,18 @@ export function TournamentsTab({ snapshot, hca, getTeamLogo }: TournamentsTabPro
         <div className="flex-1 min-w-0">
           {selectedConference && template && matchups.length > 0 ? (
             <div>
-              <div className="flex items-center gap-3 mb-4">
-                <h2 className="text-lg font-semibold text-gray-900">
-                  {getDefaultBracketName(selectedConference)}
-                </h2>
-                {hasOverrides && (
-                  <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded">
-                    Manual picks active
-                  </span>
-                )}
+              <div className="mb-4">
+                <div className="flex items-center gap-3">
+                  <h2 className="text-lg font-semibold text-gray-900">
+                    {getDefaultBracketName(selectedConference)}
+                  </h2>
+                  {hasOverrides && (
+                    <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded">
+                      Manual picks active
+                    </span>
+                  )}
+                </div>
+                <BracketNotes notes={notes} onChange={setNotes} />
               </div>
               <BracketVisualization
                 template={template}
