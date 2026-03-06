@@ -8,6 +8,7 @@ interface BracketRoundProps {
   roundName: string;
   matchups: BracketMatchup[];
   onPickWinner: (matchupId: string, side: 'top' | 'bottom') => void;
+  onToggleCompleted: (matchupId: string) => void;
   getTeamLogo: (teamName: string) => string | null;
   roundIndex: number;
 }
@@ -16,6 +17,7 @@ export function BracketRound({
   roundName,
   matchups,
   onPickWinner,
+  onToggleCompleted,
   getTeamLogo,
   roundIndex,
 }: BracketRoundProps) {
@@ -37,6 +39,7 @@ export function BracketRound({
             <BracketMatchupCard
               matchup={matchup}
               onPickWinner={onPickWinner}
+              onToggleCompleted={onToggleCompleted}
               getTeamLogo={getTeamLogo}
             />
           </div>

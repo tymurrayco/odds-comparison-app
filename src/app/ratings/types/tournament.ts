@@ -6,6 +6,7 @@ export interface BracketTeam {
   rating: number;
   conference: string;
   logoUrl: string | null;
+  ineligible?: boolean;
 }
 
 export interface BracketMatchup {
@@ -18,6 +19,7 @@ export interface BracketMatchup {
   winProbTop: number | null;
   winner: 'top' | 'bottom' | null;
   isManualOverride: boolean;
+  isCompleted?: boolean;
   sourceMatchupIds: [string | null, string | null]; // prior matchups feeding in
 }
 

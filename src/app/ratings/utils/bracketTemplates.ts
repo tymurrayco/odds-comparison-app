@@ -439,8 +439,8 @@ const TEMPLATE_12_TEAM_STEPLADDER: BracketTemplate = {
       round: 3,
       name: 'Third Round',
       matchups: [
-        { id: 'R3-G1', topSeed: 6, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R2-G1' },
-        { id: 'R3-G2', topSeed: 5, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R2-G2' },
+        { id: 'R3-G1', topSeed: 5, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R2-G1' },
+        { id: 'R3-G2', topSeed: 6, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R2-G2' },
       ],
     },
     {
@@ -455,15 +455,15 @@ const TEMPLATE_12_TEAM_STEPLADDER: BracketTemplate = {
       round: 5,
       name: 'Semifinals',
       matchups: [
-        { id: 'R5-G1', topSeed: 2, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R4-G1' },
-        { id: 'R5-G2', topSeed: 1, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R4-G2' },
+        { id: 'R5-G1', topSeed: 1, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R4-G1' },
+        { id: 'R5-G2', topSeed: 2, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R4-G2' },
       ],
     },
     {
       round: 6,
       name: 'Championship',
       matchups: [
-        { id: 'R6-G1', topSeed: null, bottomSeed: null, topFromMatchup: 'R5-G2', bottomFromMatchup: 'R5-G1' },
+        { id: 'R6-G1', topSeed: null, bottomSeed: null, topFromMatchup: 'R5-G1', bottomFromMatchup: 'R5-G2' },
       ],
     },
   ],
@@ -626,60 +626,66 @@ const TEMPLATE_14_TEAM_TOP4_DBL: BracketTemplate = {
   ],
 };
 
-// 14-team with top 2 getting bye to semifinals, 3-4 to QF
+// 14-team stepladder: pairs of seeds enter each round
 // Used by: Sun Belt
 const TEMPLATE_14_TEAM_TOP2_SEMIS: BracketTemplate = {
   id: '14-team-top2-semis',
-  name: '14-Team (Top 2 Bye to Semis)',
+  name: '14-Team Stepladder',
   teamCount: 14,
   rounds: [
     {
       round: 1,
       name: 'First Round',
       matchups: [
-        { id: 'R1-G1', topSeed: 11, bottomSeed: 14, topFromMatchup: null, bottomFromMatchup: null },
-        { id: 'R1-G2', topSeed: 12, bottomSeed: 13, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G1', topSeed: 12, bottomSeed: 13, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G2', topSeed: 11, bottomSeed: 14, topFromMatchup: null, bottomFromMatchup: null },
       ],
     },
     {
       round: 2,
       name: 'Second Round',
       matchups: [
-        { id: 'R2-G1', topSeed: 6, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R1-G1' },
-        { id: 'R2-G2', topSeed: 7, bottomSeed: 10, topFromMatchup: null, bottomFromMatchup: null },
-        { id: 'R2-G3', topSeed: 5, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R1-G2' },
-        { id: 'R2-G4', topSeed: 8, bottomSeed: 9, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R2-G1', topSeed: 9, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R1-G1' },
+        { id: 'R2-G2', topSeed: 10, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R1-G2' },
       ],
     },
     {
       round: 3,
       name: 'Third Round',
       matchups: [
-        { id: 'R3-G1', topSeed: null, bottomSeed: null, topFromMatchup: 'R2-G1', bottomFromMatchup: 'R2-G2' },
-        { id: 'R3-G2', topSeed: null, bottomSeed: null, topFromMatchup: 'R2-G3', bottomFromMatchup: 'R2-G4' },
+        { id: 'R3-G1', topSeed: 8, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R2-G1' },
+        { id: 'R3-G2', topSeed: 7, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R2-G2' },
       ],
     },
     {
       round: 4,
-      name: 'Quarterfinals',
+      name: 'Fourth Round',
       matchups: [
-        { id: 'R4-G1', topSeed: 3, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R3-G1' },
-        { id: 'R4-G2', topSeed: 4, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R3-G2' },
+        { id: 'R4-G1', topSeed: 5, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R3-G1' },
+        { id: 'R4-G2', topSeed: 6, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R3-G2' },
       ],
     },
     {
       round: 5,
-      name: 'Semifinals',
+      name: 'Quarterfinals',
       matchups: [
-        { id: 'R5-G1', topSeed: 1, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R4-G1' },
-        { id: 'R5-G2', topSeed: 2, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R4-G2' },
+        { id: 'R5-G1', topSeed: 4, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R4-G1' },
+        { id: 'R5-G2', topSeed: 3, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R4-G2' },
       ],
     },
     {
       round: 6,
+      name: 'Semifinals',
+      matchups: [
+        { id: 'R6-G1', topSeed: 1, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R5-G1' },
+        { id: 'R6-G2', topSeed: 2, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R5-G2' },
+      ],
+    },
+    {
+      round: 7,
       name: 'Championship',
       matchups: [
-        { id: 'R6-G1', topSeed: null, bottomSeed: null, topFromMatchup: 'R5-G1', bottomFromMatchup: 'R5-G2' },
+        { id: 'R7-G1', topSeed: null, bottomSeed: null, topFromMatchup: 'R6-G1', bottomFromMatchup: 'R6-G2' },
       ],
     },
   ],

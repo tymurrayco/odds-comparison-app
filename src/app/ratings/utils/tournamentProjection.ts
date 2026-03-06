@@ -157,8 +157,20 @@ export function toggleMatchupWinner(
   side: 'top' | 'bottom',
   hca: number,
 ): BracketMatchup[] {
+  const current = matchups.find(m => m.id === matchupId);
+  const isUndoing = current?.isManualOverride && current?.winner === side;
+
   const updated = matchups.map(m => {
     if (m.id === matchupId) {
+      if (isUndoing) {
+        // Clicking the same winner again clears the override
+        return {
+          ...m,
+          winner: null,
+          isManualOverride: false,
+          isCompleted: false,
+        };
+      }
       return {
         ...m,
         winner: side,
@@ -172,6 +184,7 @@ export function toggleMatchupWinner(
         ...m,
         winner: null,
         isManualOverride: false,
+        isCompleted: false,
       };
     }
     return { ...m };
@@ -214,6 +227,123 @@ export function resetProjections(
     isManualOverride: false,
   }));
   return projectBracket(cleared, hca);
+}
+
+// ============================================
+// Tournament Win Probabilities
+// ============================================
+
+/**
+ * Calculate each team's probability of winning the tournament.
+ * Uses analytical round-by-round probability propagation.
+ * Completed or manually picked matchups are treated as settled (100% for the winner).
+ * Returns a map of teamName -> win probability (0-1).
+ */
+export function calculateTournamentWinProbs(
+  template: BracketTemplate,
+  teams: BracketTeam[],
+  hca: number,
+  matchups?: BracketMatchup[],
+): Map<string, number> {
+  const teamBySeed = new Map<number, BracketTeam>();
+  for (const t of teams) teamBySeed.set(t.seed, t);
+
+  // Build lookup of settled matchups (only manually picked or completed results)
+  const settledMap = new Map<string, BracketMatchup>();
+  if (matchups) {
+    for (const m of matchups) {
+      if (m.winner && (m.isManualOverride || m.isCompleted)) {
+        settledMap.set(m.id, m);
+      }
+    }
+  }
+
+  // For each matchup, track probability of each team being in that slot
+  // Key: matchupId, Value: Map<teamName, probability>
+  type SlotProbs = Map<string, number>; // teamName -> prob
+  const winnerProbs = new Map<string, SlotProbs>();
+
+  const teamsByName = new Map<string, BracketTeam>();
+  for (const t of teams) teamsByName.set(t.teamName, t);
+
+  for (const roundDef of template.rounds) {
+    for (const tm of roundDef.matchups) {
+      // Initialize top slot
+      const top: SlotProbs = new Map();
+      if (tm.topSeed) {
+        const team = teamBySeed.get(tm.topSeed);
+        if (team) top.set(team.teamName, 1);
+      } else if (tm.topFromMatchup) {
+        const source = winnerProbs.get(tm.topFromMatchup);
+        if (source) for (const [name, prob] of source) top.set(name, prob);
+      }
+
+      // Initialize bottom slot
+      const bottom: SlotProbs = new Map();
+      if (tm.bottomSeed) {
+        const team = teamBySeed.get(tm.bottomSeed);
+        if (team) bottom.set(team.teamName, 1);
+      } else if (tm.bottomFromMatchup) {
+        const source = winnerProbs.get(tm.bottomFromMatchup);
+        if (source) for (const [name, prob] of source) bottom.set(name, prob);
+      }
+
+      // Check if this matchup is settled
+      const settled = settledMap.get(tm.id);
+      if (settled && settled.winner) {
+        const winnerTeam = settled.winner === 'top' ? settled.topTeam : settled.bottomTeam;
+        const winners: SlotProbs = new Map();
+        if (winnerTeam) {
+          winners.set(winnerTeam.teamName, 1);
+        }
+        winnerProbs.set(tm.id, winners);
+        continue;
+      }
+
+      // Calculate winner probabilities
+      const winners: SlotProbs = new Map();
+
+      for (const [topName, topProb] of top) {
+        const topTeam = teamsByName.get(topName);
+        if (!topTeam) continue;
+        for (const [botName, botProb] of bottom) {
+          const botTeam = teamsByName.get(botName);
+          if (!botTeam) continue;
+          const meetProb = topProb * botProb;
+          if (meetProb === 0) continue;
+
+          const spread = projectSpread(topTeam.rating, botTeam.rating, hca, true);
+          const topWinProb = spreadToWinProb(spread);
+
+          winners.set(topName, (winners.get(topName) || 0) + meetProb * topWinProb);
+          winners.set(botName, (winners.get(botName) || 0) + meetProb * (1 - topWinProb));
+        }
+      }
+      winnerProbs.set(tm.id, winners);
+    }
+  }
+
+  // The final matchup's winner probs are the tournament win probs
+  const allMatchupIds = template.rounds.flatMap(r => r.matchups.map(m => m.id));
+  const finalId = allMatchupIds[allMatchupIds.length - 1];
+  return winnerProbs.get(finalId) || new Map();
+}
+
+/**
+ * Convert a win probability (0-1) to American odds string.
+ * e.g., 0.8 -> "-400", 0.2 -> "+400"
+ */
+export function probToAmericanOdds(prob: number): string {
+  if (prob <= 0 || prob >= 1) return prob >= 1 ? '-∞' : '+∞';
+  if (prob >= 0.5) {
+    // Favorite: negative odds
+    const odds = Math.round(-(prob / (1 - prob)) * 100);
+    return `${odds}`;
+  } else {
+    // Underdog: positive odds
+    const odds = Math.round(((1 - prob) / prob) * 100);
+    return `+${odds}`;
+  }
 }
 
 /**

@@ -8,6 +8,7 @@ interface BracketVisualizationProps {
   template: BracketTemplate;
   matchups: BracketMatchup[];
   onPickWinner: (matchupId: string, side: 'top' | 'bottom') => void;
+  onToggleCompleted: (matchupId: string) => void;
   getTeamLogo: (teamName: string) => string | null;
 }
 
@@ -15,6 +16,7 @@ export function BracketVisualization({
   template,
   matchups,
   onPickWinner,
+  onToggleCompleted,
   getTeamLogo,
 }: BracketVisualizationProps) {
   // Group matchups by round
@@ -46,6 +48,7 @@ export function BracketVisualization({
               roundName={round.name}
               matchups={round.matchups}
               onPickWinner={onPickWinner}
+              onToggleCompleted={onToggleCompleted}
               getTeamLogo={getTeamLogo}
               roundIndex={idx}
             />

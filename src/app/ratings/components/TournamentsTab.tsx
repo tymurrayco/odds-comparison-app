@@ -13,6 +13,7 @@ import {
   projectBracket,
   toggleMatchupWinner,
   resetProjections,
+  calculateTournamentWinProbs,
 } from '../utils/tournamentProjection';
 import { ConferenceSelector } from './tournament/ConferenceSelector';
 import { TemplateSelector } from './tournament/TemplateSelector';
@@ -125,31 +126,43 @@ export function TournamentsTab({ snapshot, hca, getTeamLogo }: TournamentsTabPro
     const defaultTemplate = getDefaultTemplate(conference);
     setTemplateId(defaultTemplate.id);
 
-    // Build and project bracket
-    const template = defaultTemplate;
-    const newMatchups = buildMatchups(template, confTeams);
-    const projected = projectBracket(newMatchups, hca);
-    setMatchups(projected);
+    // Build and project bracket (all fresh teams are eligible)
+    rebuildBracket(defaultTemplate.id, confTeams);
   }
 
   // When template changes, rebuild bracket with current teams
   function handleTemplateChange(newTemplateId: string) {
     setTemplateId(newTemplateId);
-    const template = BRACKET_TEMPLATES[newTemplateId];
-    if (!template) return;
-
-    const newMatchups = buildMatchups(template, teams);
-    const projected = projectBracket(newMatchups, hca);
-    setMatchups(projected);
+    rebuildBracket(newTemplateId, teams);
   }
 
   // When seeds change, rebuild bracket
   function handleSeedChange(newTeams: BracketTeam[]) {
     setTeams(newTeams);
-    const template = BRACKET_TEMPLATES[templateId];
-    if (!template) return;
+    rebuildBracket(templateId, newTeams);
+  }
 
-    const newMatchups = buildMatchups(template, newTeams);
+  // Toggle a team's ineligibility and rebuild bracket
+  function handleToggleIneligible(teamName: string) {
+    const newTeams = teams.map(t =>
+      t.teamName === teamName ? { ...t, ineligible: !t.ineligible } : t
+    );
+    // Re-seed eligible teams
+    let seed = 1;
+    const reseeded = newTeams.map(t => {
+      if (t.ineligible) return { ...t, seed: 0 };
+      return { ...t, seed: seed++ };
+    });
+    setTeams(reseeded);
+    rebuildBracket(templateId, reseeded);
+  }
+
+  // Helper: rebuild bracket from template + teams (filters to eligible only)
+  function rebuildBracket(tplId: string, allTeams: BracketTeam[]) {
+    const template = BRACKET_TEMPLATES[tplId];
+    if (!template) return;
+    const eligible = allTeams.filter(t => !t.ineligible);
+    const newMatchups = buildMatchups(template, eligible);
     const projected = projectBracket(newMatchups, hca);
     setMatchups(projected);
   }
@@ -158,6 +171,13 @@ export function TournamentsTab({ snapshot, hca, getTeamLogo }: TournamentsTabPro
   function handlePickWinner(matchupId: string, side: 'top' | 'bottom') {
     const updated = toggleMatchupWinner(matchups, matchupId, side, hca);
     setMatchups(updated);
+  }
+
+  // Toggle completed status on a matchup
+  function handleToggleCompleted(matchupId: string) {
+    setMatchups(prev => prev.map(m =>
+      m.id === matchupId ? { ...m, isCompleted: !m.isCompleted } : m
+    ));
   }
 
   // Reset all overrides
@@ -258,6 +278,13 @@ export function TournamentsTab({ snapshot, hca, getTeamLogo }: TournamentsTabPro
   const template = BRACKET_TEMPLATES[templateId];
   const hasOverrides = matchups.some(m => m.isManualOverride);
 
+  // Calculate tournament win probabilities (reacts to matchup changes / completed games)
+  const tournamentWinProbs = useMemo(() => {
+    if (!template || teams.length === 0) return new Map<string, number>();
+    const eligible = teams.filter(t => !t.ineligible);
+    return calculateTournamentWinProbs(template, eligible, hca, matchups);
+  }, [template, teams, hca, matchups]);
+
   if (!snapshot) {
     return (
       <div className="p-6 text-center text-gray-500">
@@ -289,7 +316,9 @@ export function TournamentsTab({ snapshot, hca, getTeamLogo }: TournamentsTabPro
                 teams={teams}
                 maxSeeds={template?.teamCount || 8}
                 onReorder={handleSeedChange}
+                onToggleIneligible={handleToggleIneligible}
                 getTeamLogo={getTeamLogo}
+                tournamentWinProbs={tournamentWinProbs}
               />
 
               <div className="flex gap-2">
@@ -341,6 +370,7 @@ export function TournamentsTab({ snapshot, hca, getTeamLogo }: TournamentsTabPro
                 template={template}
                 matchups={matchups}
                 onPickWinner={handlePickWinner}
+                onToggleCompleted={handleToggleCompleted}
                 getTeamLogo={getTeamLogo}
               />
             </div>

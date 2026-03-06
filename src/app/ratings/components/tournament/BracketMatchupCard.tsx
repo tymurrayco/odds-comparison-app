@@ -8,6 +8,7 @@ import type { BracketMatchup } from '../../types/tournament';
 interface BracketMatchupCardProps {
   matchup: BracketMatchup;
   onPickWinner: (matchupId: string, side: 'top' | 'bottom') => void;
+  onToggleCompleted: (matchupId: string) => void;
   getTeamLogo: (teamName: string) => string | null;
 }
 
@@ -15,13 +16,17 @@ function TeamRow({
   team,
   side,
   matchup,
+  isCompleted,
   onClick,
+  onToggleCompleted,
   getTeamLogo,
 }: {
   team: { teamName: string; seed: number; rating: number; logoUrl: string | null } | null;
   side: 'top' | 'bottom';
   matchup: BracketMatchup;
+  isCompleted?: boolean;
   onClick: () => void;
+  onToggleCompleted: () => void;
   getTeamLogo: (teamName: string) => string | null;
 }) {
   if (!team) {
@@ -37,29 +42,47 @@ function TeamRow({
   const isLoser = matchup.winner !== null && matchup.winner !== side;
 
   return (
-    <button
-      onClick={onClick}
-      className={`flex items-center gap-1.5 px-2 py-1.5 w-full text-left text-xs h-8 transition-colors ${
-        isWinner
-          ? 'bg-green-50 font-semibold text-gray-900'
-          : isLoser
-            ? 'text-gray-400'
-            : 'text-gray-700 hover:bg-gray-50'
-      }`}
-    >
-      <span className="w-4 text-center text-[10px] text-gray-400 flex-shrink-0">{team.seed}</span>
-      <TeamLogo
-        teamName={team.teamName}
-        logoUrl={getTeamLogo(team.teamName)}
-        size="sm"
-      />
-      <span className="truncate flex-1 min-w-0">{team.teamName}</span>
-    </button>
+    <div className="flex items-center h-8">
+      <button
+        onClick={onClick}
+        className={`flex items-center gap-1.5 px-2 py-1.5 flex-1 min-w-0 text-left text-xs h-full transition-colors ${
+          isWinner
+            ? 'bg-green-50 font-semibold text-gray-900'
+            : isLoser
+              ? 'text-gray-400'
+              : 'text-gray-700 hover:bg-gray-50'
+        }`}
+      >
+        <span className="w-4 text-center text-[10px] text-gray-400 flex-shrink-0">{team.seed}</span>
+        <TeamLogo
+          teamName={team.teamName}
+          logoUrl={getTeamLogo(team.teamName)}
+          size="sm"
+        />
+        <span className="truncate flex-1 min-w-0">{team.teamName}</span>
+      </button>
+      {isWinner && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggleCompleted(); }}
+          className={`flex-shrink-0 w-4 h-4 rounded border flex items-center justify-center transition-colors mr-1.5 ${
+            isCompleted
+              ? 'bg-green-500 border-green-500 text-white'
+              : 'border-gray-300 text-transparent hover:border-green-400 hover:text-green-400'
+          }`}
+          title={isCompleted ? 'Mark as pending' : 'Mark as final result'}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+          </svg>
+        </button>
+      )}
+    </div>
   );
 }
 
-export function BracketMatchupCard({ matchup, onPickWinner, getTeamLogo }: BracketMatchupCardProps) {
+export function BracketMatchupCard({ matchup, onPickWinner, onToggleCompleted, getTeamLogo }: BracketMatchupCardProps) {
   const hasTeams = matchup.topTeam && matchup.bottomTeam;
+  const isCompleted = matchup.isCompleted;
 
   // Spread display
   let spreadText: string | null = null;
@@ -77,8 +100,12 @@ export function BracketMatchupCard({ matchup, onPickWinner, getTeamLogo }: Brack
 
   return (
     <div
-      className={`w-40 sm:w-48 rounded border bg-white shadow-sm ${
-        matchup.isManualOverride ? 'border-yellow-400 ring-1 ring-yellow-200' : 'border-gray-200'
+      className={`w-40 sm:w-48 rounded border bg-white shadow-sm relative ${
+        isCompleted
+          ? 'border-green-500 ring-1 ring-green-200'
+          : matchup.isManualOverride
+            ? 'border-yellow-400 ring-1 ring-yellow-200'
+            : 'border-gray-200'
       }`}
     >
       {/* Top team */}
@@ -86,7 +113,9 @@ export function BracketMatchupCard({ matchup, onPickWinner, getTeamLogo }: Brack
         team={matchup.topTeam}
         side="top"
         matchup={matchup}
+        isCompleted={isCompleted}
         onClick={() => hasTeams && onPickWinner(matchup.id, 'top')}
+        onToggleCompleted={() => onToggleCompleted(matchup.id)}
         getTeamLogo={getTeamLogo}
       />
 
@@ -112,7 +141,9 @@ export function BracketMatchupCard({ matchup, onPickWinner, getTeamLogo }: Brack
         team={matchup.bottomTeam}
         side="bottom"
         matchup={matchup}
+        isCompleted={isCompleted}
         onClick={() => hasTeams && onPickWinner(matchup.id, 'bottom')}
+        onToggleCompleted={() => onToggleCompleted(matchup.id)}
         getTeamLogo={getTeamLogo}
       />
 
