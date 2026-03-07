@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import type { RatingsSnapshot } from '@/lib/ratings/types';
 import type { BracketTeam, BracketMatchup, BracketConfig } from '../types/tournament';
 import {
@@ -143,6 +143,8 @@ export function TournamentsTab({ snapshot, hca, getTeamLogo }: TournamentsTabPro
   const [saving, setSaving] = useState(false);
   const [loadingBrackets, setLoadingBrackets] = useState(true);
   const [notes, setNotes] = useState<string>('');
+  const pendingSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveBracketRef = useRef<(() => Promise<void>) | undefined>(undefined);
 
   // Derived data
   const conferences = useMemo(() => {
@@ -188,6 +190,16 @@ export function TournamentsTab({ snapshot, hca, getTeamLogo }: TournamentsTabPro
   // When conference changes, populate teams and pick default template
   function handleConferenceSelect(conference: string) {
     if (!snapshot) return;
+
+    // Flush any pending save for the current conference before switching
+    if (pendingSaveRef.current) {
+      clearTimeout(pendingSaveRef.current);
+      pendingSaveRef.current = null;
+      if (selectedConference && matchups.length > 0) {
+        saveBracketRef.current?.();
+      }
+    }
+
     setSelectedConference(conference);
 
     // Check if we have a saved bracket for this conference
@@ -342,13 +354,17 @@ export function TournamentsTab({ snapshot, hca, getTeamLogo }: TournamentsTabPro
     }
   }, [selectedConference, matchups, teams, templateId, notes]);
 
+  // Keep ref in sync so we can flush the latest save on conference switch
+  saveBracketRef.current = saveBracket;
+
   // Auto-save when matchups or notes change (debounced)
   useEffect(() => {
     if (!selectedConference || matchups.length === 0) return;
     const timer = setTimeout(() => {
       saveBracket();
     }, 1000);
-    return () => clearTimeout(timer);
+    pendingSaveRef.current = timer;
+    return () => { clearTimeout(timer); pendingSaveRef.current = null; };
   }, [matchups, notes, saveBracket, selectedConference]);
 
   // Delete bracket
