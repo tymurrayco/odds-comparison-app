@@ -13,9 +13,10 @@ interface SeedingPanelProps {
   onToggleIneligible: (teamName: string) => void;
   getTeamLogo: (teamName: string) => string | null;
   tournamentWinProbs: Map<string, number>;
+  eliminatedTeams: Set<string>;
 }
 
-export function SeedingPanel({ teams, maxSeeds, onReorder, onToggleIneligible, getTeamLogo, tournamentWinProbs }: SeedingPanelProps) {
+export function SeedingPanel({ teams, maxSeeds, onReorder, onToggleIneligible, getTeamLogo, tournamentWinProbs, eliminatedTeams }: SeedingPanelProps) {
   const eligible = teams.filter(t => !t.ineligible);
   const ineligible = teams.filter(t => t.ineligible);
   const displayTeams = eligible.slice(0, maxSeeds);
@@ -39,10 +40,12 @@ export function SeedingPanel({ teams, maxSeeds, onReorder, onToggleIneligible, g
         Seeding ({displayTeams.length} of {eligible.length} eligible)
       </div>
       <div className="space-y-0.5 max-h-[300px] sm:max-h-[500px] overflow-y-auto">
-        {displayTeams.map((team, idx) => (
+        {displayTeams.map((team, idx) => {
+          const isEliminated = eliminatedTeams.has(team.teamName);
+          return (
           <div
             key={team.teamName}
-            className="flex items-center gap-2 px-2 py-1 text-sm rounded hover:bg-gray-50 group"
+            className={`flex items-center gap-2 px-2 py-1 text-sm rounded hover:bg-gray-50 group ${isEliminated ? 'opacity-60' : ''}`}
           >
             <span className="w-5 text-xs text-gray-400 text-right flex-shrink-0">{team.seed}</span>
             <div className="flex gap-0.5 flex-shrink-0">
@@ -68,7 +71,7 @@ export function SeedingPanel({ teams, maxSeeds, onReorder, onToggleIneligible, g
               logoUrl={getTeamLogo(team.teamName)}
               size="sm"
             />
-            <span className="truncate flex-1 min-w-0 text-gray-900">{team.teamName}</span>
+            <span className={`truncate flex-1 min-w-0 ${isEliminated ? 'text-red-400 line-through' : 'text-gray-900'}`}>{team.teamName}</span>
             {(() => {
               const winProb = tournamentWinProbs.get(team.teamName);
               if (winProb != null && winProb > 0) {
@@ -92,7 +95,8 @@ export function SeedingPanel({ teams, maxSeeds, onReorder, onToggleIneligible, g
               ✕
             </button>
           </div>
-        ))}
+          );
+        })}
 
         {/* Teams outside bracket (eligible but didn't make the cut) */}
         {outsideBracket.length > 0 && (

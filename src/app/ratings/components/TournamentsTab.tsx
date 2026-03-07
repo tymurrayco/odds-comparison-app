@@ -387,6 +387,17 @@ export function TournamentsTab({ snapshot, hca, getTeamLogo }: TournamentsTabPro
     return calculateTournamentWinProbs(template, eligible, hca, matchups);
   }, [template, teams, hca, matchups]);
 
+  // Compute eliminated teams (lost a completed game)
+  const eliminatedTeams = useMemo(() => {
+    const eliminated = new Set<string>();
+    for (const m of matchups) {
+      if (!m.isCompleted || !m.winner) continue;
+      const loser = m.winner === 'top' ? m.bottomTeam : m.topTeam;
+      if (loser) eliminated.add(loser.teamName);
+    }
+    return eliminated;
+  }, [matchups]);
+
   if (!snapshot) {
     return (
       <div className="p-6 text-center text-gray-500">
@@ -421,6 +432,7 @@ export function TournamentsTab({ snapshot, hca, getTeamLogo }: TournamentsTabPro
                 onToggleIneligible={handleToggleIneligible}
                 getTeamLogo={getTeamLogo}
                 tournamentWinProbs={tournamentWinProbs}
+                eliminatedTeams={eliminatedTeams}
               />
 
               <div className="flex gap-2">
