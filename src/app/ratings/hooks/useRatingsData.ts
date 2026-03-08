@@ -22,6 +22,7 @@ import {
   parseTimeToMinutes,
   hasGameStarted,
   getDateInfo,
+  convertETToLocal,
 } from '../utils/teamMatching';
 
 export interface UseRatingsDataReturn {
@@ -356,7 +357,7 @@ export function useRatingsData(): UseRatingsDataReturn {
         return {
           id: bt.id?.toString() || `${bt.gameDate}-${bt.awayTeam}-${bt.homeTeam}`,
           gameDate: bt.gameDate,
-          gameTime: bt.gameTime || '',
+          gameTime: bt.gameTime ? convertETToLocal(bt.gameDate, bt.gameTime) : '',
           homeTeam: bt.homeTeam,
           awayTeam: bt.awayTeam,
           btSpread: bt.predictedSpread ?? null,

@@ -212,10 +212,10 @@ async function fetchHistoricalGames(
     return { success: false, games: [], error: 'Invalid date format' };
   }
   
-  // Don't allow more than 120 days of data at once
-  const maxDays = 120;
+  // Don't allow more than 200 days of data at once (covers a full NCAAB season)
+  const maxDays = 200;
   const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-  
+
   if (daysDiff > maxDays) {
     return { success: false, games: [], error: `Date range too large. Maximum is ${maxDays} days.` };
   }
@@ -452,9 +452,26 @@ export async function POST(request: NextRequest) {
     // Step 3: Fetch completed games from ESPN directly (no internal HTTP call)
     const seasonStart = SEASON_DATES[config.season].start;
     const today = new Date().toISOString().split('T')[0];
-    
+
+    // Smart default start date: if games have been processed, start from 3 days before
+    // the last processed game to catch any late-night games that may have been missed.
+    // This avoids hitting the maxDays limit late in the season.
+    let smartStart = seasonStart;
+    if (!startDate && processedGameIds.size > 0) {
+      const stats = await getStats(config.season);
+      if (stats.lastGameDate) {
+        const lastDate = new Date(stats.lastGameDate);
+        lastDate.setDate(lastDate.getDate() - 3);
+        const lastDateStr = lastDate.toISOString().split('T')[0];
+        if (lastDateStr > seasonStart) {
+          smartStart = lastDateStr;
+          console.log(`[Calculate Ratings] Smart start date: ${smartStart} (3 days before last processed game)`);
+        }
+      }
+    }
+
     // Use provided date range or defaults
-    const queryStartDate = startDate || seasonStart;
+    const queryStartDate = startDate || smartStart;
     const queryEndDate = endDate || today;
     
     const gamesResult = await fetchHistoricalGames(
@@ -605,6 +622,7 @@ export async function POST(request: NextRequest) {
             const US_CONSENSUS_BOOKS = ['draftkings', 'fanduel', 'betmgm', 'betrivers'];
             
             let matchingOddsGame: OddsAPIGame | null = null;
+            let matchSwapped = false;
             let closingLine: { spread: number | null; bookmakers: string[] } = { spread: null, bookmakers: [] };
             const usedSource: ClosingLineSource = 'us_average';
             
@@ -636,13 +654,21 @@ export async function POST(request: NextRequest) {
             }
             
             if (usGames && usGames.length > 0) {
-              matchingOddsGame = findMatchingGame(game, usGames, oddsApiOverrideMap);
-              
-              if (matchingOddsGame) {
+              const matchResult = findMatchingGame(game, usGames, oddsApiOverrideMap);
+
+              if (matchResult) {
+                matchingOddsGame = matchResult.game;
+                matchSwapped = matchResult.swapped;
                 closingLine = extractClosingSpread(matchingOddsGame, 'us_average', US_CONSENSUS_BOOKS);
+                // When home/away are swapped between ESPN and Odds API,
+                // the spread is from the wrong team's perspective — negate it
+                if (matchSwapped && closingLine.spread !== null) {
+                  closingLine.spread = -closingLine.spread;
+                  console.log(`[Calculate Ratings] Negated spread for swapped match: ${game.homeTeam} vs ${game.awayTeam} → ${closingLine.spread}`);
+                }
               }
             }
-            
+
             if (!matchingOddsGame) {
               matchingLog.status = 'no_odds';
               matchingLog.skipReason = 'No matching game in Odds API';
@@ -824,46 +850,46 @@ export async function POST(request: NextRequest) {
  * Uses override map for team name translations
  */
 function findMatchingGame(
-  espnGame: HistoricalGame, 
+  espnGame: HistoricalGame,
   oddsGames: OddsAPIGame[],
   oddsApiOverrideMap?: Map<string, string>
-): OddsAPIGame | null {
+): { game: OddsAPIGame; swapped: boolean } | null {
   const espnHome = espnGame.homeTeam.toLowerCase();
   const espnAway = espnGame.awayTeam.toLowerCase();
-  
+
   // Get override names if they exist
   const overrideHome = oddsApiOverrideMap?.get(espnHome);
   const overrideAway = oddsApiOverrideMap?.get(espnAway);
-  
+
   for (const oddsGame of oddsGames) {
     const oddsHome = oddsGame.home_team.toLowerCase();
     const oddsAway = oddsGame.away_team.toLowerCase();
-    
+
     // Check normal orientation (with override support)
-    const homeMatch = teamsMatch(espnHome, oddsHome) || 
+    const homeMatch = teamsMatch(espnHome, oddsHome) ||
                       (overrideHome && teamsMatch(overrideHome, oddsHome));
-    const awayMatch = teamsMatch(espnAway, oddsAway) || 
+    const awayMatch = teamsMatch(espnAway, oddsAway) ||
                       (overrideAway && teamsMatch(overrideAway, oddsAway));
-    
+
     if (homeMatch && awayMatch) {
       if (overrideHome || overrideAway) {
         console.log(`[findMatchingGame] Matched via override: ESPN ${espnGame.homeTeam} vs ${espnGame.awayTeam}`);
       }
-      return oddsGame;
+      return { game: oddsGame, swapped: false };
     }
-    
+
     // Check swapped orientation (common for neutral site tournaments)
-    const swappedHomeMatch = teamsMatch(espnHome, oddsAway) || 
+    const swappedHomeMatch = teamsMatch(espnHome, oddsAway) ||
                              (overrideHome && teamsMatch(overrideHome, oddsAway));
-    const swappedAwayMatch = teamsMatch(espnAway, oddsHome) || 
+    const swappedAwayMatch = teamsMatch(espnAway, oddsHome) ||
                              (overrideAway && teamsMatch(overrideAway, oddsHome));
-    
+
     if (swappedHomeMatch && swappedAwayMatch) {
       console.log(`[findMatchingGame] Found swapped match: ESPN ${espnGame.homeTeam} vs ${espnGame.awayTeam} -> Odds API ${oddsGame.away_team} vs ${oddsGame.home_team}`);
-      return oddsGame;
+      return { game: oddsGame, swapped: true };
     }
   }
-  
+
   return null;
 }
 
@@ -965,9 +991,20 @@ async function handleRecalculate(request: NextRequest, body: Record<string, unkn
     
     // Calculate projected spread based on current ratings
     const projectedSpread = awayRating.rating - homeRating.rating - (adj.isNeutralSite ? 0 : hca);
-    
+
+    // Detect and fix closing spreads with wrong sign (from swapped Odds API matches).
+    // If negating the closing spread brings it much closer to the projection,
+    // the sign was stored from the wrong team's perspective.
+    let closingSpread = adj.closingSpread;
+    const diffAsIs = Math.abs(closingSpread - projectedSpread);
+    const diffNegated = Math.abs(-closingSpread - projectedSpread);
+    if (diffAsIs > 10 && diffNegated < diffAsIs * 0.5) {
+      console.log(`[Recalculate] Fixing swapped closing spread for ${adj.awayTeam} @ ${adj.homeTeam}: ${closingSpread} → ${-closingSpread} (projected: ${projectedSpread.toFixed(1)})`);
+      closingSpread = -closingSpread;
+    }
+
     // Calculate difference and adjustment
-    const difference = adj.closingSpread - projectedSpread;
+    const difference = closingSpread - projectedSpread;
     const adjustment = difference / 2; // Half the difference applied to each team
     
     // Apply adjustments to ratings
@@ -979,6 +1016,7 @@ async function handleRecalculate(request: NextRequest, body: Record<string, unkn
     awayRating.gamesProcessed++;
     
     // Create updated adjustment record with new before/after values
+    // Use corrected closingSpread (may have been sign-fixed above)
     updatedAdjustments.push({
       gameId: adj.gameId,
       date: adj.date,
@@ -986,7 +1024,7 @@ async function handleRecalculate(request: NextRequest, body: Record<string, unkn
       awayTeam: adj.awayTeam,
       isNeutralSite: adj.isNeutralSite,
       projectedSpread,
-      closingSpread: adj.closingSpread,
+      closingSpread,
       closingSource: adj.closingSource,
       difference,
       adjustment,
@@ -1075,7 +1113,17 @@ async function handleRecalculateFrom(body: Record<string, unknown>) {
     const awayRatingBefore = awayRating.rating;
 
     const projectedSpread = awayRating.rating - homeRating.rating - (adj.isNeutralSite ? 0 : hca);
-    const difference = adj.closingSpread - projectedSpread;
+
+    // Detect and fix closing spreads with wrong sign (from swapped Odds API matches)
+    let closingSpread = adj.closingSpread;
+    const diffAsIs = Math.abs(closingSpread - projectedSpread);
+    const diffNegated = Math.abs(-closingSpread - projectedSpread);
+    if (diffAsIs > 10 && diffNegated < diffAsIs * 0.5) {
+      console.log(`[RecalculateFrom] Fixing swapped closing spread for ${adj.awayTeam} @ ${adj.homeTeam}: ${closingSpread} → ${-closingSpread} (projected: ${projectedSpread.toFixed(1)})`);
+      closingSpread = -closingSpread;
+    }
+
+    const difference = closingSpread - projectedSpread;
     const adjustment = difference / 2;
 
     homeRating.rating -= adjustment;
@@ -1088,7 +1136,7 @@ async function handleRecalculateFrom(body: Record<string, unknown>) {
     // Only save adjustments from the target date forward
     const adjDateStr = adj.date.substring(0, 10); // Extract YYYY-MM-DD
     if (adjDateStr >= fromDate) {
-      console.log(`[RecalculateFrom] Saving ${adj.awayTeam} @ ${adj.homeTeam} (${adjDateStr}): close=${adj.closingSpread}, proj=${projectedSpread.toFixed(2)}, diff=${difference.toFixed(2)}, adj=${adjustment.toFixed(2)}`);
+      console.log(`[RecalculateFrom] Saving ${adj.awayTeam} @ ${adj.homeTeam} (${adjDateStr}): close=${closingSpread}, proj=${projectedSpread.toFixed(2)}, diff=${difference.toFixed(2)}, adj=${adjustment.toFixed(2)}`);
       const updatedAdj: GameAdjustment = {
         gameId: adj.gameId,
         date: adj.date,
@@ -1096,7 +1144,7 @@ async function handleRecalculateFrom(body: Record<string, unknown>) {
         awayTeam: adj.awayTeam,
         isNeutralSite: adj.isNeutralSite,
         projectedSpread,
-        closingSpread: adj.closingSpread,
+        closingSpread,
         closingSource: adj.closingSource,
         difference,
         adjustment,

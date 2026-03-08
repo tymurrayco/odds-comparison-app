@@ -256,22 +256,41 @@ export async function isGameProcessed(gameId: string): Promise<boolean> {
 }
 
 /**
- * Get all processed game IDs for a season
+ * Get all processed game IDs for a season.
+ * Uses pagination to avoid Supabase's default 1000-row limit.
  */
 export async function getProcessedGameIds(season: number = 2026): Promise<Set<string>> {
   const supabase = getSupabaseClient();
-  
-  const { data, error } = await supabase
-    .from('ncaab_game_adjustments')
-    .select('game_id')
-    .eq('season', season);
-  
-  if (error) {
-    console.error('[Supabase] Error loading processed games:', error);
-    return new Set();
+  const allIds: string[] = [];
+  const pageSize = 1000;
+  let offset = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    const { data, error } = await supabase
+      .from('ncaab_game_adjustments')
+      .select('game_id')
+      .eq('season', season)
+      .range(offset, offset + pageSize - 1);
+
+    if (error) {
+      console.error('[Supabase] Error loading processed games:', error);
+      break;
+    }
+
+    if (!data || data.length === 0) {
+      hasMore = false;
+    } else {
+      allIds.push(...data.map(row => row.game_id));
+      if (data.length < pageSize) {
+        hasMore = false;
+      } else {
+        offset += pageSize;
+      }
+    }
   }
-  
-  return new Set((data || []).map(row => row.game_id));
+
+  return new Set(allIds);
 }
 
 /**

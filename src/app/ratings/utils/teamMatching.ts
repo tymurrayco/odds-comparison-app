@@ -77,6 +77,48 @@ export function teamsMatch(name1: string, name2: string): boolean {
 }
 
 /**
+ * Convert an Eastern time string to the user's local timezone.
+ * Barttorvik game times are always in Eastern time.
+ * @param gameDate - YYYY-MM-DD date string
+ * @param etTimeStr - Time string in ET, e.g. "7:00 PM", "10:00 AM", "19:00"
+ * @returns Time string formatted in the user's local timezone
+ */
+export function convertETToLocal(gameDate: string, etTimeStr: string): string {
+  if (!etTimeStr) return '';
+
+  const match = etTimeStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+  if (!match) return etTimeStr;
+
+  let hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2], 10);
+  const period = (match[3] || '').toUpperCase();
+
+  if (period === 'PM' && hours !== 12) hours += 12;
+  else if (period === 'AM' && hours === 12) hours = 0;
+  // If no AM/PM (24h format), hours is already correct
+
+  const [year, month, day] = gameDate.split('-').map(Number);
+
+  // Determine ET offset (EST=-5h, EDT=-4h) for this date using noon as reference
+  const refDate = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+  const etHourStr = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York', hour12: false, hour: '2-digit',
+  }).format(refDate);
+  const utcHourStr = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'UTC', hour12: false, hour: '2-digit',
+  }).format(refDate);
+  let offset = parseInt(utcHourStr) - parseInt(etHourStr);
+  if (offset < 0) offset += 24; // handle day boundary
+
+  // Build UTC date from ET game time, then format in user's local timezone
+  const utcDate = new Date(Date.UTC(year, month - 1, day, hours + offset, minutes));
+  return utcDate.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+/**
  * Parse time string to minutes since midnight
  * Handles formats: "7:00 PM", "10:00 AM", "12:30 PM", "19:00"
  */
