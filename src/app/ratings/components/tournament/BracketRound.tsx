@@ -27,7 +27,7 @@ export function BracketRound({
 
   return (
     <div className="flex flex-col items-center flex-shrink-0">
-      <div className="text-[10px] sm:text-xs font-medium text-gray-500 mb-2 sm:mb-3 whitespace-nowrap">
+      <div className="text-[10px] sm:text-xs font-bold text-gray-600 mb-2 sm:mb-3 whitespace-nowrap">
         {roundName}
       </div>
       <div

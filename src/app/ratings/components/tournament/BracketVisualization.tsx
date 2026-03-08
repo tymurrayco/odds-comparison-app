@@ -38,7 +38,7 @@ export function BracketVisualization({
       : null;
 
   return (
-    <div className="w-full">
+    <div className="w-full bg-blue-50 rounded-lg">
       {/* Bracket grid - horizontal scroll */}
       <div className="overflow-x-auto pb-4">
         <div className="flex items-stretch gap-4 sm:gap-8 min-w-max px-2 sm:px-4 py-4">
