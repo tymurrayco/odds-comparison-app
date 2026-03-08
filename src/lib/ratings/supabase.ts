@@ -92,6 +92,13 @@ export function getSupabaseClient(): SupabaseClient {
 // Ratings Operations
 // ============================================
 
+// Teams that changed conferences but KenPom hasn't updated yet
+// Key: team name (as stored in ratings), Value: correct conference short code
+const CONFERENCE_OVERRIDES: Record<string, string> = {
+  'Missouri St.': 'CUSA',
+  'Delaware': 'CUSA',
+};
+
 /**
  * Load all ratings from Supabase
  */
@@ -118,11 +125,11 @@ export async function loadRatings(season: number = 2026): Promise<Map<string, Te
       rating: row.rating,
       initialRating: row.initial_rating,
       gamesProcessed: row.games_processed,
-      conference: row.conference,
+      conference: CONFERENCE_OVERRIDES[row.team_name] || row.conference,
       lastUpdated: row.updated_at,
     });
   }
-  
+
   return ratings;
 }
 

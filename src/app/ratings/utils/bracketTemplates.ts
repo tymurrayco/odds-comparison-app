@@ -319,11 +319,13 @@ const TEMPLATE_11_TEAM: BracketTemplate = {
   ],
 };
 
-// 11-team with play-in and top-2 bye to semifinals
+// 11-team with play-in and asymmetric bracket
 // Used by: Horizon League
+// Play-In: 10v11. First Round (campus): PIW@1, 9@2, 8@3, 7@4, 6@5.
+// Second Round: 5v6W vs 4v7W. Semis: 1W vs 2ndRdW, 2W vs 3W. Final.
 const TEMPLATE_11_TEAM_TOP2_BYE: BracketTemplate = {
   id: '11-team-top2-bye',
-  name: '11-Team (Top 2 Bye to Semis)',
+  name: '11-Team (Horizon)',
   teamCount: 11,
   rounds: [
     {
@@ -337,26 +339,26 @@ const TEMPLATE_11_TEAM_TOP2_BYE: BracketTemplate = {
       round: 1,
       name: 'First Round',
       matchups: [
-        { id: 'R1-G1', topSeed: 9, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R0-G1' },
-        { id: 'R1-G2', topSeed: 3, bottomSeed: 8, topFromMatchup: null, bottomFromMatchup: null },
-        { id: 'R1-G3', topSeed: 4, bottomSeed: 7, topFromMatchup: null, bottomFromMatchup: null },
-        { id: 'R1-G4', topSeed: 5, bottomSeed: 6, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G1', topSeed: 1, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R0-G1' },
+        { id: 'R1-G2', topSeed: 2, bottomSeed: 9, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G3', topSeed: 3, bottomSeed: 8, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G4', topSeed: 4, bottomSeed: 7, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G5', topSeed: 5, bottomSeed: 6, topFromMatchup: null, bottomFromMatchup: null },
       ],
     },
     {
       round: 2,
-      name: 'Quarterfinals',
+      name: 'Second Round',
       matchups: [
-        { id: 'R2-G1', topSeed: null, bottomSeed: null, topFromMatchup: 'R1-G1', bottomFromMatchup: 'R1-G2' },
-        { id: 'R2-G2', topSeed: null, bottomSeed: null, topFromMatchup: 'R1-G3', bottomFromMatchup: 'R1-G4' },
+        { id: 'R2-G1', topSeed: null, bottomSeed: null, topFromMatchup: 'R1-G5', bottomFromMatchup: 'R1-G4' },
       ],
     },
     {
       round: 3,
       name: 'Semifinals',
       matchups: [
-        { id: 'R3-G1', topSeed: 1, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R2-G1' },
-        { id: 'R3-G2', topSeed: 2, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R2-G2' },
+        { id: 'R3-G1', topSeed: null, bottomSeed: null, topFromMatchup: 'R1-G1', bottomFromMatchup: 'R2-G1' },
+        { id: 'R3-G2', topSeed: null, bottomSeed: null, topFromMatchup: 'R1-G2', bottomFromMatchup: 'R1-G3' },
       ],
     },
     {
@@ -898,7 +900,7 @@ export const CONFERENCE_DEFAULTS: Record<string, { templateId: string; name: str
   'AAC':  { templateId: '10-team-stepladder', name: 'AAC Tournament' },
   'A10':  { templateId: '14-team-top4-dbl', name: 'Atlantic 10 Tournament' },
   'MWC':  { templateId: '12-team-top4-bye', name: 'Mountain West Tournament' },
-  'CUSA': { templateId: '12-team-top4-bye', name: 'Conference USA Tournament' },
+  'CUSA': { templateId: '10-team', name: 'Conference USA Tournament' },
   'WCC':  { templateId: '12-team-stepladder', name: 'WCC Tournament' },
   'MVC':  { templateId: '11-team', name: 'MVC Tournament' },
   'CAA':  { templateId: '13-team', name: 'CAA Tournament' },

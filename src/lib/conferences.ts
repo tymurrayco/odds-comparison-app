@@ -319,7 +319,6 @@ export const CONFERENCES: ConferenceData = {
     "Drake Bulldogs": "Missouri Valley",
     "Illinois State Redbirds": "Missouri Valley",
     "Indiana State Sycamores": "Missouri Valley",
-    "Missouri State Bears": "Missouri Valley",
     "Murray State Racers": "Missouri Valley",
     "Northern Iowa Panthers": "Missouri Valley",
     "Southern Illinois Salukis": "Missouri Valley",
@@ -338,7 +337,9 @@ export const CONFERENCES: ConferenceData = {
     "UTEP Miners": "Conference USA",
     "Western Kentucky Hilltoppers": "Conference USA",
     "Kennesaw State Owls": "Conference USA",
-    
+    "Delaware Blue Hens": "Conference USA",
+    "Missouri State Bears": "Conference USA",
+
     // Sun Belt
     "Appalachian State Mountaineers": "Sun Belt",
     "Arkansas State Red Wolves": "Sun Belt",
@@ -405,7 +406,6 @@ export const CONFERENCES: ConferenceData = {
     
     // Colonial Athletic Association
     "Charleston Cougars": "Colonial",
-    "Delaware Blue Hens": "Colonial",
     "Drexel Dragons": "Colonial",
     "Elon Phoenix": "Colonial",
     "Hampton Pirates": "Colonial",
