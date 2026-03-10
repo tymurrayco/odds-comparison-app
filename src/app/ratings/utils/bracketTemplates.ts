@@ -380,8 +380,8 @@ const TEMPLATE_12_TEAM_TOP4_BYE: BracketTemplate = {
       round: 1,
       name: 'First Round',
       matchups: [
-        { id: 'R1-G1', topSeed: 5, bottomSeed: 12, topFromMatchup: null, bottomFromMatchup: null },
-        { id: 'R1-G2', topSeed: 8, bottomSeed: 9, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G1', topSeed: 8, bottomSeed: 9, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G2', topSeed: 5, bottomSeed: 12, topFromMatchup: null, bottomFromMatchup: null },
         { id: 'R1-G3', topSeed: 7, bottomSeed: 10, topFromMatchup: null, bottomFromMatchup: null },
         { id: 'R1-G4', topSeed: 6, bottomSeed: 11, topFromMatchup: null, bottomFromMatchup: null },
       ],
@@ -390,10 +390,10 @@ const TEMPLATE_12_TEAM_TOP4_BYE: BracketTemplate = {
       round: 2,
       name: 'Quarterfinals',
       matchups: [
-        { id: 'R2-G1', topSeed: 1, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R1-G2' },
-        { id: 'R2-G2', topSeed: 4, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R1-G1' },
-        { id: 'R2-G3', topSeed: 3, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R1-G4' },
-        { id: 'R2-G4', topSeed: 2, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R1-G3' },
+        { id: 'R2-G1', topSeed: 1, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R1-G1' },
+        { id: 'R2-G2', topSeed: 4, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R1-G2' },
+        { id: 'R2-G3', topSeed: 2, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R1-G3' },
+        { id: 'R2-G4', topSeed: 3, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R1-G4' },
       ],
     },
     {
