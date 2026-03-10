@@ -98,6 +98,7 @@ const CONFERENCE_OVERRIDES: Record<string, string> = {
   'Missouri St.': 'CUSA',
   'Delaware': 'CUSA',
   'Grand Canyon': 'MWC',
+  'Massachusetts': 'MAC',
 };
 
 /**

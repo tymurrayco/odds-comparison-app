@@ -483,8 +483,8 @@ const TEMPLATE_12_TEAM_TOP6_BYE: BracketTemplate = {
       round: 1,
       name: 'First Round',
       matchups: [
-        { id: 'R1-G1', topSeed: 9, bottomSeed: 12, topFromMatchup: null, bottomFromMatchup: null },
-        { id: 'R1-G2', topSeed: 10, bottomSeed: 11, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G1', topSeed: 10, bottomSeed: 11, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G2', topSeed: 9, bottomSeed: 12, topFromMatchup: null, bottomFromMatchup: null },
       ],
     },
     {
@@ -500,17 +500,17 @@ const TEMPLATE_12_TEAM_TOP6_BYE: BracketTemplate = {
       name: 'Quarterfinals',
       matchups: [
         { id: 'R3-G1', topSeed: 1, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R2-G1' },
-        { id: 'R3-G2', topSeed: 4, bottomSeed: 5, topFromMatchup: null, bottomFromMatchup: null },
-        { id: 'R3-G3', topSeed: 3, bottomSeed: 6, topFromMatchup: null, bottomFromMatchup: null },
-        { id: 'R3-G4', topSeed: 2, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R2-G2' },
+        { id: 'R3-G2', topSeed: 2, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R2-G2' },
+        { id: 'R3-G3', topSeed: 4, bottomSeed: 5, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R3-G4', topSeed: 3, bottomSeed: 6, topFromMatchup: null, bottomFromMatchup: null },
       ],
     },
     {
       round: 4,
       name: 'Semifinals',
       matchups: [
-        { id: 'R4-G1', topSeed: null, bottomSeed: null, topFromMatchup: 'R3-G1', bottomFromMatchup: 'R3-G2' },
-        { id: 'R4-G2', topSeed: null, bottomSeed: null, topFromMatchup: 'R3-G3', bottomFromMatchup: 'R3-G4' },
+        { id: 'R4-G1', topSeed: null, bottomSeed: null, topFromMatchup: 'R3-G1', bottomFromMatchup: 'R3-G3' },
+        { id: 'R4-G2', topSeed: null, bottomSeed: null, topFromMatchup: 'R3-G2', bottomFromMatchup: 'R3-G4' },
       ],
     },
     {
@@ -794,6 +794,61 @@ const TEMPLATE_16_TEAM: BracketTemplate = {
   ],
 };
 
+// 16-team staggered byes: Seeds 1-4 double bye to QF, 5-8 single bye, 9-16 first round
+// Used by: Big 12
+const TEMPLATE_16_TEAM_TOP4_DBL: BracketTemplate = {
+  id: '16-team-top4-dbl',
+  name: '16-Team (Top 4 Double Bye)',
+  teamCount: 16,
+  rounds: [
+    {
+      round: 1,
+      name: 'First Round',
+      matchups: [
+        { id: 'R1-G1', topSeed: 12, bottomSeed: 13, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G2', topSeed: 9, bottomSeed: 16, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G3', topSeed: 10, bottomSeed: 15, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G4', topSeed: 11, bottomSeed: 14, topFromMatchup: null, bottomFromMatchup: null },
+      ],
+    },
+    {
+      round: 2,
+      name: 'Second Round',
+      matchups: [
+        { id: 'R2-G1', topSeed: 5, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R1-G1' },
+        { id: 'R2-G2', topSeed: 8, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R1-G2' },
+        { id: 'R2-G3', topSeed: 7, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R1-G3' },
+        { id: 'R2-G4', topSeed: 6, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R1-G4' },
+      ],
+    },
+    {
+      round: 3,
+      name: 'Quarterfinals',
+      matchups: [
+        { id: 'R3-G1', topSeed: 4, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R2-G1' },
+        { id: 'R3-G2', topSeed: 1, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R2-G2' },
+        { id: 'R3-G3', topSeed: 2, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R2-G3' },
+        { id: 'R3-G4', topSeed: 3, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R2-G4' },
+      ],
+    },
+    {
+      round: 4,
+      name: 'Semifinals',
+      matchups: [
+        { id: 'R4-G1', topSeed: null, bottomSeed: null, topFromMatchup: 'R3-G1', bottomFromMatchup: 'R3-G2' },
+        { id: 'R4-G2', topSeed: null, bottomSeed: null, topFromMatchup: 'R3-G3', bottomFromMatchup: 'R3-G4' },
+      ],
+    },
+    {
+      round: 5,
+      name: 'Championship',
+      matchups: [
+        { id: 'R5-G1', topSeed: null, bottomSeed: null, topFromMatchup: 'R4-G1', bottomFromMatchup: 'R4-G2' },
+      ],
+    },
+  ],
+};
+
 // 18-team: All teams play, staggered byes
 // Seeds 1-4 triple bye to QF, 5-8 double bye, 9-14 single bye, 15-18 first round
 // Used by: Big Ten
@@ -880,6 +935,7 @@ export const BRACKET_TEMPLATES: Record<string, BracketTemplate> = {
   '14-team-top2-semis': TEMPLATE_14_TEAM_TOP2_SEMIS,
   '15-team': TEMPLATE_15_TEAM,
   '16-team': TEMPLATE_16_TEAM,
+  '16-team-top4-dbl': TEMPLATE_16_TEAM_TOP4_DBL,
   '18-team': TEMPLATE_18_TEAM,
 };
 
@@ -891,7 +947,7 @@ export const ALL_TEMPLATES = Object.values(BRACKET_TEMPLATES);
 
 export const CONFERENCE_DEFAULTS: Record<string, { templateId: string; name: string }> = {
   // Power conferences
-  'B12': { templateId: '16-team', name: 'Big 12 Tournament' },
+  'B12': { templateId: '16-team-top4-dbl', name: 'Big 12 Tournament' },
   'SEC': { templateId: '16-team', name: 'SEC Tournament' },
   'ACC': { templateId: '15-team', name: 'ACC Tournament' },
   'B10': { templateId: '18-team', name: 'Big Ten Tournament' },
