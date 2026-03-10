@@ -97,6 +97,7 @@ export function getSupabaseClient(): SupabaseClient {
 const CONFERENCE_OVERRIDES: Record<string, string> = {
   'Missouri St.': 'CUSA',
   'Delaware': 'CUSA',
+  'Grand Canyon': 'MWC',
 };
 
 /**

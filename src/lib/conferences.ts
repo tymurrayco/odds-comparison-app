@@ -467,7 +467,7 @@ export const CONFERENCES: ConferenceData = {
     // WAC
     "Abilene Christian Wildcats": "WAC",
     "California Baptist Lancers": "WAC",
-    "Grand Canyon Antelopes": "WAC",
+    "Grand Canyon Antelopes": "Mountain West",
     "Seattle U Redhawks": "WAC",
     "Southern Utah Thunderbirds": "WAC",
     "Stephen F. Austin Lumberjacks": "WAC",
