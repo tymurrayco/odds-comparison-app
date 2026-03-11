@@ -37,7 +37,7 @@ const PROGRESS_FILE          = path.join(DATA_DIR, '.torvik-scrape-progress.json
 
 // Torvik data starts at 2008; NCAA tournament has 64-68 teams depending on year
 const DEFAULT_START_YEAR = 2008;
-const DEFAULT_END_YEAR   = 2025;
+const DEFAULT_END_YEAR   = 2026;
 
 // URL filter definitions — discovered via --discover mode on the actual page.
 //
@@ -77,6 +77,22 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+/**
+ * Escape a value for CSV export. Wraps W-L records (e.g. "6-10") with ="..."
+ * so Excel doesn't auto-format them as dates.
+ */
+function csvEscape(val) {
+  const s = String(val ?? '');
+  // W-L records like "6-10", "30-3", "13-3" — prevent Excel date interpretation
+  if (/^\d{1,3}-\d{1,3}$/.test(s)) {
+    return `="${s}"`;
+  }
+  if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+    return `"${s.replace(/"/g, '""')}"`;
+  }
+  return s;
+}
+
 function parseArgs() {
   const args = process.argv.slice(2);
   const opts = {
@@ -88,6 +104,7 @@ function parseArgs() {
     discoverRegion: null,
     resume: false,
     singleYear: null,
+    allTeams: false,
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -120,28 +137,28 @@ function parseArgs() {
       case '--resume':
         opts.resume = true;
         break;
+      case '--all-teams':
+        opts.allTeams = true;
+        break;
     }
   }
 
   return opts;
 }
 
-function buildUrl(year, extraParams = {}) {
+function buildUrl(year, extraParams = {}, allTeams = false) {
   const base = 'https://barttorvik.com/trank.php';
-  const params = new URLSearchParams({
-    year: String(year),
-    conlimit: 'NCAA',
-    ...extraParams,
-  });
+  const baseParams = { year: String(year), ...extraParams };
+  if (!allTeams) baseParams.conlimit = 'NCAA';
+  const params = new URLSearchParams(baseParams);
   return `${base}?${params.toString()}`;
 }
 
-function buildTalentUrl(year) {
+function buildTalentUrl(year, allTeams = false) {
   const base = 'https://barttorvik.com/team-tables_each.php';
-  const params = new URLSearchParams({
-    year: String(year),
-    conlimit: 'NCAA',
-  });
+  const baseParams = { year: String(year) };
+  if (!allTeams) baseParams.conlimit = 'NCAA';
+  const params = new URLSearchParams(baseParams);
   return `${base}?${params.toString()}`;
 }
 
@@ -919,8 +936,8 @@ async function scrapeRegionFromWikipedia(page, year) {
  * Returns Map<teamName, { talent, talent_rk }> where talent is the raw score
  * and talent_rk is the rank (row position in the table, which is sorted by talent).
  */
-async function scrapeTalentPage(page, year) {
-  const url = buildTalentUrl(year);
+async function scrapeTalentPage(page, year, allTeams = false) {
+  const url = buildTalentUrl(year, allTeams);
   console.log(`\n  --- Talent (team-tables_each.php) ---`);
   console.log(`    Navigating: ${url}`);
   await page.goto(url, { waitUntil: 'networkidle2', timeout: PAGE_LOAD_TIMEOUT });
@@ -1049,7 +1066,7 @@ async function scrapeTalentPage(page, year) {
  * Scrape all 3 splits for a single year.
  * Returns array of merged team rows for that year.
  */
-async function scrapeYear(page, year, splitsToRun) {
+async function scrapeYear(page, year, splitsToRun, allTeams = false) {
   console.log(`\n${'='.repeat(60)}`);
   console.log(`  SCRAPING YEAR ${year}`);
   console.log(`${'='.repeat(60)}`);
@@ -1058,7 +1075,7 @@ async function scrapeYear(page, year, splitsToRun) {
 
   for (const [key, split] of Object.entries(splitsToRun)) {
     console.log(`\n  --- ${split.label} (prefix: ${split.prefix}) ---`);
-    const url = buildUrl(year, split.params);
+    const url = buildUrl(year, split.params, allTeams);
 
     try {
       const { headers, rows } = await scrapePage(page, url);
@@ -1083,20 +1100,25 @@ async function scrapeYear(page, year, splitsToRun) {
   // Scrape talent page
   let talentMap = new Map();
   try {
-    talentMap = await scrapeTalentPage(page, year);
+    talentMap = await scrapeTalentPage(page, year, allTeams);
   } catch (err) {
     console.error(`    ERROR scraping talent for ${year}:`, err.message);
   }
   await sleep(DELAY_BETWEEN_PAGES_MS);
 
-  // Scrape region data from Wikipedia
+  // Scrape region data from Wikipedia (skip when pulling all teams — no bracket yet)
   let regionMap = new Map();
-  try {
-    regionMap = await scrapeRegionFromWikipedia(page, year);
-  } catch (err) {
-    console.error(`    ERROR scraping region for ${year}:`, err.message);
+  if (!allTeams) {
+    try {
+      regionMap = await scrapeRegionFromWikipedia(page, year);
+    } catch (err) {
+      console.error(`    ERROR scraping region for ${year}:`, err.message);
+    }
+    await sleep(DELAY_BETWEEN_PAGES_MS);
+  } else {
+    console.log(`\n  --- Region (Wikipedia) ---`);
+    console.log(`    Skipped (--all-teams mode, no bracket data)`);
   }
-  await sleep(DELAY_BETWEEN_PAGES_MS);
 
   // Merge splits by team name
   return mergeYearData(year, splitData, talentMap, regionMap);
@@ -1256,11 +1278,7 @@ function writeCSV(allRows, outputPath) {
   for (const row of allRows) {
     const values = allCols.map(col => {
       const val = row[col] ?? '';
-      // Escape commas and quotes in CSV
-      if (String(val).includes(',') || String(val).includes('"') || String(val).includes('\n')) {
-        return `"${String(val).replace(/"/g, '""')}"`;
-      }
-      return String(val);
+      return csvEscape(val);
     });
     lines.push(values.join(','));
   }
@@ -1306,10 +1324,7 @@ function appendYearToCSV(yearRows, outputPath, isFirstYear) {
   for (const row of yearRows) {
     const values = allCols.map(col => {
       const val = row[col] ?? '';
-      if (String(val).includes(',') || String(val).includes('"') || String(val).includes('\n')) {
-        return `"${String(val).replace(/"/g, '""')}"`;
-      }
-      return String(val);
+      return csvEscape(val);
     });
     lines.push(values.join(','));
   }
@@ -1338,6 +1353,7 @@ async function main() {
   if (opts.discoverTalent) console.log(`  MODE: DISCOVER-TALENT (year ${opts.discoverTalent})`);
   if (opts.discoverRegion) console.log(`  MODE: DISCOVER-REGION (year ${opts.discoverRegion})`);
   if (opts.resume) console.log('  MODE: RESUME from last progress');
+  if (opts.allTeams) console.log('  MODE: ALL TEAMS (no NCAA tournament filter)');
   console.log('');
 
   // Launch browser once, reuse for all pages
@@ -1412,10 +1428,16 @@ async function main() {
 
     // Scrape year by year
     const allRows = [];
-    let isFirstYear = !opts.resume || progress.completedYears.length === 0;
+    // When scraping a single year with --year and the CSV already exists, append instead of overwrite
+    let isFirstYear;
+    if (opts.singleYear && fs.existsSync(OUTPUT_FILE)) {
+      isFirstYear = false;
+    } else {
+      isFirstYear = !opts.resume || progress.completedYears.length === 0;
+    }
 
     for (const year of years) {
-      const yearRows = await scrapeYear(page, year, splitsToRun);
+      const yearRows = await scrapeYear(page, year, splitsToRun, opts.allTeams);
 
       if (yearRows.length > 0) {
         allRows.push(...yearRows);
