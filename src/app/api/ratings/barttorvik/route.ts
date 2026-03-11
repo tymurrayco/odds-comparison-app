@@ -258,11 +258,13 @@ async function fetchScheduleForDate(dateStr?: string): Promise<BTGame[]> {
 
   try {
     const page = await browser.newPage();
-    
+
+    // Force Eastern timezone so BT always shows ET times (matches convertETToLocal expectation)
+    await page.emulateTimezone('America/New_York');
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-    
+
     // Build URL with optional date parameter (format: YYYYMMDD)
-    const url = dateStr 
+    const url = dateStr
       ? `https://barttorvik.com/schedule.php?date=${dateStr}&conlimit=`
       : 'https://barttorvik.com/schedule.php';
     console.log('Navigating to:', url);

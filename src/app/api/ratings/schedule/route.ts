@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { ODDS_API_BASE_URL, NCAAB_SPORT_KEY } from '@/lib/ratings/constants';
+import { teamsMatch } from '@/app/ratings/utils/teamMatching';
 
 // Force dynamic rendering - disable Vercel edge caching
 export const dynamic = 'force-dynamic';
@@ -406,8 +407,22 @@ export async function GET(request: Request) {
       const rowsToInsert = Array.from(freshClosingLines.entries()).map(([gameId, line]) => {
         const home = homeTeams.get(gameId) || null;
         const away = awayTeams.get(gameId) || null;
-        const key = home && away ? `${away.toLowerCase()}|${home.toLowerCase()}` : '';
-        const sbrOpener = sbrOpeners.get(key) ?? null;
+
+        // Find SBR opener using fuzzy matching (SBR rows may use KenPom names)
+        let sbrOpener: number | null = null;
+        if (home && away) {
+          for (const [sbrKey, opener] of sbrOpeners.entries()) {
+            const [sbrAway, sbrHome] = sbrKey.split('|');
+            if (teamsMatch(home, sbrHome) && teamsMatch(away, sbrAway)) {
+              sbrOpener = opener;
+              break;
+            }
+            if (teamsMatch(home, sbrAway) && teamsMatch(away, sbrHome)) {
+              sbrOpener = -opener;
+              break;
+            }
+          }
+        }
         
         return {
           game_id: gameId,
@@ -497,27 +512,31 @@ export async function GET(request: Request) {
         if (sbrError) {
           console.warn('[Schedule] SBR opener team-name lookup error:', sbrError);
         } else if (sbrRows) {
-          // Build a lookup by "away|home" (lowercase)
-          const teamLookup = new Map<string, number>();
-          for (const row of sbrRows) {
-            if (row.opening_spread !== null && row.home_team && row.away_team) {
-              const key = `${row.away_team.toLowerCase()}|${row.home_team.toLowerCase()}`;
-              teamLookup.set(key, row.opening_spread);
-            }
-          }
-          
+          // Build list of SBR opener rows for fuzzy matching
+          const sbrOpenerRows = sbrRows.filter(
+            (row: { opening_spread: number | null; home_team: string | null; away_team: string | null }) =>
+              row.opening_spread !== null && row.home_team && row.away_team
+          );
+
           let teamMatchCount = 0;
           for (const game of gamesNeedingOpeners) {
-            const key = `${game.away_team.toLowerCase()}|${game.home_team.toLowerCase()}`;
-            const opener = teamLookup.get(key);
-            if (opener !== undefined) {
-              openingLines.set(game.id, opener);
-              teamMatchCount++;
+            for (const row of sbrOpenerRows) {
+              // Match in either direction (neutral site games may swap home/away)
+              if (teamsMatch(game.home_team, row.home_team) && teamsMatch(game.away_team, row.away_team)) {
+                openingLines.set(game.id, row.opening_spread);
+                teamMatchCount++;
+                break;
+              }
+              if (teamsMatch(game.home_team, row.away_team) && teamsMatch(game.away_team, row.home_team)) {
+                openingLines.set(game.id, -row.opening_spread);
+                teamMatchCount++;
+                break;
+              }
             }
           }
-          
+
           cachedOpeningCount += teamMatchCount;
-          console.log(`[Schedule] Found ${teamMatchCount} additional SBR opening spreads by team name`);
+          console.log(`[Schedule] Found ${teamMatchCount} additional SBR opening spreads by team name (fuzzy)`);
         }
       }
       

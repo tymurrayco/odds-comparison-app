@@ -105,17 +105,21 @@ export async function POST(request: NextRequest) {
         const oddsApiHome = kenpomToOddsApi.get(kenpomHome.toLowerCase());
         const oddsApiAway = kenpomToOddsApi.get(kenpomAway.toLowerCase());
 
-        if (oddsApiHome && oddsApiAway) {
+        // Use Odds API names if available, otherwise fall back to KenPom names
+        const clHome = oddsApiHome || kenpomHome;
+        const clAway = oddsApiAway || kenpomAway;
+
+        {
           const { data: clRows, error: clSelectErr } = await supabase
             .from('closing_lines')
             .select('game_id')
-            .eq('home_team', oddsApiHome)
-            .eq('away_team', oddsApiAway)
+            .eq('home_team', clHome)
+            .eq('away_team', clAway)
             .gte('commence_time', startISO)
             .lt('commence_time', endISO);
 
           if (clSelectErr) {
-            errors.push(`[cl] Select error for ${oddsApiAway}@${oddsApiHome}: ${clSelectErr.message}`);
+            errors.push(`[cl] Select error for ${clAway}@${clHome}: ${clSelectErr.message}`);
           } else if (clRows && clRows.length > 0) {
             // UPDATE existing row
             const gameIds = clRows.map(r => r.game_id);
@@ -125,21 +129,21 @@ export async function POST(request: NextRequest) {
               .in('game_id', gameIds);
 
             if (clUpdateErr) {
-              errors.push(`[cl] Update error for ${oddsApiAway}@${oddsApiHome}: ${clUpdateErr.message}`);
+              errors.push(`[cl] Update error for ${clAway}@${clHome}: ${clUpdateErr.message}`);
             } else {
               closingLinesUpdated += clRows.length;
             }
           } else {
             // INSERT new row so Schedule tab can display the opener
             const sanitize = (s: string) => s.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 40);
-            const syntheticId = `sbr-${date}-${sanitize(oddsApiHome)}-${sanitize(oddsApiAway)}`;
+            const syntheticId = `sbr-${date}-${sanitize(clHome)}-${sanitize(clAway)}`;
 
             const { error: insertErr } = await supabase
               .from('closing_lines')
               .upsert({
                 game_id: syntheticId,
-                home_team: oddsApiHome,
-                away_team: oddsApiAway,
+                home_team: clHome,
+                away_team: clAway,
                 commence_time: defaultCommenceTime,
                 opening_spread: openerSpread,
                 spread: null,
@@ -149,18 +153,12 @@ export async function POST(request: NextRequest) {
               }, { onConflict: 'game_id' });
 
             if (insertErr) {
-              console.error(`[SBR Save] INSERT FAILED for ${oddsApiAway}@${oddsApiHome}:`, insertErr.message, insertErr.details, insertErr.hint);
-              errors.push(`[cl] Insert error for ${oddsApiAway}@${oddsApiHome}: ${insertErr.message}`);
+              console.error(`[SBR Save] INSERT FAILED for ${clAway}@${clHome}:`, insertErr.message, insertErr.details, insertErr.hint);
+              errors.push(`[cl] Insert error for ${clAway}@${clHome}: ${insertErr.message}`);
             } else {
               closingLinesInserted++;
             }
           }
-        } else {
-          closingLinesSkipped++;
-          const missing = [];
-          if (!oddsApiHome) missing.push(`home: ${kenpomHome}`);
-          if (!oddsApiAway) missing.push(`away: ${kenpomAway}`);
-          closingLinesSkippedGames.push(`${gameLabel} (no Odds API mapping for ${missing.join(', ')})`);
         }
       } catch (err) {
         errors.push(`[cl] Exception for ${kenpomAway}@${kenpomHome}: ${err}`);

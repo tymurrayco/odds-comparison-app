@@ -415,52 +415,70 @@ export function useRatingsData(): UseRatingsDataReturn {
             }
           }
           
-          // Find matching odds game
-          const findOddsMatch = (btHome: string, btAway: string): ScheduleGame | null => {
+          // Find matching odds game (returns { game, swapped } to handle neutral site home/away differences)
+          const findOddsMatch = (btHome: string, btAway: string): { game: ScheduleGame; swapped: boolean } | null => {
             const oddsHomeOverride = torvikToOddsApi[btHome.toLowerCase()];
             const oddsAwayOverride = torvikToOddsApi[btAway.toLowerCase()];
-            
+
             for (const oddsGame of oddsGames) {
               const oddsHomeLower = oddsGame.homeTeam.toLowerCase();
               const oddsAwayLower = oddsGame.awayTeam.toLowerCase();
-              
+
+              // Normal direction: btHome=oddsHome, btAway=oddsAway
               if (oddsHomeOverride && oddsAwayOverride) {
                 if (oddsHomeLower.includes(oddsHomeOverride) || oddsHomeOverride.includes(oddsHomeLower)) {
                   if (oddsAwayLower.includes(oddsAwayOverride) || oddsAwayOverride.includes(oddsAwayLower)) {
-                    return oddsGame;
+                    return { game: oddsGame, swapped: false };
                   }
                 }
               }
-              
+
               if (teamsMatch(btHome, oddsGame.homeTeam) && teamsMatch(btAway, oddsGame.awayTeam)) {
-                return oddsGame;
+                return { game: oddsGame, swapped: false };
+              }
+
+              // Swapped direction: btHome=oddsAway, btAway=oddsHome (neutral site games)
+              if (oddsHomeOverride && oddsAwayOverride) {
+                if (oddsAwayLower.includes(oddsHomeOverride) || oddsHomeOverride.includes(oddsAwayLower)) {
+                  if (oddsHomeLower.includes(oddsAwayOverride) || oddsAwayOverride.includes(oddsHomeLower)) {
+                    return { game: oddsGame, swapped: true };
+                  }
+                }
+              }
+
+              if (teamsMatch(btHome, oddsGame.awayTeam) && teamsMatch(btAway, oddsGame.homeTeam)) {
+                return { game: oddsGame, swapped: true };
               }
             }
-            
+
             return null;
           };
           
           // Merge odds into games
           let enrichedGames: CombinedScheduleGame[] = initialCombinedGames.map(game => {
-            const oddsMatch = findOddsMatch(game.homeTeam, game.awayTeam);
+            const oddsResult = findOddsMatch(game.homeTeam, game.awayTeam);
             const timeBasedStarted = hasGameStarted(game.gameTime, game.isToday);
             const prevKey = `${game.awayTeam}|${game.homeTeam}|${game.gameDate}`;
             const prev = prevGameMap.get(prevKey);
 
-            if (oddsMatch) {
+            if (oddsResult) {
+              const { game: oddsMatch, swapped } = oddsResult;
               const started = oddsMatch.hasStarted || timeBasedStarted;
+              // Negate spreads when home/away are swapped (neutral site games)
+              const rawSpread = oddsMatch.spread !== null && swapped ? -oddsMatch.spread : oddsMatch.spread;
+              const rawOpener = oddsMatch.openingSpread !== null && swapped ? -oddsMatch.openingSpread : oddsMatch.openingSpread;
               // For started games with null spread, preserve previous spread data
-              const useSpread = (started && oddsMatch.spread === null && prev?.spread !== null && prev?.spread !== undefined)
-                ? prev.spread : oddsMatch.spread;
-              const useOpeningSpread = (started && oddsMatch.spread === null && prev?.openingSpread !== null && prev?.openingSpread !== undefined)
-                ? prev.openingSpread : oddsMatch.openingSpread;
+              const useSpread = (started && rawSpread === null && prev?.spread !== null && prev?.spread !== undefined)
+                ? prev.spread : rawSpread;
+              const useOpeningSpread = (started && rawSpread === null && prev?.openingSpread !== null && prev?.openingSpread !== undefined)
+                ? prev.openingSpread : rawOpener;
               return {
                 ...game,
                 oddsGameId: oddsMatch.id,
                 spread: useSpread,
                 openingSpread: useOpeningSpread,
                 total: oddsMatch.total,
-                spreadBookmaker: oddsMatch.spreadBookmaker || (started && oddsMatch.spread === null ? (prev?.spreadBookmaker ?? null) : null),
+                spreadBookmaker: oddsMatch.spreadBookmaker || (started && rawSpread === null ? (prev?.spreadBookmaker ?? null) : null),
                 hasStarted: started,
                 isFrozen: oddsMatch.isFrozen || started,
               };
@@ -561,6 +579,41 @@ export function useRatingsData(): UseRatingsDataReturn {
             }
           }
           
+          // Fallback: fetch openers from game_adjustments for games still missing them
+          const gamesMissingOpeners = enrichedGames.filter(g => g.openingSpread === null);
+          if (gamesMissingOpeners.length > 0) {
+            try {
+              const openerDates = [...new Set(enrichedGames.map(g => g.gameDate))];
+              const openerPromises = openerDates.map(d =>
+                fetch(`/api/ratings/sbr-openers?date=${d}`).then(r => r.json())
+              );
+              const openerResults = await Promise.all(openerPromises);
+              const allOpeners: Array<{ homeTeam: string; awayTeam: string; openingSpread: number }> = [];
+              for (const result of openerResults) {
+                if (result.success && result.openers) {
+                  allOpeners.push(...result.openers);
+                }
+              }
+              if (allOpeners.length > 0) {
+                enrichedGames = enrichedGames.map(game => {
+                  if (game.openingSpread !== null) return game;
+                  const match = allOpeners.find(op =>
+                    (teamsMatch(game.homeTeam, op.homeTeam) && teamsMatch(game.awayTeam, op.awayTeam)) ||
+                    (teamsMatch(game.homeTeam, op.awayTeam) && teamsMatch(game.awayTeam, op.homeTeam))
+                  );
+                  if (match) {
+                    // If home/away are swapped relative to game_adjustments, negate the spread
+                    const swapped = teamsMatch(game.homeTeam, match.awayTeam) && teamsMatch(game.awayTeam, match.homeTeam);
+                    return { ...game, openingSpread: swapped ? -match.openingSpread : match.openingSpread };
+                  }
+                  return game;
+                });
+              }
+            } catch {
+              // Non-critical — skip fallback opener fetch
+            }
+          }
+
           // Fetch neutral site flags from ESPN
           try {
             const gameDates = [...new Set(enrichedGames.map(g => g.gameDate))];
@@ -570,7 +623,8 @@ export function useRatingsData(): UseRatingsDataReturn {
               enrichedGames = enrichedGames.map(game => {
                 const isNeutral = neutralData.neutralGames.some(
                   (ng: { homeTeam: string; awayTeam: string }) =>
-                    teamsMatch(game.homeTeam, ng.homeTeam) && teamsMatch(game.awayTeam, ng.awayTeam)
+                    (teamsMatch(game.homeTeam, ng.homeTeam) && teamsMatch(game.awayTeam, ng.awayTeam)) ||
+                    (teamsMatch(game.homeTeam, ng.awayTeam) && teamsMatch(game.awayTeam, ng.homeTeam))
                 );
                 return isNeutral ? { ...game, isNeutralSite: true } : game;
               });
