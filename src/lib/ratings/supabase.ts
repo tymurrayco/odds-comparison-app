@@ -99,6 +99,8 @@ const CONFERENCE_OVERRIDES: Record<string, string> = {
   'Delaware': 'CUSA',
   'Grand Canyon': 'MWC',
   'Massachusetts': 'MAC',
+  'Army': 'Pat',
+  'Navy': 'Pat',
 };
 
 /**

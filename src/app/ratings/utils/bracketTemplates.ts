@@ -237,16 +237,16 @@ const TEMPLATE_10_TEAM_STEPLADDER: BracketTemplate = {
       round: 1,
       name: 'First Round',
       matchups: [
-        { id: 'R1-G1', topSeed: 7, bottomSeed: 10, topFromMatchup: null, bottomFromMatchup: null },
-        { id: 'R1-G2', topSeed: 8, bottomSeed: 9, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G1', topSeed: 8, bottomSeed: 9, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G2', topSeed: 7, bottomSeed: 10, topFromMatchup: null, bottomFromMatchup: null },
       ],
     },
     {
       round: 2,
       name: 'Second Round',
       matchups: [
-        { id: 'R2-G1', topSeed: 6, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R1-G1' },
-        { id: 'R2-G2', topSeed: 5, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R1-G2' },
+        { id: 'R2-G1', topSeed: 5, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R1-G1' },
+        { id: 'R2-G2', topSeed: 6, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R1-G2' },
       ],
     },
     {
@@ -261,15 +261,15 @@ const TEMPLATE_10_TEAM_STEPLADDER: BracketTemplate = {
       round: 4,
       name: 'Semifinals',
       matchups: [
-        { id: 'R4-G1', topSeed: 2, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R3-G1' },
-        { id: 'R4-G2', topSeed: 1, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R3-G2' },
+        { id: 'R4-G1', topSeed: 1, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R3-G1' },
+        { id: 'R4-G2', topSeed: 2, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R3-G2' },
       ],
     },
     {
       round: 5,
       name: 'Championship',
       matchups: [
-        { id: 'R5-G1', topSeed: null, bottomSeed: null, topFromMatchup: 'R4-G2', bottomFromMatchup: 'R4-G1' },
+        { id: 'R5-G1', topSeed: null, bottomSeed: null, topFromMatchup: 'R4-G1', bottomFromMatchup: 'R4-G2' },
       ],
     },
   ],
@@ -954,6 +954,7 @@ export const CONFERENCE_DEFAULTS: Record<string, { templateId: string; name: str
   // Major conferences
   'BE':   { templateId: '11-team', name: 'Big East Tournament' },
   'AAC':  { templateId: '10-team-stepladder', name: 'AAC Tournament' },
+  'Amer': { templateId: '10-team-stepladder', name: 'AAC Tournament' },
   'A10':  { templateId: '14-team-top4-dbl', name: 'Atlantic 10 Tournament' },
   'MWC':  { templateId: '12-team-top4-bye', name: 'Mountain West Tournament' },
   'CUSA': { templateId: '10-team', name: 'Conference USA Tournament' },
