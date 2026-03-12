@@ -469,12 +469,14 @@ export function TournamentsTab({ snapshot, hca, getTeamLogo }: TournamentsTabPro
 
           <div className="border-t border-gray-200 pt-4">
             <SavedBracketsPanel
-              brackets={savedBrackets.map(b => ({
-                id: b.id,
-                name: b.name,
-                conference: b.conference,
-                updatedAt: b.updatedAt,
-              }))}
+              brackets={savedBrackets
+                .filter(b => !selectedConference || b.conference === selectedConference)
+                .map(b => ({
+                  id: b.id,
+                  name: b.name,
+                  conference: b.conference,
+                  updatedAt: b.updatedAt,
+                }))}
               onLoad={handleLoadBracket}
               onDelete={handleDeleteBracket}
               activeConference={selectedConference}
