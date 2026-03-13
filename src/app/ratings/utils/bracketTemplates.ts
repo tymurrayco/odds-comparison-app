@@ -870,9 +870,9 @@ const TEMPLATE_18_TEAM: BracketTemplate = {
       name: 'Second Round',
       matchups: [
         { id: 'R2-G1', topSeed: 9, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R1-G1' },
-        { id: 'R2-G2', topSeed: 12, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R1-G2' },
-        { id: 'R2-G3', topSeed: 10, bottomSeed: 13, topFromMatchup: null, bottomFromMatchup: null },
-        { id: 'R2-G4', topSeed: 11, bottomSeed: 14, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R2-G2', topSeed: 12, bottomSeed: 13, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R2-G3', topSeed: 11, bottomSeed: 14, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R2-G4', topSeed: 10, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R1-G2' },
       ],
     },
     {
@@ -948,7 +948,7 @@ export const ALL_TEMPLATES = Object.values(BRACKET_TEMPLATES);
 export const CONFERENCE_DEFAULTS: Record<string, { templateId: string; name: string }> = {
   // Power conferences
   'B12': { templateId: '16-team-top4-dbl', name: 'Big 12 Tournament' },
-  'SEC': { templateId: '16-team', name: 'SEC Tournament' },
+  'SEC': { templateId: '16-team-top4-dbl', name: 'SEC Tournament' },
   'ACC': { templateId: '15-team', name: 'ACC Tournament' },
   'B10': { templateId: '18-team', name: 'Big Ten Tournament' },
   // Major conferences
