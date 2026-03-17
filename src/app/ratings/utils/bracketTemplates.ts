@@ -913,6 +913,77 @@ const TEMPLATE_18_TEAM: BracketTemplate = {
   ],
 };
 
+// 32-team: Standard single-elimination (NIT format)
+// Standard bracket seeding: 1v32, 16v17, 8v25, 9v24, etc.
+const TEMPLATE_32_TEAM: BracketTemplate = {
+  id: '32-team',
+  name: '32-Team (NIT)',
+  teamCount: 32,
+  rounds: [
+    {
+      round: 1,
+      name: 'First Round',
+      matchups: [
+        { id: 'R1-G1', topSeed: 1, bottomSeed: 32, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G2', topSeed: 16, bottomSeed: 17, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G3', topSeed: 8, bottomSeed: 25, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G4', topSeed: 9, bottomSeed: 24, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G5', topSeed: 5, bottomSeed: 28, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G6', topSeed: 12, bottomSeed: 21, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G7', topSeed: 4, bottomSeed: 29, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G8', topSeed: 13, bottomSeed: 20, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G9', topSeed: 6, bottomSeed: 27, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G10', topSeed: 11, bottomSeed: 22, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G11', topSeed: 3, bottomSeed: 30, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G12', topSeed: 14, bottomSeed: 19, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G13', topSeed: 7, bottomSeed: 26, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G14', topSeed: 10, bottomSeed: 23, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G15', topSeed: 2, bottomSeed: 31, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G16', topSeed: 15, bottomSeed: 18, topFromMatchup: null, bottomFromMatchup: null },
+      ],
+    },
+    {
+      round: 2,
+      name: 'Second Round',
+      matchups: [
+        { id: 'R2-G1', topSeed: null, bottomSeed: null, topFromMatchup: 'R1-G1', bottomFromMatchup: 'R1-G2' },
+        { id: 'R2-G2', topSeed: null, bottomSeed: null, topFromMatchup: 'R1-G3', bottomFromMatchup: 'R1-G4' },
+        { id: 'R2-G3', topSeed: null, bottomSeed: null, topFromMatchup: 'R1-G5', bottomFromMatchup: 'R1-G6' },
+        { id: 'R2-G4', topSeed: null, bottomSeed: null, topFromMatchup: 'R1-G7', bottomFromMatchup: 'R1-G8' },
+        { id: 'R2-G5', topSeed: null, bottomSeed: null, topFromMatchup: 'R1-G9', bottomFromMatchup: 'R1-G10' },
+        { id: 'R2-G6', topSeed: null, bottomSeed: null, topFromMatchup: 'R1-G11', bottomFromMatchup: 'R1-G12' },
+        { id: 'R2-G7', topSeed: null, bottomSeed: null, topFromMatchup: 'R1-G13', bottomFromMatchup: 'R1-G14' },
+        { id: 'R2-G8', topSeed: null, bottomSeed: null, topFromMatchup: 'R1-G15', bottomFromMatchup: 'R1-G16' },
+      ],
+    },
+    {
+      round: 3,
+      name: 'Quarterfinals',
+      matchups: [
+        { id: 'R3-G1', topSeed: null, bottomSeed: null, topFromMatchup: 'R2-G1', bottomFromMatchup: 'R2-G2' },
+        { id: 'R3-G2', topSeed: null, bottomSeed: null, topFromMatchup: 'R2-G3', bottomFromMatchup: 'R2-G4' },
+        { id: 'R3-G3', topSeed: null, bottomSeed: null, topFromMatchup: 'R2-G5', bottomFromMatchup: 'R2-G6' },
+        { id: 'R3-G4', topSeed: null, bottomSeed: null, topFromMatchup: 'R2-G7', bottomFromMatchup: 'R2-G8' },
+      ],
+    },
+    {
+      round: 4,
+      name: 'Semifinals',
+      matchups: [
+        { id: 'R4-G1', topSeed: null, bottomSeed: null, topFromMatchup: 'R3-G1', bottomFromMatchup: 'R3-G2' },
+        { id: 'R4-G2', topSeed: null, bottomSeed: null, topFromMatchup: 'R3-G3', bottomFromMatchup: 'R3-G4' },
+      ],
+    },
+    {
+      round: 5,
+      name: 'Championship',
+      matchups: [
+        { id: 'R5-G1', topSeed: null, bottomSeed: null, topFromMatchup: 'R4-G1', bottomFromMatchup: 'R4-G2' },
+      ],
+    },
+  ],
+};
+
 // 64-team: NCAA Tournament (4 regions of 16, Final Four, Championship)
 // Seeds 1-16 = Region 1, 17-32 = Region 2, 33-48 = Region 3, 49-64 = Region 4
 // Within each region: standard NCAA seeding (1v16, 8v9, 5v12, 4v13, 6v11, 3v14, 7v10, 2v15)
@@ -1074,6 +1145,7 @@ export const BRACKET_TEMPLATES: Record<string, BracketTemplate> = {
   '16-team': TEMPLATE_16_TEAM,
   '16-team-top4-dbl': TEMPLATE_16_TEAM_TOP4_DBL,
   '18-team': TEMPLATE_18_TEAM,
+  '32-team': TEMPLATE_32_TEAM,
   '64-team': TEMPLATE_64_TEAM,
 };
 
@@ -1085,8 +1157,9 @@ export const ALL_TEMPLATES = Object.values(BRACKET_TEMPLATES);
 
 export const NCAA_REGION_SIZE = 16;
 export const CONFERENCE_DEFAULTS: Record<string, { templateId: string; name: string }> = {
-  // NCAA Tournament
+  // Postseason tournaments
   'NCAA': { templateId: '64-team', name: 'NCAA Tournament' },
+  'NIT':  { templateId: '32-team', name: 'NIT' },
   // Power conferences
   'B12': { templateId: '16-team-top4-dbl', name: 'Big 12 Tournament' },
   'SEC': { templateId: '16-team-top4-dbl', name: 'SEC Tournament' },

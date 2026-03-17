@@ -9,7 +9,7 @@ import {
   getDefaultBracketName,
   NCAA_REGION_SIZE,
 } from '../utils/bracketTemplates';
-import { NCAA_2026_REGION_NAMES, buildNCAA2026Teams } from '../utils/ncaaField2026';
+import { NCAA_2026_REGION_NAMES, NCAA_2026_FIELD, buildNCAA2026Teams } from '../utils/ncaaField2026';
 import {
   buildMatchups,
   projectBracket,
@@ -228,6 +228,19 @@ export function TournamentsTab({ snapshot, hca, getTeamLogo }: TournamentsTabPro
     if (conference === 'NCAA') {
       // Pre-seeded from actual tournament field
       confTeams = buildNCAA2026Teams(snapshot.ratings, getTeamLogo);
+    } else if (conference === 'NIT') {
+      // NIT: top teams NOT in the NCAA tournament, sorted by rating
+      const ncaaTeamNames = new Set(NCAA_2026_FIELD.map(e => e.team));
+      confTeams = snapshot.ratings
+        .filter(r => !ncaaTeamNames.has(r.teamName))
+        .sort((a, b) => b.rating - a.rating)
+        .map((r, idx) => ({
+          teamName: r.teamName,
+          seed: idx + 1,
+          rating: r.rating,
+          conference: r.conference || '',
+          logoUrl: getTeamLogo(r.teamName),
+        }));
     } else {
       confTeams = snapshot.ratings
         .filter(r => r.conference === conference)

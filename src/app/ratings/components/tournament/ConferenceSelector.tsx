@@ -29,6 +29,9 @@ export function ConferenceSelector({
         <option value="NCAA" className="font-semibold">
           NCAA Tournament ({totalTeams} teams)
         </option>
+        <option value="NIT">
+          NIT ({totalTeams} teams)
+        </option>
         <option disabled>──────────</option>
         {conferences.map(conf => (
           <option key={conf} value={conf}>
