@@ -288,13 +288,13 @@ export function TournamentsTab({ snapshot, hca, getTeamLogo }: TournamentsTabPro
     if (!template) return;
     const eligible = allTeams.filter(t => !t.ineligible);
     const newMatchups = buildMatchups(template, eligible);
-    const projected = projectBracket(newMatchups, hca);
+    const projected = projectBracket(newMatchups, hca, template.neutralFromRound);
     setMatchups(projected);
   }
 
   // Toggle winner on a matchup
   function handlePickWinner(matchupId: string, side: 'top' | 'bottom') {
-    const updated = toggleMatchupWinner(matchups, matchupId, side, hca);
+    const updated = toggleMatchupWinner(matchups, matchupId, side, hca, template?.neutralFromRound);
     setMatchups(updated);
   }
 
@@ -307,7 +307,7 @@ export function TournamentsTab({ snapshot, hca, getTeamLogo }: TournamentsTabPro
 
   // Reset all overrides
   function handleReset() {
-    const reset = resetProjections(matchups, hca);
+    const reset = resetProjections(matchups, hca, template?.neutralFromRound);
     setMatchups(reset);
   }
 

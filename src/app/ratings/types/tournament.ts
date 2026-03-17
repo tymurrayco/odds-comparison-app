@@ -48,4 +48,5 @@ export interface BracketTemplate {
   name: string;
   teamCount: number;
   rounds: { round: number; name: string; matchups: TemplateMatchup[] }[];
+  neutralFromRound?: number;   // Rounds below this: top seed gets HCA. At/above: neutral site. Undefined = all neutral.
 }

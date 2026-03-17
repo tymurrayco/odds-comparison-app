@@ -921,6 +921,7 @@ const TEMPLATE_32_TEAM: BracketTemplate = {
   id: '32-team',
   name: '32-Team (NIT)',
   teamCount: 32,
+  neutralFromRound: 4, // Rounds 1-3 (First Round, Second Round, QF) at higher seed's home. Semis+ neutral.
   rounds: [
     {
       round: 1,

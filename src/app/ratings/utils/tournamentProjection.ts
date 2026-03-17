@@ -87,6 +87,7 @@ function getWinner(matchup: BracketMatchup): BracketTeam | null {
 export function projectBracket(
   matchups: BracketMatchup[],
   hca: number,
+  neutralFromRound?: number,
 ): BracketMatchup[] {
   const matchupMap = new Map<string, BracketMatchup>();
   const result = matchups.map(m => ({ ...m }));
@@ -96,6 +97,8 @@ export function projectBracket(
 
   for (const round of rounds) {
     const roundMatchups = result.filter(m => m.round === round);
+    // Rounds below neutralFromRound: top seed gets HCA. At/above (or undefined): neutral.
+    const isNeutral = neutralFromRound == null || round >= neutralFromRound;
 
     for (const matchup of roundMatchups) {
       // Feed winners from prior matchups
@@ -116,20 +119,18 @@ export function projectBracket(
 
       // Project if both teams are present
       if (matchup.topTeam && matchup.bottomTeam) {
-        // Use projectSpread with neutral site (tournament games)
-        // topTeam treated as "home" for spread calculation convention
+        // topTeam = higher seed (home team for non-neutral rounds)
         const spread = projectSpread(
           matchup.topTeam.rating,
           matchup.bottomTeam.rating,
           hca,
-          true, // neutral site
+          isNeutral,
         );
         matchup.projectedSpread = spread;
         matchup.winProbTop = spreadToWinProb(spread);
 
         // Auto-pick winner if not manually overridden
         if (!matchup.isManualOverride) {
-          // Negative spread = top team favored
           matchup.winner = spread <= 0 ? 'top' : 'bottom';
         }
       } else {
@@ -156,6 +157,7 @@ export function toggleMatchupWinner(
   matchupId: string,
   side: 'top' | 'bottom',
   hca: number,
+  neutralFromRound?: number,
 ): BracketMatchup[] {
   const current = matchups.find(m => m.id === matchupId);
   const isUndoing = current?.isManualOverride && current?.winner === side;
@@ -190,7 +192,7 @@ export function toggleMatchupWinner(
     return { ...m };
   });
 
-  return projectBracket(updated, hca);
+  return projectBracket(updated, hca, neutralFromRound);
 }
 
 /**
@@ -220,13 +222,14 @@ function isDownstream(
 export function resetProjections(
   matchups: BracketMatchup[],
   hca: number,
+  neutralFromRound?: number,
 ): BracketMatchup[] {
   const cleared = matchups.map(m => ({
     ...m,
     winner: null,
     isManualOverride: false,
   }));
-  return projectBracket(cleared, hca);
+  return projectBracket(cleared, hca, neutralFromRound);
 }
 
 // ============================================
@@ -261,7 +264,11 @@ function computeMatchupWinnerProbs(
   const teamsByName = new Map<string, BracketTeam>();
   for (const t of teams) teamsByName.set(t.teamName, t);
 
+  const nfr = template.neutralFromRound;
+
   for (const roundDef of template.rounds) {
+    const isNeutral = nfr == null || roundDef.round >= nfr;
+
     for (const tm of roundDef.matchups) {
       const top: SlotProbs = new Map();
       if (tm.topSeed) {
@@ -302,7 +309,7 @@ function computeMatchupWinnerProbs(
           const meetProb = topProb * botProb;
           if (meetProb === 0) continue;
 
-          const spread = projectSpread(topTeam.rating, botTeam.rating, hca, true);
+          const spread = projectSpread(topTeam.rating, botTeam.rating, hca, isNeutral);
           const topWinProb = spreadToWinProb(spread);
 
           winners.set(topName, (winners.get(topName) || 0) + meetProb * topWinProb);
