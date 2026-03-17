@@ -89,16 +89,14 @@ function NCAATournamentBracket({
   getTeamLogo,
   regionNames = ['Region 1', 'Region 2', 'Region 3', 'Region 4'],
 }: BracketVisualizationProps) {
-  // Split matchups by region based on position within each round
-  // Round 1: 32 matchups, 8 per region (pos 0-7, 8-15, 16-23, 24-31)
-  // Round 2: 16 matchups, 4 per region
-  // Round 3 (Sweet 16): 8, 2 per region
-  // Round 4 (Elite 8): 4, 1 per region
-  // Round 5 (Final Four): 2 games (cross-region)
-  // Round 6 (Championship): 1 game
+  // Determine which rounds are regional vs cross-region
+  // Regional rounds have 4+ matchups (one per region); cross-region have 2 or fewer
   const firstFourRound = template.rounds.find(r => r.round === 0);
-  const regionalRounds = template.rounds.filter(r => r.round >= 1 && r.round <= 4);
-  const finalFourRounds = template.rounds.filter(r => r.round >= 5);
+  const maxRegionalRound = template.rounds
+    .filter(r => r.round >= 1 && r.matchups.length >= 4)
+    .reduce((max, r) => Math.max(max, r.round), 0);
+  const regionalRounds = template.rounds.filter(r => r.round >= 1 && r.round <= maxRegionalRound);
+  const finalFourRounds = template.rounds.filter(r => r.round > maxRegionalRound);
 
   function getRegionMatchups(regionIndex: number) {
     const regionMatchups: { round: number; name: string; matchups: BracketMatchup[] }[] = [];
@@ -200,7 +198,7 @@ function NCAATournamentBracket({
       {/* Final Four + Championship */}
       <div className="bg-blue-50 rounded-lg">
         <div className="px-3 pt-2 pb-1">
-          <h3 className="text-sm font-bold text-blue-700">Final Four & Championship</h3>
+          <h3 className="text-sm font-bold text-blue-700">Semifinals & Championship</h3>
         </div>
         <div className="overflow-x-auto pb-3">
           <div className="flex items-stretch gap-4 sm:gap-8 min-w-max px-2 py-2">
@@ -224,7 +222,7 @@ function NCAATournamentBracket({
 }
 
 export function BracketVisualization(props: BracketVisualizationProps) {
-  if (props.template.id === '64-team') {
+  if (props.template.id === '64-team' || props.template.id === '32-team') {
     return <NCAATournamentBracket {...props} />;
   }
   return <StandardBracket {...props} />;

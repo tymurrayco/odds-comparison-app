@@ -10,6 +10,7 @@ import {
   NCAA_REGION_SIZE,
 } from '../utils/bracketTemplates';
 import { NCAA_2026_REGION_NAMES, NCAA_2026_FIELD, buildNCAA2026Teams } from '../utils/ncaaField2026';
+import { NIT_2026_REGION_NAMES, NIT_REGION_SIZE, buildNIT2026Teams } from '../utils/nitField2026';
 import {
   buildMatchups,
   projectBracket,
@@ -229,18 +230,8 @@ export function TournamentsTab({ snapshot, hca, getTeamLogo }: TournamentsTabPro
       // Pre-seeded from actual tournament field
       confTeams = buildNCAA2026Teams(snapshot.ratings, getTeamLogo);
     } else if (conference === 'NIT') {
-      // NIT: top teams NOT in the NCAA tournament, sorted by rating
-      const ncaaTeamNames = new Set(NCAA_2026_FIELD.map(e => e.team));
-      confTeams = snapshot.ratings
-        .filter(r => !ncaaTeamNames.has(r.teamName))
-        .sort((a, b) => b.rating - a.rating)
-        .map((r, idx) => ({
-          teamName: r.teamName,
-          seed: idx + 1,
-          rating: r.rating,
-          conference: r.conference || '',
-          logoUrl: getTeamLogo(r.teamName),
-        }));
+      // Pre-seeded from actual NIT field
+      confTeams = buildNIT2026Teams(snapshot.ratings, getTeamLogo);
     } else {
       confTeams = snapshot.ratings
         .filter(r => r.conference === conference)
@@ -425,19 +416,23 @@ export function TournamentsTab({ snapshot, hca, getTeamLogo }: TournamentsTabPro
     return calculateTournamentWinProbs(template, eligible, hca, matchups);
   }, [template, teams, hca, matchups]);
 
-  // Round-by-round advance probabilities for NCAA bracket
+  // Round-by-round advance probabilities for postseason brackets
   const advanceColumns = useMemo(() => {
-    if (selectedConference !== 'NCAA' || !template || teams.length === 0) return undefined;
+    if ((selectedConference !== 'NCAA' && selectedConference !== 'NIT') || !template || teams.length === 0) return undefined;
     const eligible = teams.filter(t => !t.ineligible);
     const allRoundProbs = calculateRoundAdvanceProbs(template, eligible, hca, matchups);
-    // Pick milestone rounds: Second Round winners (S16), Sweet 16 winners (E8),
-    // Elite 8 winners (F4), Championship winner (Champ)
-    const milestones = [
-      { label: 'S16', roundNum: 2 },
-      { label: 'E8', roundNum: 3 },
-      { label: 'F4', roundNum: 4 },
-      { label: 'Champ', roundNum: 6 },
-    ];
+    const milestones = selectedConference === 'NCAA'
+      ? [
+          { label: 'S16', roundNum: 2 },
+          { label: 'E8', roundNum: 3 },
+          { label: 'F4', roundNum: 4 },
+          { label: 'Champ', roundNum: 6 },
+        ]
+      : [
+          { label: 'QF', roundNum: 3 },
+          { label: 'SF', roundNum: 4 },
+          { label: 'Champ', roundNum: 5 },
+        ];
     return milestones
       .map(m => {
         const roundData = allRoundProbs.find(r => r.round === m.roundNum);
@@ -469,7 +464,7 @@ export function TournamentsTab({ snapshot, hca, getTeamLogo }: TournamentsTabPro
     <div className="p-3 sm:p-6">
       <div className="flex flex-col md:flex-row gap-4 md:gap-6">
         {/* Left sidebar: controls */}
-        <div className={`w-full md:flex-shrink-0 space-y-4 ${selectedConference === 'NCAA' ? 'md:w-[340px]' : 'md:w-64'}`}>
+        <div className={`w-full md:flex-shrink-0 space-y-4 ${selectedConference === 'NCAA' || selectedConference === 'NIT' ? 'md:w-[340px]' : 'md:w-64'}`}>
           <ConferenceSelector
             conferences={conferences}
             selectedConference={selectedConference}
@@ -492,8 +487,8 @@ export function TournamentsTab({ snapshot, hca, getTeamLogo }: TournamentsTabPro
                 getTeamLogo={getTeamLogo}
                 tournamentWinProbs={tournamentWinProbs}
                 eliminatedTeams={eliminatedTeams}
-                regionSize={selectedConference === 'NCAA' ? NCAA_REGION_SIZE : undefined}
-                regionNames={selectedConference === 'NCAA' ? NCAA_2026_REGION_NAMES : undefined}
+                regionSize={selectedConference === 'NCAA' ? NCAA_REGION_SIZE : selectedConference === 'NIT' ? NIT_REGION_SIZE : undefined}
+                regionNames={selectedConference === 'NCAA' ? NCAA_2026_REGION_NAMES : selectedConference === 'NIT' ? NIT_2026_REGION_NAMES : undefined}
                 advanceColumns={advanceColumns}
               />
 
@@ -553,7 +548,7 @@ export function TournamentsTab({ snapshot, hca, getTeamLogo }: TournamentsTabPro
                 onPickWinner={handlePickWinner}
                 onToggleCompleted={handleToggleCompleted}
                 getTeamLogo={getTeamLogo}
-                regionNames={selectedConference === 'NCAA' ? NCAA_2026_REGION_NAMES : undefined}
+                regionNames={selectedConference === 'NCAA' ? NCAA_2026_REGION_NAMES : selectedConference === 'NIT' ? NIT_2026_REGION_NAMES : undefined}
               />
             </div>
           ) : (
