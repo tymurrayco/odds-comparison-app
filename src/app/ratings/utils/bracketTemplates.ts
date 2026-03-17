@@ -913,6 +913,143 @@ const TEMPLATE_18_TEAM: BracketTemplate = {
   ],
 };
 
+// 64-team: NCAA Tournament (4 regions of 16, Final Four, Championship)
+// Seeds 1-16 = Region 1, 17-32 = Region 2, 33-48 = Region 3, 49-64 = Region 4
+// Within each region: standard NCAA seeding (1v16, 8v9, 5v12, 4v13, 6v11, 3v14, 7v10, 2v15)
+// Final Four: Region 1 vs Region 2, Region 3 vs Region 4
+const TEMPLATE_64_TEAM: BracketTemplate = {
+  id: '64-team',
+  name: 'NCAA Tournament (68-Team)',
+  teamCount: 68,
+  rounds: [
+    {
+      round: 0,
+      name: 'First Four',
+      matchups: [
+        // South 16: seed 16 vs 65
+        { id: 'R0-G1', topSeed: 16, bottomSeed: 65, topFromMatchup: null, bottomFromMatchup: null },
+        // West 11: seed 43 vs 66
+        { id: 'R0-G2', topSeed: 43, bottomSeed: 66, topFromMatchup: null, bottomFromMatchup: null },
+        // Midwest 11: seed 59 vs 67
+        { id: 'R0-G3', topSeed: 59, bottomSeed: 67, topFromMatchup: null, bottomFromMatchup: null },
+        // Midwest 16: seed 64 vs 68
+        { id: 'R0-G4', topSeed: 64, bottomSeed: 68, topFromMatchup: null, bottomFromMatchup: null },
+      ],
+    },
+    {
+      round: 1,
+      name: 'First Round',
+      matchups: [
+        // Region 1 (seeds 1-16) — South 1 vs First Four winner
+        { id: 'R1-G1', topSeed: 1, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R0-G1' },
+        { id: 'R1-G2', topSeed: 8, bottomSeed: 9, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G3', topSeed: 5, bottomSeed: 12, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G4', topSeed: 4, bottomSeed: 13, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G5', topSeed: 6, bottomSeed: 11, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G6', topSeed: 3, bottomSeed: 14, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G7', topSeed: 7, bottomSeed: 10, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G8', topSeed: 2, bottomSeed: 15, topFromMatchup: null, bottomFromMatchup: null },
+        // Region 2 (seeds 17-32, region seed = overall - 16)
+        { id: 'R1-G9', topSeed: 17, bottomSeed: 32, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G10', topSeed: 24, bottomSeed: 25, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G11', topSeed: 21, bottomSeed: 28, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G12', topSeed: 20, bottomSeed: 29, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G13', topSeed: 22, bottomSeed: 27, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G14', topSeed: 19, bottomSeed: 30, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G15', topSeed: 23, bottomSeed: 26, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G16', topSeed: 18, bottomSeed: 31, topFromMatchup: null, bottomFromMatchup: null },
+        // Region 3 (seeds 33-48, region seed = overall - 32)
+        { id: 'R1-G17', topSeed: 33, bottomSeed: 48, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G18', topSeed: 40, bottomSeed: 41, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G19', topSeed: 37, bottomSeed: 44, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G20', topSeed: 36, bottomSeed: 45, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G21', topSeed: 38, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R0-G2' },
+        { id: 'R1-G22', topSeed: 35, bottomSeed: 46, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G23', topSeed: 39, bottomSeed: 42, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G24', topSeed: 34, bottomSeed: 47, topFromMatchup: null, bottomFromMatchup: null },
+        // Region 4 (seeds 49-64, region seed = overall - 48)
+        { id: 'R1-G25', topSeed: 49, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R0-G4' },
+        { id: 'R1-G26', topSeed: 56, bottomSeed: 57, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G27', topSeed: 53, bottomSeed: 60, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G28', topSeed: 52, bottomSeed: 61, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G29', topSeed: 54, bottomSeed: null, topFromMatchup: null, bottomFromMatchup: 'R0-G3' },
+        { id: 'R1-G30', topSeed: 51, bottomSeed: 62, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G31', topSeed: 55, bottomSeed: 58, topFromMatchup: null, bottomFromMatchup: null },
+        { id: 'R1-G32', topSeed: 50, bottomSeed: 63, topFromMatchup: null, bottomFromMatchup: null },
+      ],
+    },
+    {
+      round: 2,
+      name: 'Second Round',
+      matchups: [
+        // Region 1
+        { id: 'R2-G1', topSeed: null, bottomSeed: null, topFromMatchup: 'R1-G1', bottomFromMatchup: 'R1-G2' },
+        { id: 'R2-G2', topSeed: null, bottomSeed: null, topFromMatchup: 'R1-G3', bottomFromMatchup: 'R1-G4' },
+        { id: 'R2-G3', topSeed: null, bottomSeed: null, topFromMatchup: 'R1-G5', bottomFromMatchup: 'R1-G6' },
+        { id: 'R2-G4', topSeed: null, bottomSeed: null, topFromMatchup: 'R1-G7', bottomFromMatchup: 'R1-G8' },
+        // Region 2
+        { id: 'R2-G5', topSeed: null, bottomSeed: null, topFromMatchup: 'R1-G9', bottomFromMatchup: 'R1-G10' },
+        { id: 'R2-G6', topSeed: null, bottomSeed: null, topFromMatchup: 'R1-G11', bottomFromMatchup: 'R1-G12' },
+        { id: 'R2-G7', topSeed: null, bottomSeed: null, topFromMatchup: 'R1-G13', bottomFromMatchup: 'R1-G14' },
+        { id: 'R2-G8', topSeed: null, bottomSeed: null, topFromMatchup: 'R1-G15', bottomFromMatchup: 'R1-G16' },
+        // Region 3
+        { id: 'R2-G9', topSeed: null, bottomSeed: null, topFromMatchup: 'R1-G17', bottomFromMatchup: 'R1-G18' },
+        { id: 'R2-G10', topSeed: null, bottomSeed: null, topFromMatchup: 'R1-G19', bottomFromMatchup: 'R1-G20' },
+        { id: 'R2-G11', topSeed: null, bottomSeed: null, topFromMatchup: 'R1-G21', bottomFromMatchup: 'R1-G22' },
+        { id: 'R2-G12', topSeed: null, bottomSeed: null, topFromMatchup: 'R1-G23', bottomFromMatchup: 'R1-G24' },
+        // Region 4
+        { id: 'R2-G13', topSeed: null, bottomSeed: null, topFromMatchup: 'R1-G25', bottomFromMatchup: 'R1-G26' },
+        { id: 'R2-G14', topSeed: null, bottomSeed: null, topFromMatchup: 'R1-G27', bottomFromMatchup: 'R1-G28' },
+        { id: 'R2-G15', topSeed: null, bottomSeed: null, topFromMatchup: 'R1-G29', bottomFromMatchup: 'R1-G30' },
+        { id: 'R2-G16', topSeed: null, bottomSeed: null, topFromMatchup: 'R1-G31', bottomFromMatchup: 'R1-G32' },
+      ],
+    },
+    {
+      round: 3,
+      name: 'Sweet 16',
+      matchups: [
+        // Region 1
+        { id: 'R3-G1', topSeed: null, bottomSeed: null, topFromMatchup: 'R2-G1', bottomFromMatchup: 'R2-G2' },
+        { id: 'R3-G2', topSeed: null, bottomSeed: null, topFromMatchup: 'R2-G3', bottomFromMatchup: 'R2-G4' },
+        // Region 2
+        { id: 'R3-G3', topSeed: null, bottomSeed: null, topFromMatchup: 'R2-G5', bottomFromMatchup: 'R2-G6' },
+        { id: 'R3-G4', topSeed: null, bottomSeed: null, topFromMatchup: 'R2-G7', bottomFromMatchup: 'R2-G8' },
+        // Region 3
+        { id: 'R3-G5', topSeed: null, bottomSeed: null, topFromMatchup: 'R2-G9', bottomFromMatchup: 'R2-G10' },
+        { id: 'R3-G6', topSeed: null, bottomSeed: null, topFromMatchup: 'R2-G11', bottomFromMatchup: 'R2-G12' },
+        // Region 4
+        { id: 'R3-G7', topSeed: null, bottomSeed: null, topFromMatchup: 'R2-G13', bottomFromMatchup: 'R2-G14' },
+        { id: 'R3-G8', topSeed: null, bottomSeed: null, topFromMatchup: 'R2-G15', bottomFromMatchup: 'R2-G16' },
+      ],
+    },
+    {
+      round: 4,
+      name: 'Elite 8',
+      matchups: [
+        { id: 'R4-G1', topSeed: null, bottomSeed: null, topFromMatchup: 'R3-G1', bottomFromMatchup: 'R3-G2' },
+        { id: 'R4-G2', topSeed: null, bottomSeed: null, topFromMatchup: 'R3-G3', bottomFromMatchup: 'R3-G4' },
+        { id: 'R4-G3', topSeed: null, bottomSeed: null, topFromMatchup: 'R3-G5', bottomFromMatchup: 'R3-G6' },
+        { id: 'R4-G4', topSeed: null, bottomSeed: null, topFromMatchup: 'R3-G7', bottomFromMatchup: 'R3-G8' },
+      ],
+    },
+    {
+      round: 5,
+      name: 'Final Four',
+      matchups: [
+        { id: 'R5-G1', topSeed: null, bottomSeed: null, topFromMatchup: 'R4-G1', bottomFromMatchup: 'R4-G2' },
+        { id: 'R5-G2', topSeed: null, bottomSeed: null, topFromMatchup: 'R4-G3', bottomFromMatchup: 'R4-G4' },
+      ],
+    },
+    {
+      round: 6,
+      name: 'Championship',
+      matchups: [
+        { id: 'R6-G1', topSeed: null, bottomSeed: null, topFromMatchup: 'R5-G1', bottomFromMatchup: 'R5-G2' },
+      ],
+    },
+  ],
+};
+
 // ============================================
 // Template Registry
 // ============================================
@@ -937,6 +1074,7 @@ export const BRACKET_TEMPLATES: Record<string, BracketTemplate> = {
   '16-team': TEMPLATE_16_TEAM,
   '16-team-top4-dbl': TEMPLATE_16_TEAM_TOP4_DBL,
   '18-team': TEMPLATE_18_TEAM,
+  '64-team': TEMPLATE_64_TEAM,
 };
 
 export const ALL_TEMPLATES = Object.values(BRACKET_TEMPLATES);
@@ -945,7 +1083,10 @@ export const ALL_TEMPLATES = Object.values(BRACKET_TEMPLATES);
 // Conference Defaults (2025-26 season)
 // ============================================
 
+export const NCAA_REGION_SIZE = 16;
 export const CONFERENCE_DEFAULTS: Record<string, { templateId: string; name: string }> = {
+  // NCAA Tournament
+  'NCAA': { templateId: '64-team', name: 'NCAA Tournament' },
   // Power conferences
   'B12': { templateId: '16-team-top4-dbl', name: 'Big 12 Tournament' },
   'SEC': { templateId: '16-team-top4-dbl', name: 'SEC Tournament' },

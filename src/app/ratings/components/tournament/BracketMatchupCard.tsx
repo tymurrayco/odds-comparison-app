@@ -21,7 +21,7 @@ function TeamRow({
   onToggleCompleted,
   getTeamLogo,
 }: {
-  team: { teamName: string; seed: number; rating: number; logoUrl: string | null } | null;
+  team: { teamName: string; seed: number; rating: number; logoUrl: string | null; displaySeed?: number } | null;
   side: 'top' | 'bottom';
   matchup: BracketMatchup;
   isCompleted?: boolean;
@@ -53,7 +53,7 @@ function TeamRow({
               : 'text-gray-700 hover:bg-gray-50'
         }`}
       >
-        <span className="w-4 text-center text-[10px] text-gray-400 flex-shrink-0">{team.seed}</span>
+        <span className="w-4 text-center text-[10px] text-gray-400 flex-shrink-0">{team.displaySeed ?? team.seed}</span>
         <TeamLogo
           teamName={team.teamName}
           logoUrl={getTeamLogo(team.teamName)}

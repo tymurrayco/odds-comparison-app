@@ -234,21 +234,18 @@ export function resetProjections(
 // ============================================
 
 /**
- * Calculate each team's probability of winning the tournament.
- * Uses analytical round-by-round probability propagation.
- * Completed or manually picked matchups are treated as settled (100% for the winner).
- * Returns a map of teamName -> win probability (0-1).
+ * Core computation: for each matchup, compute the probability of each team
+ * winning that matchup. Returns Map<matchupId, Map<teamName, probability>>.
  */
-export function calculateTournamentWinProbs(
+function computeMatchupWinnerProbs(
   template: BracketTemplate,
   teams: BracketTeam[],
   hca: number,
   matchups?: BracketMatchup[],
-): Map<string, number> {
+): Map<string, Map<string, number>> {
   const teamBySeed = new Map<number, BracketTeam>();
   for (const t of teams) teamBySeed.set(t.seed, t);
 
-  // Build lookup of settled matchups (only manually picked or completed results)
   const settledMap = new Map<string, BracketMatchup>();
   if (matchups) {
     for (const m of matchups) {
@@ -258,9 +255,7 @@ export function calculateTournamentWinProbs(
     }
   }
 
-  // For each matchup, track probability of each team being in that slot
-  // Key: matchupId, Value: Map<teamName, probability>
-  type SlotProbs = Map<string, number>; // teamName -> prob
+  type SlotProbs = Map<string, number>;
   const winnerProbs = new Map<string, SlotProbs>();
 
   const teamsByName = new Map<string, BracketTeam>();
@@ -268,7 +263,6 @@ export function calculateTournamentWinProbs(
 
   for (const roundDef of template.rounds) {
     for (const tm of roundDef.matchups) {
-      // Initialize top slot
       const top: SlotProbs = new Map();
       if (tm.topSeed) {
         const team = teamBySeed.get(tm.topSeed);
@@ -278,7 +272,6 @@ export function calculateTournamentWinProbs(
         if (source) for (const [name, prob] of source) top.set(name, prob);
       }
 
-      // Initialize bottom slot
       const bottom: SlotProbs = new Map();
       if (tm.bottomSeed) {
         const team = teamBySeed.get(tm.bottomSeed);
@@ -288,7 +281,6 @@ export function calculateTournamentWinProbs(
         if (source) for (const [name, prob] of source) bottom.set(name, prob);
       }
 
-      // Check if this matchup is settled
       const settled = settledMap.get(tm.id);
       if (settled && settled.winner) {
         const winnerTeam = settled.winner === 'top' ? settled.topTeam : settled.bottomTeam;
@@ -300,9 +292,7 @@ export function calculateTournamentWinProbs(
         continue;
       }
 
-      // Calculate winner probabilities
       const winners: SlotProbs = new Map();
-
       for (const [topName, topProb] of top) {
         const topTeam = teamsByName.get(topName);
         if (!topTeam) continue;
@@ -323,28 +313,81 @@ export function calculateTournamentWinProbs(
     }
   }
 
-  // The final matchup's winner probs are the tournament win probs
+  return winnerProbs;
+}
+
+/**
+ * Calculate each team's probability of winning the tournament.
+ * Returns a map of teamName -> win probability (0-1).
+ */
+export function calculateTournamentWinProbs(
+  template: BracketTemplate,
+  teams: BracketTeam[],
+  hca: number,
+  matchups?: BracketMatchup[],
+): Map<string, number> {
+  const winnerProbs = computeMatchupWinnerProbs(template, teams, hca, matchups);
   const allMatchupIds = template.rounds.flatMap(r => r.matchups.map(m => m.id));
   const finalId = allMatchupIds[allMatchupIds.length - 1];
   return winnerProbs.get(finalId) || new Map();
 }
 
 /**
- * Convert a win probability (0-1) to American odds string.
- * e.g., 0.8 -> "-400", 0.2 -> "+400"
+ * Calculate round-by-round advance probabilities for each team.
+ * Returns an array of { round, name, probs: Map<teamName, probability> }
+ * where probability = chance of the team surviving (winning) that round.
+ *
+ * For NCAA 64-team:
+ *   Round 2 winners → reached Sweet 16
+ *   Round 3 winners → reached Elite 8
+ *   Round 4 winners → reached Final Four
+ *   Round 6 winners → champion
  */
-export function probToAmericanOdds(prob: number): string {
-  if (prob <= 0 || prob >= 1) return prob >= 1 ? '-∞' : '+∞';
-  if (prob >= 0.5) {
-    // Favorite: negative odds
-    const odds = Math.round(-(prob / (1 - prob)) * 100);
-    return `${odds}`;
-  } else {
-    // Underdog: positive odds
-    const odds = Math.round(((1 - prob) / prob) * 100);
-    return `+${odds}`;
-  }
+export function calculateRoundAdvanceProbs(
+  template: BracketTemplate,
+  teams: BracketTeam[],
+  hca: number,
+  matchups?: BracketMatchup[],
+): { round: number; name: string; probs: Map<string, number> }[] {
+  const winnerProbs = computeMatchupWinnerProbs(template, teams, hca, matchups);
+
+  return template.rounds.map(roundDef => {
+    const roundProbs = new Map<string, number>();
+    for (const tm of roundDef.matchups) {
+      const matchupProbs = winnerProbs.get(tm.id);
+      if (matchupProbs) {
+        for (const [teamName, prob] of matchupProbs) {
+          roundProbs.set(teamName, (roundProbs.get(teamName) || 0) + prob);
+        }
+      }
+    }
+    return { round: roundDef.round, name: roundDef.name, probs: roundProbs };
+  });
 }
+
+/**
+ * Convert a win probability (0-1) to decimal odds string.
+ * Underdogs (< 50%): ratio format, e.g., 0.2 -> "4:1", capped at 10000:1
+ * Favorites (>= 50%): American format, e.g., 0.8 -> "-400"
+ */
+export function probToOdds(prob: number): string {
+  if (prob <= 0) return '10000:1';
+  if (prob >= 1) return '-∞';
+  if (prob >= 0.5) {
+    // Favorite: American negative odds
+    const odds = Math.round((prob / (1 - prob)) * 100);
+    return `-${odds}`;
+  }
+  // Underdog: ratio format
+  const ratio = (1 - prob) / prob;
+  if (ratio >= 10000) return '10000:1';
+  if (ratio >= 100) return `${Math.round(ratio)}:1`;
+  if (ratio >= 10) return `${ratio.toFixed(1)}:1`;
+  return `${ratio.toFixed(2)}:1`;
+}
+
+/** @deprecated Use probToOdds instead */
+export const probToAmericanOdds = probToOdds;
 
 /**
  * Re-export formatSpread for convenience

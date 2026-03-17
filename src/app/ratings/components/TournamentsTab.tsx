@@ -7,13 +7,16 @@ import {
   BRACKET_TEMPLATES,
   getDefaultTemplate,
   getDefaultBracketName,
+  NCAA_REGION_SIZE,
 } from '../utils/bracketTemplates';
+import { NCAA_2026_REGION_NAMES, buildNCAA2026Teams } from '../utils/ncaaField2026';
 import {
   buildMatchups,
   projectBracket,
   toggleMatchupWinner,
   resetProjections,
   calculateTournamentWinProbs,
+  calculateRoundAdvanceProbs,
 } from '../utils/tournamentProjection';
 import { ConferenceSelector } from './tournament/ConferenceSelector';
 import { TemplateSelector } from './tournament/TemplateSelector';
@@ -220,17 +223,23 @@ export function TournamentsTab({ snapshot, hca, getTeamLogo }: TournamentsTabPro
       setNotes('');
     }
 
-    // Fresh setup: get teams sorted by rating for this conference
-    const confTeams = snapshot.ratings
-      .filter(r => r.conference === conference)
-      .sort((a, b) => b.rating - a.rating)
-      .map((r, idx) => ({
-        teamName: r.teamName,
-        seed: idx + 1,
-        rating: r.rating,
-        conference: r.conference || conference,
-        logoUrl: getTeamLogo(r.teamName),
-      }));
+    // Fresh setup: get teams with correct seeds
+    let confTeams;
+    if (conference === 'NCAA') {
+      // Pre-seeded from actual tournament field
+      confTeams = buildNCAA2026Teams(snapshot.ratings, getTeamLogo);
+    } else {
+      confTeams = snapshot.ratings
+        .filter(r => r.conference === conference)
+        .sort((a, b) => b.rating - a.rating)
+        .map((r, idx) => ({
+          teamName: r.teamName,
+          seed: idx + 1,
+          rating: r.rating,
+          conference: r.conference || conference,
+          logoUrl: getTeamLogo(r.teamName),
+        }));
+    }
 
     setTeams(confTeams);
 
@@ -403,6 +412,27 @@ export function TournamentsTab({ snapshot, hca, getTeamLogo }: TournamentsTabPro
     return calculateTournamentWinProbs(template, eligible, hca, matchups);
   }, [template, teams, hca, matchups]);
 
+  // Round-by-round advance probabilities for NCAA bracket
+  const advanceColumns = useMemo(() => {
+    if (selectedConference !== 'NCAA' || !template || teams.length === 0) return undefined;
+    const eligible = teams.filter(t => !t.ineligible);
+    const allRoundProbs = calculateRoundAdvanceProbs(template, eligible, hca, matchups);
+    // Pick milestone rounds: Second Round winners (S16), Sweet 16 winners (E8),
+    // Elite 8 winners (F4), Championship winner (Champ)
+    const milestones = [
+      { label: 'S16', roundNum: 2 },
+      { label: 'E8', roundNum: 3 },
+      { label: 'F4', roundNum: 4 },
+      { label: 'Champ', roundNum: 6 },
+    ];
+    return milestones
+      .map(m => {
+        const roundData = allRoundProbs.find(r => r.round === m.roundNum);
+        return roundData ? { label: m.label, probs: roundData.probs } : null;
+      })
+      .filter((x): x is { label: string; probs: Map<string, number> } => x !== null);
+  }, [selectedConference, template, teams, hca, matchups]);
+
   // Compute eliminated teams (lost a completed game)
   const eliminatedTeams = useMemo(() => {
     const eliminated = new Set<string>();
@@ -426,7 +456,7 @@ export function TournamentsTab({ snapshot, hca, getTeamLogo }: TournamentsTabPro
     <div className="p-3 sm:p-6">
       <div className="flex flex-col md:flex-row gap-4 md:gap-6">
         {/* Left sidebar: controls */}
-        <div className="w-full md:w-64 md:flex-shrink-0 space-y-4">
+        <div className={`w-full md:flex-shrink-0 space-y-4 ${selectedConference === 'NCAA' ? 'md:w-[340px]' : 'md:w-64'}`}>
           <ConferenceSelector
             conferences={conferences}
             selectedConference={selectedConference}
@@ -449,6 +479,9 @@ export function TournamentsTab({ snapshot, hca, getTeamLogo }: TournamentsTabPro
                 getTeamLogo={getTeamLogo}
                 tournamentWinProbs={tournamentWinProbs}
                 eliminatedTeams={eliminatedTeams}
+                regionSize={selectedConference === 'NCAA' ? NCAA_REGION_SIZE : undefined}
+                regionNames={selectedConference === 'NCAA' ? NCAA_2026_REGION_NAMES : undefined}
+                advanceColumns={advanceColumns}
               />
 
               <div className="flex gap-2">
@@ -507,6 +540,7 @@ export function TournamentsTab({ snapshot, hca, getTeamLogo }: TournamentsTabPro
                 onPickWinner={handlePickWinner}
                 onToggleCompleted={handleToggleCompleted}
                 getTeamLogo={getTeamLogo}
+                regionNames={selectedConference === 'NCAA' ? NCAA_2026_REGION_NAMES : undefined}
               />
             </div>
           ) : (

@@ -7,6 +7,7 @@ export interface BracketTeam {
   conference: string;
   logoUrl: string | null;
   ineligible?: boolean;
+  displaySeed?: number;        // Region seed for NCAA display (1-16)
 }
 
 export interface BracketMatchup {
