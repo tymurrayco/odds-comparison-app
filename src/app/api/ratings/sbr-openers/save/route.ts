@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
     let gameAdjSkipped = 0;
     let closingLinesUpdated = 0;
     let closingLinesInserted = 0;
-    let closingLinesSkipped = 0;
+    const closingLinesSkipped = 0;
     const gameAdjSkippedGames: string[] = [];
     const closingLinesSkippedGames: string[] = [];
     const errors: string[] = [];
