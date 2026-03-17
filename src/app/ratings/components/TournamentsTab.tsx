@@ -9,7 +9,7 @@ import {
   getDefaultBracketName,
   NCAA_REGION_SIZE,
 } from '../utils/bracketTemplates';
-import { NCAA_2026_REGION_NAMES, NCAA_2026_FIELD, buildNCAA2026Teams } from '../utils/ncaaField2026';
+import { NCAA_2026_REGION_NAMES, buildNCAA2026Teams } from '../utils/ncaaField2026';
 import { NIT_2026_REGION_NAMES, NIT_REGION_SIZE, buildNIT2026Teams } from '../utils/nitField2026';
 import {
   buildMatchups,
