@@ -213,11 +213,11 @@ export function TournamentsTab({ snapshot, hca, getTeamLogo }: TournamentsTabPro
       setTemplateId(config.templateId);
       setTeams(config.teams);
       setNotes(config.notes || '');
-      // Re-project to restore matchups (in case ratings changed)
+      // Re-project saved matchups (picks up rating changes and template settings like neutralFromRound)
       const template = BRACKET_TEMPLATES[config.templateId];
       if (template) {
-        // Restore matchups with manual overrides preserved
-        setMatchups(config.matchups);
+        const reprojected = projectBracket(config.matchups, hca, template.neutralFromRound);
+        setMatchups(reprojected);
         return;
       }
     } else {
