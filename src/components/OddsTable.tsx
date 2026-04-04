@@ -129,7 +129,7 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
   };
   
   // Bookmakers that support deep linking
-  const deepLinkBookmakers = ['FanDuel', 'DraftKings', 'Caesars'];
+  const deepLinkBookmakers = ['FanDuel', 'DraftKings', 'Caesars', 'Kalshi'];
 
   // Handle press-and-hold to create bet
   const handlePressStart = (

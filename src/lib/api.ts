@@ -266,6 +266,7 @@ function mergeKalshiOdds(games: Game[], kalshiGames: KalshiGameOdds[]): void {
     );
 
     if (match) {
+      const marketLink = `https://kalshi.com/markets/${kg.eventTicker}`;
       const kalshiBookmaker: Bookmaker = {
         key: 'kalshi',
         title: 'Kalshi',
@@ -274,8 +275,8 @@ function mergeKalshiOdds(games: Game[], kalshiGames: KalshiGameOdds[]): void {
           key: 'h2h',
           last_update: new Date().toISOString(),
           outcomes: [
-            { name: match.home_team, price: kg.homeOdds },
-            { name: match.away_team, price: kg.awayOdds },
+            { name: match.home_team, price: kg.homeOdds, link: marketLink },
+            { name: match.away_team, price: kg.awayOdds, link: marketLink },
           ],
         }],
       };

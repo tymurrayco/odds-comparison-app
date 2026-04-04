@@ -97,7 +97,8 @@ function buildGameOdds(marketsByEvent: Map<string, KalshiMarketRaw[]>): KalshiGa
     let commenceTime = '';
 
     for (const m of markets) {
-      const price = parseFloat(m.last_price_dollars);
+      // Use yes_bid (current best bid) over last_price (last trade, can be stale)
+      const price = parseFloat(m.yes_bid_dollars) || parseFloat(m.last_price_dollars);
       if (isNaN(price) || price <= 0 || price >= 1) continue;
 
       // Market ticker suffix is the team abbreviation (e.g., "NSH", "LA", "DEN")
