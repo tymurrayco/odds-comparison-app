@@ -260,10 +260,15 @@ interface KalshiGameOdds {
  */
 function mergeKalshiOdds(games: Game[], kalshiGames: KalshiGameOdds[]): void {
   for (const kg of kalshiGames) {
-    // Find matching game from the-odds-api
-    const match = games.find(g =>
-      teamsMatch(g.home_team, kg.homeTeam) && teamsMatch(g.away_team, kg.awayTeam)
-    );
+    // Find matching game from the-odds-api by teams AND commence time.
+    // Time check avoids matching the wrong game in back-to-back series.
+    const kgTime = kg.commenceTime ? new Date(kg.commenceTime).getTime() : 0;
+    const match = games.find(g => {
+      if (!teamsMatch(g.home_team, kg.homeTeam) || !teamsMatch(g.away_team, kg.awayTeam)) return false;
+      if (!kgTime) return true;
+      const gTime = new Date(g.commence_time).getTime();
+      return Math.abs(gTime - kgTime) < 12 * 60 * 60 * 1000; // within 12 hours
+    });
 
     if (match) {
       const marketLink = `https://kalshi.com/markets/${kg.eventTicker}`;

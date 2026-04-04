@@ -409,9 +409,9 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
           <TeamAnalysis awayTeam={game.away_team} homeTeam={game.home_team} />
         </div>
       ) : (
-        <OddsTable 
-          games={[game]} 
-          view={expandedMarket === 'analysis' ? 'spread' : expandedMarket} 
+        <OddsTable
+          games={[game]}
+          view={expandedMarket === 'analysis' ? 'spread' : expandedMarket}
           selectedBookmakers={selectedBookmakers}
           league={game.sport_key}
           awayLogo={liveScore?.awayLogo}
