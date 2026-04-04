@@ -12,7 +12,10 @@ const bookmakerLogos: { [key: string]: string } = {
   'DraftKings': '/bookmaker-logos/draftkings.png',
   'FanDuel': '/bookmaker-logos/fd.png',
   'BetMGM': '/bookmaker-logos/betmgm.png',
-  'BetRivers': '/bookmaker-logos/betrivers.png'
+  'BetRivers': '/bookmaker-logos/betrivers.png',
+  'Caesars': '/bookmaker-logos/caesars.png',
+  'BetOnline.ag': '/bookmaker-logos/betonline.png',
+  'Kalshi': '/bookmaker-logos/kalshi.png'
 };
 
 export default function MyBets() {

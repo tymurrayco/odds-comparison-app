@@ -119,11 +119,11 @@ export interface ApiResponse<T> {
 }
 
 // List of supported bookmakers
-export const BOOKMAKERS = ['DraftKings', 'FanDuel', 'BetMGM', 'BetRivers', 'Caesars', 'BetOnline.ag'];
+export const BOOKMAKERS = ['DraftKings', 'FanDuel', 'Kalshi', 'BetMGM', 'BetRivers', 'Caesars', 'BetOnline.ag'];
 
 // List of leagues with isActive flag
 export const LEAGUES = [
-  { id: 'baseball_mlb', name: 'MLB', icon: '/league-icons/mlb.png', isActive: false },
+  { id: 'baseball_mlb', name: 'MLB', icon: '/league-icons/mlb.png', isActive: true },
   { id: 'americanfootball_nfl', name: 'NFL', icon: '/league-icons/nfl.png', isActive: true },
   { id: 'americanfootball_nfl_preseason', name: 'NFL PreSzn', icon: '/league-icons/nfl.png', isActive: false },
   { id: 'americanfootball_ncaaf', name: 'NCAAF', icon: '/league-icons/ncaaf.png', isActive: true },
@@ -213,15 +213,26 @@ export const PROP_MARKET_NAMES: { [key: string]: string } = {
  */
 export async function fetchOdds(sport: string): Promise<ApiResponse<Game[]>> {
   try {
-    const response = await fetch(`/api/odds?sport=${sport}`);
-    if (!response.ok) {
-      throw new Error(`Error fetching odds: ${response.statusText}`);
+    // Fetch from the-odds-api and Kalshi in parallel
+    const [oddsResponse, kalshiResponse] = await Promise.all([
+      fetch(`/api/odds?sport=${sport}`),
+      fetch(`/api/kalshi-odds?sport=${sport}`).catch(() => null),
+    ]);
+
+    if (!oddsResponse.ok) {
+      throw new Error(`Error fetching odds: ${oddsResponse.statusText}`);
     }
-    const data = await response.json();
-    const requestsRemaining = response.headers.get('x-requests-remaining');
-    
+    const data: Game[] = await oddsResponse.json();
+    const requestsRemaining = oddsResponse.headers.get('x-requests-remaining');
+
+    // Merge Kalshi odds into matching games
+    if (kalshiResponse?.ok) {
+      const kalshiGames = await kalshiResponse.json();
+      mergeKalshiOdds(data, kalshiGames);
+    }
+
     return {
-      data: data,
+      data,
       requestsRemaining
     };
   } catch (error) {
@@ -230,6 +241,46 @@ export async function fetchOdds(sport: string): Promise<ApiResponse<Game[]>> {
       data: [],
       requestsRemaining: null
     };
+  }
+}
+
+interface KalshiGameOdds {
+  eventTicker: string;
+  title: string;
+  awayTeam: string;
+  homeTeam: string;
+  awayOdds: number;
+  homeOdds: number;
+  commenceTime: string;
+}
+
+/**
+ * Merge Kalshi moneyline odds into existing games from the-odds-api.
+ * Matches games by fuzzy team name comparison.
+ */
+function mergeKalshiOdds(games: Game[], kalshiGames: KalshiGameOdds[]): void {
+  for (const kg of kalshiGames) {
+    // Find matching game from the-odds-api
+    const match = games.find(g =>
+      teamsMatch(g.home_team, kg.homeTeam) && teamsMatch(g.away_team, kg.awayTeam)
+    );
+
+    if (match) {
+      const kalshiBookmaker: Bookmaker = {
+        key: 'kalshi',
+        title: 'Kalshi',
+        last_update: new Date().toISOString(),
+        markets: [{
+          key: 'h2h',
+          last_update: new Date().toISOString(),
+          outcomes: [
+            { name: match.home_team, price: kg.homeOdds },
+            { name: match.away_team, price: kg.awayOdds },
+          ],
+        }],
+      };
+      match.bookmakers.push(kalshiBookmaker);
+    }
   }
 }
 
@@ -517,28 +568,38 @@ const getFirstWord = (name: string): string => {
   return words[0].toLowerCase();
 };
 
+// Aliases for team names that differ across sources (e.g. Kalshi "A's" vs odds-api "Athletics")
+const TEAM_ALIASES: Record<string, string[]> = {
+  "athletics": ["a's"],
+  "a's": ["athletics"],
+};
+
 // Check if two team names likely refer to the same team
 const teamsMatch = (name1: string, name2: string): boolean => {
   const n1 = name1.toLowerCase();
   const n2 = name2.toLowerCase();
-  
+
   // Exact match
   if (n1 === n2) return true;
-  
+
   // One contains the other
   if (n1.includes(n2) || n2.includes(n1)) return true;
-  
+
+  // Alias match
+  const aliases1 = TEAM_ALIASES[n1] || [];
+  if (aliases1.includes(n2)) return true;
+
   // Mascot match
   if (getMascot(name1) === getMascot(name2)) return true;
-  
+
   // First word match (e.g., "Duke" vs "Duke Blue Devils")
   if (getFirstWord(name1) === getFirstWord(name2)) return true;
-  
+
   // City match
   const city1 = getCity(name1);
   const city2 = getCity(name2);
   if (city1.length > 2 && city2.length > 2 && city1 === city2) return true;
-  
+
   return false;
 };
 

@@ -313,7 +313,8 @@ export default function FuturesTable({
   'BetMGM': '/bookmaker-logos/betmgm.png',
   'BetRivers': '/bookmaker-logos/betrivers.png',
   'Caesars': '/bookmaker-logos/caesars.png',
-  'BetOnline.ag': '/bookmaker-logos/betonline.png'
+  'BetOnline.ag': '/bookmaker-logos/betonline.png',
+  'Kalshi': '/bookmaker-logos/kalshi.png'
   };
 
   // Custom CSS for handling Masters mobile display

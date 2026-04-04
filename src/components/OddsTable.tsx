@@ -207,7 +207,8 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
   'BetMGM': '/bookmaker-logos/betmgm.png',
   'BetRivers': '/bookmaker-logos/betrivers.png',
   'Caesars': '/bookmaker-logos/caesars.png',
-  'BetOnline.ag': '/bookmaker-logos/betonline.png'
+  'BetOnline.ag': '/bookmaker-logos/betonline.png',
+  'Kalshi': '/bookmaker-logos/kalshi.png'
   };
   
   // Map market keys

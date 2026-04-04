@@ -16,7 +16,8 @@ const bookmakerLogos: { [key: string]: string } = {
   'BetMGM': '/bookmaker-logos/betmgm.png',
   'BetRivers': '/bookmaker-logos/betrivers.png',
   'Caesars': '/bookmaker-logos/caesars.png',
-  'BetOnline.ag': '/bookmaker-logos/betonline.png'
+  'BetOnline.ag': '/bookmaker-logos/betonline.png',
+  'Kalshi': '/bookmaker-logos/kalshi.png'
 };
 
 export default function BookmakerSelector({ 
