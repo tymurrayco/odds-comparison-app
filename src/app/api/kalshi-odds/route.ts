@@ -9,14 +9,14 @@ export async function GET(request: Request) {
   const sport = searchParams.get('sport');
 
   if (!sport) {
-    return NextResponse.json([]);
+    return NextResponse.json({ moneyline: [], spreads: [] });
   }
 
   try {
-    const games = await fetchKalshiOdds(sport);
-    return NextResponse.json(games);
+    const result = await fetchKalshiOdds(sport);
+    return NextResponse.json(result);
   } catch (error) {
     console.error('Error fetching Kalshi odds:', error);
-    return NextResponse.json([]);
+    return NextResponse.json({ moneyline: [], spreads: [] });
   }
 }

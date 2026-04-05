@@ -227,8 +227,11 @@ export async function fetchOdds(sport: string): Promise<ApiResponse<Game[]>> {
 
     // Merge Kalshi odds into matching games
     if (kalshiResponse?.ok) {
-      const kalshiGames = await kalshiResponse.json();
-      mergeKalshiOdds(data, kalshiGames);
+      const kalshiData = await kalshiResponse.json();
+      // Support both old format (array) and new format ({ moneyline, spreads })
+      const moneyline = Array.isArray(kalshiData) ? kalshiData : (kalshiData.moneyline || []);
+      const spreads = Array.isArray(kalshiData) ? [] : (kalshiData.spreads || []);
+      mergeKalshiOdds(data, moneyline, spreads);
     }
 
     return {
@@ -254,24 +257,64 @@ interface KalshiGameOdds {
   commenceTime: string;
 }
 
-/**
- * Merge Kalshi moneyline odds into existing games from the-odds-api.
- * Matches games by fuzzy team name comparison.
- */
-function mergeKalshiOdds(games: Game[], kalshiGames: KalshiGameOdds[]): void {
-  for (const kg of kalshiGames) {
-    // Find matching game from the-odds-api by teams AND commence time.
-    // Time check avoids matching the wrong game in back-to-back series.
-    const kgTime = kg.commenceTime ? new Date(kg.commenceTime).getTime() : 0;
-    const match = games.find(g => {
-      if (!teamsMatch(g.home_team, kg.homeTeam) || !teamsMatch(g.away_team, kg.awayTeam)) return false;
-      if (!kgTime) return true;
-      const gTime = new Date(g.commence_time).getTime();
-      return Math.abs(gTime - kgTime) < 12 * 60 * 60 * 1000; // within 12 hours
-    });
+interface KalshiSpreadOdds {
+  eventTicker: string;
+  title: string;
+  awayTeam: string;
+  homeTeam: string;
+  awaySpread: number;
+  homeSpread: number;
+  awayPrice: number;
+  homePrice: number;
+  commenceTime: string;
+}
 
-    if (match) {
+/**
+ * Find a matching game from the-odds-api by teams and commence time.
+ * Also tries swapped home/away since tournament events may not have a true home team.
+ * Returns { game, swapped } where swapped indicates the Kalshi teams were in reverse order.
+ */
+function findKalshiMatch(games: Game[], awayTeam: string, homeTeam: string, commenceTime: string): { game: Game; swapped: boolean } | undefined {
+  const kgTime = commenceTime ? new Date(commenceTime).getTime() : 0;
+  const withinTime = (g: Game) => {
+    if (!kgTime) return true;
+    const gTime = new Date(g.commence_time).getTime();
+    return Math.abs(gTime - kgTime) < 12 * 60 * 60 * 1000;
+  };
+
+  // Try normal order first
+  const normal = games.find(g =>
+    teamsMatch(g.home_team, homeTeam) && teamsMatch(g.away_team, awayTeam) && withinTime(g)
+  );
+  if (normal) return { game: normal, swapped: false };
+
+  // Try swapped (tournament events may list teams in different order)
+  const swapped = games.find(g =>
+    teamsMatch(g.home_team, awayTeam) && teamsMatch(g.away_team, homeTeam) && withinTime(g)
+  );
+  if (swapped) return { game: swapped, swapped: true };
+
+  return undefined;
+}
+
+/**
+ * Merge Kalshi moneyline and spread odds into existing games from the-odds-api.
+ * Matches games by fuzzy team name comparison.
+ * Handles swapped home/away for tournament neutral-site games.
+ */
+function mergeKalshiOdds(games: Game[], kalshiGames: KalshiGameOdds[], kalshiSpreads: KalshiSpreadOdds[]): void {
+  // Track which games already got a Kalshi bookmaker entry (from moneyline)
+  const kalshiBookmakers = new Map<Game, Bookmaker>();
+
+  // Merge moneyline odds
+  for (const kg of kalshiGames) {
+    const result = findKalshiMatch(games, kg.awayTeam, kg.homeTeam, kg.commenceTime);
+    if (result) {
+      const { game, swapped } = result;
       const marketLink = `https://kalshi.com/markets/${kg.eventTicker}`;
+      // If swapped, Kalshi's "away" is actually the-odds-api's "home" and vice versa
+      const homeOdds = swapped ? kg.awayOdds : kg.homeOdds;
+      const awayOdds = swapped ? kg.homeOdds : kg.awayOdds;
       const kalshiBookmaker: Bookmaker = {
         key: 'kalshi',
         title: 'Kalshi',
@@ -280,12 +323,49 @@ function mergeKalshiOdds(games: Game[], kalshiGames: KalshiGameOdds[]): void {
           key: 'h2h',
           last_update: new Date().toISOString(),
           outcomes: [
-            { name: match.home_team, price: kg.homeOdds, link: marketLink },
-            { name: match.away_team, price: kg.awayOdds, link: marketLink },
+            { name: game.home_team, price: homeOdds, link: marketLink },
+            { name: game.away_team, price: awayOdds, link: marketLink },
           ],
         }],
       };
-      match.bookmakers.push(kalshiBookmaker);
+      game.bookmakers.push(kalshiBookmaker);
+      kalshiBookmakers.set(game, kalshiBookmaker);
+    }
+  }
+
+  // Merge spread odds
+  for (const ks of kalshiSpreads) {
+    const result = findKalshiMatch(games, ks.awayTeam, ks.homeTeam, ks.commenceTime);
+    if (result) {
+      const { game, swapped } = result;
+      const marketLink = `https://kalshi.com/markets/${ks.eventTicker}`;
+      const homeSpread = swapped ? ks.awaySpread : ks.homeSpread;
+      const awaySpread = swapped ? ks.homeSpread : ks.awaySpread;
+      const homePrice = swapped ? ks.awayPrice : ks.homePrice;
+      const awayPrice = swapped ? ks.homePrice : ks.awayPrice;
+      const spreadMarket: Market = {
+        key: 'spreads',
+        last_update: new Date().toISOString(),
+        outcomes: [
+          { name: game.home_team, price: homePrice, point: homeSpread, link: marketLink },
+          { name: game.away_team, price: awayPrice, point: awaySpread, link: marketLink },
+        ],
+      };
+
+      // If we already have a Kalshi bookmaker for this game, add spread market to it
+      const existing = kalshiBookmakers.get(game);
+      if (existing) {
+        existing.markets.push(spreadMarket);
+      } else {
+        const kalshiBookmaker: Bookmaker = {
+          key: 'kalshi',
+          title: 'Kalshi',
+          last_update: new Date().toISOString(),
+          markets: [spreadMarket],
+        };
+        game.bookmakers.push(kalshiBookmaker);
+        kalshiBookmakers.set(game, kalshiBookmaker);
+      }
     }
   }
 }
