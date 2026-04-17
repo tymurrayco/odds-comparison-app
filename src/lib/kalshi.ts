@@ -28,6 +28,11 @@ const SPORT_TO_KALSHI_SPREAD: Record<string, string[]> = {
   'icehockey_nhl': ['KXNHLSPREAD'],
 };
 
+// Maps the-odds-api sport keys to Kalshi series tickers for totals (over/under)
+const SPORT_TO_KALSHI_TOTAL: Record<string, string[]> = {
+  'baseball_mlb': ['KXMLBTOTAL'],
+};
+
 // Kalshi market as returned from the API (fields we care about)
 interface KalshiMarketRaw {
   ticker: string;
@@ -66,6 +71,18 @@ export interface KalshiSpreadOdds {
   homeSpread: number;     // e.g. -5.5
   awayPrice: number;      // American odds for the away spread
   homePrice: number;      // American odds for the home spread
+  commenceTime: string;
+}
+
+// A resolved total with over/under
+export interface KalshiTotalOdds {
+  eventTicker: string;
+  title: string;
+  awayTeam: string;
+  homeTeam: string;
+  total: number;          // e.g. 8.5
+  overPrice: number;      // American odds for over
+  underPrice: number;     // American odds for under
   commenceTime: string;
 }
 
@@ -323,6 +340,85 @@ function buildSpreadOdds(marketsByEvent: Map<string, KalshiMarketRaw[]>): Kalshi
 }
 
 /**
+ * Build totals odds from Kalshi total markets.
+ * Each event has ~11 markets at different strike points (floor_strike = line, e.g. 8.5).
+ * YES = over the line, NO = under. We pick the "main line" — the strike whose YES price
+ * is closest to 0.50 — and derive under price as (1 - yesPrice), matching buildSpreadOdds.
+ */
+function buildTotalsOdds(marketsByEvent: Map<string, KalshiMarketRaw[]>): KalshiTotalOdds[] {
+  const totals: KalshiTotalOdds[] = [];
+
+  for (const [eventTicker, markets] of marketsByEvent) {
+    const activeMarkets = markets.filter(m => m.status === 'active');
+    if (activeMarkets.length < 1) continue;
+
+    // Parse team names from market title, e.g. "Toronto vs Arizona Total Runs?"
+    // Kalshi uses "vs" for both home/away and neutral — order matches ticker (away first).
+    let awayTeam = '';
+    let homeTeam = '';
+    for (const m of activeMarkets) {
+      const match = m.title?.match(/^(.+?)\s+(?:at|vs)\s+(.+?)\s+Total\s+Runs\??$/i);
+      if (match) {
+        awayTeam = match[1].trim();
+        homeTeam = match[2].trim();
+        break;
+      }
+    }
+    if (!awayTeam || !homeTeam) continue;
+
+    interface TotalEntry {
+      line: number;
+      yesPrice: number;
+    }
+    const entries: TotalEntry[] = [];
+    let commenceTime = '';
+
+    for (const m of activeMarkets) {
+      const line = m.floor_strike;
+      if (line === undefined || line === null) continue;
+
+      const yesPrice = parseFloat(m.yes_bid_dollars) || parseFloat(m.last_price_dollars);
+      if (isNaN(yesPrice) || yesPrice <= 0 || yesPrice >= 1) continue;
+
+      entries.push({ line, yesPrice });
+
+      if (!commenceTime && m.expected_expiration_time) {
+        const endTime = new Date(m.expected_expiration_time);
+        const startTime = new Date(endTime.getTime() - 3 * 60 * 60 * 1000);
+        commenceTime = startTime.toISOString();
+      }
+    }
+
+    if (entries.length === 0) continue;
+
+    // Main line: YES price closest to 0.50 = market's consensus line
+    let bestEntry: TotalEntry | null = null;
+    let bestDistFrom50 = Infinity;
+    for (const e of entries) {
+      const dist = Math.abs(e.yesPrice - 0.50);
+      if (dist < bestDistFrom50) {
+        bestDistFrom50 = dist;
+        bestEntry = e;
+      }
+    }
+    if (!bestEntry) continue;
+
+    totals.push({
+      eventTicker,
+      title: `${awayTeam} at ${homeTeam}: Total`,
+      awayTeam,
+      homeTeam,
+      total: bestEntry.line,
+      overPrice: priceToML(bestEntry.yesPrice),
+      underPrice: priceToML(1 - bestEntry.yesPrice),
+      commenceTime,
+    });
+  }
+
+  return totals;
+}
+
+/**
  * Fetch events from a single Kalshi series ticker.
  * Tries status=open first, falls back to unfiltered if no results.
  */
@@ -412,18 +508,23 @@ async function fetchEventMarkets(seriesTickers: string[]): Promise<Map<string, K
 export async function fetchKalshiOdds(sportKey: string): Promise<{
   moneyline: KalshiGameOdds[];
   spreads: KalshiSpreadOdds[];
+  totals: KalshiTotalOdds[];
 }> {
   const mlTickers = SPORT_TO_KALSHI_MONEYLINE[sportKey] || [];
   const spreadTickers = SPORT_TO_KALSHI_SPREAD[sportKey] || [];
+  const totalTickers = SPORT_TO_KALSHI_TOTAL[sportKey] || [];
 
-  // Fetch moneyline and spread events in parallel
-  const [mlMarkets, spreadMarkets] = await Promise.all([
-    mlTickers.length > 0 ? fetchEventMarkets(mlTickers) : Promise.resolve(new Map<string, KalshiMarketRaw[]>()),
-    spreadTickers.length > 0 ? fetchEventMarkets(spreadTickers) : Promise.resolve(new Map<string, KalshiMarketRaw[]>()),
+  // Fetch moneyline, spread, and total events in parallel
+  const empty = new Map<string, KalshiMarketRaw[]>();
+  const [mlMarkets, spreadMarkets, totalMarkets] = await Promise.all([
+    mlTickers.length > 0 ? fetchEventMarkets(mlTickers) : Promise.resolve(empty),
+    spreadTickers.length > 0 ? fetchEventMarkets(spreadTickers) : Promise.resolve(empty),
+    totalTickers.length > 0 ? fetchEventMarkets(totalTickers) : Promise.resolve(empty),
   ]);
 
   return {
     moneyline: mlMarkets.size > 0 ? buildGameOdds(mlMarkets) : [],
     spreads: spreadMarkets.size > 0 ? buildSpreadOdds(spreadMarkets) : [],
+    totals: totalMarkets.size > 0 ? buildTotalsOdds(totalMarkets) : [],
   };
 }

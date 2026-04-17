@@ -1,5 +1,7 @@
 // src/lib/api.ts
 
+import type { KalshiGameOdds, KalshiSpreadOdds, KalshiTotalOdds } from '@/lib/kalshi';
+
 // Define the types we need
 export interface Game {
   id: string;
@@ -228,10 +230,10 @@ export async function fetchOdds(sport: string): Promise<ApiResponse<Game[]>> {
     // Merge Kalshi odds into matching games
     if (kalshiResponse?.ok) {
       const kalshiData = await kalshiResponse.json();
-      // Support both old format (array) and new format ({ moneyline, spreads })
       const moneyline = Array.isArray(kalshiData) ? kalshiData : (kalshiData.moneyline || []);
       const spreads = Array.isArray(kalshiData) ? [] : (kalshiData.spreads || []);
-      mergeKalshiOdds(data, moneyline, spreads);
+      const totals = Array.isArray(kalshiData) ? [] : (kalshiData.totals || []);
+      mergeKalshiOdds(data, moneyline, spreads, totals);
     }
 
     return {
@@ -245,28 +247,6 @@ export async function fetchOdds(sport: string): Promise<ApiResponse<Game[]>> {
       requestsRemaining: null
     };
   }
-}
-
-interface KalshiGameOdds {
-  eventTicker: string;
-  title: string;
-  awayTeam: string;
-  homeTeam: string;
-  awayOdds: number;
-  homeOdds: number;
-  commenceTime: string;
-}
-
-interface KalshiSpreadOdds {
-  eventTicker: string;
-  title: string;
-  awayTeam: string;
-  homeTeam: string;
-  awaySpread: number;
-  homeSpread: number;
-  awayPrice: number;
-  homePrice: number;
-  commenceTime: string;
 }
 
 /**
@@ -298,75 +278,87 @@ function findKalshiMatch(games: Game[], awayTeam: string, homeTeam: string, comm
 }
 
 /**
- * Merge Kalshi moneyline and spread odds into existing games from the-odds-api.
+ * Merge Kalshi moneyline, spread, and total odds into existing games from the-odds-api.
  * Matches games by fuzzy team name comparison.
  * Handles swapped home/away for tournament neutral-site games.
  */
-function mergeKalshiOdds(games: Game[], kalshiGames: KalshiGameOdds[], kalshiSpreads: KalshiSpreadOdds[]): void {
-  // Track which games already got a Kalshi bookmaker entry (from moneyline)
+function mergeKalshiOdds(
+  games: Game[],
+  kalshiGames: KalshiGameOdds[],
+  kalshiSpreads: KalshiSpreadOdds[],
+  kalshiTotals: KalshiTotalOdds[],
+): void {
+  // Track which games already got a Kalshi bookmaker entry
   const kalshiBookmakers = new Map<Game, Bookmaker>();
+
+  const attachMarket = (game: Game, market: Market) => {
+    const existing = kalshiBookmakers.get(game);
+    if (existing) {
+      existing.markets.push(market);
+    } else {
+      const bookmaker: Bookmaker = {
+        key: 'kalshi',
+        title: 'Kalshi',
+        last_update: new Date().toISOString(),
+        markets: [market],
+      };
+      game.bookmakers.push(bookmaker);
+      kalshiBookmakers.set(game, bookmaker);
+    }
+  };
 
   // Merge moneyline odds
   for (const kg of kalshiGames) {
     const result = findKalshiMatch(games, kg.awayTeam, kg.homeTeam, kg.commenceTime);
-    if (result) {
-      const { game, swapped } = result;
-      const marketLink = `https://kalshi.com/markets/${kg.eventTicker}`;
-      // If swapped, Kalshi's "away" is actually the-odds-api's "home" and vice versa
-      const homeOdds = swapped ? kg.awayOdds : kg.homeOdds;
-      const awayOdds = swapped ? kg.homeOdds : kg.awayOdds;
-      const kalshiBookmaker: Bookmaker = {
-        key: 'kalshi',
-        title: 'Kalshi',
-        last_update: new Date().toISOString(),
-        markets: [{
-          key: 'h2h',
-          last_update: new Date().toISOString(),
-          outcomes: [
-            { name: game.home_team, price: homeOdds, link: marketLink },
-            { name: game.away_team, price: awayOdds, link: marketLink },
-          ],
-        }],
-      };
-      game.bookmakers.push(kalshiBookmaker);
-      kalshiBookmakers.set(game, kalshiBookmaker);
-    }
+    if (!result) continue;
+    const { game, swapped } = result;
+    const marketLink = `https://kalshi.com/markets/${kg.eventTicker}`;
+    // If swapped, Kalshi's "away" is actually the-odds-api's "home" and vice versa
+    const homeOdds = swapped ? kg.awayOdds : kg.homeOdds;
+    const awayOdds = swapped ? kg.homeOdds : kg.awayOdds;
+    attachMarket(game, {
+      key: 'h2h',
+      last_update: new Date().toISOString(),
+      outcomes: [
+        { name: game.home_team, price: homeOdds, link: marketLink },
+        { name: game.away_team, price: awayOdds, link: marketLink },
+      ],
+    });
   }
 
   // Merge spread odds
   for (const ks of kalshiSpreads) {
     const result = findKalshiMatch(games, ks.awayTeam, ks.homeTeam, ks.commenceTime);
-    if (result) {
-      const { game, swapped } = result;
-      const marketLink = `https://kalshi.com/markets/${ks.eventTicker}`;
-      const homeSpread = swapped ? ks.awaySpread : ks.homeSpread;
-      const awaySpread = swapped ? ks.homeSpread : ks.awaySpread;
-      const homePrice = swapped ? ks.awayPrice : ks.homePrice;
-      const awayPrice = swapped ? ks.homePrice : ks.awayPrice;
-      const spreadMarket: Market = {
-        key: 'spreads',
-        last_update: new Date().toISOString(),
-        outcomes: [
-          { name: game.home_team, price: homePrice, point: homeSpread, link: marketLink },
-          { name: game.away_team, price: awayPrice, point: awaySpread, link: marketLink },
-        ],
-      };
+    if (!result) continue;
+    const { game, swapped } = result;
+    const marketLink = `https://kalshi.com/markets/${ks.eventTicker}`;
+    const homeSpread = swapped ? ks.awaySpread : ks.homeSpread;
+    const awaySpread = swapped ? ks.homeSpread : ks.awaySpread;
+    const homePrice = swapped ? ks.awayPrice : ks.homePrice;
+    const awayPrice = swapped ? ks.homePrice : ks.awayPrice;
+    attachMarket(game, {
+      key: 'spreads',
+      last_update: new Date().toISOString(),
+      outcomes: [
+        { name: game.home_team, price: homePrice, point: homeSpread, link: marketLink },
+        { name: game.away_team, price: awayPrice, point: awaySpread, link: marketLink },
+      ],
+    });
+  }
 
-      // If we already have a Kalshi bookmaker for this game, add spread market to it
-      const existing = kalshiBookmakers.get(game);
-      if (existing) {
-        existing.markets.push(spreadMarket);
-      } else {
-        const kalshiBookmaker: Bookmaker = {
-          key: 'kalshi',
-          title: 'Kalshi',
-          last_update: new Date().toISOString(),
-          markets: [spreadMarket],
-        };
-        game.bookmakers.push(kalshiBookmaker);
-        kalshiBookmakers.set(game, kalshiBookmaker);
-      }
-    }
+  // Merge totals odds — over/under is side-agnostic, no swap needed
+  for (const kt of kalshiTotals) {
+    const result = findKalshiMatch(games, kt.awayTeam, kt.homeTeam, kt.commenceTime);
+    if (!result) continue;
+    const marketLink = `https://kalshi.com/markets/${kt.eventTicker}`;
+    attachMarket(result.game, {
+      key: 'totals',
+      last_update: new Date().toISOString(),
+      outcomes: [
+        { name: 'Over', price: kt.overPrice, point: kt.total, link: marketLink },
+        { name: 'Under', price: kt.underPrice, point: kt.total, link: marketLink },
+      ],
+    });
   }
 }
 

@@ -9,7 +9,7 @@ export async function GET(request: Request) {
   const sport = searchParams.get('sport');
 
   if (!sport) {
-    return NextResponse.json({ moneyline: [], spreads: [] });
+    return NextResponse.json({ moneyline: [], spreads: [], totals: [] });
   }
 
   try {
@@ -17,6 +17,6 @@ export async function GET(request: Request) {
     return NextResponse.json(result);
   } catch (error) {
     console.error('Error fetching Kalshi odds:', error);
-    return NextResponse.json({ moneyline: [], spreads: [] });
+    return NextResponse.json({ moneyline: [], spreads: [], totals: [] });
   }
 }
