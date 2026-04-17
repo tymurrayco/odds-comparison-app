@@ -12,6 +12,7 @@ const ESPN_LEAGUE_MAP: { [key: string]: { sport: string; league: string } } = {
   'basketball_wnba': { sport: 'basketball', league: 'wnba' },
   'soccer_usa_mls': { sport: 'soccer', league: 'usa.1' },
   'soccer_epl': { sport: 'soccer', league: 'eng.1' },
+  'lacrosse_ncaa': { sport: 'lacrosse', league: 'mens-college-lacrosse' },
 };
 
 export interface ESPNGameScore {
