@@ -15,18 +15,7 @@ const ESPN_LEAGUE_MAP: { [key: string]: { sport: string; league: string } } = {
   'lacrosse_ncaa': { sport: 'lacrosse', league: 'mens-college-lacrosse' },
 };
 
-export interface ESPNGameScore {
-  homeTeam: string;
-  awayTeam: string;
-  homeScore: string;
-  awayScore: string;
-  homeLogo: string;
-  awayLogo: string;
-  period: number;
-  displayClock: string;
-  state: 'pre' | 'in' | 'post'; // pre-game, in-progress, completed
-  statusDetail: string; // "Q3 8:42", "Halftime", "Final", etc.
-}
+import type { ESPNGameScore } from '@/lib/api';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
