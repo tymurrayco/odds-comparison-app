@@ -17,6 +17,7 @@
  *   node scripts/scrape-torvik-tournament.js --discover-talent 2025  # Discover talent page structure
  *   node scripts/scrape-torvik-tournament.js --discover-region 2025 # Discover Wikipedia region structure
  *   node scripts/scrape-torvik-tournament.js --resume         # Resume from last completed year
+ *   node scripts/scrape-torvik-tournament.js --wiki-bracket   # Use Wikipedia seed tables for 2026+ (bypasses Torvik NCAA filter)
  */
 
 const puppeteer = require('puppeteer');
@@ -105,6 +106,7 @@ function parseArgs() {
     resume: false,
     singleYear: null,
     allTeams: false,
+    wikiBracket: false,
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -139,6 +141,9 @@ function parseArgs() {
         break;
       case '--all-teams':
         opts.allTeams = true;
+        break;
+      case '--wiki-bracket':
+        opts.wikiBracket = true;
         break;
     }
   }
@@ -210,6 +215,12 @@ const WIKI_TEAM_NAME_MAP = {
   // Wikipedia sometimes adds state qualifiers:
   "Saint Mary's (CA)": "Saint Mary's",
   "Saint Mary's (California)": "Saint Mary's",
+  "St. Mary's": "Saint Mary's",
+  'California Baptist': 'Cal Baptist',
+  "Hawai'i": 'Hawaii',
+  'Hawai\u02BBi': 'Hawaii',
+  'Hawai\u2018i': 'Hawaii',
+  'Hawai\u2019i': 'Hawaii',
 
   // Texas system
   'Texas–Arlington': 'UT Arlington',     // em-dash
@@ -932,6 +943,122 @@ async function scrapeRegionFromWikipedia(page, year) {
 }
 
 /**
+ * Scrape seed + region data from Wikipedia bracket tables for a given year.
+ * Bracket tables have rows where cell[1] = seed number, cell[2] = team name.
+ * Each regional heading (e.g. "South regional") is followed by its bracket table.
+ * Also handles First Four matchups (two teams separated by "/" in one cell).
+ * Returns Map<wikiTeamName, { region, seed }>.
+ */
+async function scrapeWikipediaSeedTable(page, year) {
+  const url = `https://en.wikipedia.org/wiki/${year}_NCAA_Division_I_men%27s_basketball_tournament`;
+  console.log(`\n  --- Wikipedia Bracket Tables (seeds + regions) ---`);
+  console.log(`    Navigating: ${url}`);
+  await page.goto(url, { waitUntil: 'networkidle2', timeout: PAGE_LOAD_TIMEOUT });
+
+  const entries = await page.evaluate(() => {
+    const regionKeywords = ['east', 'west', 'south', 'midwest'];
+    const results = [];
+    const seen = new Set();
+
+    function findNextTable(h) {
+      const wrapper = h.closest('.mw-heading') || h.parentElement;
+      let el = wrapper.nextElementSibling;
+      while (el) {
+        if (el.tagName === 'TABLE') return el;
+        if (el.tagName === 'DIV' || el.tagName === 'SECTION') {
+          const t = el.querySelector('table');
+          if (t) return t;
+        }
+        if (el.tagName && el.tagName.match(/^H[23]$/)) break;
+        if (el.classList && el.classList.contains('mw-heading')) break;
+        el = el.nextElementSibling;
+      }
+      return null;
+    }
+
+    const headings = document.querySelectorAll('h3');
+    for (const h3 of headings) {
+      const headline = h3.querySelector('.mw-headline');
+      const text = (headline ? headline.textContent : h3.textContent).trim().toLowerCase();
+      if (!text.includes('regional')) continue;
+      const region = regionKeywords.find(r => text.startsWith(r));
+      if (!region) continue;
+      const regionName = region.charAt(0).toUpperCase() + region.slice(1);
+
+      const table = findNextTable(h3);
+      if (!table) continue;
+
+      const rows = table.querySelectorAll('tr');
+      for (const row of rows) {
+        const cells = row.querySelectorAll('td');
+        if (cells.length < 3) continue;
+
+        // Seed is in cell[1], team name in cell[2]
+        const seedText = cells[1].textContent.trim();
+        if (!/^\d{1,2}$/.test(seedText)) continue;
+        const seed = seedText;
+
+        // Team cell may have links (team names) or text with "/" for First Four
+        const teamCell = cells[2];
+        const links = teamCell.querySelectorAll('a');
+        const teamLinks = [];
+        links.forEach(link => {
+          const href = link.getAttribute('href') || '';
+          const name = link.textContent.trim();
+          if (name && name.length > 1 && /\/wiki\/\d{4}/.test(href)) {
+            teamLinks.push(name);
+          }
+        });
+
+        if (teamLinks.length === 0) {
+          // Fallback: use cell text, split on "/" for First Four matchups
+          const cellText = teamCell.textContent.trim();
+          const names = cellText.includes('/') ? cellText.split('/').map(s => s.trim()) : [cellText];
+          for (const name of names) {
+            if (name && name.length > 1 && !seen.has(name)) {
+              seen.add(name);
+              results.push({ team: name, region: regionName, seed });
+            }
+          }
+        } else {
+          // One or more teams (First Four has two separated by "/")
+          for (const name of teamLinks) {
+            // Split on "/" in case link text contains combined names
+            const parts = name.includes('/') ? name.split('/').map(s => s.trim()) : [name];
+            for (const part of parts) {
+              if (part && part.length > 1 && !seen.has(part)) {
+                seen.add(part);
+                results.push({ team: part, region: regionName, seed });
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return results;
+  });
+
+  // Build map
+  const bracketMap = new Map();
+  for (const { team, region, seed } of entries) {
+    bracketMap.set(team, { region, seed });
+  }
+
+  // Log summary
+  const byRegion = {};
+  for (const { region } of bracketMap.values()) {
+    byRegion[region] = (byRegion[region] || 0) + 1;
+  }
+  for (const [region, count] of Object.entries(byRegion)) {
+    console.log(`    ${region}: ${count} teams`);
+  }
+  console.log(`    Total: ${bracketMap.size} teams`);
+
+  return bracketMap;
+}
+
+/**
  * Scrape talent data from team-tables_each.php for a given year.
  * Returns Map<teamName, { talent, talent_rk }> where talent is the raw score
  * and talent_rk is the rank (row position in the table, which is sorted by talent).
@@ -1066,16 +1193,20 @@ async function scrapeTalentPage(page, year, allTeams = false) {
  * Scrape all 3 splits for a single year.
  * Returns array of merged team rows for that year.
  */
-async function scrapeYear(page, year, splitsToRun, allTeams = false) {
+async function scrapeYear(page, year, splitsToRun, allTeams = false, wikiBracket = false) {
   console.log(`\n${'='.repeat(60)}`);
   console.log(`  SCRAPING YEAR ${year}`);
+  if (wikiBracket) console.log(`  MODE: wiki-bracket (all teams from Torvik, filter by Wikipedia seed tables)`);
   console.log(`${'='.repeat(60)}`);
+
+  // In wiki-bracket mode, scrape all teams from Torvik (no NCAA filter)
+  const useAllTeams = allTeams || wikiBracket;
 
   const splitData = {};
 
   for (const [key, split] of Object.entries(splitsToRun)) {
     console.log(`\n  --- ${split.label} (prefix: ${split.prefix}) ---`);
-    const url = buildUrl(year, split.params, allTeams);
+    const url = buildUrl(year, split.params, useAllTeams);
 
     try {
       const { headers, rows } = await scrapePage(page, url);
@@ -1100,11 +1231,24 @@ async function scrapeYear(page, year, splitsToRun, allTeams = false) {
   // Scrape talent page
   let talentMap = new Map();
   try {
-    talentMap = await scrapeTalentPage(page, year, allTeams);
+    talentMap = await scrapeTalentPage(page, year, useAllTeams);
   } catch (err) {
     console.error(`    ERROR scraping talent for ${year}:`, err.message);
   }
   await sleep(DELAY_BETWEEN_PAGES_MS);
+
+  // Wiki-bracket mode: get seed + region from Wikipedia seed tables, then filter
+  if (wikiBracket) {
+    let wikiBracketMap = new Map();
+    try {
+      wikiBracketMap = await scrapeWikipediaSeedTable(page, year);
+    } catch (err) {
+      console.error(`    ERROR scraping Wikipedia seed tables for ${year}:`, err.message);
+    }
+    await sleep(DELAY_BETWEEN_PAGES_MS);
+
+    return mergeYearData(year, splitData, talentMap, new Map(), wikiBracketMap);
+  }
 
   // Scrape region data from Wikipedia (skip when pulling all teams — no bracket yet)
   let regionMap = new Map();
@@ -1129,10 +1273,22 @@ async function scrapeYear(page, year, splitsToRun, allTeams = false) {
  * Each stat column gets prefixed with the split prefix (reg_, nc_, q12_).
  * Talent data is added as unprefixed columns (talent, talent_rk).
  * Region data is matched from Wikipedia names to Barttorvik names.
+ *
+ * If wikiBracketMap is provided (from --wiki-bracket mode), it's a
+ * Map<wikiTeamName, { region, seed }> from the Wikipedia seed tables.
+ * Teams are filtered to only those in the bracket, and seed + region
+ * come from Wikipedia instead of Torvik/bracket tables.
  */
-function mergeYearData(year, splitData, talentMap = new Map(), regionMap = new Map()) {
-  // Use the regular season split as the base (it has all tournament teams)
-  const baseSplit = splitData.reg || Object.values(splitData)[0];
+function mergeYearData(year, splitData, talentMap = new Map(), regionMap = new Map(), wikiBracketMap = new Map()) {
+  // Use the split with the most rows as the base.
+  // Normally reg has all tournament teams, but in wiki-bracket mode Torvik may
+  // filter reg to NCAA teams while nc/q12 still have all 365.
+  let baseSplit = splitData.reg || Object.values(splitData)[0];
+  if (wikiBracketMap.size > 0) {
+    for (const split of Object.values(splitData)) {
+      if (split.rows.length > baseSplit.rows.length) baseSplit = split;
+    }
+  }
   if (!baseSplit || baseSplit.rows.length === 0) {
     console.log(`  No base data for ${year}, skipping merge`);
     return [];
@@ -1197,6 +1353,45 @@ function mergeYearData(year, splitData, talentMap = new Map(), regionMap = new M
   }
   if (talentMap.size > 0) {
     console.log(`  Talent: matched ${talentMatches}/${merged.size} teams`);
+  }
+
+  // Wiki-bracket mode: filter to bracket teams and assign seed + region from Wikipedia
+  if (wikiBracketMap.size > 0) {
+    const torvikNames = new Set(merged.keys());
+    let matched = 0;
+    const unmatchedWiki = [];
+    const keepTeams = new Set();
+
+    for (const [wikiName, { region, seed }] of wikiBracketMap) {
+      const torvikName = matchWikiTeamName(wikiName, torvikNames);
+      if (torvikName) {
+        const row = merged.get(torvikName);
+        if (row) {
+          row.region = region;
+          row.seed = seed;
+          keepTeams.add(torvikName);
+          matched++;
+        }
+      } else if (torvikName !== null) {
+        unmatchedWiki.push(wikiName);
+      }
+    }
+
+    // Remove teams not in the bracket
+    const beforeCount = merged.size;
+    for (const team of [...merged.keys()]) {
+      if (!keepTeams.has(team)) merged.delete(team);
+    }
+
+    console.log(`  Wiki-bracket: matched ${matched}/${wikiBracketMap.size} Wikipedia teams to Torvik`);
+    console.log(`  Filtered ${beforeCount} → ${merged.size} teams`);
+    if (unmatchedWiki.length > 0) {
+      console.log(`  Wiki-bracket unmatched names: ${unmatchedWiki.join(', ')}`);
+    }
+
+    const result = Array.from(merged.values());
+    console.log(`  Merged ${result.length} teams for ${year}`);
+    return result;
   }
 
   // Merge region data from Wikipedia
@@ -1354,6 +1549,7 @@ async function main() {
   if (opts.discoverRegion) console.log(`  MODE: DISCOVER-REGION (year ${opts.discoverRegion})`);
   if (opts.resume) console.log('  MODE: RESUME from last progress');
   if (opts.allTeams) console.log('  MODE: ALL TEAMS (no NCAA tournament filter)');
+  if (opts.wikiBracket) console.log('  MODE: WIKI-BRACKET (seeds + regions from Wikipedia for 2026+)');
   console.log('');
 
   // Launch browser once, reuse for all pages
@@ -1365,7 +1561,7 @@ async function main() {
   try {
     const page = await browser.newPage();
     await page.setUserAgent(
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
     );
 
     // Discover mode
@@ -1387,6 +1583,150 @@ async function main() {
       await discoverRegionFromWikipedia(page, opts.discoverRegion);
       await browser.close();
       return;
+    }
+
+    // -----------------------------------------------------------------------
+    // Preflight: if 2026 is in the range (and not --all-teams), verify data
+    // sources are live before committing to a 20+ minute scrape.
+    //
+    // --wiki-bracket mode: only checks Wikipedia seed tables (skips Torvik NCAA check)
+    // Default mode: checks both Wikipedia bracket tables and Torvik NCAA seeds
+    // -----------------------------------------------------------------------
+    if (!opts.allTeams && opts.endYear >= 2026 && !opts.test) {
+      console.log('  PREFLIGHT: checking 2026 data availability...\n');
+
+      if (opts.wikiBracket) {
+        // Wiki-bracket mode: check that Wikipedia seed tables have teams
+        const testMap = await scrapeWikipediaSeedTable(page, 2026);
+        if (testMap.size < 64) {
+          console.error(`\n  ✗ PREFLIGHT FAILED: Wikipedia seed tables only have ${testMap.size} teams (need at least 64).`);
+          console.error('    Seed table data is not complete yet. Try again later.');
+          await browser.close();
+          process.exit(1);
+        }
+        console.log(`    ✓ Wikipedia seed tables have ${testMap.size} teams`);
+        await sleep(DELAY_BETWEEN_PAGES_MS);
+      } else {
+        // Default mode: check Wikipedia bracket tables + Torvik NCAA seeds
+        const wikiUrl = 'https://en.wikipedia.org/wiki/2026_NCAA_Division_I_men%27s_basketball_tournament';
+        console.log(`    [Wikipedia] ${wikiUrl}`);
+        await page.goto(wikiUrl, { waitUntil: 'networkidle2', timeout: PAGE_LOAD_TIMEOUT });
+        const wikiCheck = await page.evaluate(() => {
+          const regionKeywords = ['east', 'west', 'south', 'midwest'];
+          const regions = [];
+
+          function findNextTables(h) {
+            const wrapper = h.closest('.mw-heading') || h.parentElement;
+            let el = wrapper.nextElementSibling;
+            const tables = [];
+            while (el) {
+              if (el.tagName === 'TABLE') tables.push(el);
+              else if (el.tagName === 'DIV' || el.tagName === 'SECTION') {
+                el.querySelectorAll('table').forEach(t => tables.push(t));
+              }
+              if (el.tagName && el.tagName.match(/^H[23]$/)) break;
+              if (el.classList && el.classList.contains('mw-heading')) break;
+              el = el.nextElementSibling;
+            }
+            return tables;
+          }
+
+          const headings = document.querySelectorAll('h3');
+          for (const h3 of headings) {
+            const headline = h3.querySelector('.mw-headline');
+            const text = (headline ? headline.textContent : h3.textContent).trim().toLowerCase();
+            if (!text.includes('regional')) continue;
+            const region = regionKeywords.find(r => text.startsWith(r));
+            if (!region) continue;
+
+            const tables = findNextTables(h3);
+            let teamCount = 0;
+            if (tables.length > 0) {
+              const links = tables[0].querySelectorAll('a');
+              const seen = new Set();
+              links.forEach(link => {
+                const href = link.getAttribute('href') || '';
+                const name = link.textContent.trim();
+                if (name && name.length > 1 && !/^\d+$/.test(name) && !seen.has(name) && /\/wiki\/\d{4}/.test(href)) {
+                  seen.add(name);
+                  teamCount++;
+                }
+              });
+            }
+            regions.push({ region: region.charAt(0).toUpperCase() + region.slice(1), teamCount });
+          }
+          return regions;
+        });
+
+        const regionsWithTeams = wikiCheck.filter(r => r.teamCount > 0);
+        const totalTeams = wikiCheck.reduce((sum, r) => sum + r.teamCount, 0);
+
+        if (wikiCheck.length < 4) {
+          console.error(`\n  ✗ PREFLIGHT FAILED: Wikipedia only has ${wikiCheck.length}/4 regional bracket headings for 2026.`);
+          console.error('    Region data is not available yet. Try again after the bracket is published on Wikipedia.');
+          await browser.close();
+          process.exit(1);
+        }
+        if (regionsWithTeams.length < 4) {
+          const empty = wikiCheck.filter(r => r.teamCount === 0).map(r => r.region).join(', ');
+          console.error(`\n  ✗ PREFLIGHT FAILED: Wikipedia has bracket headings but ${empty} have no teams yet.`);
+          console.error('    Teams have not been added to the bracket tables. Try again later.');
+          await browser.close();
+          process.exit(1);
+        }
+        for (const r of wikiCheck) {
+          console.log(`    ${r.region}: ${r.teamCount} teams`);
+        }
+        console.log(`    ✓ Wikipedia has ${regionsWithTeams.length}/4 brackets with ${totalTeams} total teams`);
+
+        // Check 2: Torvik seed data (quick probe of conlimit=NCAA)
+        // Torvik may redirect when no NCAA teams exist yet, so catch navigation errors.
+        const torvikUrl = buildUrl(2026, {}, false); // conlimit=NCAA
+        console.log(`    [Torvik]    ${torvikUrl}`);
+        let seedCheck = { teamCount: 0, seedCount: 0 };
+        try {
+          await page.goto(torvikUrl, { waitUntil: 'networkidle2', timeout: PAGE_LOAD_TIMEOUT });
+          await sleep(2000); // let any late redirects settle
+          seedCheck = await page.evaluate(() => {
+            const table = document.querySelector('#content-area table, table.pointed, table');
+            if (!table) return { teamCount: 0, seedCount: 0 };
+            const rows = table.querySelectorAll('tbody tr');
+            let teamCount = 0;
+            let seedCount = 0;
+            rows.forEach(row => {
+              const teamCell = row.querySelector('td a[href*="team.php"]');
+              if (!teamCell) return;
+              teamCount++;
+              const lowrow = teamCell.querySelector('.lowrow');
+              if (lowrow && /\d+\s*seed/.test(lowrow.textContent)) seedCount++;
+            });
+            return { teamCount, seedCount };
+          });
+        } catch (err) {
+          // Navigation error likely means Torvik redirected (no NCAA data yet)
+          console.error(`\n  ✗ PREFLIGHT FAILED: Torvik page errored for 2026 (${err.message}).`);
+          console.error('    Torvik likely has not flagged tournament teams yet. Try again later.');
+          await browser.close();
+          process.exit(1);
+        }
+        if (seedCheck.teamCount === 0) {
+          console.error(`\n  ✗ PREFLIGHT FAILED: Torvik conlimit=NCAA returned 0 teams for 2026.`);
+          console.error('    Torvik has not flagged tournament teams yet. Try again later.');
+          await browser.close();
+          process.exit(1);
+        }
+        if (seedCheck.seedCount === 0) {
+          console.error(`\n  ✗ PREFLIGHT FAILED: Torvik has ${seedCheck.teamCount} NCAA teams but 0 have seed data.`);
+          console.error('    Seeds are not populated yet. Try again later.');
+          await browser.close();
+          process.exit(1);
+        }
+        console.log(`    ✓ Torvik has ${seedCheck.teamCount} NCAA teams, ${seedCheck.seedCount} with seeds`);
+
+        await sleep(DELAY_BETWEEN_PAGES_MS);
+      }
+
+      console.log('\n  PREFLIGHT PASSED — proceeding with full scrape.\n');
     }
 
     // Determine which splits to run
@@ -1437,7 +1777,9 @@ async function main() {
     }
 
     for (const year of years) {
-      const yearRows = await scrapeYear(page, year, splitsToRun, opts.allTeams);
+      // Use wiki-bracket mode for the current year (2026+) when --wiki-bracket is set
+      const useWikiBracket = opts.wikiBracket && year >= 2026;
+      const yearRows = await scrapeYear(page, year, splitsToRun, opts.allTeams, useWikiBracket);
 
       if (yearRows.length > 0) {
         allRows.push(...yearRows);

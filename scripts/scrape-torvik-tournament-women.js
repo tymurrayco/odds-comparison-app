@@ -28,7 +28,7 @@ const path = require('path');
 // ---------------------------------------------------------------------------
 
 const DELAY_BETWEEN_PAGES_MS = 4000;   // Safe delay to avoid IP bans
-const PAGE_LOAD_TIMEOUT      = 45000;
+const PAGE_LOAD_TIMEOUT      = 90000;
 const SCROLL_WAIT_MS         = 600;
 const MAX_SCROLL_ATTEMPTS    = 25;
 const DATA_DIR               = path.join(__dirname, '..', 'data');
@@ -38,7 +38,7 @@ const PROGRESS_FILE          = path.join(DATA_DIR, '.torvik-scrape-progress-wome
 // Women's Torvik ratings exist back to at least 2015, but the conlimit=NCAA filter
 // only works from 2022+. For 2015-2019, we scrape all teams and filter to tournament
 // teams using Wikipedia bracket data as the source of truth.
-const DEFAULT_START_YEAR = 2015;
+const DEFAULT_START_YEAR = 2022;
 const DEFAULT_END_YEAR   = 2025;
 
 // Years where Torvik's conlimit=NCAA filter correctly returns tournament teams only.
@@ -867,7 +867,8 @@ async function scrapeRegionFromWikipedia(page, year) {
 
     const seedHeading = Array.from(document.querySelectorAll('h3')).find(h => {
       const hl = h.querySelector('.mw-headline');
-      return (hl ? hl.textContent : h.textContent).trim().toLowerCase().includes('tournament seeds');
+      const hText = (hl ? hl.textContent : h.textContent).trim().toLowerCase();
+      return hText.includes('tournament seeds') || hText === 'seeds';
     });
     if (seedHeading) {
       const wrapper = seedHeading.closest('.mw-heading') || seedHeading.parentElement;
@@ -917,7 +918,7 @@ async function scrapeRegionFromWikipedia(page, year) {
         if (!name || name.length <= 1 || /^\d+$/.test(name) || seen.has(name)) return;
         if (teamOnly) {
           const href = link.getAttribute('href') || '';
-          if (!/\/wiki\/\d{4}/.test(href)) return;
+          if (!/\/wiki\/\d{4}/.test(href) && !/\/w\/index\.php\?title=\d{4}/.test(href)) return;
         }
         seen.add(name);
         teams.push(name);
@@ -964,6 +965,12 @@ async function scrapeRegionFromWikipedia(page, year) {
         return matchWithNum[1].trim() + ' ' + matchWithNum[2];
       }
 
+      // Try: "City #N regional – ..." (2026+ format)
+      const matchHashNum = headingText.match(/^(.+?)\s*#(\d+)\s*[Rr]egional/);
+      if (matchHashNum) {
+        return matchHashNum[1].trim() + ' #' + matchHashNum[2];
+      }
+
       // Try: "City regional – ..." (no number)
       const matchNoNum = headingText.match(/^(.+?)\s*(?:regional|region)/i);
       if (matchNoNum) {
@@ -988,7 +995,7 @@ async function scrapeRegionFromWikipedia(page, year) {
       if (regionName) {
         const tables = findNextTables(h3);
         if (tables.length === 0) continue;
-        const teams = extractTeamLinks(tables[0]);
+        const teams = extractTeamLinks(tables[0], true);
         results.push({ region: regionName, teams });
         continue;
       }
@@ -1162,9 +1169,16 @@ async function scrapeRegionFromWikipedia(page, year) {
     }
   }
 
+  // Merge seed-table regions BEFORE First Four pairing, so that seed-table
+  // regions are available when assigning First Four teams their region.
+  for (const [teamName, region] of seedRegionMap) {
+    if (!regionMap.has(teamName)) {
+      regionMap.set(teamName, region);
+    }
+  }
+
   // Handle First Four: for each pair, if one team already has a region from the
-  // bracket, assign the other team to the same region (First Four loser gets
-  // the region of the winner who advanced into the bracket)
+  // bracket or seed table, assign the other team to the same region.
   //
   // First Four tables sometimes use different name variants than bracket tables
   // (e.g., "UNC-Asheville" vs "UNC Asheville"), so we do fuzzy lookup.
@@ -1187,13 +1201,6 @@ async function scrapeRegionFromWikipedia(page, year) {
       } else if (regionB && !regionA) {
         regionMap.set(a, regionB);
       }
-    }
-  }
-
-  // Merge seed-table regions as fallback (for years where bracket tables lack team links)
-  for (const [teamName, region] of seedRegionMap) {
-    if (!regionMap.has(teamName)) {
-      regionMap.set(teamName, region);
     }
   }
 
