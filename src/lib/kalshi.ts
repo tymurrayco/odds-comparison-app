@@ -44,6 +44,7 @@ interface KalshiMarketRaw {
   last_price_dollars: string;
   yes_bid_dollars: string;
   yes_ask_dollars: string;
+  no_ask_dollars: string;
   expected_expiration_time: string | null;
   close_time: string;
   volume_fp: string;
@@ -99,6 +100,40 @@ function priceToML(priceDollars: number): number {
     // Favorite: negative odds
     return Math.round(-(priceDollars / (1 - priceDollars)) * 100);
   }
+}
+
+/** Parse a dollar-price string into a usable probability (0 < p < 1), else null. */
+function validPrice(raw: string | undefined): number | null {
+  const p = parseFloat(raw ?? '');
+  return !isNaN(p) && p > 0 && p < 1 ? p : null;
+}
+
+/**
+ * The price a buyer actually pays for a side is the ASK. The bid is only what
+ * a seller would receive — quoting bids overstated every Kalshi price (the two
+ * sides of a game implied probabilities summing under 1, so Kalshi won "Best"
+ * comparisons at prices no one could get).
+ */
+function buyYesPrice(m: KalshiMarketRaw): number | null {
+  return validPrice(m.yes_ask_dollars) ?? validPrice(m.last_price_dollars);
+}
+
+function buyNoPrice(m: KalshiMarketRaw): number | null {
+  // no_ask == 1 - yes_bid on Kalshi's book; prefer the field, derive as fallback
+  const noAsk = validPrice(m.no_ask_dollars);
+  if (noAsk !== null) return noAsk;
+  const yesBid = validPrice(m.yes_bid_dollars);
+  if (yesBid !== null) return 1 - yesBid;
+  const last = validPrice(m.last_price_dollars);
+  return last !== null ? 1 - last : null;
+}
+
+/** Bid/ask midpoint (fallback: last trade) — the market's consensus probability. */
+function midPrice(m: KalshiMarketRaw): number | null {
+  const bid = validPrice(m.yes_bid_dollars);
+  const ask = validPrice(m.yes_ask_dollars);
+  if (bid !== null && ask !== null) return (bid + ask) / 2;
+  return validPrice(m.last_price_dollars) ?? ask ?? bid;
 }
 
 /**
@@ -172,8 +207,9 @@ function buildGameOdds(marketsByEvent: Map<string, KalshiMarketRaw[]>): KalshiGa
     let commenceTime = '';
 
     for (const m of workingMarkets) {
-      const price = parseFloat(m.yes_bid_dollars) || parseFloat(m.last_price_dollars);
-      if (isNaN(price) || price <= 0 || price >= 1) continue;
+      // Each team's market is priced by what it costs to BUY that team's YES
+      const price = buyYesPrice(m);
+      if (price === null) continue;
 
       const marketSuffix = m.ticker.split('-').pop()?.toLowerCase() || '';
 
@@ -226,9 +262,10 @@ function buildGameOdds(marketsByEvent: Map<string, KalshiMarketRaw[]>): KalshiGa
 /**
  * Build spread odds from spread markets.
  * Each spread event has multiple markets at different strike points for each team.
- * We find the "consensus" spread — the strike where the YES price is closest to 0.50
- * (even money), which represents the market's best estimate of the true spread.
- * Both sides are derived from a single market: YES = favorite covers, NO = underdog covers.
+ * We find the "consensus" spread — the strike where the bid/ask midpoint is closest
+ * to 0.50 (even money), which represents the market's best estimate of the true spread.
+ * Both sides are derived from a single market: YES = favorite covers, NO = underdog
+ * covers — each priced at its own ask (what a buyer pays).
  */
 function buildSpreadOdds(marketsByEvent: Map<string, KalshiMarketRaw[]>): KalshiSpreadOdds[] {
   const spreads: KalshiSpreadOdds[] = [];
@@ -248,7 +285,9 @@ function buildSpreadOdds(marketsByEvent: Map<string, KalshiMarketRaw[]>): Kalshi
     interface SpreadEntry {
       teamName: string;
       strike: number;
-      yesPrice: number;   // Kalshi YES bid price (0-1)
+      buyYes: number;     // cost to buy YES (favorite covers), 0-1
+      buyNo: number;      // cost to buy NO (underdog covers), 0-1
+      mid: number;        // bid/ask midpoint, used for consensus-line selection
       isAway: boolean;
     }
     const entries: SpreadEntry[] = [];
@@ -257,8 +296,10 @@ function buildSpreadOdds(marketsByEvent: Map<string, KalshiMarketRaw[]>): Kalshi
       const strike = m.floor_strike;
       if (strike === undefined || strike === null) continue;
 
-      const yesPrice = parseFloat(m.yes_bid_dollars) || parseFloat(m.last_price_dollars);
-      if (isNaN(yesPrice) || yesPrice <= 0 || yesPrice >= 1) continue;
+      const buyYes = buyYesPrice(m);
+      const buyNo = buyNoPrice(m);
+      const mid = midPrice(m);
+      if (buyYes === null || buyNo === null || mid === null) continue;
 
       const marketSuffix = m.ticker.split('-').pop()?.toLowerCase() || '';
       const teamAbbrev = marketSuffix.replace(/\d+$/, '');
@@ -273,7 +314,7 @@ function buildSpreadOdds(marketsByEvent: Map<string, KalshiMarketRaw[]>): Kalshi
       if (isAway && !awayTeam) awayTeam = teamName;
       if (isHome && !homeTeam) homeTeam = teamName;
 
-      entries.push({ teamName, strike, yesPrice, isAway });
+      entries.push({ teamName, strike, buyYes, buyNo, mid, isAway });
 
       if (!commenceTime && m.expected_expiration_time) {
         const endTime = new Date(m.expected_expiration_time);
@@ -284,13 +325,13 @@ function buildSpreadOdds(marketsByEvent: Map<string, KalshiMarketRaw[]>): Kalshi
 
     if (!awayTeam || !homeTeam) continue;
 
-    // Find the consensus spread: the market whose YES price is closest to 0.50.
-    // "Team wins by over X" at ~0.50 means the market thinks the true spread is ~X.
+    // Find the consensus spread: the market whose bid/ask midpoint is closest to
+    // 0.50. "Team wins by over X" at ~0.50 means the market thinks the true spread is ~X.
     let bestEntry: SpreadEntry | null = null;
     let bestDistFrom50 = Infinity;
 
     for (const e of entries) {
-      const dist = Math.abs(e.yesPrice - 0.50);
+      const dist = Math.abs(e.mid - 0.50);
       if (dist < bestDistFrom50) {
         bestDistFrom50 = dist;
         bestEntry = e;
@@ -301,11 +342,11 @@ function buildSpreadOdds(marketsByEvent: Map<string, KalshiMarketRaw[]>): Kalshi
 
     // Derive both sides from the consensus market:
     // "Team A wins by over X" YES = Team A -X, NO = Team B +X
-    // YES price → favorite odds, (1 - YES price) → underdog odds
+    // Each side priced at its ask — what a buyer pays
     const favoriteSpread = -bestEntry.strike;
     const underdogSpread = bestEntry.strike;
-    const favoriteOdds = priceToML(bestEntry.yesPrice);
-    const underdogOdds = priceToML(1 - bestEntry.yesPrice);
+    const favoriteOdds = priceToML(bestEntry.buyYes);
+    const underdogOdds = priceToML(bestEntry.buyNo);
 
     let homeSpread: number, awaySpread: number, homePrice: number, awayPrice: number;
 
@@ -342,8 +383,8 @@ function buildSpreadOdds(marketsByEvent: Map<string, KalshiMarketRaw[]>): Kalshi
 /**
  * Build totals odds from Kalshi total markets.
  * Each event has ~11 markets at different strike points (floor_strike = line, e.g. 8.5).
- * YES = over the line, NO = under. We pick the "main line" — the strike whose YES price
- * is closest to 0.50 — and derive under price as (1 - yesPrice), matching buildSpreadOdds.
+ * YES = over the line, NO = under. We pick the "main line" — the strike whose bid/ask
+ * midpoint is closest to 0.50 — then price each side at its own ask, matching buildSpreadOdds.
  */
 function buildTotalsOdds(marketsByEvent: Map<string, KalshiMarketRaw[]>): KalshiTotalOdds[] {
   const totals: KalshiTotalOdds[] = [];
@@ -368,7 +409,9 @@ function buildTotalsOdds(marketsByEvent: Map<string, KalshiMarketRaw[]>): Kalshi
 
     interface TotalEntry {
       line: number;
-      yesPrice: number;
+      buyYes: number;     // cost to buy YES (over), 0-1
+      buyNo: number;      // cost to buy NO (under), 0-1
+      mid: number;        // bid/ask midpoint, used for main-line selection
     }
     const entries: TotalEntry[] = [];
     let commenceTime = '';
@@ -377,10 +420,12 @@ function buildTotalsOdds(marketsByEvent: Map<string, KalshiMarketRaw[]>): Kalshi
       const line = m.floor_strike;
       if (line === undefined || line === null) continue;
 
-      const yesPrice = parseFloat(m.yes_bid_dollars) || parseFloat(m.last_price_dollars);
-      if (isNaN(yesPrice) || yesPrice <= 0 || yesPrice >= 1) continue;
+      const buyYes = buyYesPrice(m);
+      const buyNo = buyNoPrice(m);
+      const mid = midPrice(m);
+      if (buyYes === null || buyNo === null || mid === null) continue;
 
-      entries.push({ line, yesPrice });
+      entries.push({ line, buyYes, buyNo, mid });
 
       if (!commenceTime && m.expected_expiration_time) {
         const endTime = new Date(m.expected_expiration_time);
@@ -391,11 +436,11 @@ function buildTotalsOdds(marketsByEvent: Map<string, KalshiMarketRaw[]>): Kalshi
 
     if (entries.length === 0) continue;
 
-    // Main line: YES price closest to 0.50 = market's consensus line
+    // Main line: bid/ask midpoint closest to 0.50 = market's consensus line
     let bestEntry: TotalEntry | null = null;
     let bestDistFrom50 = Infinity;
     for (const e of entries) {
-      const dist = Math.abs(e.yesPrice - 0.50);
+      const dist = Math.abs(e.mid - 0.50);
       if (dist < bestDistFrom50) {
         bestDistFrom50 = dist;
         bestEntry = e;
@@ -409,8 +454,8 @@ function buildTotalsOdds(marketsByEvent: Map<string, KalshiMarketRaw[]>): Kalshi
       awayTeam,
       homeTeam,
       total: bestEntry.line,
-      overPrice: priceToML(bestEntry.yesPrice),
-      underPrice: priceToML(1 - bestEntry.yesPrice),
+      overPrice: priceToML(bestEntry.buyYes),
+      underPrice: priceToML(bestEntry.buyNo),
       commenceTime,
     });
   }
