@@ -29,14 +29,24 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    
-    if (!body.gameId || !body.espnHome || !body.espnAway || !body.gameDate) {
+
+    const requiredStrings = ['gameId', 'espnHome', 'espnAway', 'gameDate'] as const;
+    for (const field of requiredStrings) {
+      if (typeof body?.[field] !== 'string' || !body[field].trim()) {
+        return NextResponse.json(
+          { success: false, error: `${field} must be a non-empty string` },
+          { status: 400 }
+        );
+      }
+    }
+
+    if (body.notes !== undefined && typeof body.notes !== 'string') {
       return NextResponse.json(
-        { success: false, error: 'Missing required fields' },
+        { success: false, error: 'notes must be a string' },
         { status: 400 }
       );
     }
-    
+
     const success = await markGameAsNonD1({
       gameId: body.gameId,
       espnHome: body.espnHome,

@@ -58,14 +58,28 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    if (!body.conference || !body.configJson) {
+    if (typeof body?.conference !== 'string' || !body.conference.trim()) {
       return NextResponse.json(
-        { success: false, error: 'Missing required fields: conference, configJson' },
+        { success: false, error: 'conference must be a non-empty string' },
         { status: 400 }
       );
     }
 
-    const season = body.season || 2026;
+    if (!body.configJson || typeof body.configJson !== 'object' || Array.isArray(body.configJson)) {
+      return NextResponse.json(
+        { success: false, error: 'configJson must be an object' },
+        { status: 400 }
+      );
+    }
+
+    if (body.name !== undefined && typeof body.name !== 'string') {
+      return NextResponse.json(
+        { success: false, error: 'name must be a string' },
+        { status: 400 }
+      );
+    }
+
+    const season = typeof body.season === 'number' && Number.isFinite(body.season) ? body.season : 2026;
     const supabase = getSupabaseClient();
 
     // Check if bracket already exists for this conference + season

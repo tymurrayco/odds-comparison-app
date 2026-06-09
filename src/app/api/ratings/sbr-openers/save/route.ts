@@ -19,14 +19,50 @@ interface SaveOpenerGame {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { date, games } = body as { date: string; games: SaveOpenerGame[] };
+    const { date, games } = body as { date: unknown; games: unknown };
 
-    if (!date || !games || games.length === 0) {
+    if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       return NextResponse.json(
-        { success: false, error: 'Missing date or games' },
+        { success: false, error: 'date must be a YYYY-MM-DD string' },
         { status: 400 }
       );
     }
+
+    if (!Array.isArray(games) || games.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'games must be a non-empty array' },
+        { status: 400 }
+      );
+    }
+
+    for (let i = 0; i < games.length; i++) {
+      const g = games[i] as Record<string, unknown>;
+      const strFields = ['sbrAway', 'sbrHome', 'kenpomAway', 'kenpomHome'] as const;
+      for (const f of strFields) {
+        if (typeof g?.[f] !== 'string' || !(g[f] as string).trim()) {
+          return NextResponse.json(
+            { success: false, error: `games[${i}].${f} must be a non-empty string` },
+            { status: 400 }
+          );
+        }
+      }
+      if (typeof g.openerSpread !== 'number' || !Number.isFinite(g.openerSpread)) {
+        return NextResponse.json(
+          { success: false, error: `games[${i}].openerSpread must be a finite number` },
+          { status: 400 }
+        );
+      }
+      for (const f of ['awayScore', 'homeScore'] as const) {
+        if (g[f] !== null && (typeof g[f] !== 'number' || !Number.isFinite(g[f] as number))) {
+          return NextResponse.json(
+            { success: false, error: `games[${i}].${f} must be a finite number or null` },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
+    const typedGames = games as SaveOpenerGame[];
 
     const supabase = getSupabaseClient();
 
@@ -60,7 +96,7 @@ export async function POST(request: NextRequest) {
     const closingLinesSkippedGames: string[] = [];
     const errors: string[] = [];
 
-    for (const game of games) {
+    for (const game of typedGames) {
       const { kenpomAway, kenpomHome, openerSpread, awayScore, homeScore } = game;
       const gameLabel = `${kenpomAway} @ ${kenpomHome}`;
 
@@ -166,7 +202,7 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(`[SBR Save Openers] Date: ${date} | Range: ${startISO} to ${endISO}`);
-    console.log(`[SBR Save Openers] Games sent: ${games.length}`);
+    console.log(`[SBR Save Openers] Games sent: ${typedGames.length}`);
     console.log(`[SBR Save Openers] game_adjustments: ${gameAdjUpdated} updated, ${gameAdjSkipped} skipped`);
     if (gameAdjSkippedGames.length > 0) {
       console.log(`[SBR Save Openers] game_adjustments skipped:`, gameAdjSkippedGames);
@@ -185,7 +221,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       date,
-      gamesSent: games.length,
+      gamesSent: typedGames.length,
       gameAdjustments: {
         updated: gameAdjUpdated,
         skipped: gameAdjSkipped,
