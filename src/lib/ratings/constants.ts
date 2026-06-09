@@ -12,7 +12,7 @@ import { RatingsConfig, ClosingLineSource } from './types';
 
 export const DEFAULT_RATINGS_CONFIG: RatingsConfig = {
   hca: 2.5,                          // Home court advantage in points
-  closingSource: 'pinnacle',         // Default to Pinnacle (sharp book)
+  closingSource: 'us_average',       // Average of US books (DK, FD, BetMGM, BetRivers)
   closingTimeMinutes: 5,             // Pull closing line 5 min before tip
   season: 2026,                      // 2025-26 season
   previousSeason: 2025,              // 2024-25 season for initial ratings
