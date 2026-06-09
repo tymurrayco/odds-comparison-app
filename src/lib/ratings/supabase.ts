@@ -278,15 +278,20 @@ export async function getProcessedGameIds(season: number = 2026): Promise<Set<st
   let hasMore = true;
 
   while (hasMore) {
+    // game_id order gives pages a stable, unique sort — without it Postgres
+    // row order is undefined and rows can repeat or fall between pages.
     const { data, error } = await supabase
       .from('ncaab_game_adjustments')
       .select('game_id')
       .eq('season', season)
+      .order('game_id', { ascending: true })
       .range(offset, offset + pageSize - 1);
 
     if (error) {
+      // Never return a partial set: games missing from it look unprocessed
+      // and would have their adjustments applied a second time.
       console.error('[Supabase] Error loading processed games:', error);
-      break;
+      throw new Error(`Failed to load processed game ids (offset ${offset}): ${error.message}`);
     }
 
     if (!data || data.length === 0) {
@@ -401,16 +406,21 @@ export async function loadAdjustments(season: number = 2026): Promise<GameAdjust
   let hasMore = true;
   
   while (hasMore) {
+    // game_id tiebreaker: many games share the same tip time, so game_date
+    // alone leaves page boundaries unstable (rows can repeat or be skipped).
     const { data, error } = await supabase
       .from('ncaab_game_adjustments')
       .select('*')
       .eq('season', season)
       .order('game_date', { ascending: true })
+      .order('game_id', { ascending: true })
       .range(offset, offset + pageSize - 1);
-    
+
     if (error) {
+      // Never return a truncated ledger: recalculation replays this list from
+      // scratch and SAVES the result, so partial history = corrupted ratings.
       console.error('[Supabase] Error loading adjustments:', error);
-      break;
+      throw new Error(`Failed to load adjustments (offset ${offset}): ${error.message}`);
     }
     
     if (!data || data.length === 0) {

@@ -235,18 +235,41 @@ export async function saveRating(rating: TeamRating, season: number = 2026): Pro
 
 export async function getProcessedGameIds(season: number = 2026): Promise<Set<string>> {
   const supabase = getSupabaseClient();
+  const allIds: string[] = [];
+  const pageSize = 1000;
+  let offset = 0;
+  let hasMore = true;
 
-  const { data, error } = await supabase
-    .from('lacrosse_game_adjustments')
-    .select('game_id')
-    .eq('season', season);
+  while (hasMore) {
+    // Paginated (PostgREST caps unpaged reads at 1000 rows) with a unique sort
+    // so pages can't overlap or skip rows.
+    const { data, error } = await supabase
+      .from('lacrosse_game_adjustments')
+      .select('game_id')
+      .eq('season', season)
+      .order('game_id', { ascending: true })
+      .range(offset, offset + pageSize - 1);
 
-  if (error) {
-    console.error('[Lacrosse Supabase] Error loading processed games:', error);
-    return new Set();
+    if (error) {
+      // Never return a partial (or empty) set: games missing from it look
+      // unprocessed and would have their adjustments applied a second time.
+      console.error('[Lacrosse Supabase] Error loading processed games:', error);
+      throw new Error(`Failed to load processed game ids (offset ${offset}): ${error.message}`);
+    }
+
+    if (!data || data.length === 0) {
+      hasMore = false;
+    } else {
+      allIds.push(...data.map(row => row.game_id));
+      if (data.length < pageSize) {
+        hasMore = false;
+      } else {
+        offset += pageSize;
+      }
+    }
   }
 
-  return new Set((data || []).map(row => row.game_id));
+  return new Set(allIds);
 }
 
 export async function saveGameAdjustment(adjustment: GameAdjustment, season: number = 2026): Promise<void> {
@@ -290,16 +313,21 @@ export async function loadAdjustments(season: number = 2026): Promise<GameAdjust
   let hasMore = true;
 
   while (hasMore) {
+    // game_id tiebreaker: games share tip times, so game_date alone leaves
+    // page boundaries unstable (rows can repeat or be skipped).
     const { data, error } = await supabase
       .from('lacrosse_game_adjustments')
       .select('*')
       .eq('season', season)
       .order('game_date', { ascending: true })
+      .order('game_id', { ascending: true })
       .range(offset, offset + pageSize - 1);
 
     if (error) {
+      // Never return a truncated ledger: recalculation replays this list from
+      // scratch and SAVES the result, so partial history = corrupted ratings.
       console.error('[Lacrosse Supabase] Error loading adjustments:', error);
-      break;
+      throw new Error(`Failed to load adjustments (offset ${offset}): ${error.message}`);
     }
 
     if (!data || data.length === 0) {
