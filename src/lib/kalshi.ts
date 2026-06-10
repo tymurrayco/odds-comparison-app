@@ -33,6 +33,18 @@ const SPORT_TO_KALSHI_TOTAL: Record<string, string[]> = {
   'baseball_mlb': ['KXMLBTOTAL'],
 };
 
+// Maps the-odds-api sport keys to Kalshi championship (futures) series.
+// Each series has one event per season with one market per team.
+const SPORT_TO_KALSHI_CHAMPIONSHIP: Record<string, string> = {
+  'baseball_mlb': 'KXMLB',            // World Series winner
+  'basketball_nba': 'KXNBA',          // NBA champion
+  'icehockey_nhl': 'KXNHL',           // Stanley Cup winner
+  'americanfootball_nfl': 'KXSB',     // Super Bowl winner
+  'americanfootball_ncaaf': 'KXNCAAF',// CFB national champion
+  'basketball_ncaab': 'KXMARMAD',     // March Madness champion
+  'soccer_epl': 'KXPREMIERLEAGUE',    // EPL champion
+};
+
 // Kalshi market as returned from the API (fields we care about)
 interface KalshiMarketRaw {
   ticker: string;
@@ -73,6 +85,12 @@ export interface KalshiSpreadOdds {
   awayPrice: number;      // American odds for the away spread
   homePrice: number;      // American odds for the home spread
   commenceTime: string;
+}
+
+// A championship futures price for one team
+export interface KalshiFuturesOdds {
+  team: string;           // Kalshi's team label (often short, e.g. "Los Angeles D")
+  odds: number;           // American odds, fee-inclusive
 }
 
 // A resolved total with over/under
@@ -560,6 +578,44 @@ async function fetchEventMarkets(seriesTickers: string[]): Promise<Map<string, K
     }
   }
   return combined;
+}
+
+/**
+ * Fetch championship (futures) odds for a sport from Kalshi.
+ * Returns one fee-inclusive American price per team, or [] when the sport has
+ * no championship series / no open priced event.
+ */
+export async function fetchKalshiFutures(sportKey: string): Promise<KalshiFuturesOdds[]> {
+  const series = SPORT_TO_KALSHI_CHAMPIONSHIP[sportKey];
+  if (!series) return [];
+
+  const eventMap = await fetchSeriesEvents(series);
+  if (eventMap.size === 0) return [];
+
+  // A series can have multiple seasons open at once (e.g. KXMLB-26 mid-season
+  // and KXMLB-27 already listed); take the event closing soonest — the
+  // current/nearest season.
+  let bestTicker: string | null = null;
+  let bestClose = Infinity;
+  for (const [ticker, markets] of eventMap) {
+    const priced = markets.filter(m => m.status === 'active' && buyYesPrice(m) !== null);
+    if (priced.length < 2) continue;
+    const minClose = Math.min(...priced.map(m => new Date(m.close_time).getTime()));
+    if (minClose < bestClose) {
+      bestClose = minClose;
+      bestTicker = ticker;
+    }
+  }
+  if (!bestTicker) return [];
+
+  const results: KalshiFuturesOdds[] = [];
+  for (const m of eventMap.get(bestTicker)!) {
+    if (m.status !== 'active' || !m.yes_sub_title) continue;
+    const price = buyYesPrice(m);
+    if (price === null) continue;
+    results.push({ team: m.yes_sub_title, odds: costToML(price) });
+  }
+  return results;
 }
 
 /**

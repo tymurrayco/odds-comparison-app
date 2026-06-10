@@ -362,15 +362,58 @@ function mergeKalshiOdds(
   }
 }
 
+// Kalshi futures team labels that don't reduce to a prefix/initials of the
+// Odds API full name
+const KALSHI_FUTURES_NAME_MAP: Record<string, string> = {
+  "A's": 'Athletics',
+};
+
+const normalizeFuturesName = (name: string): string =>
+  name.toLowerCase().replace(/[.'’]/g, '').replace(/\s+/g, ' ').trim();
+
+/**
+ * Match a Kalshi team label (often a short city form like "Los Angeles D" or
+ * "Chicago WS") against Odds API full names ("Los Angeles Dodgers").
+ * Returns the matched full name only when exactly one candidate matches —
+ * ambiguity means no Kalshi price rather than a wrong one.
+ */
+function matchKalshiFuturesTeam(kalshiName: string, fullNames: string[]): string | null {
+  const k = normalizeFuturesName(KALSHI_FUTURES_NAME_MAP[kalshiName] ?? kalshiName);
+  if (!k) return null;
+
+  const matches = fullNames.filter(full => {
+    const f = normalizeFuturesName(full);
+    if (f === k || f.startsWith(k + ' ')) return true;
+
+    // "Chicago WS" / "New York Y" style: leading tokens match the full name,
+    // final token is the initials (or a prefix) of the remaining words
+    const kTokens = k.split(' ');
+    const fTokens = f.split(' ');
+    if (kTokens.length < 2 || fTokens.length < kTokens.length) return false;
+    const head = kTokens.slice(0, -1).join(' ');
+    if (head !== fTokens.slice(0, kTokens.length - 1).join(' ')) return false;
+    const last = kTokens[kTokens.length - 1];
+    const rest = fTokens.slice(kTokens.length - 1);
+    return rest.map(w => w[0]).join('') === last || rest[0].startsWith(last);
+  });
+
+  return matches.length === 1 ? matches[0] : null;
+}
+
 /**
  * Fetch futures odds for a specific sport
- * 
+ *
  * @param sport - The sport key, e.g. 'basketball_nba'
  * @returns Object with array of futures market objects and API requests remaining
  */
 export async function fetchFutures(sport: string): Promise<ApiResponse<FuturesMarket[]>> {
   try {
-    const response = await fetch(`/api/futures?sport=${sport}`);
+    // Kalshi championship prices fetched alongside the sportsbook outrights;
+    // a Kalshi failure is non-fatal (sportsbook columns render either way)
+    const [response, kalshiResponse] = await Promise.all([
+      fetch(`/api/futures?sport=${sport}`),
+      fetch(`/api/kalshi-odds?sport=${sport}&futures=true`).catch(() => null),
+    ]);
     if (!response.ok) {
       throw new Error(`Error fetching futures: ${response.statusText}`);
     }
@@ -412,6 +455,27 @@ export async function fetchFutures(sport: string): Promise<ApiResponse<FuturesMa
       });
     });
     
+    // Merge Kalshi championship prices (fee-inclusive) into each market's teams
+    try {
+      if (kalshiResponse?.ok) {
+        const kalshiData = await kalshiResponse.json();
+        const kalshiTeams: { team: string; odds: number }[] = kalshiData.futures || [];
+        for (const market of Object.values(marketsByTitle)) {
+          const fullNames = market.teams.map(t => t.team);
+          for (const k of kalshiTeams) {
+            if (!k.odds) continue;
+            const matched = matchKalshiFuturesTeam(k.team, fullNames);
+            if (matched) {
+              const entry = market.teams.find(t => t.team === matched);
+              if (entry) entry.odds['Kalshi'] = k.odds;
+            }
+          }
+        }
+      }
+    } catch (kalshiError) {
+      console.error('Error merging Kalshi futures:', kalshiError);
+    }
+
     // Convert the object to an array and sort teams by likelihood to win (most likely first)
     const markets = Object.values(marketsByTitle);
     
