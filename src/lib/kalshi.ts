@@ -91,6 +91,7 @@ export interface KalshiSpreadOdds {
 export interface KalshiFuturesOdds {
   team: string;           // Kalshi's team label (often short, e.g. "Los Angeles D")
   odds: number;           // American odds, fee-inclusive
+  link: string;           // Kalshi market page for the championship event
 }
 
 // A resolved total with over/under
@@ -608,12 +609,15 @@ export async function fetchKalshiFutures(sportKey: string): Promise<KalshiFuture
   }
   if (!bestTicker) return [];
 
+  // Same event-ticker URL pattern the game-odds deep links use
+  const link = `https://kalshi.com/markets/${bestTicker}`;
+
   const results: KalshiFuturesOdds[] = [];
   for (const m of eventMap.get(bestTicker)!) {
     if (m.status !== 'active' || !m.yes_sub_title) continue;
     const price = buyYesPrice(m);
     if (price === null) continue;
-    results.push({ team: m.yes_sub_title, odds: costToML(price) });
+    results.push({ team: m.yes_sub_title, odds: costToML(price), link });
   }
   return results;
 }

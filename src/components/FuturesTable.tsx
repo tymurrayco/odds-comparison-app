@@ -142,6 +142,9 @@ export default function FuturesTable({
   league = 'basketball_nba'
 }: FuturesTableProps) {
   const pressTimer = useRef<NodeJS.Timeout | null>(null);
+  // Set when a press-and-hold completes (bet created), so the click that fires
+  // on release doesn't also navigate to the bookmaker page
+  const holdCompleted = useRef(false);
   const [holdingKey, setHoldingKey] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
@@ -249,8 +252,9 @@ export default function FuturesTable({
     cellKey: string
   ) => {
     setHoldingKey(cellKey);
-    
+
     pressTimer.current = setTimeout(async () => {
+      holdCompleted.current = true;
       // Calculate stake for 1 unit to-win
       const stake = calculateStakeForOneUnit(odds);
       
@@ -298,6 +302,19 @@ export default function FuturesTable({
       clearTimeout(pressTimer.current);
     }
     setHoldingKey(null);
+  };
+
+  // Quick click opens the bookmaker's market page (currently Kalshi only);
+  // press-and-hold still creates a tracked bet without navigating
+  const handleCellClick = (links: { [bookmaker: string]: string } | undefined, book: string) => {
+    if (holdCompleted.current) {
+      holdCompleted.current = false;
+      return;
+    }
+    const link = links?.[book];
+    if (link) {
+      window.open(link, '_blank', 'noopener,noreferrer');
+    }
   };
 
   // Function to get last name from full name
@@ -590,6 +607,8 @@ export default function FuturesTable({
                         onMouseDown={() => hasOdds && handlePressStart(item.team, item.odds[book], book, cellKey)}
                         onMouseUp={handlePressEnd}
                         onMouseLeave={handlePressEnd}
+                        onClick={() => hasOdds && handleCellClick(item.links, book)}
+                        title={hasOdds && item.links?.[book] ? `Click to view on ${book} — hold to track bet` : undefined}
                       >
                         {hasOdds ? (
                           <div className={`text-xs md:text-sm font-medium ${

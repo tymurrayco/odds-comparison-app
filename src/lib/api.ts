@@ -45,6 +45,8 @@ export interface FuturesMarket {
 export interface FuturesTeam {
   team: string;
   odds: { [bookmaker: string]: number };
+  // Click-through URLs to the bookmaker's market page (currently Kalshi only)
+  links?: { [bookmaker: string]: string };
 }
 
 // Props types
@@ -459,7 +461,7 @@ export async function fetchFutures(sport: string): Promise<ApiResponse<FuturesMa
     try {
       if (kalshiResponse?.ok) {
         const kalshiData = await kalshiResponse.json();
-        const kalshiTeams: { team: string; odds: number }[] = kalshiData.futures || [];
+        const kalshiTeams: { team: string; odds: number; link?: string }[] = kalshiData.futures || [];
         for (const market of Object.values(marketsByTitle)) {
           const fullNames = market.teams.map(t => t.team);
           for (const k of kalshiTeams) {
@@ -467,7 +469,10 @@ export async function fetchFutures(sport: string): Promise<ApiResponse<FuturesMa
             const matched = matchKalshiFuturesTeam(k.team, fullNames);
             if (matched) {
               const entry = market.teams.find(t => t.team === matched);
-              if (entry) entry.odds['Kalshi'] = k.odds;
+              if (entry) {
+                entry.odds['Kalshi'] = k.odds;
+                if (k.link) entry.links = { ...(entry.links ?? {}), Kalshi: k.link };
+              }
             }
           }
         }
