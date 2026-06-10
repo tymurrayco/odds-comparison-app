@@ -21,7 +21,8 @@ export async function GET(request: Request) {
     'basketball_ncaab': 'basketball_ncaab_championship_winner',
     'americanfootball_ncaaf': 'americanfootball_ncaaf_championship_winner',
     'soccer_epl': 'soccer_epl_winner',
-    'golf_masters_tournament_winner': 'golf_masters_tournament_winner' // Masters tournament
+    'golf_masters_tournament_winner': 'golf_masters_tournament_winner', // Masters tournament
+    'golf_us_open_winner': 'golf_us_open_winner' // US Open golf
   };
 
   const championshipKey = sportToChampionship[sport];

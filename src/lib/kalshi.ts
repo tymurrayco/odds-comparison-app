@@ -47,6 +47,7 @@ const KALSHI_SERIES_SLUGS: Record<string, string> = {
   'KXNCAAF': 'ncaaf-championship',
   'KXWNBA': 'wnba-championship',
   'KXPREMIERLEAGUE': 'premier-league',
+  'KXPGATOUR': 'pga-tour',
   // Game winners
   'KXMLBGAME': 'professional-baseball-game',
   'KXNBAGAME': 'professional-basketball-game',
@@ -91,6 +92,13 @@ const SPORT_TO_KALSHI_CHAMPIONSHIP: Record<string, string> = {
   'basketball_ncaab': 'KXMARMAD',     // March Madness champion
   'basketball_wnba': 'KXWNBA',        // WNBA champion
   'soccer_epl': 'KXPREMIERLEAGUE',    // EPL champion
+  'golf_us_open_winner': 'KXPGATOUR', // US Open (see event filter below)
+};
+
+// Some series host many tournaments — KXPGATOUR has an event per PGA stop, so
+// "closing soonest" would grab this week's regular event. Restrict by ticker.
+const KALSHI_CHAMPIONSHIP_EVENT_FILTER: Record<string, RegExp> = {
+  'golf_us_open_winner': /-USO\d+$/,
 };
 
 // Kalshi market as returned from the API (fields we care about)
@@ -644,9 +652,11 @@ export async function fetchKalshiFutures(sportKey: string): Promise<KalshiFuture
   // A series can have multiple seasons open at once (e.g. KXMLB-26 mid-season
   // and KXMLB-27 already listed); take the event closing soonest — the
   // current/nearest season.
+  const eventFilter = KALSHI_CHAMPIONSHIP_EVENT_FILTER[sportKey];
   let bestTicker: string | null = null;
   let bestClose = Infinity;
   for (const [ticker, markets] of eventMap) {
+    if (eventFilter && !eventFilter.test(ticker)) continue;
     const priced = markets.filter(m => m.status === 'active' && buyYesPrice(m) !== null);
     if (priced.length < 2) continue;
     const minClose = Math.min(...priced.map(m => new Date(m.close_time).getTime()));

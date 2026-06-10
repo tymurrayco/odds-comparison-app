@@ -88,6 +88,9 @@ function HomeContent() {
   
   // Define the Masters league ID correctly
   const MASTERS_LEAGUE_ID = 'golf_masters_tournament_winner';
+  // Golf tournaments are futures-only — they have no game-odds view
+  const FUTURES_ONLY_LEAGUES = [MASTERS_LEAGUE_ID, 'golf_us_open_winner'];
+  const isFuturesOnly = (id: string) => FUTURES_ONLY_LEAGUES.includes(id);
 
   // Check if current league supports props
   const supportsProps = PROPS_SUPPORTED_LEAGUES.includes(activeLeague);
@@ -176,9 +179,9 @@ function HomeContent() {
     }
   }, [highlightedGameId, loading, games, router]);
 
-  // Force futures view when Masters is selected, reset props when league changes
+  // Force futures view for futures-only leagues, reset props when league changes
   useEffect(() => {
-    if (activeLeague === MASTERS_LEAGUE_ID) {
+    if (isFuturesOnly(activeLeague)) {
       setActiveView('futures');
     }
     // If switching to a league that doesn't support props while on props view, switch to games
@@ -276,9 +279,9 @@ function HomeContent() {
     try {
       const now = Date.now();
       const activeLeagueIds = LEAGUES
-        .filter(l => l.isActive && l.id !== MASTERS_LEAGUE_ID)
+        .filter(l => l.isActive && !isFuturesOnly(l.id))
         .map(l => l.id);
-      
+
       const leaguesToFetch = activeLeagueIds.filter(leagueId => !isValidCache(gamesCache, leagueId));
       
       if (leaguesToFetch.length === 0) {
@@ -408,8 +411,8 @@ function HomeContent() {
     
     const now = Date.now();
     
-    const needsGames = activeView === 'games' && activeLeague !== MASTERS_LEAGUE_ID;
-    const needsFutures = activeView === 'futures' || activeLeague === MASTERS_LEAGUE_ID;
+    const needsGames = activeView === 'games' && !isFuturesOnly(activeLeague);
+    const needsFutures = activeView === 'futures' || isFuturesOnly(activeLeague);
     
     try {
       let gamesLoaded = false;
@@ -486,9 +489,9 @@ function HomeContent() {
       try {
         const now = Date.now();
         const activeLeagueIds = LEAGUES
-          .filter(l => l.isActive && l.id !== MASTERS_LEAGUE_ID)
+          .filter(l => l.isActive && !isFuturesOnly(l.id))
           .map(l => l.id);
-        
+
         const results = await Promise.all(
           activeLeagueIds.map(async (leagueId) => {
             try {
@@ -567,7 +570,7 @@ function HomeContent() {
     try {
       const now = Date.now();
       
-      if (activeView === 'games' && activeLeague !== MASTERS_LEAGUE_ID) {
+      if (activeView === 'games' && !isFuturesOnly(activeLeague)) {
         const response = await fetchOdds(activeLeague);
         setGames(response.data);
         setApiRequestsRemaining(response.requestsRemaining);
@@ -613,7 +616,7 @@ function HomeContent() {
   }, [loadData, activeView, activeLeague]);
 
   // Force the effective view for rendering
-  const effectiveView: 'games' | 'futures' | 'props' | 'mybets' = activeLeague === MASTERS_LEAGUE_ID ? 'futures' : activeView;
+  const effectiveView: 'games' | 'futures' | 'props' | 'mybets' = isFuturesOnly(activeLeague) ? 'futures' : activeView;
 
   // Filter games based on team name AND conferences
   const filteredGames = useMemo(() => {
@@ -955,7 +958,7 @@ function HomeContent() {
 
             {/* View Toggle Tabs - Only show when not in favorites */}
             {activeLeague !== 'favorites' && (
-              activeLeague === MASTERS_LEAGUE_ID ? (
+              isFuturesOnly(activeLeague) ? (
                 <div className="bg-white rounded-lg shadow p-2 mb-6 flex justify-center">
                   <div className="inline-flex rounded-md shadow-sm">
                     <button type="button" className="px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white border border-gray-200">
@@ -1287,7 +1290,7 @@ function HomeContent() {
                         key={market.id} 
                         market={market} 
                         compactMode={false}
-                        isMasters={activeLeague === MASTERS_LEAGUE_ID}
+                        isMasters={isFuturesOnly(activeLeague)}
                         selectedBookmakers={selectedBookmakers}
                         league={activeLeague}
                       />

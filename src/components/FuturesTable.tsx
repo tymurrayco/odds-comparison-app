@@ -51,7 +51,8 @@ function getLeagueDisplayName(league: string): string {
     'soccer_usa_mls': 'MLS',
     'soccer_epl': 'EPL',
     'basketball_wnba': 'WNBA',
-    'golf_masters_tournament_winner': 'PGA'
+    'golf_masters_tournament_winner': 'PGA',
+    'golf_us_open_winner': 'PGA'
   };
   return leagueMap[league] || league.toUpperCase();
 }
@@ -66,7 +67,8 @@ function getMarketDescription(league: string): string {
     'icehockey_nhl': 'Stanley Cup',
     'baseball_mlb': 'World Series',
     'soccer_epl': 'EPL',
-    'golf_masters_tournament_winner': 'Masters'
+    'golf_masters_tournament_winner': 'Masters',
+    'golf_us_open_winner': 'US Open'
   };
   
   const leagueName = leagueNames[league] || getLeagueDisplayName(league);

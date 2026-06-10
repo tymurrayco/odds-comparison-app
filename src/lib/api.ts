@@ -140,6 +140,7 @@ export const LEAGUES = [
   { id: 'basketball_nba', name: 'NBA', icon: '/league-icons/nba.png', isActive: true },
   { id: 'baseball_ncaa', name: 'CWS', icon: '/league-icons/cws.png', isActive: false }, // Hidden - out of season
   { id: 'lacrosse_ncaa', name: 'NCAAL', icon: '/league-icons/ncaal.png', isActive: false }, // Hidden - out of season
+  { id: 'golf_us_open_winner', name: 'US Open', icon: '/league-icons/usopen.png', isActive: true }, // Futures-only golf tab
 ];
 
 // Leagues that support props
