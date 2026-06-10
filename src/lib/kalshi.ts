@@ -87,19 +87,36 @@ export interface KalshiTotalOdds {
   commenceTime: string;
 }
 
+// Kalshi charges a trading fee of 7% x price x (1 - price) per contract.
+// Their own sports UI quotes fee-INCLUSIVE odds, and sportsbook odds have no
+// separate fee, so we must include it for an apples-to-apples comparison
+// (e.g. A's +1.5 at 59c ask is -144 raw but -155 once the fee is in).
+const KALSHI_FEE_RATE = 0.07;
+
+function effectiveCost(priceDollars: number): number {
+  return priceDollars + KALSHI_FEE_RATE * priceDollars * (1 - priceDollars);
+}
+
 /**
  * Convert a Kalshi YES price (0.00-1.00 dollars) to American moneyline.
- * Ported from kalshi-sportsbot/odds_fetcher.py price_to_ml()
+ * Ported from kalshi-sportsbot/odds_fetcher.py price_to_ml().
+ * Rounds conservatively (the direction that's worse for the bettor),
+ * matching how Kalshi's UI displays odds.
  */
 function priceToML(priceDollars: number): number {
   if (priceDollars <= 0 || priceDollars >= 1) return 0;
   if (priceDollars <= 0.5) {
-    // Underdog: positive odds
-    return Math.round((1 / priceDollars - 1) * 100);
+    // Underdog: positive odds, round down
+    return Math.floor((1 / priceDollars - 1) * 100);
   } else {
-    // Favorite: negative odds
-    return Math.round(-(priceDollars / (1 - priceDollars)) * 100);
+    // Favorite: negative odds, round magnitude up
+    return -Math.ceil((priceDollars / (1 - priceDollars)) * 100);
   }
+}
+
+/** Cost of buying a side (incl. Kalshi's fee) expressed as American odds. */
+function costToML(priceDollars: number): number {
+  return priceToML(effectiveCost(priceDollars));
 }
 
 /** Parse a dollar-price string into a usable probability (0 < p < 1), else null. */
@@ -250,8 +267,8 @@ function buildGameOdds(marketsByEvent: Map<string, KalshiMarketRaw[]>): KalshiGa
       title: workingMarkets[0].title,
       awayTeam: awayName,
       homeTeam: homeName,
-      awayOdds: priceToML(awayPrice),
-      homeOdds: priceToML(homePrice),
+      awayOdds: costToML(awayPrice),
+      homeOdds: costToML(homePrice),
       commenceTime,
     });
   }
@@ -345,8 +362,8 @@ function buildSpreadOdds(marketsByEvent: Map<string, KalshiMarketRaw[]>): Kalshi
     // Each side priced at its ask — what a buyer pays
     const favoriteSpread = -bestEntry.strike;
     const underdogSpread = bestEntry.strike;
-    const favoriteOdds = priceToML(bestEntry.buyYes);
-    const underdogOdds = priceToML(bestEntry.buyNo);
+    const favoriteOdds = costToML(bestEntry.buyYes);
+    const underdogOdds = costToML(bestEntry.buyNo);
 
     let homeSpread: number, awaySpread: number, homePrice: number, awayPrice: number;
 
@@ -454,8 +471,8 @@ function buildTotalsOdds(marketsByEvent: Map<string, KalshiMarketRaw[]>): Kalshi
       awayTeam,
       homeTeam,
       total: bestEntry.line,
-      overPrice: priceToML(bestEntry.buyYes),
-      underPrice: priceToML(bestEntry.buyNo),
+      overPrice: costToML(bestEntry.buyYes),
+      underPrice: costToML(bestEntry.buyNo),
       commenceTime,
     });
   }
