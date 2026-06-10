@@ -134,11 +134,11 @@ export const LEAGUES = [
   { id: 'basketball_ncaab', name: 'NCAAB', icon: '/league-icons/ncaab.png', isActive: true },
   { id: 'soccer_epl', name: 'EPL', icon: '/league-icons/epl.png', isActive: true },
   { id: 'soccer_usa_mls', name: 'MLS', icon: '/league-icons/mls.png', isActive: false },
-  { id: 'basketball_wnba', name: 'WNBA', icon: '/league-icons/wnba.png', isActive: false },
+  { id: 'basketball_wnba', name: 'WNBA', icon: '/league-icons/wnba.png', isActive: true },
   { id: 'icehockey_nhl', name: 'NHL', icon: '/league-icons/nhl.png', isActive: true },
   { id: 'basketball_nba', name: 'NBA', icon: '/league-icons/nba.png', isActive: true },
   { id: 'baseball_ncaa', name: 'CWS', icon: '/league-icons/cws.png', isActive: false }, // Hidden - out of season
-  { id: 'lacrosse_ncaa', name: 'NCAAL', icon: '/league-icons/ncaal.png', isActive: true }, // Hidden - out of season
+  { id: 'lacrosse_ncaa', name: 'NCAAL', icon: '/league-icons/ncaal.png', isActive: false }, // Hidden - out of season
 ];
 
 // Leagues that support props

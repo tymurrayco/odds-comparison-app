@@ -42,6 +42,7 @@ const SPORT_TO_KALSHI_CHAMPIONSHIP: Record<string, string> = {
   'americanfootball_nfl': 'KXSB',     // Super Bowl winner
   'americanfootball_ncaaf': 'KXNCAAF',// CFB national champion
   'basketball_ncaab': 'KXMARMAD',     // March Madness champion
+  'basketball_wnba': 'KXWNBA',        // WNBA champion
   'soccer_epl': 'KXPREMIERLEAGUE',    // EPL champion
 };
 
