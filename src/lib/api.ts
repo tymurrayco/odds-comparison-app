@@ -463,16 +463,32 @@ export async function fetchFutures(sport: string): Promise<ApiResponse<FuturesMa
       if (kalshiResponse?.ok) {
         const kalshiData = await kalshiResponse.json();
         const kalshiTeams: { team: string; odds: number; link?: string }[] = kalshiData.futures || [];
-        for (const market of Object.values(marketsByTitle)) {
-          const fullNames = market.teams.map(t => t.team);
-          for (const k of kalshiTeams) {
-            if (!k.odds) continue;
-            const matched = matchKalshiFuturesTeam(k.team, fullNames);
-            if (matched) {
-              const entry = market.teams.find(t => t.team === matched);
-              if (entry) {
-                entry.odds['Kalshi'] = k.odds;
-                if (k.link) entry.links = { ...(entry.links ?? {}), Kalshi: k.link };
+        if (Object.keys(marketsByTitle).length === 0 && kalshiTeams.length > 0) {
+          // The Odds API has no outright market for this sport (e.g. WNBA):
+          // show a Kalshi-only market rather than an empty tab
+          marketsByTitle['outrights'] = {
+            id: `kalshi-${sport}-outrights`,
+            title: 'outrights',
+            teams: kalshiTeams
+              .filter(k => k.odds)
+              .map(k => ({
+                team: k.team,
+                odds: { Kalshi: k.odds },
+                ...(k.link ? { links: { Kalshi: k.link } } : {}),
+              })),
+          };
+        } else {
+          for (const market of Object.values(marketsByTitle)) {
+            const fullNames = market.teams.map(t => t.team);
+            for (const k of kalshiTeams) {
+              if (!k.odds) continue;
+              const matched = matchKalshiFuturesTeam(k.team, fullNames);
+              if (matched) {
+                const entry = market.teams.find(t => t.team === matched);
+                if (entry) {
+                  entry.odds['Kalshi'] = k.odds;
+                  if (k.link) entry.links = { ...(entry.links ?? {}), Kalshi: k.link };
+                }
               }
             }
           }

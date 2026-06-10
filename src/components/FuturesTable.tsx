@@ -615,7 +615,8 @@ export default function FuturesTable({
                             bestOddsBooks.includes(book) ? 'text-green-600 font-bold' : 'text-gray-900'
                           } ${isThisCellHolding ? 'opacity-50' : ''}`}>
                             {formatOdds(item.odds[book])}
-                            {bestOddsBooks.includes(book) && (
+                            {/* Best badge only means something when multiple books price the team */}
+                            {bestOddsBooks.includes(book) && Object.keys(item.odds).length > 1 && (
                               <span className="ml-1 inline-flex items-center px-1 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                                 Best
                               </span>
