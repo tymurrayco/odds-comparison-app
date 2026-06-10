@@ -33,6 +33,53 @@ const SPORT_TO_KALSHI_TOTAL: Record<string, string[]> = {
   'baseball_mlb': ['KXMLBTOTAL'],
 };
 
+// Kalshi web URLs are /markets/{series}/{slug}/{event} — the slug is the
+// kebab-cased series title (apostrophes stripped). Bare /markets/{event} URLs
+// do NOT resolve. Slugs derived from the series API's title field; the
+// MLB/NFL/NCAAB championship ones are confirmed against real page URLs.
+const KALSHI_SERIES_SLUGS: Record<string, string> = {
+  // Championships
+  'KXMLB': 'world-series',
+  'KXSB': 'super-bowl',
+  'KXMARMAD': 'college-basketball-champion',
+  'KXNBA': 'pro-basketball-champion',
+  'KXNHL': 'stanley-cup',
+  'KXNCAAF': 'ncaaf-championship',
+  'KXWNBA': 'wnba-championship',
+  'KXPREMIERLEAGUE': 'premier-league',
+  // Game winners
+  'KXMLBGAME': 'professional-baseball-game',
+  'KXNBAGAME': 'professional-basketball-game',
+  'KXNCAAMBGAME': 'mens-college-basketball-mens-game',
+  'KXNHLGAME': 'nhl-game',
+  'KXEPLGAME': 'english-premier-league-game',
+  'KXNFLGAME': 'professional-football-game',
+  'KXNCAAMBCBC': 'mens-college-basketball-crown-winner',
+  'KXNCAAMBNIT': 'mens-nit-tournament-champion',
+  // Spreads
+  'KXNCAAMBSPREAD': 'mens-college-basketball-spread',
+  'KXNBASPREAD': 'pro-basketball-spread',
+  'KXNFLSPREAD': 'pro-football-spread',
+  'KXMLBSPREAD': 'pro-baseball-spread',
+  'KXNHLSPREAD': 'nhl-spread',
+  // Totals
+  'KXMLBTOTAL': 'pro-baseball-total-points',
+};
+
+/**
+ * Build the Kalshi web URL for an event, optionally focusing a specific market
+ * (team) via op_market_ticker. Falls back to the bare event URL when the
+ * series slug is unknown.
+ */
+export function kalshiMarketUrl(eventTicker: string, marketTicker?: string): string {
+  const series = eventTicker.split('-')[0];
+  const slug = KALSHI_SERIES_SLUGS[series];
+  const base = slug
+    ? `https://kalshi.com/markets/${series.toLowerCase()}/${slug}/${eventTicker.toLowerCase()}`
+    : `https://kalshi.com/markets/${eventTicker}`;
+  return marketTicker ? `${base}?op_market_ticker=${marketTicker}` : base;
+}
+
 // Maps the-odds-api sport keys to Kalshi championship (futures) series.
 // Each series has one event per season with one market per team.
 const SPORT_TO_KALSHI_CHAMPIONSHIP: Record<string, string> = {
@@ -610,15 +657,13 @@ export async function fetchKalshiFutures(sportKey: string): Promise<KalshiFuture
   }
   if (!bestTicker) return [];
 
-  // Same event-ticker URL pattern the game-odds deep links use
-  const link = `https://kalshi.com/markets/${bestTicker}`;
-
   const results: KalshiFuturesOdds[] = [];
   for (const m of eventMap.get(bestTicker)!) {
     if (m.status !== 'active' || !m.yes_sub_title) continue;
     const price = buyYesPrice(m);
     if (price === null) continue;
-    results.push({ team: m.yes_sub_title, odds: costToML(price), link });
+    // Deep-link straight to this team's market on the championship page
+    results.push({ team: m.yes_sub_title, odds: costToML(price), link: kalshiMarketUrl(bestTicker, m.ticker) });
   }
   return results;
 }

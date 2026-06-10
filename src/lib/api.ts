@@ -1,6 +1,7 @@
 // src/lib/api.ts
 
 import type { KalshiGameOdds, KalshiSpreadOdds, KalshiTotalOdds } from '@/lib/kalshi';
+import { kalshiMarketUrl } from '@/lib/kalshi';
 
 // Define the types we need
 export interface Game {
@@ -132,7 +133,7 @@ export const LEAGUES = [
   { id: 'americanfootball_nfl_preseason', name: 'NFL PreSzn', icon: '/league-icons/nfl.png', isActive: false },
   { id: 'americanfootball_ncaaf', name: 'NCAAF', icon: '/league-icons/ncaaf.png', isActive: true },
   { id: 'basketball_ncaab', name: 'NCAAB', icon: '/league-icons/ncaab.png', isActive: true },
-  { id: 'soccer_epl', name: 'EPL', icon: '/league-icons/epl.png', isActive: true },
+  { id: 'soccer_epl', name: 'EPL', icon: '/league-icons/epl.png', isActive: false }, // Hidden - out of season
   { id: 'soccer_usa_mls', name: 'MLS', icon: '/league-icons/mls.png', isActive: false },
   { id: 'basketball_wnba', name: 'WNBA', icon: '/league-icons/wnba.png', isActive: true },
   { id: 'icehockey_nhl', name: 'NHL', icon: '/league-icons/nhl.png', isActive: true },
@@ -314,7 +315,7 @@ function mergeKalshiOdds(
     const result = findKalshiMatch(games, kg.awayTeam, kg.homeTeam, kg.commenceTime);
     if (!result) continue;
     const { game, swapped } = result;
-    const marketLink = `https://kalshi.com/markets/${kg.eventTicker}`;
+    const marketLink = kalshiMarketUrl(kg.eventTicker);
     // If swapped, Kalshi's "away" is actually the-odds-api's "home" and vice versa
     const homeOdds = swapped ? kg.awayOdds : kg.homeOdds;
     const awayOdds = swapped ? kg.homeOdds : kg.awayOdds;
@@ -333,7 +334,7 @@ function mergeKalshiOdds(
     const result = findKalshiMatch(games, ks.awayTeam, ks.homeTeam, ks.commenceTime);
     if (!result) continue;
     const { game, swapped } = result;
-    const marketLink = `https://kalshi.com/markets/${ks.eventTicker}`;
+    const marketLink = kalshiMarketUrl(ks.eventTicker);
     const homeSpread = swapped ? ks.awaySpread : ks.homeSpread;
     const awaySpread = swapped ? ks.homeSpread : ks.awaySpread;
     const homePrice = swapped ? ks.awayPrice : ks.homePrice;
@@ -352,7 +353,7 @@ function mergeKalshiOdds(
   for (const kt of kalshiTotals) {
     const result = findKalshiMatch(games, kt.awayTeam, kt.homeTeam, kt.commenceTime);
     if (!result) continue;
-    const marketLink = `https://kalshi.com/markets/${kt.eventTicker}`;
+    const marketLink = kalshiMarketUrl(kt.eventTicker);
     attachMarket(result.game, {
       key: 'totals',
       last_update: new Date().toISOString(),
