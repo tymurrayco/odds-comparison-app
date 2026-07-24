@@ -4,6 +4,8 @@ import OddsTable from './OddsTable';
 import TeamAnalysis from './TeamAnalysis';
 import { Game, ESPNGameScore } from '@/lib/api';
 import { GameRestData } from '@/lib/nhlRest';
+import { Bet } from '@/lib/betService';
+import { usePendingBetsForGame } from '@/lib/myGameBets';
 
 interface GameCardProps {
   game: Game;
@@ -70,6 +72,16 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
     const cleanName = teamName.toLowerCase().replace(/\s+/g, '');
     return `/team-logos/${cleanName}.png`;
   };
+
+  // Pending wagers on this game → header badge
+  const myPendingBets = usePendingBetsForGame(game.away_team, game.home_team, game.commence_time);
+
+  // Mobile-compact bet text: "TCU Horned Frogs -6.5" → "TCU -6.5", Over/Under → O/U
+  const compactBetText = (bet: Bet): string => bet.bet
+    .replace(game.away_team, getFirstWord(game.away_team))
+    .replace(game.home_team, getFirstWord(game.home_team))
+    .replace(/^Over\s+/i, 'O ')
+    .replace(/^Under\s+/i, 'U ');
   
   // Calculate implied scores based on average spread and total
   const calculateImpliedScores = () => {
@@ -241,6 +253,22 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                   {formattedDate} at {formattedTime} {timeZoneAbbr}
                 </p>
               )}
+
+              {/* My pending wager badge(s) */}
+              {myPendingBets.map(bet => (
+                <span
+                  key={bet.id}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] md:text-xs font-semibold bg-indigo-600 text-white shadow-sm"
+                  title={`Your bet: ${bet.bet}${bet.book ? ` (${bet.book})` : ''}`}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3 opacity-80 flex-shrink-0">
+                    <path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" />
+                    <path d="M13 5v2M13 11v2M13 17v2" />
+                  </svg>
+                  <span className="hidden md:inline whitespace-nowrap">{bet.bet}</span>
+                  <span className="md:hidden whitespace-nowrap">{compactBetText(bet)}</span>
+                </span>
+              ))}
               
               {/* Mobile only: Live/Final scores */}
               <div className="md:hidden flex items-center">
