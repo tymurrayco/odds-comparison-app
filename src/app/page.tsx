@@ -113,9 +113,11 @@ function HomeContent() {
         console.error('Error parsing ratingsNav:', e);
       }
     } else {
-      // Load saved league from localStorage after client-side hydration
+      // Load saved league from localStorage after client-side hydration.
+      // Skip leagues that have since been hidden (isActive=false) — restoring
+      // one would land on a tab that no longer exists.
       const savedLeague = localStorage.getItem('activeLeague');
-      if (savedLeague) {
+      if (savedLeague && (savedLeague === 'favorites' || LEAGUES.some(l => l.id === savedLeague && l.isActive))) {
         setActiveLeague(savedLeague);
       }
     }
