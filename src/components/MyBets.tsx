@@ -18,6 +18,41 @@ const bookmakerLogos: { [key: string]: string } = {
   'Kalshi': '/bookmaker-logos/kalshi.png'
 };
 
+// Team logo/color data from ESPN — same source and card treatment as the Bet Admin view.
+interface BetTeamInfo {
+  displayName: string;
+  logo: string;
+  color: string;          // hex without leading #
+  alternateColor?: string;
+}
+
+// Keep in sync with src/app/api/bet-team-logos/route.ts (duplicated to avoid
+// importing server code from a client component).
+const normalizeTeamKey = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+// Leagues with ESPN team data (excluded: UFC, PGA, Tennis, MMA, Golf, Soccer).
+const SUPPORTED_LEAGUES = new Set(['NFL', 'NCAAF', 'NBA', 'NCAAB', 'MLB', 'NHL']);
+
+const hexToRgba = (hex: string, alpha: number): string => {
+  const h = hex.replace('#', '').trim();
+  if (h.length !== 6) return `rgba(0,0,0,${alpha})`;
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+};
+
+// Logo with fallback chain: ESPN first, then the legacy local file, then hidden.
+function TeamLogoImg({ srcs, className }: { srcs: string[]; className: string }) {
+  const [idx, setIdx] = useState(0);
+  const src = srcs[idx];
+  if (!src) return null;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={src} alt="" className={className} onError={() => setIdx(i => i + 1)} />
+  );
+}
+
 export default function MyBets() {
   // NEW: State for Supabase data
   const [myBets, setMyBets] = useState<Bet[]>([]);
@@ -28,6 +63,34 @@ export default function MyBets() {
   const [statusFilter, setStatusFilter] = useState<BetStatus | 'all'>('pending');
   const [expandedBetId, setExpandedBetId] = useState<string | null>(null);
   const [viewType, setViewType] = useState<'games' | 'futures'>('games');
+
+  // Team logo/color maps per league (lazy-loaded, same as Bet Admin)
+  const [teamMaps, setTeamMaps] = useState<Record<string, Record<string, BetTeamInfo>>>({});
+
+  useEffect(() => {
+    const needed = Array.from(new Set(myBets.map(b => b.league)))
+      .filter(lg => SUPPORTED_LEAGUES.has(lg) && !teamMaps[lg]);
+    if (needed.length === 0) return;
+    let cancelled = false;
+    Promise.all(needed.map(async lg => {
+      try {
+        const resp = await fetch(`/api/bet-team-logos?league=${lg}`);
+        if (!resp.ok) return [lg, {}] as const;
+        const data = await resp.json();
+        return [lg, data.teams as Record<string, BetTeamInfo>] as const;
+      } catch {
+        return [lg, {}] as const;
+      }
+    })).then(results => {
+      if (cancelled) return;
+      setTeamMaps(prev => {
+        const next = { ...prev };
+        for (const [lg, map] of results) next[lg] = map;
+        return next;
+      });
+    });
+    return () => { cancelled = true; };
+  }, [myBets, teamMaps]);
 
   // NEW: Fetch bets from Supabase on mount
   useEffect(() => {
@@ -309,6 +372,36 @@ export default function MyBets() {
     return `/team-logos/${cleanName}.png`;
   };
 
+  const lookupTeamInfo = (league: string, name?: string | null): BetTeamInfo | null => {
+    if (!name) return null;
+    const map = teamMaps[league];
+    if (!map) return null;
+    return map[normalizeTeamKey(name)] ?? null;
+  };
+
+  // Resolve the bet's primary team for the accent color — same order as Bet Admin
+  // (team, homeTeam, awayTeam, leading tokens of the bet text), plus the teams
+  // parsed from the description since the public data often only has that.
+  const getPrimaryTeamInfo = (bet: Bet): BetTeamInfo | null => {
+    const candidates: (string | undefined)[] = [bet.team, bet.homeTeam, bet.awayTeam];
+    const betLead = bet.bet?.match(/^([A-Za-z .'-]+?)(?:\s+[-+0-9]|,|$)/)?.[1]?.trim();
+    if (betLead) candidates.push(betLead);
+    const teams = parseTeams(bet);
+    if (teams) candidates.push(teams.away, teams.home);
+    for (const c of candidates) {
+      const info = lookupTeamInfo(bet.league, c);
+      if (info) return info;
+    }
+    return null;
+  };
+
+  // ESPN logo first, legacy local file as fallback.
+  const logoSrcs = (league: string, teamName: string): string[] => {
+    const espn = lookupTeamInfo(league, teamName)?.logo;
+    const local = getTeamLogo(teamName);
+    return espn ? [espn, local] : [local];
+  };
+
   const toggleExpanded = (betId: string) => {
     setExpandedBetId(expandedBetId === betId ? null : betId);
   };
@@ -480,14 +573,26 @@ export default function MyBets() {
             const isTeaser = bet.betType === 'teaser';
             const isParlay = bet.betType === 'parlay';
 
+            // Team-color accent (same treatment as Bet Admin cards); falls back
+            // to the status-colored edge when no team color is available.
+            const primaryTeam = getPrimaryTeamInfo(bet);
+            const accent = primaryTeam?.color ? `#${primaryTeam.color}` : null;
+            const cardStyle = accent
+              ? {
+                  borderLeftColor: accent,
+                  backgroundImage: `linear-gradient(135deg, ${hexToRgba(accent, 0.07)} 0%, rgba(255,255,255,0) 45%)`,
+                }
+              : undefined;
+
             return (
               <div key={bet.id}>
                 <div className={`bg-white rounded-lg shadow border-l-4 transition-all duration-200 ${
-                  getStatusColor(bet.status).split(' ')[2]
+                  accent ? '' : getStatusColor(bet.status).split(' ')[2]
                 } ${
-                  bet.status === 'pending' && formatTimeRemaining(bet.eventDate) === 'Soon' 
+                  bet.status === 'pending' && formatTimeRemaining(bet.eventDate) === 'Soon'
                     ? 'ring-2 ring-blue-400' : ''
-                }`}>
+                }`}
+                style={cardStyle}>
                   {/* Main Bet Row - Mobile Optimized - UPDATED FOR TEASERS */}
                   <div 
                     className="p-3 cursor-pointer"
@@ -529,33 +634,19 @@ export default function MyBets() {
                             <div className="flex sm:hidden items-center gap-1 flex-wrap">
                               {bet.parlayTeams.map((team, index) => (
                                 <span key={index} className="flex items-center gap-1">
-                                  <img 
-                                    src={getTeamLogo(team)}
-                                    alt=""
-                                    className="h-5 w-5"
-                                    onError={(e) => {
-                                      e.currentTarget.style.display = 'none';
-                                    }}
-                                  />
+                                  <TeamLogoImg srcs={logoSrcs(bet.league, team)} className="h-5 w-5 object-contain" />
                                   {index < bet.parlayTeams!.length - 1 && (
                                     <span className="text-xs text-gray-400">&</span>
                                   )}
                                 </span>
                               ))}
                             </div>
-                            
+
                             {/* Desktop: Show all logos with team names separated by & */}
                             <div className="hidden sm:flex items-center gap-1 flex-wrap">
                               {bet.parlayTeams.map((team, index) => (
                                 <span key={index} className="flex items-center gap-1">
-                                  <img 
-                                    src={getTeamLogo(team)}
-                                    alt=""
-                                    className="h-4 w-4"
-                                    onError={(e) => {
-                                      e.currentTarget.style.display = 'none';
-                                    }}
-                                  />
+                                  <TeamLogoImg srcs={logoSrcs(bet.league, team)} className="h-4 w-4 object-contain" />
                                   <span className="text-sm truncate">{team}</span>
                                   {index < bet.parlayTeams!.length - 1 && (
                                     <span className="text-xs text-gray-400">&</span>
@@ -569,45 +660,17 @@ export default function MyBets() {
                             {/* Fallback for parlays without parlayTeams array (legacy data) */}
                             {/* Mobile: Show logos with & separator */}
                             <div className="flex sm:hidden items-center gap-1">
-                              <img 
-                                src={getTeamLogo(teams.away)}
-                                alt=""
-                                className="h-5 w-5"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = 'none';
-                                }}
-                              />
+                              <TeamLogoImg srcs={logoSrcs(bet.league, teams.away)} className="h-5 w-5 object-contain" />
                               <span className="text-xs text-gray-400">&</span>
-                              <img 
-                                src={getTeamLogo(teams.home)}
-                                alt=""
-                                className="h-5 w-5"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = 'none';
-                                }}
-                              />
+                              <TeamLogoImg srcs={logoSrcs(bet.league, teams.home)} className="h-5 w-5 object-contain" />
                             </div>
-                            
+
                             {/* Desktop: Show logos with team names separated by & */}
                             <div className="hidden sm:flex items-center gap-1">
-                              <img 
-                                src={getTeamLogo(teams.away)}
-                                alt=""
-                                className="h-4 w-4"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = 'none';
-                                }}
-                              />
+                              <TeamLogoImg srcs={logoSrcs(bet.league, teams.away)} className="h-4 w-4 object-contain" />
                               <span className="text-sm truncate">{teams.away}</span>
                               <span className="text-xs text-gray-400">&</span>
-                              <img 
-                                src={getTeamLogo(teams.home)}
-                                alt=""
-                                className="h-4 w-4"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = 'none';
-                                }}
-                              />
+                              <TeamLogoImg srcs={logoSrcs(bet.league, teams.home)} className="h-4 w-4 object-contain" />
                               <span className="text-sm truncate">{teams.home}</span>
                             </div>
                           </>
@@ -615,49 +678,21 @@ export default function MyBets() {
                           <>
                             {/* Mobile: Show logos only or with abbreviated names */}
                             <div className="flex sm:hidden items-center gap-1">
-                              <img 
-                                src={getTeamLogo(teams.away)}
-                                alt=""
-                                className="h-5 w-5"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = 'none';
-                                }}
-                              />
+                              <TeamLogoImg srcs={logoSrcs(bet.league, teams.away)} className="h-5 w-5 object-contain" />
                               <span className="text-xs text-gray-400">
                                 {isTeaser ? '&' : '@'}
                               </span>
-                              <img 
-                                src={getTeamLogo(teams.home)}
-                                alt=""
-                                className="h-5 w-5"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = 'none';
-                                }}
-                              />
+                              <TeamLogoImg srcs={logoSrcs(bet.league, teams.home)} className="h-5 w-5 object-contain" />
                             </div>
-                            
+
                             {/* Desktop: Show full team names with logos */}
                             <div className="hidden sm:flex items-center gap-1">
-                              <img 
-                                src={getTeamLogo(teams.away)}
-                                alt=""
-                                className="h-4 w-4"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = 'none';
-                                }}
-                              />
+                              <TeamLogoImg srcs={logoSrcs(bet.league, teams.away)} className="h-4 w-4 object-contain" />
                               <span className="text-sm truncate">{teams.away}</span>
                               <span className="text-xs text-gray-400">
                                 {isTeaser ? '&' : '@'}
                               </span>
-                              <img 
-                                src={getTeamLogo(teams.home)}
-                                alt=""
-                                className="h-4 w-4"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = 'none';
-                                }}
-                              />
+                              <TeamLogoImg srcs={logoSrcs(bet.league, teams.home)} className="h-4 w-4 object-contain" />
                               <span className="text-sm truncate">{teams.home}</span>
                             </div>
                           </>
@@ -665,26 +700,12 @@ export default function MyBets() {
                           <>
                             {/* Mobile: Show logo only for futures */}
                             <div className="flex sm:hidden items-center gap-2">
-                              <img 
-                                src={getTeamLogo(futureTeam)}
-                                alt=""
-                                className="h-6 w-6 flex-shrink-0"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = 'none';
-                                }}
-                              />
+                              <TeamLogoImg srcs={logoSrcs(bet.league, futureTeam)} className="h-6 w-6 flex-shrink-0 object-contain" />
                             </div>
-                            
+
                             {/* Desktop: Show logo and full description for futures */}
                             <div className="hidden sm:flex items-center gap-1">
-                              <img 
-                                src={getTeamLogo(futureTeam)}
-                                alt=""
-                                className="h-4 w-4"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = 'none';
-                                }}
-                              />
+                              <TeamLogoImg srcs={logoSrcs(bet.league, futureTeam)} className="h-4 w-4 object-contain" />
                               <span className="text-sm truncate">{bet.description}</span>
                             </div>
                           </>
