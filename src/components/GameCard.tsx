@@ -5,7 +5,7 @@ import TeamAnalysis from './TeamAnalysis';
 import { Game, ESPNGameScore } from '@/lib/api';
 import { GameRestData } from '@/lib/nhlRest';
 import { Bet } from '@/lib/betService';
-import { usePendingBetsForGame } from '@/lib/myGameBets';
+import { usePendingBetsForGame, useTeamColorMap, wageredTeamColor, hexToRgba } from '@/lib/myGameBets';
 
 interface GameCardProps {
   game: Game;
@@ -75,6 +75,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
 
   // Pending wagers on this game → header badge
   const myPendingBets = usePendingBetsForGame(game.away_team, game.home_team, game.commence_time);
+  const teamColorMap = useTeamColorMap(game.sport_key);
 
   // Mobile-compact bet text: "TCU Horned Frogs -6.5" → "TCU -6.5", Over/Under → O/U
   const compactBetText = (bet: Bet): string => bet.bet
@@ -254,21 +255,30 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                 </p>
               )}
 
-              {/* My pending wager badge(s) */}
-              {myPendingBets.map(bet => (
-                <span
-                  key={bet.id}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] md:text-xs font-semibold bg-indigo-600 text-white shadow-sm"
-                  title={`Your bet: ${bet.bet}${bet.book ? ` (${bet.book})` : ''}`}
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3 opacity-80 flex-shrink-0">
-                    <path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" />
-                    <path d="M13 5v2M13 11v2M13 17v2" />
-                  </svg>
-                  <span className="hidden md:inline whitespace-nowrap">{bet.bet}</span>
-                  <span className="md:hidden whitespace-nowrap">{compactBetText(bet)}</span>
-                </span>
-              ))}
+              {/* My pending wager badge(s) — team-colored border + light gradient fill */}
+              {myPendingBets.map(bet => {
+                const accent = wageredTeamColor(bet, teamColorMap, game.away_team, game.home_team);
+                return (
+                  <span
+                    key={bet.id}
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] md:text-xs font-semibold shadow-sm ${
+                      accent ? 'border bg-white text-gray-900' : 'bg-indigo-600 text-white'
+                    }`}
+                    style={accent ? {
+                      borderColor: accent,
+                      backgroundImage: `linear-gradient(135deg, ${hexToRgba(accent, 0.18)} 0%, ${hexToRgba(accent, 0.04)} 100%)`,
+                    } : undefined}
+                    title={`Your bet: ${bet.bet}${bet.book ? ` (${bet.book})` : ''}`}
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3 opacity-90 flex-shrink-0" style={accent ? { color: accent } : undefined}>
+                      <path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" />
+                      <path d="M13 5v2M13 11v2M13 17v2" />
+                    </svg>
+                    <span className="hidden md:inline whitespace-nowrap">{bet.bet}</span>
+                    <span className="md:hidden whitespace-nowrap">{compactBetText(bet)}</span>
+                  </span>
+                );
+              })}
               
               {/* Mobile only: Live/Final scores */}
               <div className="md:hidden flex items-center">
