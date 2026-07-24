@@ -1,5 +1,5 @@
 // src/components/GameCard.tsx
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import OddsTable from './OddsTable';
 import TeamAnalysis from './TeamAnalysis';
 import { Game, ESPNGameScore } from '@/lib/api';
@@ -76,34 +76,6 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
   // Pending wagers on this game → header badge
   const myPendingBets = usePendingBetsForGame(game.away_team, game.home_team, game.commence_time);
   const teamColorMap = useTeamColorMap(game.sport_key);
-
-  // On mobile, when "Away @ Home" is too long to share its row with the
-  // favorite/share icons, move the icons to the right end of the row below.
-  const namesRowRef = useRef<HTMLDivElement>(null);
-  const teamNamesRef = useRef<HTMLHeadingElement>(null);
-  const [iconsBelow, setIconsBelow] = useState(false);
-
-  useEffect(() => {
-    const measure = () => {
-      const row = namesRowRef.current;
-      const names = teamNamesRef.current;
-      if (!row || !names) return;
-      if (window.innerWidth >= 640) {
-        setIconsBelow(false);
-        return;
-      }
-      // scrollWidth = full text width even while truncated; reserve ~60px for icons
-      setIconsBelow(names.scrollWidth + 60 > row.clientWidth);
-    };
-    measure();
-    window.addEventListener('resize', measure);
-    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
-    if (ro && namesRowRef.current) ro.observe(namesRowRef.current);
-    return () => {
-      window.removeEventListener('resize', measure);
-      ro?.disconnect();
-    };
-  }, [game.away_team, game.home_team]);
 
   const favoriteShareButtons = (
     <>
@@ -217,17 +189,14 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
       <div className="p-3 md:p-4 border-b border-gray-200">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between">
           <div className="mb-2 sm:mb-0">
-            {/* Team names row */}
-            <div ref={namesRowRef} className="flex items-center flex-wrap">
-              <h3 ref={teamNamesRef} className="text-sm md:text-lg font-semibold text-gray-900 truncate">
+            {/* Team names row — icons pinned to the right edge on mobile, inline on sm+ */}
+            <div className="flex items-center flex-wrap">
+              <h3 className="text-sm md:text-lg font-semibold text-gray-900 truncate">
                 {game.away_team} @ {game.home_team}
               </h3>
-              {/* Favorite + share icons inline (moved below on tight mobile rows) */}
-              {!iconsBelow && (
-                <span className="ml-2 flex items-center">
-                  {favoriteShareButtons}
-                </span>
-              )}
+              <span className="ml-auto pl-2 sm:ml-2 sm:pl-0 flex items-center">
+                {favoriteShareButtons}
+              </span>
               {/* Desktop only: Live/Final scores inline with team names */}
               <div className="hidden md:inline-flex">
                 {/* Live indicator with score */}
@@ -285,14 +254,6 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
             
             {/* Second row: Game time (pre-game) OR Live/Final + Implied scores (mobile on same line) */}
             <div className="flex items-center gap-2 flex-wrap mt-1">
-              {/* Icons relocated here when the names row is too tight (mobile).
-                  ml-auto only when the implied score isn't already pushing right —
-                  two auto margins on one line would split the free space. */}
-              {iconsBelow && (
-                <span className={`order-last flex items-center ${impliedScores ? '' : 'ml-auto'}`}>
-                  {favoriteShareButtons}
-                </span>
-              )}
               {/* Only show game time if not live/completed */}
               {!isLive && !isCompleted && (
                 <p className="text-xs md:text-sm text-gray-500">
@@ -369,12 +330,11 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                 )}
               </div>
               
-              {/* Implied Score - always show; right-aligned on mobile so it shares
-                  the date/time + ticket line instead of wrapping below them */}
+              {/* Implied Score - always show, inline after date/time + ticket */}
               {impliedScores && (
-                <div className="flex items-center gap-1 text-xs md:text-sm ml-auto md:ml-0">
+                <div className="flex items-center gap-1 text-xs md:text-sm">
                   {!isLive && !isCompleted && <span className="text-gray-400 hidden md:inline">•</span>}
-                  {(isLive || isCompleted) && liveScore && <span className="text-gray-400 hidden md:inline">•</span>}
+                  {(isLive || isCompleted) && liveScore && <span className="text-gray-400">•</span>}
                   <span className="text-gray-600 flex items-center gap-0.5">
                     <span className="text-gray-500">Implied:</span>
                     {impliedScores.awayWinning ? (
