@@ -1,5 +1,5 @@
 // src/components/GameCard.tsx
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import OddsTable from './OddsTable';
 import TeamAnalysis from './TeamAnalysis';
 import { Game, ESPNGameScore } from '@/lib/api';
@@ -76,6 +76,63 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
   // Pending wagers on this game → header badge
   const myPendingBets = usePendingBetsForGame(game.away_team, game.home_team, game.commence_time);
   const teamColorMap = useTeamColorMap(game.sport_key);
+
+  // On mobile, when "Away @ Home" is too long to share its row with the
+  // favorite/share icons, move the icons to the right end of the row below.
+  const namesRowRef = useRef<HTMLDivElement>(null);
+  const teamNamesRef = useRef<HTMLHeadingElement>(null);
+  const [iconsBelow, setIconsBelow] = useState(false);
+
+  useEffect(() => {
+    const measure = () => {
+      const row = namesRowRef.current;
+      const names = teamNamesRef.current;
+      if (!row || !names) return;
+      if (window.innerWidth >= 640) {
+        setIconsBelow(false);
+        return;
+      }
+      // scrollWidth = full text width even while truncated; reserve ~60px for icons
+      setIconsBelow(names.scrollWidth + 60 > row.clientWidth);
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+    if (ro && namesRowRef.current) ro.observe(namesRowRef.current);
+    return () => {
+      window.removeEventListener('resize', measure);
+      ro?.disconnect();
+    };
+  }, [game.away_team, game.home_team]);
+
+  const favoriteShareButtons = (
+    <>
+      {onToggleFavorite && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleFavorite(game.id);
+          }}
+          className={`text-lg hover:scale-110 transition-transform ${
+            isFavorite ? 'text-yellow-500' : 'text-gray-900 hover:text-yellow-400'
+          }`}
+          aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+        >
+          {isFavorite ? '★' : '☆'}
+        </button>
+      )}
+      <button
+        onClick={copyGameLink}
+        className="ml-1 text-gray-400 hover:text-blue-500 hover:scale-110 transition-all"
+        aria-label="Share game"
+        title="Share game"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+        </svg>
+      </button>
+    </>
+  );
 
   // Mobile-compact bet text: "TCU Horned Frogs -6.5" → "TCU -6.5", Over/Under → O/U
   const compactBetText = (bet: Bet): string => bet.bet
@@ -161,36 +218,16 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
         <div className="flex flex-col sm:flex-row sm:items-center justify-between">
           <div className="mb-2 sm:mb-0">
             {/* Team names row */}
-            <div className="flex items-center flex-wrap">
-              <h3 className="text-sm md:text-lg font-semibold text-gray-900 truncate">
+            <div ref={namesRowRef} className="flex items-center flex-wrap">
+              <h3 ref={teamNamesRef} className="text-sm md:text-lg font-semibold text-gray-900 truncate">
                 {game.away_team} @ {game.home_team}
               </h3>
-              {/* Favorite Star Button */}
-              {onToggleFavorite && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onToggleFavorite(game.id);
-                  }}
-                  className={`ml-2 text-lg hover:scale-110 transition-transform ${
-                    isFavorite ? 'text-yellow-500' : 'text-gray-900 hover:text-yellow-400'
-                  }`}
-                  aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
-                >
-                  {isFavorite ? '★' : '☆'}
-                </button>
+              {/* Favorite + share icons inline (moved below on tight mobile rows) */}
+              {!iconsBelow && (
+                <span className="ml-2 flex items-center">
+                  {favoriteShareButtons}
+                </span>
               )}
-              {/* Copy Link Button */}
-              <button
-                onClick={copyGameLink}
-                className="ml-1 text-gray-400 hover:text-blue-500 hover:scale-110 transition-all"
-                aria-label="Share game"
-                title="Share game"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                </svg>
-              </button>
               {/* Desktop only: Live/Final scores inline with team names */}
               <div className="hidden md:inline-flex">
                 {/* Live indicator with score */}
@@ -248,6 +285,12 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
             
             {/* Second row: Game time (pre-game) OR Live/Final + Implied scores (mobile on same line) */}
             <div className="flex items-center gap-2 flex-wrap mt-1">
+              {/* Icons relocated here when the names row is too tight (mobile) */}
+              {iconsBelow && (
+                <span className="order-last ml-auto flex items-center">
+                  {favoriteShareButtons}
+                </span>
+              )}
               {/* Only show game time if not live/completed */}
               {!isLive && !isCompleted && (
                 <p className="text-xs md:text-sm text-gray-500">
