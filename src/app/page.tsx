@@ -120,13 +120,23 @@ function HomeContent() {
       }
     }
     
-    // Load saved bookmaker selection from localStorage
+    // Load saved bookmaker selection from localStorage.
+    // Bookmakers added to the app AFTER the selection was saved auto-enable —
+    // otherwise a stale saved list hides new books (e.g. Kalshi) forever.
     const savedBookmakers = localStorage.getItem('selectedBookmakers');
     if (savedBookmakers) {
       try {
         const parsed = JSON.parse(savedBookmakers);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setSelectedBookmakers(parsed);
+          let known: string[] = [];
+          try {
+            const k = JSON.parse(localStorage.getItem('knownBookmakers') ?? '[]');
+            if (Array.isArray(k)) known = k;
+          } catch { /* ignore */ }
+          const newBooks = BOOKMAKERS.filter(b =>
+            known.length > 0 ? !known.includes(b) : !parsed.includes(b)
+          );
+          setSelectedBookmakers([...new Set([...parsed, ...newBooks])]);
         }
       } catch (e) {
         console.error('Error parsing saved bookmakers:', e);
@@ -206,10 +216,13 @@ function HomeContent() {
     }
   }, [activeLeague, isClient]);
 
-  // Save selected bookmakers to localStorage
+  // Save selected bookmakers to localStorage, plus the app's bookmaker list at
+  // save time — so future additions to BOOKMAKERS can be told apart from books
+  // the user deliberately deselected.
   useEffect(() => {
     if (isClient) {
       localStorage.setItem('selectedBookmakers', JSON.stringify(selectedBookmakers));
+      localStorage.setItem('knownBookmakers', JSON.stringify(BOOKMAKERS));
     }
   }, [selectedBookmakers, isClient]);
 
