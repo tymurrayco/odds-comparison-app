@@ -448,25 +448,28 @@ export default function FuturesTable({
         : '';
 
       return (
-        <div className="flex items-center gap-1">
-          <TeamLogoImg srcs={[espnLogoSrc, localLogoSrc]} className="h-5 w-5 mr-2 object-contain flex-shrink-0" />
-          {/* Mobile: logo only (saves space for the ticket badge); name on sm+ */}
-          <span className="hidden sm:inline">{team}</span>
-          {/* OE/DE Ranks for ALL teams with KenPom data */}
-          {teamDetails && (
-            <span className="text-[10px] text-gray-900 ml-1 whitespace-nowrap">
-              O:{teamDetails.rankOE} D:{teamDetails.rankDE}
-            </span>
-          )}
-          {/* Elite/Borderline badge for NCAAB */}
-          {tier && badgeStyles && (
-            <span
-              className={`hidden md:inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${badgeStyles.bg} ${badgeStyles.text} border ${badgeStyles.border}`}
-              title={tooltipText}
-            >
-              {badgeStyles.label}
-            </span>
-          )}
+        // Mobile: ticket badge stacks UNDER the logo; sm+: everything inline
+        <div className="flex flex-col items-start gap-1 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-1">
+            <TeamLogoImg srcs={[espnLogoSrc, localLogoSrc]} className="h-5 w-5 sm:mr-2 object-contain flex-shrink-0" />
+            {/* Mobile: logo only (saves space for the ticket badge); name on sm+ */}
+            <span className="hidden sm:inline">{team}</span>
+            {/* OE/DE Ranks for ALL teams with KenPom data */}
+            {teamDetails && (
+              <span className="text-[10px] text-gray-900 ml-1 whitespace-nowrap">
+                O:{teamDetails.rankOE} D:{teamDetails.rankDE}
+              </span>
+            )}
+            {/* Elite/Borderline badge for NCAAB */}
+            {tier && badgeStyles && (
+              <span
+                className={`hidden md:inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${badgeStyles.bg} ${badgeStyles.text} border ${badgeStyles.border}`}
+                title={tooltipText}
+              >
+                {badgeStyles.label}
+              </span>
+            )}
+          </div>
           {renderTicketBadge(team)}
         </div>
       );
