@@ -15,9 +15,11 @@ interface LeagueConfig {
 
 const LEAGUE_MAP: Record<string, LeagueConfig> = {
   NFL: { sport: 'football', league: 'nfl' },
-  NCAAF: { sport: 'football', league: 'college-football', limit: 400, groups: '80' },
+  // ESPN ignores the groups filter on this endpoint and serves all 755 college
+  // football teams — a 400 limit truncated the list and dropped teams (e.g. TCU).
+  NCAAF: { sport: 'football', league: 'college-football', limit: 1000, groups: '80' },
   NBA: { sport: 'basketball', league: 'nba' },
-  NCAAB: { sport: 'basketball', league: 'mens-college-basketball', limit: 400, groups: '50' },
+  NCAAB: { sport: 'basketball', league: 'mens-college-basketball', limit: 1000, groups: '50' },
   MLB: { sport: 'baseball', league: 'mlb' },
   NHL: { sport: 'hockey', league: 'nhl' },
 };
