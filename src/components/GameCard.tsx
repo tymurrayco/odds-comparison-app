@@ -262,20 +262,24 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                 </p>
               )}
 
-              {/* My pending wager badge(s) — strong team-color border + light fill */}
-              {myPendingBets.map(bet => {
-                const accent = wageredTeamColor(bet, teamColorMap, game.away_team, game.home_team);
-                return (
-                  <MyBetBadge
-                    key={bet.id}
-                    accent={accent}
-                    title={`Your bet: ${bet.bet}${bet.book ? ` (${bet.book})` : ''}`}
-                  >
-                    <span className="hidden md:inline whitespace-nowrap">{bet.bet}</span>
-                    <span className="md:hidden whitespace-nowrap">{compactBetText(bet)}</span>
-                  </MyBetBadge>
-                );
-              })}
+              {/* My pending wager badge(s) — strong team-color border + light fill.
+                  order-last on mobile keeps the implied score glued to the date/time
+                  (stable position) and lets the badge wrap to its own line alone. */}
+              <span className="order-last md:order-none flex items-center gap-1.5 flex-wrap empty:hidden">
+                {myPendingBets.map(bet => {
+                  const accent = wageredTeamColor(bet, teamColorMap, game.away_team, game.home_team);
+                  return (
+                    <MyBetBadge
+                      key={bet.id}
+                      accent={accent}
+                      title={`Your bet: ${bet.bet}${bet.book ? ` (${bet.book})` : ''}`}
+                    >
+                      <span className="hidden md:inline whitespace-nowrap">{bet.bet}</span>
+                      <span className="md:hidden whitespace-nowrap">{compactBetText(bet)}</span>
+                    </MyBetBadge>
+                  );
+                })}
+              </span>
               
               {/* Mobile only: Live/Final scores */}
               <div className="md:hidden flex items-center">
