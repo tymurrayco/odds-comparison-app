@@ -189,12 +189,13 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
       <div className="p-3 md:p-4 border-b border-gray-200">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between">
           <div className="mb-2 sm:mb-0">
-            {/* Team names row — icons pinned to the right edge on mobile, inline on sm+ */}
-            <div className="flex items-center flex-wrap">
-              <h3 className="text-sm md:text-lg font-semibold text-gray-900 truncate">
+            {/* Team names row — nowrap: names truncate instead of pushing the
+                icons onto their own line; icons right edge on mobile, inline on sm+ */}
+            <div className="flex items-center">
+              <h3 className="text-sm md:text-lg font-semibold text-gray-900 truncate min-w-0">
                 {game.away_team} @ {game.home_team}
               </h3>
-              <span className="ml-auto pl-2 sm:ml-2 sm:pl-0 flex items-center">
+              <span className="ml-auto pl-2 sm:ml-2 sm:pl-0 flex items-center flex-shrink-0">
                 {favoriteShareButtons}
               </span>
               {/* Desktop only: Live/Final scores inline with team names */}
