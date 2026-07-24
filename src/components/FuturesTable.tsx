@@ -3,6 +3,14 @@
 
 import { FuturesMarket, BOOKMAKERS } from '@/lib/api';
 import { createBet } from '@/lib/betService';
+import {
+  usePendingFutureBets,
+  useTeamColorMap,
+  normalizeTeamKey,
+  hexToRgba,
+  TicketIcon,
+  TeamLogoImg,
+} from '@/lib/myGameBets';
 import React, { useState, useRef, useEffect } from 'react';
 
 interface FuturesTableProps {
@@ -136,9 +144,8 @@ interface EliteTeamData {
   rankEM: number;
 }
 
-export default function FuturesTable({ 
-  market, 
-  compactMode = false,
+export default function FuturesTable({
+  market,
   isMasters = false,
   selectedBookmakers,
   league = 'basketball_nba'
@@ -231,9 +238,18 @@ export default function FuturesTable({
   };
 
   // Use selected bookmakers or default to all
-  const displayBookmakers = selectedBookmakers && selectedBookmakers.length > 0 
+  const displayBookmakers = selectedBookmakers && selectedBookmakers.length > 0
     ? BOOKMAKERS.filter(b => selectedBookmakers.includes(b))
     : BOOKMAKERS;
+
+  // My pending futures tickets for this league + ESPN colors/logos
+  const myFutureBets = usePendingFutureBets(getLeagueDisplayName(league));
+  const teamColorMap = useTeamColorMap(league);
+
+  const findTicket = (teamName: string) => {
+    const key = normalizeTeamKey(teamName);
+    return myFutureBets.find(b => b.team && normalizeTeamKey(b.team) === key);
+  };
 
   const formatOdds = (odds: number): string => {
     if (odds > 0) return `+${odds}`;
@@ -378,17 +394,41 @@ export default function FuturesTable({
     };
   };
 
+  // My-ticket badge: team-colored border + light gradient fill, indigo fallback.
+  const renderTicketBadge = (team: string) => {
+    const ticket = findTicket(team);
+    if (!ticket) return null;
+    const color = teamColorMap?.[normalizeTeamKey(team)]?.color;
+    const accent = color ? `#${color}` : null;
+    return (
+      <span
+        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] md:text-xs font-semibold shadow-sm ${
+          accent ? 'border bg-white text-gray-900' : 'bg-indigo-600 text-white'
+        }`}
+        style={accent ? {
+          borderColor: accent,
+          backgroundImage: `linear-gradient(135deg, ${hexToRgba(accent, 0.18)} 0%, ${hexToRgba(accent, 0.04)} 100%)`,
+        } : undefined}
+        title={`Your bet: ${ticket.bet}${ticket.book ? ` (${ticket.book})` : ''}`}
+      >
+        <TicketIcon color={accent} />
+        <span className="whitespace-nowrap">{formatOdds(ticket.odds)}</span>
+      </span>
+    );
+  };
+
   // Custom display for team cell based on whether it's Masters and screen size
   const renderTeamCell = (team: string, tier: EliteTier | null, teamDetails?: EliteTeamData) => {
-    const teamLogoSrc = `/team-logos/${team.toLowerCase().replace(/\s+/g, '')}.png`;
+    const localLogoSrc = `/team-logos/${team.toLowerCase().replace(/\s+/g, '')}.png`;
+    const espnLogoSrc = teamColorMap?.[normalizeTeamKey(team)]?.logo;
     const lastName = getLastName(team);
-    
+
     if (isMasters) {
       // For Masters - specialized approach with direct styles
       return (
         <div className="flex items-center" style={{ width: '100%', display: 'flex', alignItems: 'center' }}>
-          <img 
-            src={teamLogoSrc}
+          <img
+            src={localLogoSrc}
             alt=""
             className="h-5 w-5 mr-1"
             style={{ height: '20px', width: '20px', marginRight: '4px', flexShrink: 0 }}
@@ -396,16 +436,17 @@ export default function FuturesTable({
               e.currentTarget.style.display = 'none';
             }}
           />
-          
+
           {/* Always show last name on mobile */}
           <span className="sm:hidden" style={mobileLastNameStyle}>
             {lastName}
           </span>
-          
+
           {/* Show full name on desktop/tablet */}
           <span className="hidden sm:inline">
             {team}
           </span>
+          {renderTicketBadge(team)}
         </div>
       );
     } else {
@@ -416,22 +457,12 @@ export default function FuturesTable({
           ? `Top 20 in both Offense (#${teamDetails.rankOE}) and Defense (#${teamDetails.rankDE})`
           : `Top 25 in both Offense (#${teamDetails.rankOE}) and Defense (#${teamDetails.rankDE}) - one rank 21-25`
         : '';
-      
+
       return (
         <div className="flex items-center gap-1">
-          <img 
-            src={teamLogoSrc}
-            alt=""
-            className="h-5 w-5 mr-2"
-            onError={(e) => {
-              e.currentTarget.style.display = 'none';
-            }}
-          />
-          {!compactMode ? (
-            <span>{team}</span>
-          ) : (
-            <span className="sm:inline hidden">{team}</span>
-          )}
+          <TeamLogoImg srcs={[espnLogoSrc, localLogoSrc]} className="h-5 w-5 mr-2 object-contain flex-shrink-0" />
+          {/* Mobile: logo only (saves space for the ticket badge); name on sm+ */}
+          <span className="hidden sm:inline">{team}</span>
           {/* OE/DE Ranks for ALL teams with KenPom data */}
           {teamDetails && (
             <span className="text-[10px] text-gray-900 ml-1 whitespace-nowrap">
@@ -440,13 +471,14 @@ export default function FuturesTable({
           )}
           {/* Elite/Borderline badge for NCAAB */}
           {tier && badgeStyles && (
-            <span 
+            <span
               className={`hidden md:inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${badgeStyles.bg} ${badgeStyles.text} border ${badgeStyles.border}`}
               title={tooltipText}
             >
               {badgeStyles.label}
             </span>
           )}
+          {renderTicketBadge(team)}
         </div>
       );
     }

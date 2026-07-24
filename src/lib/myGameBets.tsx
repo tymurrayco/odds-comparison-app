@@ -1,20 +1,21 @@
-// src/lib/myGameBets.ts
-// Shared lookup of the user's pending bets for game-header badges.
-// Fetches once per page load (module-level cache) so every GameCard
-// instance shares a single Supabase query.
+// src/lib/myGameBets.tsx
+// Shared lookup of the user's pending bets for game-header and futures badges.
+// Fetches once per page load (module-level cache) so every card/table
+// shares a single Supabase query.
 'use client';
 
 import { useEffect, useState } from 'react';
 import { fetchBets, Bet } from './betService';
 
-const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+export const normalizeTeamKey = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+const norm = normalizeTeamKey;
 
 let pendingBetsPromise: Promise<Bet[]> | null = null;
 
-function loadPendingGameBets(): Promise<Bet[]> {
+function loadPendingBets(): Promise<Bet[]> {
   if (!pendingBetsPromise) {
     pendingBetsPromise = fetchBets()
-      .then(bets => bets.filter(b => b.status === 'pending' && b.betType !== 'future'))
+      .then(bets => bets.filter(b => b.status === 'pending'))
       .catch(() => []);
   }
   return pendingBetsPromise;
@@ -96,20 +97,21 @@ export function wageredTeamColor(
   return null;
 }
 
-// Pending bets matching this game: same local event date AND a team-name match
-// (away/home/team fields or a parlay/teaser leg), with a description fallback.
+// Pending game bets matching this game: same local event date AND a team-name
+// match (away/home/team fields or a parlay/teaser leg), with a description fallback.
 export function usePendingBetsForGame(awayTeam: string, homeTeam: string, commenceTime: string): Bet[] {
   const [matched, setMatched] = useState<Bet[]>([]);
 
   useEffect(() => {
     let cancelled = false;
-    loadPendingGameBets().then(bets => {
+    loadPendingBets().then(bets => {
       if (cancelled) return;
       const d = new Date(commenceTime);
       const gameDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       const away = norm(awayTeam);
       const home = norm(homeTeam);
       setMatched(bets.filter(b => {
+        if (b.betType === 'future') return false;
         if (b.eventDate !== gameDate) return false;
         const names = [b.awayTeam, b.homeTeam, b.team, ...(b.parlayTeams ?? [])]
           .filter((n): n is string => !!n)
@@ -123,4 +125,52 @@ export function usePendingBetsForGame(awayTeam: string, homeTeam: string, commen
   }, [awayTeam, homeTeam, commenceTime]);
 
   return matched;
+}
+
+// Pending FUTURE bets for a league (display name, e.g. 'NBA', 'NCAAF', 'PGA').
+export function usePendingFutureBets(leagueDisplay: string): Bet[] {
+  const [bets, setBets] = useState<Bet[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadPendingBets().then(all => {
+      if (cancelled) return;
+      setBets(all.filter(b => b.betType === 'future' && b.league === leagueDisplay));
+    });
+    return () => { cancelled = true; };
+  }, [leagueDisplay]);
+
+  return bets;
+}
+
+// ---- Shared badge visuals ----
+
+export function TicketIcon({ className, color }: { className?: string; color?: string | null }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className ?? 'h-3 w-3 opacity-90 flex-shrink-0'}
+      style={color ? { color } : undefined}
+    >
+      <path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" />
+      <path d="M13 5v2M13 11v2M13 17v2" />
+    </svg>
+  );
+}
+
+// Logo with fallback chain: tries each src in order, hides when exhausted.
+export function TeamLogoImg({ srcs, className }: { srcs: (string | undefined)[]; className: string }) {
+  const [idx, setIdx] = useState(0);
+  const list = srcs.filter((s): s is string => !!s);
+  const src = list[idx];
+  if (!src) return null;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={src} alt="" className={className} onError={() => setIdx(i => i + 1)} />
+  );
 }
