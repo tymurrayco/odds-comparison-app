@@ -285,9 +285,11 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
             
             {/* Second row: Game time (pre-game) OR Live/Final + Implied scores (mobile on same line) */}
             <div className="flex items-center gap-2 flex-wrap mt-1">
-              {/* Icons relocated here when the names row is too tight (mobile) */}
+              {/* Icons relocated here when the names row is too tight (mobile).
+                  ml-auto only when the implied score isn't already pushing right —
+                  two auto margins on one line would split the free space. */}
               {iconsBelow && (
-                <span className="order-last ml-auto flex items-center">
+                <span className={`order-last flex items-center ${impliedScores ? '' : 'ml-auto'}`}>
                   {favoriteShareButtons}
                 </span>
               )}
@@ -367,11 +369,12 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                 )}
               </div>
               
-              {/* Implied Score - always show */}
+              {/* Implied Score - always show; right-aligned on mobile so it shares
+                  the date/time + ticket line instead of wrapping below them */}
               {impliedScores && (
-                <div className="flex items-center gap-1 text-xs md:text-sm">
+                <div className="flex items-center gap-1 text-xs md:text-sm ml-auto md:ml-0">
                   {!isLive && !isCompleted && <span className="text-gray-400 hidden md:inline">•</span>}
-                  {(isLive || isCompleted) && liveScore && <span className="text-gray-400">•</span>}
+                  {(isLive || isCompleted) && liveScore && <span className="text-gray-400 hidden md:inline">•</span>}
                   <span className="text-gray-600 flex items-center gap-0.5">
                     <span className="text-gray-500">Implied:</span>
                     {impliedScores.awayWinning ? (
