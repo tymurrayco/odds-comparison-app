@@ -379,15 +379,29 @@ export default function MyBets() {
     return map[normalizeTeamKey(name)] ?? null;
   };
 
-  // Resolve the bet's primary team for the accent color — same order as Bet Admin
-  // (team, homeTeam, awayTeam, leading tokens of the bet text), plus the teams
-  // parsed from the description since the public data often only has that.
+  // Accent = the team the wager is on: leading tokens of the bet text (e.g.
+  // "Texas -3.5" → Texas), bet.team for futures. Totals use the home team.
+  // Home/away fields remain as fallbacks so cards still get a color when the
+  // bet text doesn't resolve to a team.
   const getPrimaryTeamInfo = (bet: Bet): BetTeamInfo | null => {
-    const candidates: (string | undefined)[] = [bet.team, bet.homeTeam, bet.awayTeam];
-    const betLead = bet.bet?.match(/^([A-Za-z .'-]+?)(?:\s+[-+0-9]|,|$)/)?.[1]?.trim();
-    if (betLead) candidates.push(betLead);
     const teams = parseTeams(bet);
-    if (teams) candidates.push(teams.away, teams.home);
+    const candidates: (string | undefined)[] = [];
+    if (bet.betType === 'total') {
+      candidates.push(bet.homeTeam, teams?.home);
+    } else {
+      const betLead = bet.bet?.match(/^([A-Za-z .'-]+?)(?:\s+[-+0-9]|,|$)/)?.[1]?.trim();
+      const betLeadNoMl = betLead?.replace(/\s+(ml|moneyline)$/i, '').trim();
+      candidates.push(
+        bet.team,
+        betLeadNoMl !== betLead ? betLeadNoMl : undefined,
+        betLead,
+        bet.parlayTeams?.[0],
+        bet.homeTeam,
+        bet.awayTeam,
+        teams?.home,
+        teams?.away,
+      );
+    }
     for (const c of candidates) {
       const info = lookupTeamInfo(bet.league, c);
       if (info) return info;
