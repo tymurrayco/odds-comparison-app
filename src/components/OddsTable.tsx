@@ -230,6 +230,14 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
       )}
 
       {games.map(game => {
+        // Only show bookmakers that actually price this game's current market —
+        // empty columns (squished logo + "-") add no value.
+        const activeBookmakers = displayBookmakers.filter(book => {
+          const bookieData = game.bookmakers.find(b => b.title === book);
+          const market = bookieData?.markets.find(m => m.key === marketKey);
+          return !!market && market.outcomes.length > 0;
+        });
+
         // For each team, calculate which bookmakers offer the best odds (only among displayed bookmakers)
         const bestBookmakersByTeam: { [key: string]: string[] } = {};
         
@@ -240,7 +248,7 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
             const allOdds: OddsItem[] = [];
             
             // Collect all odds for this team (only from displayed bookmakers)
-            displayBookmakers.forEach(book => {
+            activeBookmakers.forEach(book => {
               const bookieData = game.bookmakers.find(b => b.title === book);
               if (!bookieData) return;
               
@@ -298,7 +306,7 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
             const allOdds: { bookmaker: string, point: number, price: number }[] = [];
             
             // Collect all odds for this team (only from displayed bookmakers)
-            displayBookmakers.forEach(book => {
+            activeBookmakers.forEach(book => {
               const bookieData = game.bookmakers.find(b => b.title === book);
               if (!bookieData) return;
               
@@ -353,7 +361,7 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
             const allOdds: { bookmaker: string, point: number, price: number }[] = [];
             
             // Collect all odds for this total type (only from displayed bookmakers)
-            displayBookmakers.forEach(book => {
+            activeBookmakers.forEach(book => {
               const bookieData = game.bookmakers.find(b => b.title === book);
               if (!bookieData) return;
               
@@ -406,7 +414,7 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                 <th className="px-2 md:px-4 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Team
                 </th>
-                {displayBookmakers.map(book => (
+                {activeBookmakers.map(book => (
                   <th key={book} className="px-2 md:px-4 py-2 md:py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                     <img src={bookmakerLogos[book]} alt={book} className="h-6 mx-auto" />
                   </th>
@@ -450,7 +458,7 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                       </div>
                     </td>
                     
-                    {displayBookmakers.map(book => {
+                    {activeBookmakers.map(book => {
                       const bookieData = game.bookmakers.find(b => b.title === book);
                       
                       // Check if this is one of the best bookmakers for this team
