@@ -163,6 +163,30 @@ export function TicketIcon({ className, color }: { className?: string; color?: s
   );
 }
 
+// Shared my-bet badge: strong team-color border with a light team-color fill;
+// solid indigo fallback when no team color is available.
+export function MyBetBadge({ accent, title, children }: {
+  accent: string | null;
+  title?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] md:text-xs font-semibold shadow-sm ${
+        accent ? 'border-2 text-gray-900' : 'bg-indigo-600 text-white'
+      }`}
+      style={accent ? {
+        borderColor: accent,
+        backgroundColor: hexToRgba(accent, 0.12),
+      } : undefined}
+      title={title}
+    >
+      <TicketIcon color={accent} />
+      {children}
+    </span>
+  );
+}
+
 // Logo with fallback chain: tries each src in order, hides when exhausted.
 export function TeamLogoImg({ srcs, className }: { srcs: (string | undefined)[]; className: string }) {
   const [idx, setIdx] = useState(0);

@@ -5,7 +5,7 @@ import TeamAnalysis from './TeamAnalysis';
 import { Game, ESPNGameScore } from '@/lib/api';
 import { GameRestData } from '@/lib/nhlRest';
 import { Bet } from '@/lib/betService';
-import { usePendingBetsForGame, useTeamColorMap, wageredTeamColor, hexToRgba, TicketIcon } from '@/lib/myGameBets';
+import { usePendingBetsForGame, useTeamColorMap, wageredTeamColor, MyBetBadge } from '@/lib/myGameBets';
 
 interface GameCardProps {
   game: Game;
@@ -255,25 +255,18 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                 </p>
               )}
 
-              {/* My pending wager badge(s) — team-colored border + light gradient fill */}
+              {/* My pending wager badge(s) — strong team-color border + light fill */}
               {myPendingBets.map(bet => {
                 const accent = wageredTeamColor(bet, teamColorMap, game.away_team, game.home_team);
                 return (
-                  <span
+                  <MyBetBadge
                     key={bet.id}
-                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] md:text-xs font-semibold shadow-sm ${
-                      accent ? 'border bg-white text-gray-900' : 'bg-indigo-600 text-white'
-                    }`}
-                    style={accent ? {
-                      borderColor: accent,
-                      backgroundImage: `linear-gradient(135deg, ${hexToRgba(accent, 0.18)} 0%, ${hexToRgba(accent, 0.04)} 100%)`,
-                    } : undefined}
+                    accent={accent}
                     title={`Your bet: ${bet.bet}${bet.book ? ` (${bet.book})` : ''}`}
                   >
-                    <TicketIcon color={accent} />
                     <span className="hidden md:inline whitespace-nowrap">{bet.bet}</span>
                     <span className="md:hidden whitespace-nowrap">{compactBetText(bet)}</span>
-                  </span>
+                  </MyBetBadge>
                 );
               })}
               

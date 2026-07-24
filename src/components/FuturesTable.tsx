@@ -7,8 +7,7 @@ import {
   usePendingFutureBets,
   useTeamColorMap,
   normalizeTeamKey,
-  hexToRgba,
-  TicketIcon,
+  MyBetBadge,
   TeamLogoImg,
 } from '@/lib/myGameBets';
 import React, { useState, useRef, useEffect } from 'react';
@@ -394,26 +393,16 @@ export default function FuturesTable({
     };
   };
 
-  // My-ticket badge: team-colored border + light gradient fill, indigo fallback.
+  // My-ticket badge: strong team-color border + light fill, indigo fallback.
   const renderTicketBadge = (team: string) => {
     const ticket = findTicket(team);
     if (!ticket) return null;
     const color = teamColorMap?.[normalizeTeamKey(team)]?.color;
     const accent = color ? `#${color}` : null;
     return (
-      <span
-        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] md:text-xs font-semibold shadow-sm ${
-          accent ? 'border bg-white text-gray-900' : 'bg-indigo-600 text-white'
-        }`}
-        style={accent ? {
-          borderColor: accent,
-          backgroundImage: `linear-gradient(135deg, ${hexToRgba(accent, 0.18)} 0%, ${hexToRgba(accent, 0.04)} 100%)`,
-        } : undefined}
-        title={`Your bet: ${ticket.bet}${ticket.book ? ` (${ticket.book})` : ''}`}
-      >
-        <TicketIcon color={accent} />
+      <MyBetBadge accent={accent} title={`Your bet: ${ticket.bet}${ticket.book ? ` (${ticket.book})` : ''}`}>
         <span className="whitespace-nowrap">{formatOdds(ticket.odds)}</span>
-      </span>
+      </MyBetBadge>
     );
   };
 
