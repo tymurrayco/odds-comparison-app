@@ -42,6 +42,9 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
     e.stopPropagation();
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const url = `${window.location.origin}/game/${game.id}?league=${game.sport_key}&tz=${encodeURIComponent(tz)}`;
+    // Pre-warm the share page (metadata + upstream caches) so the first social
+    // crawler hits warm caches — cold renders made X's image fetch time out.
+    fetch(url).catch(() => {});
     navigator.clipboard.writeText(url).then(() => {
       setShowLinkCopied(true);
       setTimeout(() => setShowLinkCopied(false), 2000);

@@ -522,6 +522,8 @@ export default function FuturesTable({
             <button
               onClick={() => {
                 const url = `${window.location.origin}/futures/${league}`;
+                // Pre-warm the share page so crawler image fetches hit warm caches
+                fetch(url).catch(() => {});
                 navigator.clipboard.writeText(url).then(() => {
                   showToast('Link copied!', 'success');
                 });
