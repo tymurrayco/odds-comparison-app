@@ -137,12 +137,12 @@ function TeamColumn({ logo, name, implied, ml, dim }: {
             display: 'flex',
             alignItems: 'center',
             marginTop: '4px',
-            padding: '4px 16px',
+            padding: '5px 17px',
             backgroundColor: SURFACE,
             border: `1px solid ${HAIRLINE}`,
             borderRadius: '999px',
             color: INK_SOFT,
-            fontSize: '20px',
+            fontSize: '21px',
             fontWeight: 700,
           }}
         >
