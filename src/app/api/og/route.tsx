@@ -54,7 +54,10 @@ function panelColor(hex: string | null, altHex: string | null = null): string {
       return '#e9ebef'; // genuinely gray/black/silver identity → light gray tint
     }
   }
-  const S = Math.min(1, Math.max(hsl.s, 0.45));
+  // Clamp saturation to a pastel band: the floor keeps dark navies from going
+  // grey, the CAP keeps fully-saturated hues (CSU forest green) from rendering
+  // neon once lightness is lifted.
+  const S = Math.min(0.62, Math.max(hsl.s, 0.45));
   const L = 0.85;
   const c = (1 - Math.abs(2 * L - 1)) * S;
   const x = c * (1 - Math.abs(((hsl.hue / 60) % 2) - 1));
