@@ -306,15 +306,11 @@ export async function generateMetadata({
   
   // Add ESPN logos if we can fetch them
   const espnLogos = await getESPNLogos(game.sport_key, game.away_team, game.home_team);
-  // The card is dark with team-color panels — use ESPN's dark-background logo
-  // variants (/500-dark/) so dark logos (e.g. TCU purple) stay visible.
-  const toDarkLogo = (url: string) =>
-    url.includes('espncdn.com') ? url.replace('/500/', '/500-dark/') : url;
   if (espnLogos.awayLogo) {
-    ogImageParams.set('awayLogo', toDarkLogo(espnLogos.awayLogo));
+    ogImageParams.set('awayLogo', espnLogos.awayLogo);
   }
   if (espnLogos.homeLogo) {
-    ogImageParams.set('homeLogo', toDarkLogo(espnLogos.homeLogo));
+    ogImageParams.set('homeLogo', espnLogos.homeLogo);
   }
   if (espnLogos.awayColor) {
     ogImageParams.set('awayColor', espnLogos.awayColor);

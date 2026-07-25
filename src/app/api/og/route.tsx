@@ -7,25 +7,24 @@ import { NextRequest } from 'next/server';
 
 export const runtime = 'edge';
 
-const INK = '#f8fafc';                       // primary text
-const INK_SOFT = 'rgba(248,250,252,0.78)';   // team names
-const INK_DIM = 'rgba(248,250,252,0.55)';    // muted/underdog
-const ACCENT = '#60a5fa';                    // brand accent
-const NEUTRAL = '#0e1c33';                   // center + fallback panel base
-const SURFACE = 'rgba(255,255,255,0.07)';
-const HAIRLINE = 'rgba(255,255,255,0.14)';
+const INK = '#0f172a';                    // primary text
+const INK_SOFT = '#334155';               // team names / labels
+const INK_DIM = '#94a3b8';                // muted/underdog
+const ACCENT = '#2563eb';                 // brand accent
+const NEUTRAL = '#ffffff';                // center + fallback panel base
+const SURFACE = 'rgba(15,23,42,0.04)';
+const HAIRLINE = 'rgba(15,23,42,0.12)';
 
-// Darken a team color toward the neutral base so white text stays readable.
-// Light colors (maize, gold) get pulled down harder than dark ones.
+// Soften a team color toward white so the panels read as tints and dark ink
+// stays readable everywhere. Dark colors get pulled up harder than light ones.
 function panelColor(hex: string | null): string {
   if (!hex) return NEUTRAL;
   const h = hex.replace('#', '').trim();
   if (!/^[0-9a-fA-F]{6}$/.test(h)) return NEUTRAL;
   const c = [0, 1, 2].map(i => parseInt(h.slice(i * 2, i * 2 + 2), 16));
   const lum = (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255;
-  const t = lum > 0.55 ? 0.62 : lum > 0.35 ? 0.5 : 0.38; // mix ratio toward neutral
-  const base = [14, 28, 51]; // NEUTRAL rgb
-  const m = c.map((v, i) => Math.round(v * (1 - t) + base[i] * t));
+  const t = lum > 0.55 ? 0.55 : lum > 0.35 ? 0.68 : 0.78; // mix ratio toward white
+  const m = c.map(v => Math.round(v * (1 - t) + 255 * t));
   return `#${m.map(v => v.toString(16).padStart(2, '0')).join('')}`;
 }
 
@@ -48,7 +47,7 @@ function TeamColumn({ logo, name, implied, dim }: {
             justifyContent: 'center',
             width: '160px',
             height: '160px',
-            backgroundColor: 'rgba(255,255,255,0.12)',
+            backgroundColor: 'rgba(15,23,42,0.08)',
             borderRadius: '80px',
           }}
         >
