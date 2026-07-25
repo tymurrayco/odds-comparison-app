@@ -486,7 +486,7 @@ export async function generateMetadata({
     ogImageParams.set('tv', tvNetwork);
   }
   
-  const ogImageUrl = `https://odds.day/api/og?${ogImageParams.toString()}`;
+  const ogImageUrl = `https://www.odds.day/api/og?${ogImageParams.toString()}`;
   
   return {
     title: `${title} | odds.day`,
@@ -496,7 +496,7 @@ export async function generateMetadata({
       description,
       type: 'website',
       siteName: 'odds.day',
-      url: `https://odds.day/game/${id}`,
+      url: `https://www.odds.day/game/${id}`,
       images: [
         {
           url: ogImageUrl,

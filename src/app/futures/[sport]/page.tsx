@@ -174,7 +174,7 @@ export async function generateMetadata({
       n: t.name, o: fmt(t.odds), l: t.logo ?? '', c: t.color ?? '', b: t.book ?? '',
     }))));
   }
-  const ogImageUrl = `https://odds.day/api/og-futures?${ogParams.toString()}`;
+  const ogImageUrl = `https://www.odds.day/api/og-futures?${ogParams.toString()}`;
 
   return {
     title: `${title} Odds | odds.day`,
@@ -184,7 +184,7 @@ export async function generateMetadata({
       description,
       type: 'website',
       siteName: 'odds.day',
-      url: `https://odds.day/futures/${sport}`,
+      url: `https://www.odds.day/futures/${sport}`,
       images: [{ url: ogImageUrl, width: 1200, height: 630, alt: title }],
     },
     twitter: {
