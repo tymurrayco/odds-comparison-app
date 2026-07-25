@@ -83,13 +83,15 @@ function TeamLogoOrName({ srcs, name, restBadge }: { srcs: (string | undefined)[
   }
   const src = list[idx];
   return (
-    <div className="flex items-center">
+    // Mobile shows the logo alone — center it in the frozen column; on sm+ the
+    // name sits beside it, so the group goes back to left-aligned.
+    <div className={`flex items-center ${loaded ? 'justify-center sm:justify-start' : ''}`}>
       {src && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={src}
           alt=""
-          className="h-5 w-5 mr-1.5 flex-shrink-0"
+          className="h-5 w-5 sm:mr-1.5 flex-shrink-0"
           onLoad={() => setLoaded(true)}
           onError={() => setIdx(i => i + 1)}
         />

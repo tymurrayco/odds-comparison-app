@@ -456,8 +456,8 @@ export default function FuturesTable({
 
       return (
         // Mobile: ticket badge stacks UNDER the logo; sm+: everything inline
-        <div className="flex flex-col items-start gap-1 sm:flex-row sm:items-center">
-          <div className="flex items-center gap-1">
+        <div className="flex flex-col items-center gap-1 sm:flex-row sm:items-center sm:justify-start">
+          <div className="flex items-center justify-center gap-1 sm:justify-start">
             <TeamLogoImg
               srcs={[espnLogoSrc, localLogoSrc]}
               className="h-5 w-5 sm:mr-2 object-contain flex-shrink-0"
