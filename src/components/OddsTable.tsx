@@ -462,8 +462,10 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
         }
         
         return (
-          // border-separate: Safari drops sticky table cells under border-collapse
-          <table key={game.id} className="min-w-full border-separate border-spacing-0">
+          // border-separate: Safari drops sticky table cells under border-collapse.
+          // Key includes the market so switching tabs remounts the table —
+          // without it, sticky cells stayed unpainted until a scroll forced a repaint.
+          <table key={`${game.id}-${marketKey}`} className="min-w-full border-separate border-spacing-0">
             <thead className="bg-gray-50">
               <tr>
                 {/* Frozen while horizontally scrolling the book columns */}
