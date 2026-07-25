@@ -76,6 +76,7 @@ function getGameLines(game: {
       outcomes?: Array<{
         name: string;
         point?: number;
+        price?: number;
       }>;
     }>;
   }>;
@@ -83,7 +84,7 @@ function getGameLines(game: {
   away_team?: string;
 }) {
   if (!game.bookmakers || game.bookmakers.length === 0) {
-    return { spread: null, total: null, impliedAway: null, impliedHome: null };
+    return { spread: null, total: null, impliedAway: null, impliedHome: null, awayML: null, homeML: null };
   }
 
   // Consensus lines: average spread/total across ALL books — the same inputs
@@ -92,6 +93,10 @@ function getGameLines(game: {
   // to 0.1, matching the site's spread-average convention.
   const awaySpreads: number[] = [];
   const totals: number[] = [];
+  const awayProbs: number[] = [];
+  const homeProbs: number[] = [];
+  const toProb = (american: number) =>
+    american < 0 ? -american / (-american + 100) : 100 / (american + 100);
   for (const b of game.bookmakers) {
     const sm = b.markets?.find((m: { key: string }) => m.key === 'spreads');
     const away = sm?.outcomes?.find((o: { name: string }) => o.name === game.away_team);
@@ -99,7 +104,22 @@ function getGameLines(game: {
     const tm = b.markets?.find((m: { key: string }) => m.key === 'totals');
     const over = tm?.outcomes?.find((o: { name: string }) => o.name === 'Over');
     if (over && over.point !== undefined) totals.push(over.point);
+    const hm = b.markets?.find((m: { key: string }) => m.key === 'h2h');
+    const awayH2h = hm?.outcomes?.find((o: { name: string; price?: number }) => o.name === game.away_team);
+    const homeH2h = hm?.outcomes?.find((o: { name: string; price?: number }) => o.name === game.home_team);
+    if (awayH2h?.price !== undefined) awayProbs.push(toProb(awayH2h.price));
+    if (homeH2h?.price !== undefined) homeProbs.push(toProb(homeH2h.price));
   }
+
+  // Consensus moneylines: average implied probability, back to American, nearest 5
+  const toAmerican = (p: number) =>
+    p >= 0.5 ? -Math.round((p / (1 - p)) * 100 / 5) * 5 : Math.round(((1 - p) / p) * 100 / 5) * 5;
+  const awayML = awayProbs.length > 0
+    ? toAmerican(awayProbs.reduce((a, v) => a + v, 0) / awayProbs.length)
+    : null;
+  const homeML = homeProbs.length > 0
+    ? toAmerican(homeProbs.reduce((a, v) => a + v, 0) / homeProbs.length)
+    : null;
 
   let spread: number | null = null;       // consensus HOME spread
   let total: number | null = null;        // consensus total
@@ -127,7 +147,9 @@ function getGameLines(game: {
     spread,
     total,
     impliedAway,
-    impliedHome
+    impliedHome,
+    awayML,
+    homeML
   };
 }
 
@@ -295,7 +317,7 @@ export async function generateMetadata({
     };
   }
   
-  const { spread, total, impliedAway, impliedHome } = getGameLines(game);
+  const { spread, total, impliedAway, impliedHome, awayML, homeML } = getGameLines(game);
   const leagueName = getLeagueName(game.sport_key);
   
   // Format game time in Eastern timezone (most US sports)
@@ -367,6 +389,12 @@ export async function generateMetadata({
   }
   if (espnLogos.homeAlt) {
     ogImageParams.set('homeAlt', espnLogos.homeAlt);
+  }
+  if (awayML !== null) {
+    ogImageParams.set('awayML', awayML > 0 ? `+${awayML}` : `${awayML}`);
+  }
+  if (homeML !== null) {
+    ogImageParams.set('homeML', homeML > 0 ? `+${homeML}` : `${homeML}`);
   }
   
   const ogImageUrl = `https://odds.day/api/og?${ogImageParams.toString()}`;

@@ -67,25 +67,26 @@ function panelColor(hex: string | null, altHex: string | null = null): string {
   return `#${rgb1.map(toHex).join('')}`;
 }
 
-function TeamColumn({ logo, name, implied, dim }: {
+function TeamColumn({ logo, name, implied, ml, dim }: {
   logo: string;
   name: string;
   implied: string;
+  ml: string;
   dim: boolean;
 }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', width: '340px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', width: '340px' }}>
       {logo ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={logo} alt="" width={160} height={160} style={{ objectFit: 'contain' }} />
+        <img src={logo} alt="" width={132} height={132} style={{ objectFit: 'contain' }} />
       ) : (
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: '160px',
-            height: '160px',
+            width: '132px',
+            height: '132px',
             backgroundColor: 'rgba(15,23,42,0.08)',
             borderRadius: '80px',
           }}
@@ -101,7 +102,7 @@ function TeamColumn({ logo, name, implied, dim }: {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          height: '70px',
+          height: '64px',
           maxWidth: '310px',
         }}
       >
@@ -121,13 +122,31 @@ function TeamColumn({ logo, name, implied, dim }: {
         <span
           style={{
             color: dim ? INK_DIM : INK,
-            fontSize: '76px',
+            fontSize: '68px',
             fontWeight: 700,
             lineHeight: 1,
-            marginTop: '-6px',
+            marginTop: '-4px',
           }}
         >
           {implied}
+        </span>
+      )}
+      {ml && (
+        <span
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            marginTop: '4px',
+            padding: '4px 16px',
+            backgroundColor: SURFACE,
+            border: `1px solid ${HAIRLINE}`,
+            borderRadius: '999px',
+            color: INK_SOFT,
+            fontSize: '20px',
+            fontWeight: 700,
+          }}
+        >
+          ML {ml}
         </span>
       )}
     </div>
@@ -147,6 +166,8 @@ export async function GET(request: NextRequest) {
   const homeLogo = searchParams.get('homeLogo') || '';
   const impliedAway = searchParams.get('impliedAway') || '';
   const impliedHome = searchParams.get('impliedHome') || '';
+  const awayML = searchParams.get('awayML') || '';
+  const homeML = searchParams.get('homeML') || '';
   const awayPanel = panelColor(searchParams.get('awayColor'), searchParams.get('awayAlt'));
   const homePanel = panelColor(searchParams.get('homeColor'), searchParams.get('homeAlt'));
 
@@ -205,7 +226,7 @@ export async function GET(request: NextRequest) {
             justifyContent: 'space-between',
           }}
         >
-          <TeamColumn logo={awayLogo} name={awayTeam} implied={awayScore} dim={hasImplied && homeFavored} />
+          <TeamColumn logo={awayLogo} name={awayTeam} implied={awayScore} ml={awayML} dim={hasImplied && homeFavored} />
           <div
             style={{
               display: 'flex',
@@ -229,7 +250,7 @@ export async function GET(request: NextRequest) {
               </span>
             )}
           </div>
-          <TeamColumn logo={homeLogo} name={homeTeam} implied={homeScore} dim={hasImplied && !homeFavored} />
+          <TeamColumn logo={homeLogo} name={homeTeam} implied={homeScore} ml={homeML} dim={hasImplied && !homeFavored} />
         </div>
 
         {/* Stat row: spread / total */}
