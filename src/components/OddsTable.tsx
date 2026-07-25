@@ -7,6 +7,7 @@ import { formatOdds } from '@/lib/utils';
 import { createBet } from '@/lib/betService';
 import { GameRestData, TeamRestInfo } from '@/lib/nhlRest';
 import { resolveDeepLink, fillLinkTemplate, promptForState } from '@/lib/betLinks';
+import { useTeamColorMap, teamInfoFromMap } from '@/lib/myGameBets';
 
 interface OddsTableProps {
   games: Game[];
@@ -68,20 +69,22 @@ function getLeagueDisplayName(league: string): string {
 // Team cell: logo with graceful fallback — when the logo is missing/broken
 // (e.g. CFL has no ESPN logos), show the team name on mobile too instead of
 // leaving the cell blank.
-function TeamLogoOrName({ src, name, restBadge }: { src: string; name: string; restBadge?: React.ReactNode }) {
-  const [imgOk, setImgOk] = useState(true);
+function TeamLogoOrName({ srcs, name, restBadge }: { srcs: (string | undefined)[]; name: string; restBadge?: React.ReactNode }) {
+  const [idx, setIdx] = useState(0);
+  const list = srcs.filter((s): s is string => !!s);
+  const src = list[idx];
   return (
     <div className="flex items-center">
-      {imgOk && (
+      {src && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={src}
           alt=""
           className="h-5 w-5 mr-1.5 flex-shrink-0"
-          onError={() => setImgOk(false)}
+          onError={() => setIdx(i => i + 1)}
         />
       )}
-      <span className={imgOk ? 'hidden sm:inline truncate' : 'inline truncate'}>{name}</span>
+      <span className={src ? 'hidden sm:inline truncate' : 'inline truncate'}>{name}</span>
       {restBadge}
     </div>
   );
@@ -128,6 +131,10 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
   const pressTimer = useRef<NodeJS.Timeout | null>(null);
   const [isHolding, setIsHolding] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  // ESPN logos for every team in the league — local /team-logos files use
+  // abbreviated names ("northdakotastbison") that the odds-API names never
+  // match, and FCS teams have no file at all.
+  const teamMap = useTeamColorMap(league);
 
   // Use selected bookmakers or default to all
   const displayBookmakers = selectedBookmakers && selectedBookmakers.length > 0 
@@ -457,10 +464,11 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
             </thead>
             <tbody>
               {[game.away_team, game.home_team].map((team, index) => {
-                // Use ESPN logo if available, otherwise fall back to local
-                const teamLogo = index === 0 
-                  ? (awayLogo || `/team-logos/${team.toLowerCase().replace(/\s+/g, '')}.png`)
-                  : (homeLogo || `/team-logos/${team.toLowerCase().replace(/\s+/g, '')}.png`);
+                // Logo chain: live-score logo → ESPN league map → local file → name
+                const scoreLogo = index === 0 ? awayLogo : homeLogo;
+                const espnLogo = teamInfoFromMap(teamMap, team)?.logo;
+                const localLogo = `/team-logos/${team.toLowerCase().replace(/\s+/g, '')}.png`;
+                const logoSrcs = [scoreLogo, espnLogo, localLogo];
                 
                 // Get rest badge for this team (NHL only)
                 const teamRestInfo = restData 
@@ -477,7 +485,7 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                   <tr key={team} className={index === 0 ? "border-b" : ""}>
                     <td className={`px-2 md:px-4 py-3 text-xs md:text-sm font-medium text-gray-900 sticky left-0 z-10 bg-white border-r border-gray-100 ${restData ? 'min-w-[70px]' : 'max-w-[120px] truncate whitespace-nowrap'}`}>
                       {/* Logo only on mobile / name on desktop — name shows on mobile too when the logo is missing */}
-                      <TeamLogoOrName src={teamLogo} name={team} restBadge={restBadge} />
+                      <TeamLogoOrName srcs={logoSrcs} name={team} restBadge={restBadge} />
                     </td>
                     
                     {activeBookmakers.map(book => {
