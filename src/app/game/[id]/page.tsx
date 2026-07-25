@@ -106,13 +106,15 @@ function getGameLines(game: {
   let impliedAway: number | null = null;
   let impliedHome: number | null = null;
 
+  // Display snaps to the nearest 0.5 so the card reads like a bettable line;
+  // implied scores below still use the exact averages.
   if (awaySpreads.length > 0) {
     const avgAwaySpread = awaySpreads.reduce((s, v) => s + v, 0) / awaySpreads.length;
-    spread = Math.round(-avgAwaySpread * 10) / 10;
+    spread = Math.round(-avgAwaySpread * 2) / 2;
   }
   if (totals.length > 0) {
     const avgTotal = totals.reduce((s, v) => s + v, 0) / totals.length;
-    total = Math.round(avgTotal * 10) / 10;
+    total = Math.round(avgTotal * 2) / 2;
   }
   if (awaySpreads.length > 0 && totals.length > 0) {
     const avgSpread = awaySpreads.reduce((s, v) => s + v, 0) / awaySpreads.length;
