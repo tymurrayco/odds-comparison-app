@@ -7,6 +7,7 @@ import {
   usePendingFutureBets,
   useTeamColorMap,
   normalizeTeamKey,
+  teamInfoFromMap,
   MyBetBadge,
   TeamLogoImg,
 } from '@/lib/myGameBets';
@@ -397,7 +398,7 @@ export default function FuturesTable({
   const renderTicketBadge = (team: string) => {
     const ticket = findTicket(team);
     if (!ticket) return null;
-    const color = teamColorMap?.[normalizeTeamKey(team)]?.color;
+    const color = teamInfoFromMap(teamColorMap, team)?.color;
     const accent = color ? `#${color}` : null;
     return (
       <MyBetBadge accent={accent} title={`Your bet: ${ticket.bet}${ticket.book ? ` (${ticket.book})` : ''}`}>
@@ -409,7 +410,7 @@ export default function FuturesTable({
   // Custom display for team cell based on whether it's Masters and screen size
   const renderTeamCell = (team: string, tier: EliteTier | null, teamDetails?: EliteTeamData) => {
     const localLogoSrc = `/team-logos/${team.toLowerCase().replace(/\s+/g, '')}.png`;
-    const espnLogoSrc = teamColorMap?.[normalizeTeamKey(team)]?.logo;
+    const espnLogoSrc = teamInfoFromMap(teamColorMap, team)?.logo;
     const lastName = getLastName(team);
 
     if (isMasters) {

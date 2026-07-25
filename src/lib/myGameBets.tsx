@@ -42,6 +42,27 @@ const SPORT_KEY_TO_LEAGUE: Record<string, string> = {
 
 const teamMapCache: Record<string, Promise<Record<string, BetTeamInfo>>> = {};
 
+// Kalshi team labels that don't reduce to any ESPN name variant
+// (normalized Kalshi label → normalized ESPN map key).
+const TEAM_KEY_ALIASES: Record<string, string> = {
+  losangelesg: 'lagalaxy',       // MLS: LA Galaxy
+  losangelesf: 'lafc',           // MLS: LAFC
+  montral: 'cfmontral',          // MLS: CF Montréal (accent strips to 'montral')
+  newyorkrb: 'redbullnewyork',   // MLS: NY Red Bulls
+  newyorkcity: 'newyorkcityfc',  // MLS: NYCFC
+  saintlouis: 'stlouiscitysc',   // MLS: St. Louis City SC
+};
+
+// Map lookup with alias fallback — use instead of raw map[normalizeTeamKey(x)].
+export function teamInfoFromMap(
+  map: Record<string, BetTeamInfo> | null,
+  name: string | undefined | null,
+): BetTeamInfo | null {
+  if (!map || !name) return null;
+  const key = normalizeTeamKey(name);
+  return map[key] ?? map[TEAM_KEY_ALIASES[key] ?? ''] ?? null;
+}
+
 export const hexToRgba = (hex: string, alpha: number): string => {
   const h = hex.replace('#', '').trim();
   if (h.length !== 6) return `rgba(0,0,0,${alpha})`;
@@ -91,8 +112,7 @@ export function wageredTeamColor(
     candidates.push(bet.team, leadNoMl !== lead ? leadNoMl : undefined, lead, bet.parlayTeams?.[0], homeTeam, awayTeam);
   }
   for (const c of candidates) {
-    if (!c) continue;
-    const info = map[norm(c)];
+    const info = teamInfoFromMap(map, c);
     if (info?.color) return `#${info.color}`;
   }
   return null;
