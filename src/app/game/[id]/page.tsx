@@ -160,6 +160,30 @@ const ESPN_LEAGUE_MAP: { [key: string]: { sport: string; league: string } } = {
   'soccer_epl': { sport: 'soccer', league: 'eng.1' },
 };
 
+// Two-word mascots that a naive last-word split would chop ("Tar Heels" → "Heels").
+// Checked as the final two words of the team name; anything else uses the last word.
+const TWO_WORD_MASCOTS = new Set([
+  'tar heels', 'yellow jackets', 'horned frogs', 'blue devils', 'blue jays',
+  'blue jackets', 'blue raiders', 'blue hens', 'white sox', 'red sox',
+  'red wings', 'red raiders', 'red storm', 'red bulls', 'red wolves',
+  'golden bears', 'golden knights', 'golden eagles', 'golden gophers',
+  'golden flashes', 'golden hurricane', 'golden panthers', 'golden griffins',
+  'maple leafs', 'trail blazers', 'sun devils', 'crimson tide',
+  'fighting irish', 'fighting illini', 'fighting hawks', 'demon deacons',
+  'scarlet knights', 'nittany lions', 'mean green', 'green wave',
+  'ragin cajuns', 'black knights', 'black bears', 'purple aces',
+  'purple eagles', 'blue bombers', 'tiger-cats', 'roughriders',
+]);
+
+function getMascot(teamName: string): string {
+  const words = teamName.trim().split(/\s+/);
+  if (words.length >= 2) {
+    const lastTwo = words.slice(-2).join(' ').toLowerCase().replace(/['.]/g, '');
+    if (TWO_WORD_MASCOTS.has(lastTwo)) return words.slice(-2).join(' ');
+  }
+  return words[words.length - 1];
+}
+
 // Match strength between an ESPN team name and the odds-api team name.
 // Weak criteria (shared mascot/first word) must never beat a stronger match
 // elsewhere in the list — "California Golden Bears" was picking up the Baylor
@@ -290,9 +314,9 @@ export async function generateMetadata({
     description += ` • O/U ${total}`;
   }
   
-  // Use mascot names (last word) for title
-  const awayMascot = game.away_team.split(' ').slice(-1)[0];
-  const homeMascot = game.home_team.split(' ').slice(-1)[0];
+  // Use mascot names for the title (two-word mascots kept intact)
+  const awayMascot = getMascot(game.away_team);
+  const homeMascot = getMascot(game.home_team);
   const title = `${awayMascot} @ ${homeMascot}`;
   
   // Build OG image URL with game info
@@ -305,7 +329,7 @@ export async function generateMetadata({
   
   if (spread !== null && spread !== undefined) {
     const spreadStr = spread > 0 ? `+${spread}` : `${spread}`;
-    ogImageParams.set('spread', `${game.home_team.split(' ').slice(-1)[0]} ${spreadStr}`);
+    ogImageParams.set('spread', `${getMascot(game.home_team)} ${spreadStr}`);
   }
   if (total !== null && total !== undefined) {
     ogImageParams.set('total', `${total}`);
@@ -315,8 +339,8 @@ export async function generateMetadata({
   if (impliedAway !== null && impliedHome !== null) {
     ogImageParams.set('impliedAway', `${impliedAway}`);
     ogImageParams.set('impliedHome', `${impliedHome}`);
-    ogImageParams.set('awayName', game.away_team.split(' ').slice(-1)[0]);
-    ogImageParams.set('homeName', game.home_team.split(' ').slice(-1)[0]);
+    ogImageParams.set('awayName', getMascot(game.away_team));
+    ogImageParams.set('homeName', getMascot(game.home_team));
   }
   
   // Add ESPN logos if we can fetch them
