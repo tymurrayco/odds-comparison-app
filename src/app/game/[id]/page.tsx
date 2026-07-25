@@ -145,21 +145,18 @@ const ESPN_LEAGUE_MAP: { [key: string]: { sport: string; league: string } } = {
   'soccer_epl': { sport: 'soccer', league: 'eng.1' },
 };
 
-// Helper to match team names
-function teamsMatch(name1: string, name2: string): boolean {
+// Match strength between an ESPN team name and the odds-api team name.
+// Weak criteria (shared mascot/first word) must never beat a stronger match
+// elsewhere in the list — "California Golden Bears" was picking up the Baylor
+// Bears logo because a first-weak-match-wins loop hit Baylor alphabetically.
+function matchScore(name1: string, name2: string): number {
   const n1 = name1.toLowerCase();
   const n2 = name2.toLowerCase();
-  if (n1 === n2) return true;
-  if (n1.includes(n2) || n2.includes(n1)) return true;
-  // Check last word (mascot)
-  const mascot1 = n1.split(' ').slice(-1)[0];
-  const mascot2 = n2.split(' ').slice(-1)[0];
-  if (mascot1 === mascot2) return true;
-  // Check first word
-  const first1 = n1.split(' ')[0];
-  const first2 = n2.split(' ')[0];
-  if (first1 === first2) return true;
-  return false;
+  if (n1 === n2) return 4;
+  if (n1.includes(n2) || n2.includes(n1)) return 3;
+  if (n1.split(' ')[0] === n2.split(' ')[0]) return 2;
+  if (n1.split(' ').slice(-1)[0] === n2.split(' ').slice(-1)[0]) return 1;
+  return 0;
 }
 
 // Fetch ESPN logos for teams using the teams endpoint (works for any game, not just today's)
@@ -184,38 +181,43 @@ async function getESPNLogos(
     
     let awayLogo: string | null = null;
     let homeLogo: string | null = null;
-    
+    let awayBest = 0;
+    let homeBest = 0;
+
     interface ESPNTeamInfo {
       displayName?: string;
       name?: string;
       logos?: Array<{ href?: string }>;
     }
-    
+
     interface ESPNTeamEntry {
       team?: ESPNTeamInfo;
     }
-    
+
     if (data.sports?.[0]?.leagues?.[0]?.teams) {
+      // Scan the full list keeping the BEST match per side — never first-match.
       for (const entry of data.sports[0].leagues[0].teams as ESPNTeamEntry[]) {
         const team = entry.team;
         if (!team) continue;
-        
+
         const teamName = team.displayName || team.name || '';
         const logo = team.logos?.[0]?.href;
-        
-        if (logo) {
-          if (teamsMatch(teamName, awayTeam) && !awayLogo) {
-            awayLogo = logo;
-          }
-          if (teamsMatch(teamName, homeTeam) && !homeLogo) {
-            homeLogo = logo;
-          }
+        if (!logo) continue;
+
+        const awayScore = matchScore(teamName, awayTeam);
+        if (awayScore > awayBest) {
+          awayBest = awayScore;
+          awayLogo = logo;
         }
-        
-        if (awayLogo && homeLogo) break;
+        const homeScore = matchScore(teamName, homeTeam);
+        if (homeScore > homeBest) {
+          homeBest = homeScore;
+          homeLogo = logo;
+        }
+        if (awayBest === 4 && homeBest === 4) break;
       }
     }
-    
+
     return { awayLogo, homeLogo };
   } catch (error) {
     console.error('Error fetching ESPN logos:', error);
