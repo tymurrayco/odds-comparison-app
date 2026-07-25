@@ -172,8 +172,10 @@ async function getESPNLogos(
     const espnLeague = ESPN_LEAGUE_MAP[sportKey];
     if (!espnLeague) return { awayLogo: null, homeLogo: null };
     
-    // Use teams endpoint to get all team logos
-    const apiUrl = `https://site.api.espn.com/apis/site/v2/sports/${espnLeague.sport}/${espnLeague.league}/teams?limit=200`;
+    // Use teams endpoint to get all team logos. limit=1000: ESPN ignores group
+    // filters and college football has 755 teams — lower limits truncate the
+    // list and silently drop teams (TCU was missing at limit=200).
+    const apiUrl = `https://site.api.espn.com/apis/site/v2/sports/${espnLeague.sport}/${espnLeague.league}/teams?limit=1000`;
     
     const response = await fetch(apiUrl, { next: { revalidate: 86400 } }); // Cache for 24 hours
     if (!response.ok) return { awayLogo: null, homeLogo: null };
