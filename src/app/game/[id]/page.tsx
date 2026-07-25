@@ -85,29 +85,39 @@ function getGameLines(game: {
   if (!game.bookmakers || game.bookmakers.length === 0) {
     return { spread: null, total: null, impliedAway: null, impliedHome: null };
   }
-  
+
+  // Displayed line: first bookmaker (a real quotable line)
   const bookmaker = game.bookmakers[0];
   const spreadsMarket = bookmaker.markets?.find((m: { key: string }) => m.key === 'spreads');
   const totalsMarket = bookmaker.markets?.find((m: { key: string }) => m.key === 'totals');
-  
   const homeSpread = spreadsMarket?.outcomes?.find((o: { name: string }) => o.name === game.home_team);
   const totalOver = totalsMarket?.outcomes?.find((o: { name: string }) => o.name === 'Over');
-  
   const spread = homeSpread?.point ?? null;
   const total = totalOver?.point ?? null;
-  
-  // Calculate implied scores
+
+  // Implied scores: average spread/total across ALL books — must match the
+  // site's GameCard.calculateImpliedScores exactly (same inputs, same rounding)
+  // or the share card disagrees with the page it links to.
+  const awaySpreads: number[] = [];
+  const totals: number[] = [];
+  for (const b of game.bookmakers) {
+    const sm = b.markets?.find((m: { key: string }) => m.key === 'spreads');
+    const away = sm?.outcomes?.find((o: { name: string }) => o.name === game.away_team);
+    if (away && away.point !== undefined) awaySpreads.push(away.point);
+    const tm = b.markets?.find((m: { key: string }) => m.key === 'totals');
+    const over = tm?.outcomes?.find((o: { name: string }) => o.name === 'Over');
+    if (over && over.point !== undefined) totals.push(over.point);
+  }
+
   let impliedAway: number | null = null;
   let impliedHome: number | null = null;
-  
-  if (spread !== null && total !== null) {
-    // Home spread is negative means home is favored
-    // Implied home = (total - spread) / 2
-    // Implied away = (total + spread) / 2
-    impliedHome = Math.round(((total - spread) / 2) * 10) / 10;
-    impliedAway = Math.round(((total + spread) / 2) * 10) / 10;
+  if (awaySpreads.length > 0 && totals.length > 0) {
+    const avgSpread = awaySpreads.reduce((s, v) => s + v, 0) / awaySpreads.length;
+    const avgTotal = totals.reduce((s, v) => s + v, 0) / totals.length;
+    impliedAway = Math.round((avgTotal - avgSpread) / 2);
+    impliedHome = Math.round((avgTotal + avgSpread) / 2);
   }
-  
+
   return {
     spread,
     total,
