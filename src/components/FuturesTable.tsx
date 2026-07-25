@@ -597,7 +597,8 @@ export default function FuturesTable({
         <table className="min-w-full">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-2 md:px-4 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              {/* Frozen while horizontally scrolling the book columns */}
+              <th className="px-2 md:px-4 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-0 z-20 bg-gray-50 border-r border-gray-100">
                 Team
               </th>
               {activeBookmakers.map(book => (
@@ -642,7 +643,7 @@ export default function FuturesTable({
                   className={getRowBgColor(teamTier)}
                   title={teamDetails ? `KenPom: O#${teamDetails.rankOE}, D#${teamDetails.rankDE}, Overall#${teamDetails.rankEM}` : undefined}
                 >
-                  <td className="px-2 md:px-4 py-3 whitespace-normal text-xs md:text-sm font-medium text-gray-900">
+                  <td className={`px-2 md:px-4 py-3 whitespace-normal text-xs md:text-sm font-medium text-gray-900 sticky left-0 z-10 border-r border-gray-100 ${getRowBgColor(teamTier) || 'bg-white'}`}>
                     {renderTeamCell(item.team, teamTier, teamDetails)}
                   </td>
                   {activeBookmakers.map(book => {
