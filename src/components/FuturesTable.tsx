@@ -664,7 +664,7 @@ export default function FuturesTable({
                         onMouseUp={handlePressEnd}
                         onMouseLeave={handlePressEnd}
                         onClick={() => hasOdds && handleCellClick(item.links, book)}
-                        title={hasOdds && item.links?.[book] ? `Click to view on ${book} — hold to track bet` : undefined}
+                        title={hasOdds ? (item.links?.[book] ? `Click to view on ${book} — hold to track bet` : 'Hold to track bet') : undefined}
                       >
                         {hasOdds ? (
                           <div className={`text-xs md:text-sm font-medium ${
