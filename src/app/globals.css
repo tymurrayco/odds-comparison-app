@@ -56,3 +56,12 @@ body {
   transform-origin: center;
   animation: odds-tick 1s ease-in-out infinite;
 }
+
+/* Horizontal strips (league nav) scroll without a visible scrollbar */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
