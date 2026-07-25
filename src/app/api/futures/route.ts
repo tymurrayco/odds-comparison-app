@@ -34,7 +34,8 @@ export async function GET(request: Request) {
     const apiUrl = `https://api.the-odds-api.com/v4/sports/${championshipKey}/odds/?apiKey=${process.env.ODDS_API_KEY}&regions=us&markets=outrights&oddsFormat=american`;
     console.log('Requesting futures URL:', apiUrl.replace(process.env.ODDS_API_KEY || '', '[REDACTED]'));
     
-    const response = await fetch(apiUrl);
+    // Futures move slowly — cache for 10 minutes
+    const response = await fetch(apiUrl, { next: { revalidate: 600 } });
     
     if (!response.ok) {
       const errorText = await response.text();

@@ -15,7 +15,8 @@ export async function GET(request: Request) {
   try {
     const apiUrl = `https://api.the-odds-api.com/v4/sports/${sport}/events/${eventId}/odds?apiKey=${apiKey}&regions=us&markets=team_totals&oddsFormat=american`;
     
-    const response = await fetch(apiUrl);
+    // Shared server-side cache: visitors within 2 min reuse one paid API call
+    const response = await fetch(apiUrl, { next: { revalidate: 120 } });
     
     if (!response.ok) {
       return NextResponse.json({ error: 'API error' }, { status: 500 });

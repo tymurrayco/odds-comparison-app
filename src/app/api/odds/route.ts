@@ -39,7 +39,8 @@ export async function GET(request: Request) {
     // Added includeLinks=true to get deep links to sportsbook betslips
     const apiUrl = `https://api.the-odds-api.com/v4/sports/${sport}/odds/?apiKey=${apiKey}&regions=us&markets=h2h,spreads,totals&oddsFormat=american&includeLinks=true`;
 
-    const response = await fetch(apiUrl);
+    // Shared server-side cache: visitors within 60s reuse one paid API call
+    const response = await fetch(apiUrl, { next: { revalidate: 60 } });
 
     if (!response.ok) {
       const errorText = await response.text();

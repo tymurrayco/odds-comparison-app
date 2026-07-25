@@ -111,7 +111,8 @@ export async function GET(request: Request) {
       const apiUrl = `https://api.the-odds-api.com/v4/sports/${sport}/events/${eventId}/odds?apiKey=${apiKey}&regions=us&markets=${marketsParam}&oddsFormat=american`;
       console.log('Requesting props URL:', apiUrl.replace(apiKey || '', '[REDACTED]'));
       
-      const response = await fetch(apiUrl);
+      // Shared server-side cache (2 min) — props fan out to many paid calls
+      const response = await fetch(apiUrl, { next: { revalidate: 120 } });
       
       if (!response.ok) {
         const errorText = await response.text();
@@ -142,7 +143,8 @@ export async function GET(request: Request) {
     const apiUrl = `https://api.the-odds-api.com/v4/sports/${sport}/events?apiKey=${apiKey}`;
     console.log('Requesting events URL:', apiUrl.replace(apiKey || '', '[REDACTED]'));
     
-    const response = await fetch(apiUrl);
+    // Shared server-side cache (2 min)
+    const response = await fetch(apiUrl, { next: { revalidate: 120 } });
     
     if (!response.ok) {
       const errorText = await response.text();
