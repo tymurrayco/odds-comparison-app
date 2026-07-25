@@ -6,6 +6,8 @@ import { NextResponse } from 'next/server';
 const ALLOWED_SPORTS = new Set([
   'americanfootball_nfl',
   'americanfootball_ncaaf',
+  'americanfootball_nfl_preseason',
+  'americanfootball_cfl',
   'basketball_nba',
   'basketball_ncaab',
   'basketball_wnba',
