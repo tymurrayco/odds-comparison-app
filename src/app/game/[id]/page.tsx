@@ -385,19 +385,25 @@ export async function generateMetadata({
   const { spread, total, impliedAway, impliedHome, awayML, homeML } = getGameLines(game);
   const leagueName = getLeagueName(game.sport_key);
   
-  // Format game time in Eastern timezone (most US sports)
+  // Format game time in the site's home timezone (Arizona — matches what the
+  // odds.day cards show). The card is a static image, so it can't be
+  // viewer-local; change CARD_TIMEZONE to move it.
+  const CARD_TIMEZONE = 'America/Phoenix';
   const gameDate = new Date(game.commence_time);
-  const formattedDate = gameDate.toLocaleDateString('en-US', { 
+  const formattedDate = gameDate.toLocaleDateString('en-US', {
     weekday: 'short',
-    month: 'short', 
+    month: 'short',
     day: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
-    timeZone: 'America/New_York'
+    timeZone: CARD_TIMEZONE
   });
-  
+  const tzAbbr = new Intl.DateTimeFormat('en-US', { timeZone: CARD_TIMEZONE, timeZoneName: 'short' })
+    .formatToParts(gameDate)
+    .find(part => part.type === 'timeZoneName')?.value ?? '';
+
   // Build description with odds info
-  let description = `${leagueName} • ${formattedDate} ET`;
+  let description = `${leagueName} • ${formattedDate} ${tzAbbr}`;
   if (spread !== null && spread !== undefined) {
     const spreadStr = spread > 0 ? `+${spread}` : `${spread}`;
     description += ` • ${game.home_team} ${spreadStr}`;
@@ -416,7 +422,7 @@ export async function generateMetadata({
     away: game.away_team,
     home: game.home_team,
     league: leagueName,
-    time: formattedDate + ' ET',
+    time: `${formattedDate} ${tzAbbr}`,
   });
   
   if (spread !== null && spread !== undefined) {
