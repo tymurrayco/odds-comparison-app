@@ -15,17 +15,39 @@ const NEUTRAL = '#ffffff';                // center + fallback panel base
 const SURFACE = 'rgba(15,23,42,0.04)';
 const HAIRLINE = 'rgba(15,23,42,0.12)';
 
-// Soften a team color toward white so the panels read as tints and dark ink
-// stays readable everywhere. Dark colors get pulled up harder than light ones.
+// Pastelize a team color: keep the hue, floor the saturation, lift lightness
+// to a fixed pastel level. A plain mix-toward-white desaturated dark navies
+// (Cal #003262) into grey — HSL keeps the hue's identity at any darkness.
 function panelColor(hex: string | null): string {
   if (!hex) return NEUTRAL;
-  const h = hex.replace('#', '').trim();
-  if (!/^[0-9a-fA-F]{6}$/.test(h)) return NEUTRAL;
-  const c = [0, 1, 2].map(i => parseInt(h.slice(i * 2, i * 2 + 2), 16));
-  const lum = (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255;
-  const t = lum > 0.55 ? 0.55 : lum > 0.35 ? 0.68 : 0.78; // mix ratio toward white
-  const m = c.map(v => Math.round(v * (1 - t) + 255 * t));
-  return `#${m.map(v => v.toString(16).padStart(2, '0')).join('')}`;
+  const raw = hex.replace('#', '').trim();
+  if (!/^[0-9a-fA-F]{6}$/.test(raw)) return NEUTRAL;
+  const [r, g, b] = [0, 1, 2].map(i => parseInt(raw.slice(i * 2, i * 2 + 2), 16) / 255);
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  let hue = 0;
+  let s = 0;
+  if (max !== min) {
+    const d = max - min;
+    s = d / (1 - Math.abs(2 * l - 1));
+    if (max === r) hue = ((g - b) / d) % 6;
+    else if (max === g) hue = (b - r) / d + 2;
+    else hue = (r - g) / d + 4;
+    hue *= 60;
+    if (hue < 0) hue += 360;
+  }
+  const S = Math.min(1, Math.max(s, 0.45));
+  const L = 0.85;
+  const c = (1 - Math.abs(2 * L - 1)) * S;
+  const x = c * (1 - Math.abs(((hue / 60) % 2) - 1));
+  const m = L - c / 2;
+  const sextant = Math.floor(hue / 60) % 6;
+  const rgb1 = [
+    [c, x, 0], [x, c, 0], [0, c, x], [0, x, c], [x, 0, c], [c, 0, x],
+  ][sextant];
+  const toHex = (v: number) => Math.round((v + m) * 255).toString(16).padStart(2, '0');
+  return `#${rgb1.map(toHex).join('')}`;
 }
 
 function TeamColumn({ logo, name, implied, dim }: {
