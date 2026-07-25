@@ -60,7 +60,8 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
     .formatToParts(gameDate)
     .find(part => part.type === 'timeZoneName')?.value || '';
   
-  const formattedTime = gameDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+  // 'numeric' hour so it reads 9:00 AM, not 09:00 AM
+  const formattedTime = gameDate.toLocaleTimeString([], {hour: 'numeric', minute:'2-digit'});
   
   // Check if game is live (started but not completed)
   const now = new Date();
