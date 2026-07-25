@@ -85,7 +85,7 @@ function TeamLogoOrName({ srcs, name, restBadge }: { srcs: (string | undefined)[
   return (
     // Mobile shows the logo alone — center it in the frozen column; on sm+ the
     // name sits beside it, so the group goes back to left-aligned.
-    <div className={`flex items-center ${loaded ? 'justify-center sm:justify-start' : ''}`}>
+    <div className={`flex items-center ${src && loaded ? 'justify-center sm:justify-start' : ''}`}>
       {src && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -98,7 +98,7 @@ function TeamLogoOrName({ srcs, name, restBadge }: { srcs: (string | undefined)[
       )}
       {/* Name hides on mobile only once a logo has actually rendered — a broken
           image must never leave the cell empty */}
-      <span className={loaded ? 'hidden sm:inline truncate' : 'inline truncate'}>{name}</span>
+      <span className={src && loaded ? 'hidden sm:inline truncate' : 'inline truncate'}>{name}</span>
       {restBadge}
     </div>
   );
@@ -498,7 +498,7 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                 
                 return (
                   <tr key={team}>
-                    <td className={`px-2 md:px-4 py-3 text-xs md:text-sm font-medium text-gray-900 sticky left-0 z-10 bg-white border-r border-gray-100 ${index === 0 ? 'border-b border-b-gray-200' : ''} ${restData ? 'min-w-[70px]' : 'max-w-[120px] truncate whitespace-nowrap'}`}>
+                    <td className={`px-2 md:px-4 py-3 text-xs md:text-sm font-medium text-gray-900 sticky left-0 z-10 bg-white border-r border-gray-100 ${index === 0 ? 'border-b border-b-gray-200' : ''} ${restData ? 'min-w-[70px]' : 'max-w-[120px] whitespace-nowrap'}`}>
                       {/* Logo only on mobile / name on desktop — name shows on mobile too when the logo is missing */}
                       <TeamLogoOrName srcs={logoSrcs} name={team} restBadge={restBadge} />
                     </td>
