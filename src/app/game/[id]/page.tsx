@@ -86,18 +86,10 @@ function getGameLines(game: {
     return { spread: null, total: null, impliedAway: null, impliedHome: null };
   }
 
-  // Displayed line: first bookmaker (a real quotable line)
-  const bookmaker = game.bookmakers[0];
-  const spreadsMarket = bookmaker.markets?.find((m: { key: string }) => m.key === 'spreads');
-  const totalsMarket = bookmaker.markets?.find((m: { key: string }) => m.key === 'totals');
-  const homeSpread = spreadsMarket?.outcomes?.find((o: { name: string }) => o.name === game.home_team);
-  const totalOver = totalsMarket?.outcomes?.find((o: { name: string }) => o.name === 'Over');
-  const spread = homeSpread?.point ?? null;
-  const total = totalOver?.point ?? null;
-
-  // Implied scores: average spread/total across ALL books — must match the
-  // site's GameCard.calculateImpliedScores exactly (same inputs, same rounding)
-  // or the share card disagrees with the page it links to.
+  // Consensus lines: average spread/total across ALL books — the same inputs
+  // (and rounding) as the site's GameCard.calculateImpliedScores, so the share
+  // card always agrees with the page it links to. Spread/total display rounds
+  // to 0.1, matching the site's spread-average convention.
   const awaySpreads: number[] = [];
   const totals: number[] = [];
   for (const b of game.bookmakers) {
@@ -109,8 +101,19 @@ function getGameLines(game: {
     if (over && over.point !== undefined) totals.push(over.point);
   }
 
+  let spread: number | null = null;       // consensus HOME spread
+  let total: number | null = null;        // consensus total
   let impliedAway: number | null = null;
   let impliedHome: number | null = null;
+
+  if (awaySpreads.length > 0) {
+    const avgAwaySpread = awaySpreads.reduce((s, v) => s + v, 0) / awaySpreads.length;
+    spread = Math.round(-avgAwaySpread * 10) / 10;
+  }
+  if (totals.length > 0) {
+    const avgTotal = totals.reduce((s, v) => s + v, 0) / totals.length;
+    total = Math.round(avgTotal * 10) / 10;
+  }
   if (awaySpreads.length > 0 && totals.length > 0) {
     const avgSpread = awaySpreads.reduce((s, v) => s + v, 0) / awaySpreads.length;
     const avgTotal = totals.reduce((s, v) => s + v, 0) / totals.length;
