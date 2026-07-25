@@ -48,6 +48,7 @@ const KALSHI_SERIES_SLUGS: Record<string, string> = {
   'KXWNBA': 'wnba-championship',
   'KXPREMIERLEAGUE': 'premier-league',
   'KXPGATOUR': 'pga-tour',
+  'KXMLSCUP': 'mls-cup-champion',
   // Game winners
   'KXMLBGAME': 'professional-baseball-game',
   'KXNBAGAME': 'pro-basketball-game', // retitled by Kalshi (was professional-basketball-game, audited 2026-07-24)
@@ -92,6 +93,7 @@ const SPORT_TO_KALSHI_CHAMPIONSHIP: Record<string, string> = {
   'basketball_ncaab': 'KXMARMAD',     // March Madness champion
   'basketball_wnba': 'KXWNBA',        // WNBA champion
   'soccer_epl': 'KXPREMIERLEAGUE',    // EPL champion
+  'soccer_usa_mls': 'KXMLSCUP',       // MLS Cup champion (Kalshi-only; odds-api has no MLS outrights)
   'golf_us_open_winner': 'KXPGATOUR', // US Open (see event filter below)
 };
 

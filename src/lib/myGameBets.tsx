@@ -37,6 +37,7 @@ const SPORT_KEY_TO_LEAGUE: Record<string, string> = {
   basketball_ncaab: 'NCAAB',
   baseball_mlb: 'MLB',
   icehockey_nhl: 'NHL',
+  soccer_usa_mls: 'MLS',
 };
 
 const teamMapCache: Record<string, Promise<Record<string, BetTeamInfo>>> = {};
@@ -187,12 +188,17 @@ export function MyBetBadge({ accent, title, children }: {
   );
 }
 
-// Logo with fallback chain: tries each src in order, hides when exhausted.
-export function TeamLogoImg({ srcs, className }: { srcs: (string | undefined)[]; className: string }) {
+// Logo with fallback chain: tries each src in order; when exhausted renders
+// the optional fallback node (else nothing).
+export function TeamLogoImg({ srcs, className, fallback }: {
+  srcs: (string | undefined)[];
+  className: string;
+  fallback?: React.ReactNode;
+}) {
   const [idx, setIdx] = useState(0);
   const list = srcs.filter((s): s is string => !!s);
   const src = list[idx];
-  if (!src) return null;
+  if (!src) return <>{fallback ?? null}</>;
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img src={src} alt="" className={className} onError={() => setIdx(i => i + 1)} />

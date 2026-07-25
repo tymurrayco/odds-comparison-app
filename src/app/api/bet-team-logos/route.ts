@@ -22,6 +22,7 @@ const LEAGUE_MAP: Record<string, LeagueConfig> = {
   NCAAB: { sport: 'basketball', league: 'mens-college-basketball', limit: 1000, groups: '50' },
   MLB: { sport: 'baseball', league: 'mlb' },
   NHL: { sport: 'hockey', league: 'nhl' },
+  MLS: { sport: 'soccer', league: 'usa.1' },
 };
 
 export interface BetTeamInfo {

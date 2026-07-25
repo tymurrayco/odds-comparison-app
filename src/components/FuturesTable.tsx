@@ -451,7 +451,11 @@ export default function FuturesTable({
         // Mobile: ticket badge stacks UNDER the logo; sm+: everything inline
         <div className="flex flex-col items-start gap-1 sm:flex-row sm:items-center">
           <div className="flex items-center gap-1">
-            <TeamLogoImg srcs={[espnLogoSrc, localLogoSrc]} className="h-5 w-5 sm:mr-2 object-contain flex-shrink-0" />
+            <TeamLogoImg
+              srcs={[espnLogoSrc, localLogoSrc]}
+              className="h-5 w-5 sm:mr-2 object-contain flex-shrink-0"
+              fallback={<span className="sm:hidden truncate">{team}</span>}
+            />
             {/* Mobile: logo only (saves space for the ticket badge); name on sm+ */}
             <span className="hidden sm:inline">{team}</span>
             {/* OE/DE Ranks for ALL teams with KenPom data */}
