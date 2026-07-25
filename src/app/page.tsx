@@ -159,16 +159,21 @@ function HomeContent() {
     }
   }, []);
 
-  // Handle URL params for shared game links
+  // Handle URL params for shared game/futures links
   useEffect(() => {
     const gameId = searchParams.get('game');
     const leagueId = searchParams.get('league');
-    
+    const view = searchParams.get('view');
+
     if (gameId && leagueId) {
       // Set the league from URL
       setActiveLeague(leagueId);
       setActiveView('games');
       setHighlightedGameId(gameId);
+    } else if (view === 'futures' && leagueId) {
+      // Shared futures link
+      setActiveLeague(leagueId);
+      setActiveView('futures');
     }
   }, [searchParams]);
 

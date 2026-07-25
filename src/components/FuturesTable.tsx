@@ -508,9 +508,27 @@ export default function FuturesTable({
       {/* Header with title and optional elite teams indicator */}
       <div className="p-3 md:p-4 border-b border-gray-200">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm md:text-lg font-semibold text-gray-900">
-            {market.title}
-          </h3>
+          <div className="flex items-center gap-1">
+            <h3 className="text-sm md:text-lg font-semibold text-gray-900">
+              {market.title}
+            </h3>
+            {/* Share futures link */}
+            <button
+              onClick={() => {
+                const url = `${window.location.origin}/futures/${league}`;
+                navigator.clipboard.writeText(url).then(() => {
+                  showToast('Link copied!', 'success');
+                });
+              }}
+              className="ml-1 text-gray-400 hover:text-blue-500 hover:scale-110 transition-all"
+              aria-label="Share futures"
+              title="Share futures"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+            </button>
+          </div>
           {league === 'basketball_ncaab' && (
             <div className="flex items-center gap-3 text-xs text-gray-600">
               {eliteLoading ? (
