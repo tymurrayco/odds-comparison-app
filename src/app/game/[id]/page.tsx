@@ -159,15 +159,16 @@ function matchScore(name1: string, name2: string): number {
   return 0;
 }
 
-// Fetch ESPN logos for teams using the teams endpoint (works for any game, not just today's)
+// Fetch ESPN logos + primary colors using the teams endpoint (works for any game, not just today's)
 async function getESPNLogos(
-  sportKey: string, 
-  awayTeam: string, 
+  sportKey: string,
+  awayTeam: string,
   homeTeam: string
-): Promise<{ awayLogo: string | null; homeLogo: string | null }> {
+): Promise<{ awayLogo: string | null; homeLogo: string | null; awayColor: string | null; homeColor: string | null }> {
+  const empty = { awayLogo: null, homeLogo: null, awayColor: null, homeColor: null };
   try {
     const espnLeague = ESPN_LEAGUE_MAP[sportKey];
-    if (!espnLeague) return { awayLogo: null, homeLogo: null };
+    if (!espnLeague) return empty;
     
     // Use teams endpoint to get all team logos. limit=1000: ESPN ignores group
     // filters and college football has 755 teams — lower limits truncate the
@@ -175,18 +176,21 @@ async function getESPNLogos(
     const apiUrl = `https://site.api.espn.com/apis/site/v2/sports/${espnLeague.sport}/${espnLeague.league}/teams?limit=1000`;
     
     const response = await fetch(apiUrl, { next: { revalidate: 86400 } }); // Cache for 24 hours
-    if (!response.ok) return { awayLogo: null, homeLogo: null };
+    if (!response.ok) return empty;
     
     const data = await response.json();
     
     let awayLogo: string | null = null;
     let homeLogo: string | null = null;
+    let awayColor: string | null = null;
+    let homeColor: string | null = null;
     let awayBest = 0;
     let homeBest = 0;
 
     interface ESPNTeamInfo {
       displayName?: string;
       name?: string;
+      color?: string;
       logos?: Array<{ href?: string }>;
     }
 
@@ -208,20 +212,22 @@ async function getESPNLogos(
         if (awayScore > awayBest) {
           awayBest = awayScore;
           awayLogo = logo;
+          awayColor = team.color || null;
         }
         const homeScore = matchScore(teamName, homeTeam);
         if (homeScore > homeBest) {
           homeBest = homeScore;
           homeLogo = logo;
+          homeColor = team.color || null;
         }
         if (awayBest === 4 && homeBest === 4) break;
       }
     }
 
-    return { awayLogo, homeLogo };
+    return { awayLogo, homeLogo, awayColor, homeColor };
   } catch (error) {
     console.error('Error fetching ESPN logos:', error);
-    return { awayLogo: null, homeLogo: null };
+    return empty;
   }
 }
 
@@ -300,11 +306,21 @@ export async function generateMetadata({
   
   // Add ESPN logos if we can fetch them
   const espnLogos = await getESPNLogos(game.sport_key, game.away_team, game.home_team);
+  // The card is dark with team-color panels — use ESPN's dark-background logo
+  // variants (/500-dark/) so dark logos (e.g. TCU purple) stay visible.
+  const toDarkLogo = (url: string) =>
+    url.includes('espncdn.com') ? url.replace('/500/', '/500-dark/') : url;
   if (espnLogos.awayLogo) {
-    ogImageParams.set('awayLogo', espnLogos.awayLogo);
+    ogImageParams.set('awayLogo', toDarkLogo(espnLogos.awayLogo));
   }
   if (espnLogos.homeLogo) {
-    ogImageParams.set('homeLogo', espnLogos.homeLogo);
+    ogImageParams.set('homeLogo', toDarkLogo(espnLogos.homeLogo));
+  }
+  if (espnLogos.awayColor) {
+    ogImageParams.set('awayColor', espnLogos.awayColor);
+  }
+  if (espnLogos.homeColor) {
+    ogImageParams.set('homeColor', espnLogos.homeColor);
   }
   
   const ogImageUrl = `https://odds.day/api/og?${ogImageParams.toString()}`;
