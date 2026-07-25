@@ -36,10 +36,12 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
   const isHighlighted = highlightedGameId === game.id;
   
   // Copy game link to clipboard
-  // UPDATED: Now includes league parameter to save API calls on the game page
+  // Includes league (saves API calls) and the sharer's timezone so the share
+  // card shows game time in the sharer's local zone.
   const copyGameLink = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const url = `${window.location.origin}/game/${game.id}?league=${game.sport_key}`;
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const url = `${window.location.origin}/game/${game.id}?league=${game.sport_key}&tz=${encodeURIComponent(tz)}`;
     navigator.clipboard.writeText(url).then(() => {
       setShowLinkCopied(true);
       setTimeout(() => setShowLinkCopied(false), 2000);

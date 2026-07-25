@@ -369,10 +369,10 @@ export async function generateMetadata({
   searchParams
 }: { 
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ league?: string }>;
+  searchParams: Promise<{ league?: string; tz?: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const { league } = await searchParams;
+  const { league, tz } = await searchParams;
   const game = await getGame(id, league);
   
   if (!game) {
@@ -385,10 +385,19 @@ export async function generateMetadata({
   const { spread, total, impliedAway, impliedHome, awayML, homeML } = getGameLines(game);
   const leagueName = getLeagueName(game.sport_key);
   
-  // Format game time in the site's home timezone (Arizona — matches what the
-  // odds.day cards show). The card is a static image, so it can't be
-  // viewer-local; change CARD_TIMEZONE to move it.
-  const CARD_TIMEZONE = 'America/Phoenix';
+  // Format game time in the SHARER's timezone (embedded in the link by the
+  // copy button as ?tz=). Falls back to the site's home timezone (Arizona)
+  // for links without one. The card is a static image — it shows the sharer's
+  // zone to every recipient, labeled with the zone abbreviation.
+  const isValidTz = (z: string): boolean => {
+    try {
+      new Intl.DateTimeFormat('en-US', { timeZone: z });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const CARD_TIMEZONE = tz && isValidTz(tz) ? tz : 'America/Phoenix';
   const gameDate = new Date(game.commence_time);
   const formattedDate = gameDate.toLocaleDateString('en-US', {
     weekday: 'short',
