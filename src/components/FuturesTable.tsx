@@ -242,6 +242,12 @@ export default function FuturesTable({
     ? BOOKMAKERS.filter(b => selectedBookmakers.includes(b))
     : BOOKMAKERS;
 
+  // Only show books that actually price this market — empty columns
+  // (squished logo over dashes) add no value.
+  const activeBookmakers = displayBookmakers.filter(book =>
+    market.teams.some(item => item.odds[book] !== undefined)
+  );
+
   // My pending futures tickets for this league + ESPN colors/logos
   const myFutureBets = usePendingFutureBets(getLeagueDisplayName(league));
   const teamColorMap = useTeamColorMap(league);
@@ -594,7 +600,7 @@ export default function FuturesTable({
               <th className="px-2 md:px-4 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Team
               </th>
-              {displayBookmakers.map(book => (
+              {activeBookmakers.map(book => (
                 <th key={book} className="px-2 md:px-4 py-2 md:py-3 text-center">
                   <img src={bookmakerLogos[book]} alt={book} className="h-6 mx-auto" />
                 </th>
@@ -615,7 +621,7 @@ export default function FuturesTable({
               let bestOddsValue = -Infinity;
               let bestOddsBooks: string[] = [];
               
-              displayBookmakers.forEach(book => {
+              activeBookmakers.forEach(book => {
                 if (item.odds[book] !== undefined) {
                   if (item.odds[book] > bestOddsValue) {
                     bestOddsValue = item.odds[book];
@@ -639,7 +645,7 @@ export default function FuturesTable({
                   <td className="px-2 md:px-4 py-3 whitespace-normal text-xs md:text-sm font-medium text-gray-900">
                     {renderTeamCell(item.team, teamTier, teamDetails)}
                   </td>
-                  {displayBookmakers.map(book => {
+                  {activeBookmakers.map(book => {
                     const cellKey = `${item.team}-${book}`;
                     const isThisCellHolding = holdingKey === cellKey;
                     const hasOdds = item.odds[book] !== undefined;
