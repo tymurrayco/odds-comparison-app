@@ -6,6 +6,7 @@ import { Game, BOOKMAKERS } from '@/lib/api';
 import { formatOdds } from '@/lib/utils';
 import { createBet } from '@/lib/betService';
 import { GameRestData, TeamRestInfo } from '@/lib/nhlRest';
+import { resolveDeepLink, fillLinkTemplate, promptForState } from '@/lib/betLinks';
 
 interface OddsTableProps {
   games: Game[];
@@ -119,17 +120,25 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
     setTimeout(() => setToast(null), 3000);
   };
 
-  // Handle click on odds with deep link - open sportsbook betslip
+  // Handle click on odds with deep link - open sportsbook betslip.
+  // BetMGM/BetRivers links are templates needing the user's state — resolved
+  // from localStorage, prompted once on first use.
   const handleDeepLinkClick = (link: string | undefined, e: React.MouseEvent) => {
     if (link) {
       e.preventDefault();
       e.stopPropagation();
-      window.open(link, '_blank');
+      let resolved = resolveDeepLink(link);
+      if (!resolved) {
+        const state = promptForState();
+        if (!state) return;
+        resolved = fillLinkTemplate(link, state);
+      }
+      window.open(resolved, '_blank');
     }
   };
-  
+
   // Bookmakers that support deep linking
-  const deepLinkBookmakers = ['FanDuel', 'DraftKings', 'Caesars', 'Kalshi'];
+  const deepLinkBookmakers = ['FanDuel', 'DraftKings', 'Caesars', 'Kalshi', 'BetMGM', 'BetRivers'];
 
   // Handle press-and-hold to create bet
   const handlePressStart = (

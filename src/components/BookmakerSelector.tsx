@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { BOOKMAKERS } from '@/lib/api';
+import { BET_LINK_STATES, getBetState, setBetState } from '@/lib/betLinks';
 
 interface BookmakerSelectorProps {
   selectedBookmakers: string[];
@@ -26,6 +27,16 @@ export default function BookmakerSelector({
 }: BookmakerSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // User's state for BetMGM/BetRivers deep links (persisted in localStorage)
+  const [betLinkState, setBetLinkState] = useState('');
+  useEffect(() => {
+    setBetLinkState(getBetState()?.toUpperCase() ?? '');
+  }, []);
+  const handleStateChange = (value: string) => {
+    setBetLinkState(value);
+    if (value) setBetState(value);
+  };
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -138,6 +149,25 @@ export default function BookmakerSelector({
                 </button>
               );
             })}
+          </div>
+
+          {/* State for BetMGM/BetRivers deep links */}
+          <div className="px-4 py-3 bg-gray-50 border-t border-gray-200 flex items-center justify-between gap-2">
+            <div>
+              <span className="text-sm font-medium text-gray-900">State</span>
+              <p className="text-[10px] text-gray-500">For BetMGM / BetRivers links</p>
+            </div>
+            <select
+              value={betLinkState}
+              onChange={(e) => handleStateChange(e.target.value)}
+              className="text-sm border border-gray-300 rounded-lg px-2 py-1.5 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              aria-label="State for sportsbook links"
+            >
+              <option value="">—</option>
+              {BET_LINK_STATES.map(s => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
           </div>
 
           {/* Footer hint */}
