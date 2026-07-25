@@ -134,7 +134,8 @@ export const LEAGUES = [
   { id: 'americanfootball_ncaaf', name: 'NCAAF', icon: '/league-icons/ncaaf.png', isActive: true },
   { id: 'basketball_ncaab', name: 'NCAAB', icon: '/league-icons/ncaab.png', isActive: true },
   { id: 'soccer_epl', name: 'EPL', icon: '/league-icons/epl.png', isActive: false }, // Hidden - out of season
-  { id: 'soccer_usa_mls', name: 'MLS', icon: '/league-icons/mls.png', isActive: false },
+  { id: 'soccer_usa_mls', name: 'MLS', icon: '/league-icons/mls.png', isActive: true },
+  { id: 'americanfootball_cfl', name: 'CFL', icon: '/league-icons/cfl.png', isActive: true },
   { id: 'basketball_wnba', name: 'WNBA', icon: '/league-icons/wnba.png', isActive: true },
   { id: 'icehockey_nhl', name: 'NHL', icon: '/league-icons/nhl.png', isActive: true },
   { id: 'basketball_nba', name: 'NBA', icon: '/league-icons/nba.png', isActive: true },

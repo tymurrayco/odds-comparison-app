@@ -39,6 +39,7 @@ function getSportFromLeague(league: string): string {
   if (league.includes('nba') || league.includes('basketball')) return 'Basketball';
   if (league.includes('nfl') || league.includes('americanfootball_nfl')) return 'Football';
   if (league.includes('ncaaf') || league.includes('americanfootball_ncaaf')) return 'Football';
+  if (league.includes('cfl')) return 'Football';
   if (league.includes('nhl') || league.includes('icehockey')) return 'Hockey';
   if (league.includes('mlb') || league.includes('baseball')) return 'Baseball';
   if (league.includes('mls') || league.includes('soccer')) return 'Soccer';
@@ -58,9 +59,32 @@ function getLeagueDisplayName(league: string): string {
     'soccer_usa_mls': 'MLS',
     'soccer_epl': 'EPL',
     'basketball_ncaab': 'NCAAB',
-    'basketball_wnba': 'WNBA'
+    'basketball_wnba': 'WNBA',
+    'americanfootball_cfl': 'CFL'
   };
   return leagueMap[league] || league.toUpperCase();
+}
+
+// Team cell: logo with graceful fallback — when the logo is missing/broken
+// (e.g. CFL has no ESPN logos), show the team name on mobile too instead of
+// leaving the cell blank.
+function TeamLogoOrName({ src, name, restBadge }: { src: string; name: string; restBadge?: React.ReactNode }) {
+  const [imgOk, setImgOk] = useState(true);
+  return (
+    <div className="flex items-center">
+      {imgOk && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={src}
+          alt=""
+          className="h-5 w-5 mr-1.5 flex-shrink-0"
+          onError={() => setImgOk(false)}
+        />
+      )}
+      <span className={imgOk ? 'hidden sm:inline truncate' : 'inline truncate'}>{name}</span>
+      {restBadge}
+    </div>
+  );
 }
 
 // Rest badge component for NHL
@@ -451,20 +475,8 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                 return (
                   <tr key={team} className={index === 0 ? "border-b" : ""}>
                     <td className={`px-2 md:px-4 py-3 text-xs md:text-sm font-medium text-gray-900 ${restData ? 'min-w-[70px]' : 'max-w-[120px] truncate whitespace-nowrap'}`}>
-                      <div className="flex items-center">
-                        <img 
-                          src={teamLogo}
-                          alt=""
-                          className="h-5 w-5 mr-1.5 flex-shrink-0"
-                          onError={(e) => {
-                            e.currentTarget.style.display = 'none';
-                          }}
-                        />
-                        {/* Always show team name only on desktop, logo only on mobile */}
-                        <span className="hidden sm:inline truncate">{team}</span>
-                        {/* Rest badge - show on both mobile and desktop */}
-                        {restBadge}
-                      </div>
+                      {/* Logo only on mobile / name on desktop — name shows on mobile too when the logo is missing */}
+                      <TeamLogoOrName src={teamLogo} name={team} restBadge={restBadge} />
                     </td>
                     
                     {activeBookmakers.map(book => {

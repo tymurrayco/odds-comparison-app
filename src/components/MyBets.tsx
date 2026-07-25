@@ -214,7 +214,7 @@ export default function MyBets() {
         // Use league only - it's the most reliable
         if (leagueLower.includes('nhl')) return '🏒';
         if (leagueLower.includes('ncaab') || leagueLower.includes('nba') || leagueLower.includes('wnba')) return '🏀';
-        if (leagueLower.includes('ncaaf') || leagueLower.includes('nfl')) return '🏈';
+        if (leagueLower.includes('ncaaf') || leagueLower.includes('nfl') || leagueLower.includes('cfl')) return '🏈';
         if (leagueLower.includes('mlb')) return '⚾';
         if (leagueLower.includes('mls') || leagueLower.includes('epl')) return '⚽';
         if (leagueLower.includes('pga')) return '⛳';

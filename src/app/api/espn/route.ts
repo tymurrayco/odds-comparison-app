@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 const ESPN_LEAGUE_MAP: { [key: string]: { sport: string; league: string } } = {
   'americanfootball_nfl': { sport: 'football', league: 'nfl' },
   'americanfootball_ncaaf': { sport: 'football', league: 'college-football' },
+  'americanfootball_cfl': { sport: 'football', league: 'cfl' },
   'basketball_nba': { sport: 'basketball', league: 'nba' },
   'basketball_ncaab': { sport: 'basketball', league: 'mens-college-basketball' },
   'icehockey_nhl': { sport: 'hockey', league: 'nhl' },
