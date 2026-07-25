@@ -53,10 +53,23 @@ interface TeamRow {
   o: string;   // formatted odds
   l?: string;  // logo url
   c?: string;  // color hex (no #)
+  b?: string;  // book offering the best price
 }
 
+// Book logos served from our own public dir (Satori needs absolute URLs;
+// resolved against the request origin so dev and prod both work).
+const BOOK_LOGOS: Record<string, string> = {
+  'DraftKings': 'draftkings.png',
+  'FanDuel': 'fd.png',
+  'BetMGM': 'betmgm.png',
+  'BetRivers': 'betrivers.png',
+  'Caesars': 'caesars.png',
+  'BetOnline.ag': 'betonline.png',
+  'Kalshi': 'kalshi.png',
+};
+
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
+  const { searchParams, origin } = new URL(request.url);
   const title = searchParams.get('title') || 'Futures';
   const more = searchParams.get('more') || '';
 
@@ -147,6 +160,16 @@ export async function GET(request: NextRequest) {
               >
                 {t.n}
               </span>
+              {t.b && BOOK_LOGOS[t.b] && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={`${origin}/bookmaker-logos/${BOOK_LOGOS[t.b]}`}
+                  alt=""
+                  width={54}
+                  height={32}
+                  style={{ objectFit: 'contain' }}
+                />
+              )}
               <span style={{ color: i === 0 ? INK : INK_SOFT, fontSize: '31px', fontWeight: 700 }}>{t.o}</span>
             </div>
           ))}
@@ -161,7 +184,7 @@ export async function GET(request: NextRequest) {
         {more && (
           <div style={{ display: 'flex', justifyContent: 'center' }}>
             <span style={{ color: INK_DIM, fontSize: '20px', fontWeight: 600 }}>
-              + {more} more on odds.day
+              + {more} more
             </span>
           </div>
         )}

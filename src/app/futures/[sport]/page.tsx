@@ -39,9 +39,16 @@ const ESPN_LEAGUE_MAP: { [key: string]: { sport: string; league: string } } = {
   'soccer_epl': { sport: 'soccer', league: 'eng.1' },
 };
 
+// Books whose prices we compare (must match the-odds-api bookmaker titles;
+// Kalshi merges in separately). Keeps the card consistent with the site grid.
+const MAJOR_BOOKS = new Set([
+  'DraftKings', 'FanDuel', 'BetMGM', 'BetRivers', 'Caesars', 'BetOnline.ag',
+]);
+
 interface FutureEntry {
   name: string;
   odds: number;   // best available American odds
+  book?: string;  // which book offers it
   logo?: string;
   color?: string;
 }
@@ -72,19 +79,22 @@ async function getTopFutures(sport: string): Promise<FutureEntry[]> {
       );
       if (resp.ok) {
         const events = await resp.json();
-        const best: Record<string, number> = {};
+        const best: Record<string, { odds: number; book: string }> = {};
         for (const ev of events ?? []) {
           for (const b of ev.bookmakers ?? []) {
+            if (!MAJOR_BOOKS.has(b.title)) continue;
             for (const mk of b.markets ?? []) {
               if (mk.key !== 'outrights') continue;
               for (const o of mk.outcomes ?? []) {
                 if (typeof o.price !== 'number') continue;
-                if (best[o.name] === undefined || o.price > best[o.name]) best[o.name] = o.price;
+                if (best[o.name] === undefined || o.price > best[o.name].odds) {
+                  best[o.name] = { odds: o.price, book: b.title };
+                }
               }
             }
           }
         }
-        for (const [name, odds] of Object.entries(best)) entries.push({ name, odds });
+        for (const [name, v] of Object.entries(best)) entries.push({ name, odds: v.odds, book: v.book });
       }
     } catch { /* sportsbook side optional */ }
   }
@@ -92,12 +102,16 @@ async function getTopFutures(sport: string): Promise<FutureEntry[]> {
   // Kalshi championship prices (fee-inclusive) — merge, or stand alone (MLS/WNBA)
   try {
     const kalshi = await fetchKalshiFutures(sport);
+    const kalshiOnly = entries.length === 0;
     for (const k of kalshi) {
       const existing = entries.find(e => matchScore(e.name, k.team) >= 3);
       if (existing) {
-        if (k.odds > existing.odds) existing.odds = k.odds;
-      } else if (entries.length === 0) {
-        entries.push({ name: k.team, odds: k.odds });
+        if (k.odds > existing.odds) {
+          existing.odds = k.odds;
+          existing.book = 'Kalshi';
+        }
+      } else if (kalshiOnly) {
+        entries.push({ name: k.team, odds: k.odds, book: 'Kalshi' });
       }
     }
   } catch { /* kalshi side optional */ }
@@ -157,7 +171,7 @@ export async function generateMetadata({
   const ogParams = new URLSearchParams({ title });
   if (top.length > 0) {
     ogParams.set('teams', JSON.stringify(top.map(t => ({
-      n: t.name, o: fmt(t.odds), l: t.logo ?? '', c: t.color ?? '',
+      n: t.name, o: fmt(t.odds), l: t.logo ?? '', c: t.color ?? '', b: t.book ?? '',
     }))));
     if (all.length > top.length) ogParams.set('more', String(all.length - top.length));
   }
