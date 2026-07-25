@@ -160,7 +160,6 @@ export async function GET(request: NextRequest) {
   const homeTeam = searchParams.get('home') || 'Home Team';
   const spread = searchParams.get('spread') || '';
   const total = searchParams.get('total') || '';
-  const league = searchParams.get('league') || '';
   const time = searchParams.get('time') || '';
   const awayLogo = searchParams.get('awayLogo') || '';
   const homeLogo = searchParams.get('homeLogo') || '';
@@ -202,22 +201,23 @@ export async function GET(request: NextRequest) {
             <span style={{ color: INK, fontSize: '38px', fontWeight: 700 }}>odds</span>
             <span style={{ color: ACCENT, fontSize: '38px', fontWeight: 700 }}>.day</span>
           </div>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              backgroundColor: SURFACE,
-              border: `1px solid ${HAIRLINE}`,
-              borderRadius: '999px',
-              padding: '10px 26px',
-            }}
-          >
-            <span style={{ color: INK, fontSize: '24px', fontWeight: 700 }}>{league}</span>
-            {time && <span style={{ color: INK_SOFT, fontSize: '24px', fontWeight: 600 }}>{time}</span>}
-            {tv && <span style={{ color: INK_DIM, fontSize: '24px', fontWeight: 600 }}>·</span>}
-            {tv && <span style={{ color: INK, fontSize: '24px', fontWeight: 700 }}>{tv}</span>}
-          </div>
+          {(time || tv) && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                backgroundColor: SURFACE,
+                border: `1px solid ${HAIRLINE}`,
+                borderRadius: '999px',
+                padding: '10px 26px',
+              }}
+            >
+              {time && <span style={{ color: INK_SOFT, fontSize: '24px', fontWeight: 600 }}>{time}</span>}
+              {time && tv && <span style={{ color: INK_DIM, fontSize: '24px', fontWeight: 600 }}>·</span>}
+              {tv && <span style={{ color: INK, fontSize: '24px', fontWeight: 700 }}>{tv}</span>}
+            </div>
+          )}
         </div>
 
         {/* Matchup — implied scores are the hero */}
