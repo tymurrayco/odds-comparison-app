@@ -444,7 +444,8 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
           <table key={game.id} className="min-w-full">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-2 md:px-4 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                {/* Frozen while horizontally scrolling the book columns */}
+                <th className="px-2 md:px-4 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-0 z-20 bg-gray-50 border-r border-gray-100">
                   Team
                 </th>
                 {activeBookmakers.map(book => (
@@ -474,7 +475,7 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                 
                 return (
                   <tr key={team} className={index === 0 ? "border-b" : ""}>
-                    <td className={`px-2 md:px-4 py-3 text-xs md:text-sm font-medium text-gray-900 ${restData ? 'min-w-[70px]' : 'max-w-[120px] truncate whitespace-nowrap'}`}>
+                    <td className={`px-2 md:px-4 py-3 text-xs md:text-sm font-medium text-gray-900 sticky left-0 z-10 bg-white border-r border-gray-100 ${restData ? 'min-w-[70px]' : 'max-w-[120px] truncate whitespace-nowrap'}`}>
                       {/* Logo only on mobile / name on desktop — name shows on mobile too when the logo is missing */}
                       <TeamLogoOrName src={teamLogo} name={team} restBadge={restBadge} />
                     </td>
