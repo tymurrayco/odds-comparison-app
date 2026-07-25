@@ -195,6 +195,8 @@ const TWO_WORD_MASCOTS = new Set([
   'scarlet knights', 'nittany lions', 'mean green', 'green wave',
   'ragin cajuns', 'black knights', 'black bears', 'purple aces',
   'purple eagles', 'blue bombers', 'tiger-cats', 'roughriders',
+  'wolf pack', 'green wave', 'red flash', 'blue hose', 'golden lions',
+  'river hawks', 'sea wolves', 'great danes', 'blue raiders',
 ]);
 
 function getMascot(teamName: string): string {
@@ -225,8 +227,8 @@ async function getESPNLogos(
   sportKey: string,
   awayTeam: string,
   homeTeam: string
-): Promise<{ awayLogo: string | null; homeLogo: string | null; awayColor: string | null; homeColor: string | null; awayAlt: string | null; homeAlt: string | null }> {
-  const empty = { awayLogo: null, homeLogo: null, awayColor: null, homeColor: null, awayAlt: null, homeAlt: null };
+): Promise<{ awayLogo: string | null; homeLogo: string | null; awayColor: string | null; homeColor: string | null; awayAlt: string | null; homeAlt: string | null; awayMascot: string | null; homeMascot: string | null }> {
+  const empty = { awayLogo: null, homeLogo: null, awayColor: null, homeColor: null, awayAlt: null, homeAlt: null, awayMascot: null, homeMascot: null };
   try {
     const espnLeague = ESPN_LEAGUE_MAP[sportKey];
     if (!espnLeague) return empty;
@@ -247,12 +249,14 @@ async function getESPNLogos(
     let homeColor: string | null = null;
     let awayAlt: string | null = null;
     let homeAlt: string | null = null;
+    let awayMascot: string | null = null;
+    let homeMascot: string | null = null;
     let awayBest = 0;
     let homeBest = 0;
 
     interface ESPNTeamInfo {
       displayName?: string;
-      name?: string;
+      name?: string;          // mascot only, e.g. "Wolf Pack"
       color?: string;
       alternateColor?: string;
       logos?: Array<{ href?: string }>;
@@ -278,6 +282,7 @@ async function getESPNLogos(
           awayLogo = logo;
           awayColor = team.color || null;
           awayAlt = team.alternateColor || null;
+          awayMascot = team.name || null;
         }
         const homeScore = matchScore(teamName, homeTeam);
         if (homeScore > homeBest) {
@@ -285,12 +290,13 @@ async function getESPNLogos(
           homeLogo = logo;
           homeColor = team.color || null;
           homeAlt = team.alternateColor || null;
+          homeMascot = team.name || null;
         }
         if (awayBest === 4 && homeBest === 4) break;
       }
     }
 
-    return { awayLogo, homeLogo, awayColor, homeColor, awayAlt, homeAlt };
+    return { awayLogo, homeLogo, awayColor, homeColor, awayAlt, homeAlt, awayMascot, homeMascot };
   } catch (error) {
     console.error('Error fetching ESPN logos:', error);
     return empty;
@@ -421,9 +427,20 @@ export async function generateMetadata({
     description += ` • O/U ${total}`;
   }
   
-  // Use mascot names for the title (two-word mascots kept intact)
-  const awayMascot = getMascot(game.away_team);
-  const homeMascot = getMascot(game.home_team);
+  // Add ESPN logos + TV broadcast if we can fetch them
+  const [espnLogos, tvNetwork] = await Promise.all([
+    getESPNLogos(game.sport_key, game.away_team, game.home_team),
+    getTVBroadcast(game.sport_key, game.away_team, game.home_team, game.commence_time),
+  ]);
+  if (tvNetwork) {
+    description += ` • ${tvNetwork}`;
+  }
+
+  // Mascot for titles/labels: ESPN publishes it as its own field (team.name),
+  // so "Nevada Wolf Pack" -> "Wolf Pack" without guessing where the school
+  // name ends. getMascot() is the fallback for teams ESPN doesn't match.
+  const awayMascot = espnLogos.awayMascot || getMascot(game.away_team);
+  const homeMascot = espnLogos.homeMascot || getMascot(game.home_team);
   const title = `${awayMascot} @ ${homeMascot}`;
   
   // Build OG image URL with game info
@@ -436,7 +453,7 @@ export async function generateMetadata({
   
   if (spread !== null && spread !== undefined) {
     const spreadStr = spread > 0 ? `+${spread}` : `${spread}`;
-    ogImageParams.set('spread', `${getMascot(game.home_team)} ${spreadStr}`);
+    ogImageParams.set('spread', `${homeMascot} ${spreadStr}`);
   }
   if (total !== null && total !== undefined) {
     ogImageParams.set('total', `${total}`);
@@ -446,18 +463,10 @@ export async function generateMetadata({
   if (impliedAway !== null && impliedHome !== null) {
     ogImageParams.set('impliedAway', `${impliedAway}`);
     ogImageParams.set('impliedHome', `${impliedHome}`);
-    ogImageParams.set('awayName', getMascot(game.away_team));
-    ogImageParams.set('homeName', getMascot(game.home_team));
+    ogImageParams.set('awayName', awayMascot);
+    ogImageParams.set('homeName', homeMascot);
   }
   
-  // Add ESPN logos + TV broadcast if we can fetch them
-  const [espnLogos, tvNetwork] = await Promise.all([
-    getESPNLogos(game.sport_key, game.away_team, game.home_team),
-    getTVBroadcast(game.sport_key, game.away_team, game.home_team, game.commence_time),
-  ]);
-  if (tvNetwork) {
-    description += ` • ${tvNetwork}`;
-  }
   if (espnLogos.awayLogo) {
     ogImageParams.set('awayLogo', espnLogos.awayLogo);
   }
