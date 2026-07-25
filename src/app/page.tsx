@@ -23,6 +23,7 @@ import { fetchNHLRestData, matchGameToRestData, GameRestData } from '@/lib/nhlRe
 import LeagueNav from '@/components/LeagueNav';
 import GameCard from '@/components/GameCard';
 import FuturesTable from '@/components/FuturesTable';
+import { BoardLoading, OddsLoader } from '@/components/Loading';
 import PropsTable from '@/components/PropsTable';
 import ConferenceFilter from '@/components/ConferenceFilter';
 import BookmakerSelector from '@/components/BookmakerSelector';
@@ -1089,9 +1090,7 @@ function HomeContent() {
         {activeView === 'mybets' ? (
           <MyBets />
         ) : loading || (activeLeague === 'favorites' && favoritesLoading) ? (
-          <div className="flex justify-center py-12">
-            <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-500"></div>
-          </div>
+          <BoardLoading variant={effectiveView === 'futures' ? 'futures' : 'games'} />
         ) : (
           <div>
             {activeLeague === 'favorites' ? (
@@ -1157,9 +1156,7 @@ function HomeContent() {
             ) : effectiveView === 'props' ? (
               <div>
                 {propsLoading ? (
-                  <div className="flex justify-center py-12">
-                    <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-500"></div>
-                  </div>
+                  <OddsLoader label="Loading props" />
                 ) : selectedPropsEvent ? (
                   // Show props for selected game
                   <div>
@@ -1332,7 +1329,7 @@ export default function Home() {
     <Suspense fallback={
       <main className="min-h-screen bg-gray-100">
         <div className="flex justify-center items-center h-screen">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+          <OddsLoader label="Loading odds.day" />
         </div>
       </main>
     }>

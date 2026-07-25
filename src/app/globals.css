@@ -24,3 +24,35 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* --- Branded loading states --- */
+
+/* Sweeping highlight across skeleton blocks */
+@keyframes odds-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background-image: linear-gradient(
+    90deg,
+    rgb(241 245 249) 0%,
+    rgb(226 232 240) 20%,
+    rgb(241 245 249) 40%,
+    rgb(241 245 249) 100%
+  );
+  background-size: 200% 100%;
+  animation: odds-shimmer 1.6s ease-in-out infinite;
+  border-radius: 6px;
+}
+
+/* Odds "ticking" bars — three lines settling like a line move */
+@keyframes odds-tick {
+  0%, 100% { transform: scaleY(0.35); opacity: 0.45; }
+  50%      { transform: scaleY(1);    opacity: 1; }
+}
+
+.odds-tick-bar {
+  transform-origin: center;
+  animation: odds-tick 1s ease-in-out infinite;
+}
