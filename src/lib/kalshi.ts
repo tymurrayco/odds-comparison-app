@@ -41,7 +41,7 @@ const KALSHI_SERIES_SLUGS: Record<string, string> = {
   // Championships
   'KXMLB': 'world-series',
   'KXSB': 'super-bowl',
-  'KXMARMAD': 'college-basketball-champion',
+  'KXMARMAD': 'mens-college-basketball-tournament-champion', // retitled by Kalshi (was college-basketball-champion, audited 2026-07-24)
   'KXNBA': 'pro-basketball-champion',
   'KXNHL': 'stanley-cup',
   'KXNCAAF': 'ncaaf-championship',
@@ -50,7 +50,7 @@ const KALSHI_SERIES_SLUGS: Record<string, string> = {
   'KXPGATOUR': 'pga-tour',
   // Game winners
   'KXMLBGAME': 'professional-baseball-game',
-  'KXNBAGAME': 'professional-basketball-game',
+  'KXNBAGAME': 'pro-basketball-game', // retitled by Kalshi (was professional-basketball-game, audited 2026-07-24)
   'KXNCAAMBGAME': 'mens-college-basketball-mens-game',
   'KXNHLGAME': 'nhl-game',
   'KXEPLGAME': 'english-premier-league-game',
