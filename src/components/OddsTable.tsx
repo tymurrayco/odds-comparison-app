@@ -70,8 +70,17 @@ function getLeagueDisplayName(league: string): string {
 // (e.g. CFL has no ESPN logos), show the team name on mobile too instead of
 // leaving the cell blank.
 function TeamLogoOrName({ srcs, name, restBadge }: { srcs: (string | undefined)[]; name: string; restBadge?: React.ReactNode }) {
-  const [idx, setIdx] = useState(0);
   const list = srcs.filter((s): s is string => !!s);
+  const key = list.join('|');
+  const [idx, setIdx] = useState(0);
+  const [loaded, setLoaded] = useState(false);
+  // New candidate list (market switch, map arrival) restarts the chain
+  const [seenKey, setSeenKey] = useState(key);
+  if (seenKey !== key) {
+    setSeenKey(key);
+    setIdx(0);
+    setLoaded(false);
+  }
   const src = list[idx];
   return (
     <div className="flex items-center">
@@ -81,10 +90,13 @@ function TeamLogoOrName({ srcs, name, restBadge }: { srcs: (string | undefined)[
           src={src}
           alt=""
           className="h-5 w-5 mr-1.5 flex-shrink-0"
+          onLoad={() => setLoaded(true)}
           onError={() => setIdx(i => i + 1)}
         />
       )}
-      <span className={src ? 'hidden sm:inline truncate' : 'inline truncate'}>{name}</span>
+      {/* Name hides on mobile only once a logo has actually rendered — a broken
+          image must never leave the cell empty */}
+      <span className={loaded ? 'hidden sm:inline truncate' : 'inline truncate'}>{name}</span>
       {restBadge}
     </div>
   );
@@ -448,15 +460,16 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
         }
         
         return (
-          <table key={game.id} className="min-w-full">
+          // border-separate: Safari drops sticky table cells under border-collapse
+          <table key={game.id} className="min-w-full border-separate border-spacing-0">
             <thead className="bg-gray-50">
               <tr>
                 {/* Frozen while horizontally scrolling the book columns */}
-                <th className="px-2 md:px-4 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-0 z-20 bg-gray-50 border-r border-gray-100">
+                <th className="px-2 md:px-4 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-0 z-20 bg-gray-50 border-r border-b border-gray-100">
                   Team
                 </th>
                 {activeBookmakers.map(book => (
-                  <th key={book} className="px-2 md:px-4 py-2 md:py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th key={book} className="px-2 md:px-4 py-2 md:py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-100">
                     <img src={bookmakerLogos[book]} alt={book} className="h-6 mx-auto" />
                   </th>
                 ))}
@@ -482,8 +495,8 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                   : null;
                 
                 return (
-                  <tr key={team} className={index === 0 ? "border-b" : ""}>
-                    <td className={`px-2 md:px-4 py-3 text-xs md:text-sm font-medium text-gray-900 sticky left-0 z-10 bg-white border-r border-gray-100 ${restData ? 'min-w-[70px]' : 'max-w-[120px] truncate whitespace-nowrap'}`}>
+                  <tr key={team}>
+                    <td className={`px-2 md:px-4 py-3 text-xs md:text-sm font-medium text-gray-900 sticky left-0 z-10 bg-white border-r border-gray-100 ${index === 0 ? 'border-b border-b-gray-200' : ''} ${restData ? 'min-w-[70px]' : 'max-w-[120px] truncate whitespace-nowrap'}`}>
                       {/* Logo only on mobile / name on desktop — name shows on mobile too when the logo is missing */}
                       <TeamLogoOrName srcs={logoSrcs} name={team} restBadge={restBadge} />
                     </td>
@@ -505,7 +518,7 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                         return (
                           <td 
                             key={book} 
-                            className={`px-2 md:px-4 py-3 whitespace-nowrap text-center cursor-pointer select-none ${hasDeepLink && deepLink ? 'hover:bg-blue-50' : ''}`}
+                            className={`px-2 md:px-4 py-3 whitespace-nowrap text-center cursor-pointer select-none ${index === 0 ? 'border-b border-gray-200' : ''} ${hasDeepLink && deepLink ? 'hover:bg-blue-50' : ''}`}
                             onTouchStart={() => outcomeData && 
                               handlePressStart(game, team, outcomeData.price, book, 'moneyline')}
                             onTouchEnd={handlePressEnd}
@@ -542,7 +555,7 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                         return (
                           <td 
                             key={book} 
-                            className={`px-2 md:px-4 py-3 whitespace-nowrap text-center cursor-pointer select-none ${hasDeepLink && deepLink ? 'hover:bg-blue-50' : ''}`}
+                            className={`px-2 md:px-4 py-3 whitespace-nowrap text-center cursor-pointer select-none ${index === 0 ? 'border-b border-gray-200' : ''} ${hasDeepLink && deepLink ? 'hover:bg-blue-50' : ''}`}
                             onTouchStart={() => outcomeData && typeof outcomeData.point !== 'undefined' && 
                               handlePressStart(game, team, outcomeData.price, book, 'spread', outcomeData.point)}
                             onTouchEnd={handlePressEnd}
@@ -582,7 +595,7 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                         return (
                           <td 
                             key={book} 
-                            className={`px-2 md:px-4 py-3 whitespace-nowrap text-center cursor-pointer select-none ${hasDeepLink && deepLink ? 'hover:bg-blue-50' : ''}`}
+                            className={`px-2 md:px-4 py-3 whitespace-nowrap text-center cursor-pointer select-none ${index === 0 ? 'border-b border-gray-200' : ''} ${hasDeepLink && deepLink ? 'hover:bg-blue-50' : ''}`}
                             onTouchStart={() => outcomeData && typeof outcomeData.point !== 'undefined' && 
                               handlePressStart(game, team, outcomeData.price, book, 'total', outcomeData.point, totalType)}
                             onTouchEnd={handlePressEnd}
@@ -611,7 +624,7 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                         );
                       }
                       
-                      return <td key={book} className="px-2 md:px-4 py-3 text-center">-</td>;
+                      return <td key={book} className={`px-2 md:px-4 py-3 text-center ${index === 0 ? 'border-b border-gray-200' : ''}`}>-</td>;
                     })}
                   </tr>
                 );

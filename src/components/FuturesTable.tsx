@@ -596,21 +596,22 @@ export default function FuturesTable({
       </div>
       
       <div className="overflow-x-auto">
-        <table className="min-w-full">
+        {/* border-separate: Safari drops sticky table cells under border-collapse */}
+        <table className="min-w-full border-separate border-spacing-0">
           <thead className="bg-gray-50">
             <tr>
               {/* Frozen while horizontally scrolling the book columns */}
-              <th className="px-2 md:px-4 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-0 z-20 bg-gray-50 border-r border-gray-100">
+              <th className="px-2 md:px-4 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-0 z-20 bg-gray-50 border-r border-b border-gray-100">
                 Team
               </th>
               {activeBookmakers.map(book => (
-                <th key={book} className="px-2 md:px-4 py-2 md:py-3 text-center">
+                <th key={book} className="px-2 md:px-4 py-2 md:py-3 text-center border-b border-gray-100">
                   <img src={bookmakerLogos[book]} alt={book} className="h-6 mx-auto" />
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="bg-white">
             {market.teams
               .filter(item => {
                 // If elite-only toggle is on, filter to only qualifying teams (elite or borderline)
@@ -645,7 +646,7 @@ export default function FuturesTable({
                   className={getRowBgColor(teamTier)}
                   title={teamDetails ? `KenPom: O#${teamDetails.rankOE}, D#${teamDetails.rankDE}, Overall#${teamDetails.rankEM}` : undefined}
                 >
-                  <td className={`px-2 md:px-4 py-3 whitespace-normal text-xs md:text-sm font-medium text-gray-900 sticky left-0 z-10 border-r border-gray-100 ${getRowBgColor(teamTier) || 'bg-white'}`}>
+                  <td className={`px-2 md:px-4 py-3 whitespace-normal text-xs md:text-sm font-medium text-gray-900 sticky left-0 z-10 border-r border-b border-gray-100 ${getRowBgColor(teamTier) || 'bg-white'}`}>
                     {renderTeamCell(item.team, teamTier, teamDetails)}
                   </td>
                   {activeBookmakers.map(book => {
@@ -656,7 +657,7 @@ export default function FuturesTable({
                     return (
                       <td 
                         key={book} 
-                        className={`px-2 md:px-4 py-3 whitespace-nowrap text-center cursor-pointer select-none ${
+                        className={`px-2 md:px-4 py-3 whitespace-nowrap text-center cursor-pointer select-none border-b border-gray-100 ${
                           getCellBgColor(teamTier, isThisCellHolding)
                         }`}
                         onTouchStart={() => hasOdds && handlePressStart(item.team, item.odds[book], book, cellKey)}
