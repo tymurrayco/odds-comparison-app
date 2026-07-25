@@ -111,7 +111,7 @@ function TeamColumn({ logo, name, implied, ml, dim }: {
       >
         <span
           style={{
-            color: INK_SOFT,
+            color: INK,
             fontSize: '27px',
             fontWeight: 600,
             textAlign: 'center',
