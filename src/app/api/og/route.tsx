@@ -168,6 +168,7 @@ export async function GET(request: NextRequest) {
   const impliedHome = searchParams.get('impliedHome') || '';
   const awayML = searchParams.get('awayML') || '';
   const homeML = searchParams.get('homeML') || '';
+  const tv = searchParams.get('tv') || '';
   const awayPanel = panelColor(searchParams.get('awayColor'), searchParams.get('awayAlt'));
   const homePanel = panelColor(searchParams.get('homeColor'), searchParams.get('homeAlt'));
 
@@ -214,6 +215,8 @@ export async function GET(request: NextRequest) {
           >
             <span style={{ color: INK, fontSize: '24px', fontWeight: 700 }}>{league}</span>
             {time && <span style={{ color: INK_SOFT, fontSize: '24px', fontWeight: 600 }}>{time}</span>}
+            {tv && <span style={{ color: INK_DIM, fontSize: '24px', fontWeight: 600 }}>·</span>}
+            {tv && <span style={{ color: INK, fontSize: '24px', fontWeight: 700 }}>{tv}</span>}
           </div>
         </div>
 

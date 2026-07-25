@@ -297,6 +297,71 @@ async function getESPNLogos(
   }
 }
 
+// Look up the TV broadcast for a game from ESPN's scoreboard (cached 1h).
+// Prefers a national network over regional/streaming feed lists.
+const NATIONAL_NETWORKS = [
+  'ABC', 'CBS', 'NBC', 'FOX', 'ESPN', 'ESPN2', 'ESPNU', 'FS1', 'FS2', 'TNT',
+  'TBS', 'CBSSN', 'NFL Network', 'NFL NET', 'MLB Network', 'NBA TV', 'Prime Video',
+  'Peacock', 'Apple TV+', 'Netflix', 'The CW', 'ION', 'BTN', 'SEC Network',
+  'SECN', 'ACC Network', 'ACCN', 'truTV', 'ESPN+',
+];
+
+async function getTVBroadcast(
+  sportKey: string,
+  awayTeam: string,
+  homeTeam: string,
+  commenceTime: string
+): Promise<string | null> {
+  try {
+    const espnLeague = ESPN_LEAGUE_MAP[sportKey];
+    if (!espnLeague) return null;
+
+    // Scoreboard dates are US Eastern calendar days
+    const d = new Date(commenceTime);
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(d).replace(/-/g, '');
+    const isCollege = espnLeague.league === 'college-football' || espnLeague.league === 'mens-college-basketball';
+    const url = `https://site.api.espn.com/apis/site/v2/sports/${espnLeague.sport}/${espnLeague.league}/scoreboard?dates=${parts}${isCollege ? '&limit=300&groups=80' : ''}`;
+
+    const resp = await fetch(url, { next: { revalidate: 3600 } });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+
+    interface Competitor { team?: { displayName?: string } }
+    interface Broadcast { names?: string[] }
+    interface GeoBroadcast { media?: { shortName?: string } }
+    interface Competition { competitors?: Competitor[]; broadcasts?: Broadcast[]; geoBroadcasts?: GeoBroadcast[] }
+    interface ESPNEvent { competitions?: Competition[] }
+
+    let best: Competition | null = null;
+    let bestScore = 0;
+    for (const e of (data.events ?? []) as ESPNEvent[]) {
+      const comp = e.competitions?.[0];
+      const names = (comp?.competitors ?? []).map(c => c.team?.displayName || '');
+      if (names.length < 2) continue;
+      const score = Math.max(
+        matchScore(names[0], homeTeam) + matchScore(names[1], awayTeam),
+        matchScore(names[0], awayTeam) + matchScore(names[1], homeTeam),
+      );
+      if (score > bestScore) { bestScore = score; best = comp ?? null; }
+    }
+    if (!best || bestScore < 4) return null;
+
+    const candidates = [
+      ...(best.broadcasts ?? []).flatMap(b => b.names ?? []),
+      ...(best.geoBroadcasts ?? []).map(g => g.media?.shortName).filter((n): n is string => !!n),
+    ];
+    if (candidates.length === 0) return null;
+    const national = candidates.find(c =>
+      NATIONAL_NETWORKS.some(n => c.toLowerCase() === n.toLowerCase())
+    );
+    return national ?? candidates[0];
+  } catch {
+    return null;
+  }
+}
+
 // Generate dynamic metadata for Open Graph
 // UPDATED: Now reads league from searchParams to optimize API usage
 export async function generateMetadata({ 
@@ -370,8 +435,14 @@ export async function generateMetadata({
     ogImageParams.set('homeName', getMascot(game.home_team));
   }
   
-  // Add ESPN logos if we can fetch them
-  const espnLogos = await getESPNLogos(game.sport_key, game.away_team, game.home_team);
+  // Add ESPN logos + TV broadcast if we can fetch them
+  const [espnLogos, tvNetwork] = await Promise.all([
+    getESPNLogos(game.sport_key, game.away_team, game.home_team),
+    getTVBroadcast(game.sport_key, game.away_team, game.home_team, game.commence_time),
+  ]);
+  if (tvNetwork) {
+    description += ` • ${tvNetwork}`;
+  }
   if (espnLogos.awayLogo) {
     ogImageParams.set('awayLogo', espnLogos.awayLogo);
   }
@@ -395,6 +466,9 @@ export async function generateMetadata({
   }
   if (homeML !== null) {
     ogImageParams.set('homeML', homeML > 0 ? `+${homeML}` : `${homeML}`);
+  }
+  if (tvNetwork) {
+    ogImageParams.set('tv', tvNetwork);
   }
   
   const ogImageUrl = `https://odds.day/api/og?${ogImageParams.toString()}`;
