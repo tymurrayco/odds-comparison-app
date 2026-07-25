@@ -26,8 +26,8 @@ export function OddsLoader({ label = 'Loading odds' }: { label?: string }) {
     <div className="flex flex-col items-center justify-center gap-3 py-10" role="status" aria-live="polite">
       <div className="flex items-center">
         {/* no gap between the wordmark halves — they read as one word */}
-        <span className="text-lg font-bold text-gray-900">odds</span>
-        <span className="text-lg font-bold text-blue-600">.day</span>
+        <span className="text-lg font-bold text-blue-600">odds</span>
+        <span className="text-lg font-bold text-gray-900">.day</span>
         <OddsTicks className="ml-2" />
       </div>
       <span className="text-xs text-gray-400">{label}</span>

@@ -98,8 +98,8 @@ export async function GET(request: NextRequest) {
         {/* Header: brand left, market title right */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'baseline' }}>
-            <span style={{ color: INK, fontSize: '38px', fontWeight: 700 }}>odds</span>
-            <span style={{ color: ACCENT, fontSize: '38px', fontWeight: 700 }}>.day</span>
+            <span style={{ color: ACCENT, fontSize: '38px', fontWeight: 700 }}>odds</span>
+            <span style={{ color: INK, fontSize: '38px', fontWeight: 700 }}>.day</span>
           </div>
           <div
             style={{
