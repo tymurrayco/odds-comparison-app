@@ -173,7 +173,6 @@ export async function generateMetadata({
     ogParams.set('teams', JSON.stringify(top.map(t => ({
       n: t.name, o: fmt(t.odds), l: t.logo ?? '', c: t.color ?? '', b: t.book ?? '',
     }))));
-    if (all.length > top.length) ogParams.set('more', String(all.length - top.length));
   }
   const ogImageUrl = `https://odds.day/api/og-futures?${ogParams.toString()}`;
 

@@ -71,7 +71,6 @@ const BOOK_LOGOS: Record<string, string> = {
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const title = searchParams.get('title') || 'Futures';
-  const more = searchParams.get('more') || '';
 
   let teams: TeamRow[] = [];
   try {
@@ -117,7 +116,7 @@ export async function GET(request: NextRequest) {
         </div>
 
         {/* Favorites list */}
-        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'center', gap: '10px', marginTop: '18px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'center', gap: '13px', marginTop: '18px' }}>
           {teams.map((t, i) => (
             <div
               key={t.n}
@@ -128,23 +127,23 @@ export async function GET(request: NextRequest) {
                 backgroundColor: i === 0 ? 'rgba(255,255,255,0.75)' : SURFACE,
                 border: `1px solid ${HAIRLINE}`,
                 borderRadius: '16px',
-                padding: '10px 24px',
+                padding: '13px 26px',
               }}
             >
-              <span style={{ color: INK_DIM, fontSize: '24px', fontWeight: 700, width: '34px' }}>{i + 1}</span>
+              <span style={{ color: INK_DIM, fontSize: '26px', fontWeight: 700, width: '36px' }}>{i + 1}</span>
               {t.l ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={t.l} alt="" width={46} height={46} style={{ objectFit: 'contain' }} />
+                <img src={t.l} alt="" width={52} height={52} style={{ objectFit: 'contain' }} />
               ) : (
                 <div
                   style={{
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    width: '46px',
-                    height: '46px',
+                    width: '52px',
+                    height: '52px',
                     backgroundColor: 'rgba(15,23,42,0.08)',
-                    borderRadius: '23px',
+                    borderRadius: '26px',
                   }}
                 >
                   <span style={{ color: INK, fontSize: '22px', fontWeight: 700 }}>{t.n.charAt(0)}</span>
@@ -153,7 +152,7 @@ export async function GET(request: NextRequest) {
               <span
                 style={{
                   color: i === 0 ? INK : INK_SOFT,
-                  fontSize: '29px',
+                  fontSize: '31px',
                   fontWeight: i === 0 ? 700 : 600,
                   flex: 1,
                 }}
@@ -165,12 +164,12 @@ export async function GET(request: NextRequest) {
                 <img
                   src={`${origin}/bookmaker-logos/${BOOK_LOGOS[t.b]}`}
                   alt=""
-                  width={54}
-                  height={32}
+                  width={58}
+                  height={34}
                   style={{ objectFit: 'contain' }}
                 />
               )}
-              <span style={{ color: i === 0 ? INK : INK_SOFT, fontSize: '31px', fontWeight: 700 }}>{t.o}</span>
+              <span style={{ color: i === 0 ? INK : INK_SOFT, fontSize: '33px', fontWeight: 700 }}>{t.o}</span>
             </div>
           ))}
           {teams.length === 0 && (
@@ -180,14 +179,6 @@ export async function GET(request: NextRequest) {
           )}
         </div>
 
-        {/* Footer */}
-        {more && (
-          <div style={{ display: 'flex', justifyContent: 'center' }}>
-            <span style={{ color: INK_DIM, fontSize: '20px', fontWeight: 600 }}>
-              + {more} more
-            </span>
-          </div>
-        )}
       </div>
     ),
     {
