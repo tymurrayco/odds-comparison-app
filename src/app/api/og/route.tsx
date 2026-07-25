@@ -239,14 +239,14 @@ export async function GET(request: NextRequest) {
               marginTop: hasImplied ? '-40px' : '0px',
             }}
           >
-            <span style={{ color: INK_DIM, fontSize: '34px', fontWeight: 600 }}>@</span>
+            <span style={{ color: INK_SOFT, fontSize: '46px', fontWeight: 700 }}>@</span>
             {hasImplied && (
               <span
                 style={{
-                  color: INK_DIM,
-                  fontSize: '17px',
+                  color: INK_SOFT,
+                  fontSize: '20px',
                   fontWeight: 600,
-                  letterSpacing: '2px',
+                  letterSpacing: '3px',
                 }}
               >
                 PROJECTED
