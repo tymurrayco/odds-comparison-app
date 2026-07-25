@@ -203,8 +203,8 @@ async function getESPNLogos(
   sportKey: string,
   awayTeam: string,
   homeTeam: string
-): Promise<{ awayLogo: string | null; homeLogo: string | null; awayColor: string | null; homeColor: string | null }> {
-  const empty = { awayLogo: null, homeLogo: null, awayColor: null, homeColor: null };
+): Promise<{ awayLogo: string | null; homeLogo: string | null; awayColor: string | null; homeColor: string | null; awayAlt: string | null; homeAlt: string | null }> {
+  const empty = { awayLogo: null, homeLogo: null, awayColor: null, homeColor: null, awayAlt: null, homeAlt: null };
   try {
     const espnLeague = ESPN_LEAGUE_MAP[sportKey];
     if (!espnLeague) return empty;
@@ -223,6 +223,8 @@ async function getESPNLogos(
     let homeLogo: string | null = null;
     let awayColor: string | null = null;
     let homeColor: string | null = null;
+    let awayAlt: string | null = null;
+    let homeAlt: string | null = null;
     let awayBest = 0;
     let homeBest = 0;
 
@@ -230,6 +232,7 @@ async function getESPNLogos(
       displayName?: string;
       name?: string;
       color?: string;
+      alternateColor?: string;
       logos?: Array<{ href?: string }>;
     }
 
@@ -252,18 +255,20 @@ async function getESPNLogos(
           awayBest = awayScore;
           awayLogo = logo;
           awayColor = team.color || null;
+          awayAlt = team.alternateColor || null;
         }
         const homeScore = matchScore(teamName, homeTeam);
         if (homeScore > homeBest) {
           homeBest = homeScore;
           homeLogo = logo;
           homeColor = team.color || null;
+          homeAlt = team.alternateColor || null;
         }
         if (awayBest === 4 && homeBest === 4) break;
       }
     }
 
-    return { awayLogo, homeLogo, awayColor, homeColor };
+    return { awayLogo, homeLogo, awayColor, homeColor, awayAlt, homeAlt };
   } catch (error) {
     console.error('Error fetching ESPN logos:', error);
     return empty;
@@ -356,6 +361,12 @@ export async function generateMetadata({
   }
   if (espnLogos.homeColor) {
     ogImageParams.set('homeColor', espnLogos.homeColor);
+  }
+  if (espnLogos.awayAlt) {
+    ogImageParams.set('awayAlt', espnLogos.awayAlt);
+  }
+  if (espnLogos.homeAlt) {
+    ogImageParams.set('homeAlt', espnLogos.homeAlt);
   }
   
   const ogImageUrl = `https://odds.day/api/og?${ogImageParams.toString()}`;

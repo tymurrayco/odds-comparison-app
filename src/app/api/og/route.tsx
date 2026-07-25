@@ -18,10 +18,13 @@ const HAIRLINE = 'rgba(15,23,42,0.12)';
 // Pastelize a team color: keep the hue, floor the saturation, lift lightness
 // to a fixed pastel level. A plain mix-toward-white desaturated dark navies
 // (Cal #003262) into grey — HSL keeps the hue's identity at any darkness.
-function panelColor(hex: string | null): string {
-  if (!hex) return NEUTRAL;
+// Achromatic primaries (Steelers black) must NOT get the saturation floor —
+// that invents a hue (0 = red → pink). Fall back to the alternate color;
+// if that's achromatic too (Raiders black/silver), render an honest gray tint.
+function parseHsl(hex: string | null): { hue: number; s: number } | null {
+  if (!hex) return null;
   const raw = hex.replace('#', '').trim();
-  if (!/^[0-9a-fA-F]{6}$/.test(raw)) return NEUTRAL;
+  if (!/^[0-9a-fA-F]{6}$/.test(raw)) return null;
   const [r, g, b] = [0, 1, 2].map(i => parseInt(raw.slice(i * 2, i * 2 + 2), 16) / 255);
   const max = Math.max(r, g, b);
   const min = Math.min(r, g, b);
@@ -37,12 +40,26 @@ function panelColor(hex: string | null): string {
     hue *= 60;
     if (hue < 0) hue += 360;
   }
-  const S = Math.min(1, Math.max(s, 0.45));
+  return { hue, s };
+}
+
+function panelColor(hex: string | null, altHex: string | null = null): string {
+  let hsl = parseHsl(hex);
+  if (!hsl) return NEUTRAL;
+  if (hsl.s < 0.15) {
+    const alt = parseHsl(altHex);
+    if (alt && alt.s >= 0.15) {
+      hsl = alt;
+    } else {
+      return '#e9ebef'; // genuinely gray/black/silver identity → light gray tint
+    }
+  }
+  const S = Math.min(1, Math.max(hsl.s, 0.45));
   const L = 0.85;
   const c = (1 - Math.abs(2 * L - 1)) * S;
-  const x = c * (1 - Math.abs(((hue / 60) % 2) - 1));
+  const x = c * (1 - Math.abs(((hsl.hue / 60) % 2) - 1));
   const m = L - c / 2;
-  const sextant = Math.floor(hue / 60) % 6;
+  const sextant = Math.floor(hsl.hue / 60) % 6;
   const rgb1 = [
     [c, x, 0], [x, c, 0], [0, c, x], [0, x, c], [x, 0, c], [c, 0, x],
   ][sextant];
@@ -130,8 +147,8 @@ export async function GET(request: NextRequest) {
   const homeLogo = searchParams.get('homeLogo') || '';
   const impliedAway = searchParams.get('impliedAway') || '';
   const impliedHome = searchParams.get('impliedHome') || '';
-  const awayPanel = panelColor(searchParams.get('awayColor'));
-  const homePanel = panelColor(searchParams.get('homeColor'));
+  const awayPanel = panelColor(searchParams.get('awayColor'), searchParams.get('awayAlt'));
+  const homePanel = panelColor(searchParams.get('homeColor'), searchParams.get('homeAlt'));
 
   const hasImplied = impliedAway !== '' && impliedHome !== '';
   const awayScore = hasImplied ? String(Math.round(Number(impliedAway))) : '';
