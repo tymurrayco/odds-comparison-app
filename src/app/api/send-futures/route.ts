@@ -41,13 +41,19 @@ const BOOK_SHORT: Record<string, string> = {
 //               names run long, so the abbreviation is wasted width.
 //   'school'  — "Ohio State": college is one team per school, and the mascots
 //               there are the long ones ("Fighting Irish").
+// Verified 2026-07-26: NHL/NBA/MLB/WNBA mascots are unique league-wide (no
+// duplicates), so the city/abbrev is wasted width there. NFL keeps 'abbrev'
+// because its mascots are short and the shared-city teams (NYG/NYJ, LAR/LAC)
+// read better with it. MLS mascots are the longest of any league ("New England
+// Revolution", 22 chars) and its `name` already carries the city, so 'school'
+// (ESPN location) is the compact choice there.
 const LABEL_STYLE: Record<string, 'abbrev' | 'mascot' | 'school'> = {
   americanfootball_nfl: 'abbrev',
-  basketball_nba: 'abbrev',
-  baseball_mlb: 'abbrev',
-  basketball_wnba: 'abbrev',
-  soccer_usa_mls: 'abbrev',
   icehockey_nhl: 'mascot',
+  basketball_nba: 'mascot',
+  baseball_mlb: 'mascot',
+  basketball_wnba: 'mascot',
+  soccer_usa_mls: 'school',
   americanfootball_ncaaf: 'school',
   basketball_ncaab: 'school',
   soccer_epl: 'school',
