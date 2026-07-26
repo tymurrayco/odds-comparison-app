@@ -14,14 +14,28 @@ export async function POST(request: NextRequest) {
     
     // Get the bet data from the request
     const betData = await request.json();
-    
+
+    // Attach a share URL so downstream (Zapier -> Discord) can post a link
+    // that unfurls as the actual wager instead of a generic odds.day card.
+    const oddsStr = typeof betData.odds === 'number' && betData.odds > 0
+      ? `+${betData.odds}`
+      : `${betData.odds}`;
+    const payload = {
+      ...betData,
+      shareUrl: betData.id ? `https://www.odds.day/bet/${betData.id}` : 'https://www.odds.day',
+      // Ready-made one-liner for the Discord step
+      summary: [betData.bet, oddsStr, `${betData.stake}u`, betData.book]
+        .filter(Boolean)
+        .join(' · '),
+    };
+
     // Forward to Zapier
     const response = await fetch(webhookUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(betData)
+      body: JSON.stringify(payload)
     });
     
     if (!response.ok) {

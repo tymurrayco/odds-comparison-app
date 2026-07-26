@@ -175,6 +175,9 @@ function HomeContent() {
       // Shared futures link
       setActiveLeague(leagueId);
       setActiveView('futures');
+    } else if (view === 'mybets') {
+      // Shared bet link (/bet/[id] redirects here)
+      setActiveView('mybets');
     }
   }, [searchParams]);
 
