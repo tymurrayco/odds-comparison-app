@@ -93,6 +93,8 @@ export default function BetAdminPage() {
   const [futuresLimit, setFuturesLimit] = useState(25);
   const [futuresSending, setFuturesSending] = useState(false);
   const [futuresResult, setFuturesResult] = useState<string | null>(null);
+  const [restSending, setRestSending] = useState(false);
+  const [restResult, setRestResult] = useState<string | null>(null);
   const [isDesktop, setIsDesktop] = useState(false);
 
   const [parlayTeams, setParlayTeams] = useState<string[]>(['', '']);
@@ -336,6 +338,26 @@ export default function BetAdminPage() {
     }
   };
 
+  const handleSendNhlRest = async () => {
+    setRestSending(true);
+    setRestResult(null);
+    try {
+      const resp = await fetch('/api/send-nhl-rest', { method: 'POST' });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Failed');
+      setRestResult(
+        data.posted
+          ? `Posted ${data.spots} mismatch(es) from ${data.games} games`
+          : `Nothing posted — ${data.reason ?? 'no mismatches'}`
+      );
+    } catch (e) {
+      setRestResult(e instanceof Error ? e.message : 'Failed to send');
+    } finally {
+      setRestSending(false);
+      setTimeout(() => setRestResult(null), 6000);
+    }
+  };
+
   const handleCopyLink = (bet: Bet) => {
     const url = `${window.location.origin}/bet/${bet.id}`;
     fetch(url).catch(() => {});
@@ -557,6 +579,26 @@ export default function BetAdminPage() {
           </div>
           {futuresResult && (
             <p className="mt-2 text-xs text-slate-600">{futuresResult}</p>
+          )}
+
+          <div className="mt-4 pt-4 border-t border-slate-100 flex flex-wrap items-center gap-3">
+            <div className="flex-1 min-w-[180px]">
+              <p className="text-sm font-semibold text-slate-900">NHL rest report</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Auto-posts each morning; this sends it now
+              </p>
+            </div>
+            <button
+              onClick={handleSendNhlRest}
+              disabled={restSending}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 text-white rounded-lg font-medium text-sm hover:bg-slate-900 disabled:opacity-50 transition shadow-sm"
+            >
+              {restSending ? <IconSpinner /> : <IconSend />}
+              {restSending ? 'Sending…' : 'Send rest report'}
+            </button>
+          </div>
+          {restResult && (
+            <p className="mt-2 text-xs text-slate-600">{restResult}</p>
           )}
         </div>
 
