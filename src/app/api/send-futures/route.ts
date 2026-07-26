@@ -76,8 +76,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No futures prices available right now' }, { status: 404 });
     }
     const shown = all.slice(0, count);
-    // Colors/logos only needed for the leader (embed accent + thumbnail)
-    await attachEspnAssets(sport, shown.slice(0, 1));
+    // Attach for every row: the leader supplies the accent + thumbnail, and
+    // each row uses ESPN's school name so mascots don't wrap on mobile.
+    // Single (24h-cached) teams fetch regardless of row count.
+    await attachEspnAssets(sport, shown);
 
     // Ratio format: +3500 -> "35:1", +650 -> "6.5:1". Odds-on favorites
     // (negative American) invert: -150 -> "1:1.5".
@@ -89,10 +91,13 @@ export async function POST(request: NextRequest) {
       const y = Math.abs(o) / 100;
       return `1:${Number.isInteger(y) ? y : y.toFixed(1)}`;
     };
-    const width = Math.min(Math.max(...shown.map(t => t.name.length)), 24);
+    // Mascots make lines wrap on phones — prefer the school name
+    const label = (t: { school?: string; name: string }) => t.school || t.name;
+    const width = Math.min(Math.max(...shown.map(t => label(t).length)), 20);
     const lines = shown.map((t, i) => {
       const rank = String(i + 1).padStart(2, ' ');
-      const name = (t.name.length > width ? t.name.slice(0, width - 1) + '…' : t.name).padEnd(width);
+      const raw = label(t);
+      const name = (raw.length > width ? raw.slice(0, width - 1) + '…' : raw).padEnd(width);
       const odds = fmt(t.odds).padStart(7);
       const book = t.book ? ` ${BOOK_SHORT[t.book] ?? t.book}` : '';
       return `${rank}. ${name} ${odds}${book}`;

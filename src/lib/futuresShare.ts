@@ -51,6 +51,7 @@ interface FutureEntry {
   book?: string;  // which book offers it
   logo?: string;
   color?: string;
+  school?: string; // ESPN `location` — team name without the mascot
 }
 
 function matchScore(name1: string, name2: string): number {
@@ -131,7 +132,7 @@ async function attachEspnAssets(sport: string, entries: FutureEntry[]): Promise<
     if (!resp.ok) return;
     const data = await resp.json();
     const teams = (data.sports?.[0]?.leagues?.[0]?.teams ?? []) as Array<{
-      team?: { displayName?: string; color?: string; logos?: Array<{ href?: string }> };
+      team?: { displayName?: string; location?: string; color?: string; logos?: Array<{ href?: string }> };
     }>;
     for (const e of entries) {
       let bestScore = 0;
@@ -142,6 +143,9 @@ async function attachEspnAssets(sport: string, entries: FutureEntry[]): Promise<
           bestScore = score;
           e.logo = t.team?.logos?.[0]?.href;
           e.color = t.team?.color;
+          // ESPN publishes the school separately from the mascot, so
+          // "Ohio State Buckeyes" -> "Ohio State" with no string guessing.
+          e.school = t.team?.location;
         }
       }
     }
