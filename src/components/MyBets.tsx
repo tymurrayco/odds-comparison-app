@@ -62,6 +62,7 @@ export default function MyBets() {
   // KEPT: All your existing state
   const [statusFilter, setStatusFilter] = useState<BetStatus | 'all'>('pending');
   const [expandedBetId, setExpandedBetId] = useState<string | null>(null);
+  const [copiedBetId, setCopiedBetId] = useState<string | null>(null);
   const [viewType, setViewType] = useState<'games' | 'futures'>('games');
 
   // Team logo/color maps per league (lazy-loaded, same as Bet Admin)
@@ -414,6 +415,17 @@ export default function MyBets() {
     const espn = lookupTeamInfo(league, teamName)?.logo;
     const local = getTeamLogo(teamName);
     return espn ? [espn, local] : [local];
+  };
+
+  // Share link for a single bet — same page the Discord post targets, so a
+  // text/DM unfurls with the same card.
+  const copyBetLink = (betId: string) => {
+    const url = `${window.location.origin}/bet/${betId}`;
+    fetch(url).catch(() => {});
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedBetId(betId);
+      setTimeout(() => setCopiedBetId(null), 2500);
+    });
   };
 
   const toggleExpanded = (betId: string) => {
@@ -871,6 +883,25 @@ export default function MyBets() {
                         <div className="flex justify-between">
                           <span className="text-gray-500">Odds:</span>
                           <span>{formatOdds(bet.odds)}</span>
+                        </div>
+                        <div className="flex justify-between items-center pt-1">
+                          <span className="text-gray-500">Share:</span>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); copyBetLink(bet.id); }}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors"
+                          >
+                            {copiedBetId === bet.id ? (
+                              <>
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M20 6L9 17l-5-5" /></svg>
+                                Copied
+                              </>
+                            ) : (
+                              <>
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                                Copy link
+                              </>
+                            )}
+                          </button>
                         </div>
                         {bet.status === 'pending' ? (
                           <div className="flex justify-between">

@@ -34,6 +34,7 @@ const IconPlus = () => <svg {...iconProps}><path d="M12 5v14M5 12h14" /></svg>;
 const IconList = () => <svg {...iconProps}><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" /></svg>;
 const IconEdit = () => <svg {...iconProps}><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z" /></svg>;
 const IconTrash = () => <svg {...iconProps}><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>;
+const IconLink = () => <svg {...iconProps}><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.5 1.5" /><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.5-1.5" /></svg>;
 const IconSend = () => <svg {...iconProps}><path d="M22 2L11 13" /><path d="M22 2l-7 20-4-9-9-4 20-7z" /></svg>;
 const IconCheck = () => <svg {...iconProps}><path d="M20 6L9 17l-5-5" /></svg>;
 const IconArrowLeft = () => <svg {...iconProps}><path d="M19 12H5M12 19l-7-7 7-7" /></svg>;
@@ -86,6 +87,7 @@ export default function BetAdminPage() {
   const [view, setView] = useState<'form' | 'list'>('list');
   const [sendingBetId, setSendingBetId] = useState<string | null>(null);
   const [sentBets, setSentBets] = useState<Set<string>>(new Set());
+  const [copiedBets, setCopiedBets] = useState<Set<string>>(new Set());
   const [isDesktop, setIsDesktop] = useState(false);
 
   const [parlayTeams, setParlayTeams] = useState<string[]>(['', '']);
@@ -305,6 +307,23 @@ export default function BetAdminPage() {
     } catch (error) {
       console.error('Error updating status:', error);
     }
+  };
+
+  // Copy the bet's share link. Same page Discord posts, so texting/Slacking it
+  // unfurls with the same card. Pre-warm so the first crawler hits a warm cache.
+  const handleCopyLink = (bet: Bet) => {
+    const url = `${window.location.origin}/bet/${bet.id}`;
+    fetch(url).catch(() => {});
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedBets(prev => new Set([...prev, bet.id]));
+      setTimeout(() => {
+        setCopiedBets(prev => {
+          const next = new Set(prev);
+          next.delete(bet.id);
+          return next;
+        });
+      }, 2500);
+    });
   };
 
   const handleSendToZapier = async (bet: Bet) => {
@@ -890,6 +909,13 @@ export default function BetAdminPage() {
                     </div>
                     <div className="flex items-center gap-1">
                       <button
+                        onClick={() => handleCopyLink(bet)}
+                        className="inline-flex items-center justify-center w-8 h-8 text-slate-500 hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition"
+                        title="Copy share link"
+                      >
+                        {copiedBets.has(bet.id) ? <span className="text-emerald-600"><IconCheck /></span> : <IconLink />}
+                      </button>
+                      <button
                         onClick={() => handleSendToZapier(bet)}
                         disabled={sendingBetId === bet.id}
                         className="inline-flex items-center justify-center w-8 h-8 text-slate-500 hover:text-indigo-600 hover:bg-slate-50 rounded-lg disabled:opacity-50 transition"
@@ -991,6 +1017,13 @@ export default function BetAdminPage() {
                       <td className="px-4 py-3 text-xs text-slate-500">{bet.book}</td>
                       <td className="px-6 py-3">
                         <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => handleCopyLink(bet)}
+                            className="inline-flex items-center justify-center w-8 h-8 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition"
+                            title="Copy share link"
+                          >
+                            {copiedBets.has(bet.id) ? <span className="text-emerald-600"><IconCheck /></span> : <IconLink />}
+                          </button>
                           <button
                             onClick={() => handleSendToZapier(bet)}
                             disabled={sendingBetId === bet.id}
