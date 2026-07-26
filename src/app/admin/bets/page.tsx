@@ -88,6 +88,11 @@ export default function BetAdminPage() {
   const [sendingBetId, setSendingBetId] = useState<string | null>(null);
   const [sentBets, setSentBets] = useState<Set<string>>(new Set());
   const [copiedBets, setCopiedBets] = useState<Set<string>>(new Set());
+  // Futures -> Discord
+  const [futuresSport, setFuturesSport] = useState('americanfootball_ncaaf');
+  const [futuresLimit, setFuturesLimit] = useState(25);
+  const [futuresSending, setFuturesSending] = useState(false);
+  const [futuresResult, setFuturesResult] = useState<string | null>(null);
   const [isDesktop, setIsDesktop] = useState(false);
 
   const [parlayTeams, setParlayTeams] = useState<string[]>(['', '']);
@@ -311,6 +316,26 @@ export default function BetAdminPage() {
 
   // Copy the bet's share link. Same page Discord posts, so texting/Slacking it
   // unfurls with the same card. Pre-warm so the first crawler hits a warm cache.
+  const handleSendFutures = async () => {
+    setFuturesSending(true);
+    setFuturesResult(null);
+    try {
+      const resp = await fetch('/api/send-futures', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sport: futuresSport, limit: futuresLimit }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Failed');
+      setFuturesResult(`Sent ${data.shown} of ${data.total} to ${data.channel}`);
+    } catch (e) {
+      setFuturesResult(e instanceof Error ? e.message : 'Failed to send');
+    } finally {
+      setFuturesSending(false);
+      setTimeout(() => setFuturesResult(null), 6000);
+    }
+  };
+
   const handleCopyLink = (bet: Bet) => {
     const url = `${window.location.origin}/bet/${bet.id}`;
     fetch(url).catch(() => {});
@@ -481,6 +506,60 @@ export default function BetAdminPage() {
       </div>
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+        {/* Futures -> Discord */}
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-4 sm:p-5">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-900">Post futures to Discord</h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Best price across the books, sent to that league&apos;s channel
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="flex-1 min-w-[160px]">
+              <label className={labelCls}>League</label>
+              <select
+                value={futuresSport}
+                onChange={(e) => setFuturesSport(e.target.value)}
+                className={fieldCls}
+              >
+                <option value="americanfootball_ncaaf">College Football (CFP)</option>
+                <option value="americanfootball_nfl">NFL (Super Bowl)</option>
+                <option value="basketball_nba">NBA</option>
+                <option value="basketball_ncaab">College Basketball</option>
+                <option value="baseball_mlb">MLB (World Series)</option>
+                <option value="icehockey_nhl">NHL (Stanley Cup)</option>
+                <option value="basketball_wnba">WNBA</option>
+                <option value="soccer_usa_mls">MLS Cup</option>
+                <option value="soccer_epl">EPL</option>
+              </select>
+            </div>
+            <div className="w-24">
+              <label className={labelCls}>Teams</label>
+              <input
+                type="number"
+                min={1}
+                max={100}
+                value={futuresLimit}
+                onChange={(e) => setFuturesLimit(parseInt(e.target.value) || 25)}
+                className={fieldCls}
+              />
+            </div>
+            <button
+              onClick={handleSendFutures}
+              disabled={futuresSending}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-lg font-medium text-sm hover:bg-indigo-700 disabled:opacity-50 transition shadow-sm"
+            >
+              {futuresSending ? <IconSpinner /> : <IconSend />}
+              {futuresSending ? 'Sending…' : 'Send'}
+            </button>
+          </div>
+          {futuresResult && (
+            <p className="mt-2 text-xs text-slate-600">{futuresResult}</p>
+          )}
+        </div>
+
         {/* Stats strip */}
         <div className="grid grid-cols-3 gap-3 sm:gap-4">
           <StatCard label="Pending" value={String(stats.pendingCount)} />
