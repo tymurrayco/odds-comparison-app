@@ -91,7 +91,7 @@ function TeamLogoOrName({ srcs, name, restBadge }: { srcs: (string | undefined)[
         <img
           src={src}
           alt=""
-          className="h-5 w-5 sm:mr-1.5 flex-shrink-0"
+          className="h-7 w-7 sm:h-6 sm:w-6 sm:mr-1.5 flex-shrink-0 object-contain"
           onLoad={() => setLoaded(true)}
           onError={() => setIdx(i => i + 1)}
         />
