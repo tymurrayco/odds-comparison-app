@@ -9,7 +9,6 @@ export const runtime = 'edge';
 
 const INK = '#0f172a';
 const INK_SOFT = '#334155';
-const INK_DIM = '#94a3b8';
 const ACCENT = '#2563eb';
 const NEUTRAL = '#ffffff';
 const SURFACE = 'rgba(15,23,42,0.04)';
@@ -141,7 +140,7 @@ export async function GET(request: NextRequest) {
               </span>
             )}
             {(league || when) && (
-              <span style={{ color: INK_DIM, fontSize: '23px', fontWeight: 600, marginTop: '6px' }}>
+              <span style={{ color: INK_SOFT, fontSize: '25px', fontWeight: 600, marginTop: '6px' }}>
                 {[league, when].filter(Boolean).join('  ·  ')}
               </span>
             )}
@@ -156,31 +155,31 @@ export async function GET(request: NextRequest) {
             backgroundColor: SURFACE,
             border: `1px solid ${HAIRLINE}`,
             borderRadius: '20px',
-            padding: '16px 10px',
+            padding: '22px 10px',
           }}
         >
           {odds && (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1 }}>
-              <span style={{ color: INK_SOFT, fontSize: '17px', fontWeight: 600, letterSpacing: '2px' }}>ODDS</span>
-              <span style={{ color: INK, fontSize: '33px', fontWeight: 700 }}>{odds}</span>
+              <span style={{ color: INK_SOFT, fontSize: '20px', fontWeight: 600, letterSpacing: '2px' }}>ODDS</span>
+              <span style={{ color: INK, fontSize: '44px', fontWeight: 700 }}>{odds}</span>
             </div>
           )}
-          {odds && units && <div style={{ display: 'flex', width: '1px', height: '48px', backgroundColor: HAIRLINE }} />}
+          {odds && units && <div style={{ display: 'flex', width: '1px', height: '60px', backgroundColor: HAIRLINE }} />}
           {units && (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1 }}>
-              <span style={{ color: INK_SOFT, fontSize: '17px', fontWeight: 600, letterSpacing: '2px' }}>UNITS</span>
-              <span style={{ color: INK, fontSize: '33px', fontWeight: 700 }}>{units}</span>
+              <span style={{ color: INK_SOFT, fontSize: '20px', fontWeight: 600, letterSpacing: '2px' }}>UNITS</span>
+              <span style={{ color: INK, fontSize: '44px', fontWeight: 700 }}>{units}</span>
             </div>
           )}
-          {units && book && <div style={{ display: 'flex', width: '1px', height: '48px', backgroundColor: HAIRLINE }} />}
+          {units && book && <div style={{ display: 'flex', width: '1px', height: '60px', backgroundColor: HAIRLINE }} />}
           {book && (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, gap: '4px' }}>
-              <span style={{ color: INK_SOFT, fontSize: '17px', fontWeight: 600, letterSpacing: '2px' }}>BOOK</span>
+              <span style={{ color: INK_SOFT, fontSize: '20px', fontWeight: 600, letterSpacing: '2px' }}>BOOK</span>
               {bookFile[book] ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={`${origin}/bookmaker-logos/${bookFile[book]}`} alt="" width={64} height={30} style={{ objectFit: 'contain' }} />
+                <img src={`${origin}/bookmaker-logos/${bookFile[book]}`} alt="" width={88} height={40} style={{ objectFit: 'contain' }} />
               ) : (
-                <span style={{ color: INK, fontSize: '28px', fontWeight: 700 }}>{book}</span>
+                <span style={{ color: INK, fontSize: '38px', fontWeight: 700 }}>{book}</span>
               )}
             </div>
           )}

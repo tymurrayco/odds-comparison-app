@@ -61,11 +61,7 @@ export async function POST(request: NextRequest) {
             : null].filter(Boolean).join(' · '),
         ].filter(Boolean).join('\n'),
         color: embedColor(color),
-        fields: [
-          { name: 'Odds', value: oddsStr, inline: true },
-          { name: 'Units', value: `${bet.stake}u`, inline: true },
-          ...(bet.book ? [{ name: 'Book', value: String(bet.book), inline: true }] : []),
-        ],
+        // No odds/units/book fields — the share card image already shows them
         ...(logo ? { thumbnail: { url: logo } } : {}),
         image: { url: buildBetOgUrl(bet, logo, color) },
         footer: { text: 'odds.day' },
