@@ -16,6 +16,16 @@ const STATUS_EMOJI: Record<string, string> = {
   pending: '🎟️', won: '✅', lost: '❌', push: '➖',
 };
 
+// Read-only config check — confirms a destination is wired without posting
+// anything or revealing the webhook URL. Vercel env changes need a redeploy,
+// so this is the quick way to tell whether prod actually has it.
+export async function GET() {
+  return NextResponse.json({
+    discordConfigured: Boolean(process.env.DISCORD_WEBHOOK_URL),
+    zapierConfigured: Boolean(process.env.ZAPIER_WEBHOOK_URL),
+  });
+}
+
 export async function POST(request: NextRequest) {
   const discordUrl = process.env.DISCORD_WEBHOOK_URL;
   const zapierUrl = process.env.ZAPIER_WEBHOOK_URL;
