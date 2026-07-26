@@ -155,7 +155,7 @@ export async function GET(request: NextRequest) {
             backgroundColor: SURFACE,
             border: `1px solid ${HAIRLINE}`,
             borderRadius: '20px',
-            padding: '22px 10px',
+            padding: '18px 10px',
           }}
         >
           {odds && (
@@ -164,20 +164,20 @@ export async function GET(request: NextRequest) {
               <span style={{ color: INK, fontSize: '44px', fontWeight: 700 }}>{odds}</span>
             </div>
           )}
-          {odds && units && <div style={{ display: 'flex', width: '1px', height: '60px', backgroundColor: HAIRLINE }} />}
+          {odds && units && <div style={{ display: 'flex', width: '1px', height: '78px', backgroundColor: HAIRLINE }} />}
           {units && (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1 }}>
               <span style={{ color: INK_SOFT, fontSize: '20px', fontWeight: 600, letterSpacing: '2px' }}>UNITS</span>
               <span style={{ color: INK, fontSize: '44px', fontWeight: 700 }}>{units}</span>
             </div>
           )}
-          {units && book && <div style={{ display: 'flex', width: '1px', height: '60px', backgroundColor: HAIRLINE }} />}
+          {units && book && <div style={{ display: 'flex', width: '1px', height: '78px', backgroundColor: HAIRLINE }} />}
           {book && (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, gap: '4px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, gap: '2px' }}>
               <span style={{ color: INK_SOFT, fontSize: '20px', fontWeight: 600, letterSpacing: '2px' }}>BOOK</span>
               {bookFile[book] ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={`${origin}/bookmaker-logos/${bookFile[book]}`} alt="" width={88} height={40} style={{ objectFit: 'contain' }} />
+                <img src={`${origin}/bookmaker-logos/${bookFile[book]}`} alt="" width={78} height={78} style={{ objectFit: 'contain' }} />
               ) : (
                 <span style={{ color: INK, fontSize: '38px', fontWeight: 700 }}>{book}</span>
               )}
