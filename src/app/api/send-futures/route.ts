@@ -31,8 +31,16 @@ const LEAGUE_SUFFIX: Record<string, string> = {
 
 const BOOK_SHORT: Record<string, string> = {
   DraftKings: 'DK', FanDuel: 'FD', BetMGM: 'MGM', BetRivers: 'BR',
-  Caesars: 'CZR', 'BetOnline.ag': 'BOL', Kalshi: 'KAL',
+  Caesars: 'CZR', Kalshi: 'KAL',
 };
+
+// Pro leagues share a city across teams (NY, LA), so "DEN Broncos" reads
+// better and stays short. College teams are one-per-school, so the school
+// name alone is clearest — and mascots there are long ("Fighting Irish").
+const PRO_LEAGUES = new Set([
+  'americanfootball_nfl', 'basketball_nba', 'baseball_mlb',
+  'icehockey_nhl', 'basketball_wnba', 'soccer_usa_mls',
+]);
 
 function webhookFor(sport: string): string | undefined {
   const suffix = LEAGUE_SUFFIX[sport];
@@ -91,8 +99,12 @@ export async function POST(request: NextRequest) {
       const y = Math.abs(o) / 100;
       return `1:${Number.isInteger(y) ? y : y.toFixed(1)}`;
     };
-    // Mascots make lines wrap on phones — prefer the school name
-    const label = (t: { school?: string; name: string }) => t.school || t.name;
+    // Keep lines short enough to avoid wrapping in Discord's mobile code block
+    const isPro = PRO_LEAGUES.has(sport);
+    const label = (t: { school?: string; abbrev?: string; mascot?: string; name: string }) => {
+      if (isPro && t.abbrev && t.mascot) return `${t.abbrev} ${t.mascot}`;
+      return t.school || t.name;
+    };
     const width = Math.min(Math.max(...shown.map(t => label(t).length)), 20);
     const lines = shown.map((t, i) => {
       const rank = String(i + 1).padStart(2, ' ');

@@ -42,7 +42,7 @@ const ESPN_LEAGUE_MAP: { [key: string]: { sport: string; league: string } } = {
 // Books whose prices we compare (must match the-odds-api bookmaker titles;
 // Kalshi merges in separately). Keeps the card consistent with the site grid.
 const MAJOR_BOOKS = new Set([
-  'DraftKings', 'FanDuel', 'BetMGM', 'BetRivers', 'Caesars', 'BetOnline.ag',
+  'DraftKings', 'FanDuel', 'BetMGM', 'BetRivers', 'Caesars',
 ]);
 
 interface FutureEntry {
@@ -52,6 +52,8 @@ interface FutureEntry {
   logo?: string;
   color?: string;
   school?: string; // ESPN `location` — team name without the mascot
+  abbrev?: string; // ESPN `abbreviation` — e.g. "DEN"
+  mascot?: string; // ESPN `name` — e.g. "Broncos"
 }
 
 function matchScore(name1: string, name2: string): number {
@@ -132,7 +134,10 @@ async function attachEspnAssets(sport: string, entries: FutureEntry[]): Promise<
     if (!resp.ok) return;
     const data = await resp.json();
     const teams = (data.sports?.[0]?.leagues?.[0]?.teams ?? []) as Array<{
-      team?: { displayName?: string; location?: string; color?: string; logos?: Array<{ href?: string }> };
+      team?: {
+        displayName?: string; location?: string; abbreviation?: string;
+        name?: string; color?: string; logos?: Array<{ href?: string }>;
+      };
     }>;
     for (const e of entries) {
       let bestScore = 0;
@@ -146,6 +151,8 @@ async function attachEspnAssets(sport: string, entries: FutureEntry[]): Promise<
           // ESPN publishes the school separately from the mascot, so
           // "Ohio State Buckeyes" -> "Ohio State" with no string guessing.
           e.school = t.team?.location;
+          e.abbrev = t.team?.abbreviation;
+          e.mascot = t.team?.name;
         }
       }
     }
