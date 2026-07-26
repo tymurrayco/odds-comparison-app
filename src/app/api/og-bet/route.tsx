@@ -74,6 +74,11 @@ export async function GET(request: NextRequest) {
     BetRivers: 'betrivers.png', Caesars: 'caesars.png',
     'BetOnline.ag': 'betonline.png', Kalshi: 'kalshi.png',
   };
+  // Some assets inset their mark inside heavy padding (BetRivers is a small
+  // wordmark on a yellow tile), so a uniform box makes them read tiny. Scale
+  // those up to match the visual weight of the others.
+  const BOOK_SCALE: Record<string, number> = { BetRivers: 1.35, BetMGM: 1.15, Kalshi: 1.1 };
+  const bookSize = Math.round(80 * (BOOK_SCALE[book] ?? 1));
 
   return new ImageResponse(
     (
@@ -177,7 +182,7 @@ export async function GET(request: NextRequest) {
               <span style={{ color: INK_SOFT, fontSize: '20px', fontWeight: 600, letterSpacing: '2px' }}>BOOK</span>
               {bookFile[book] ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={`${origin}/bookmaker-logos/${bookFile[book]}`} alt="" width={78} height={78} style={{ objectFit: 'contain' }} />
+                <img src={`${origin}/bookmaker-logos/${bookFile[book]}`} alt="" width={bookSize} height={bookSize} style={{ objectFit: 'contain' }} />
               ) : (
                 <span style={{ color: INK, fontSize: '38px', fontWeight: 700 }}>{book}</span>
               )}
