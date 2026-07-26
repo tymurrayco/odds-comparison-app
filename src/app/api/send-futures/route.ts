@@ -122,10 +122,19 @@ export async function POST(request: NextRequest) {
       url: `https://www.odds.day/futures/${sport}`,
       description: '```\n' + lines.join('\n') + '\n```',
       color: embedColor(leader?.color ?? null),
-      // Discord renders embeds on a dark surface, so use ESPN's dark-background
-      // logo variant — the default ones carry dark text and look wrong there.
-      ...(leader?.logo
-        ? { thumbnail: { url: leader.logo.replace('/500/', '/500-dark/') } }
+      // Leader's logo goes in the AUTHOR slot, not `thumbnail`: a thumbnail sits
+      // beside the description and narrows it, which wrapped every line of the
+      // table on mobile. The author row sits above and costs no width.
+      // Dark-variant logo because Discord embeds render on a dark surface.
+      ...(leader
+        ? {
+            author: {
+              name: `${label(leader)} favorite`,
+              ...(leader.logo
+                ? { icon_url: leader.logo.replace('/500/', '/500-dark/') }
+                : {}),
+            },
+          }
         : {}),
       footer: {
         text: `Best price across DK · FD · MGM · BR · CZR · Kalshi — showing ${shown.length} of ${all.length} · odds.day`,
