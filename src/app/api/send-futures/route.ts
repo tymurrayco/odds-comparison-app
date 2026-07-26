@@ -79,7 +79,16 @@ export async function POST(request: NextRequest) {
     // Colors/logos only needed for the leader (embed accent + thumbnail)
     await attachEspnAssets(sport, shown.slice(0, 1));
 
-    const fmt = (o: number) => (o > 0 ? `+${o}` : `${o}`);
+    // Ratio format: +3500 -> "35:1", +650 -> "6.5:1". Odds-on favorites
+    // (negative American) invert: -150 -> "1:1.5".
+    const fmt = (o: number) => {
+      if (o > 0) {
+        const x = o / 100;
+        return `${Number.isInteger(x) ? x : x.toFixed(1)}:1`;
+      }
+      const y = Math.abs(o) / 100;
+      return `1:${Number.isInteger(y) ? y : y.toFixed(1)}`;
+    };
     const width = Math.min(Math.max(...shown.map(t => t.name.length)), 24);
     const lines = shown.map((t, i) => {
       const rank = String(i + 1).padStart(2, ' ');
@@ -96,7 +105,11 @@ export async function POST(request: NextRequest) {
       url: `https://www.odds.day/futures/${sport}`,
       description: '```\n' + lines.join('\n') + '\n```',
       color: embedColor(leader?.color ?? null),
-      ...(leader?.logo ? { thumbnail: { url: leader.logo } } : {}),
+      // Discord renders embeds on a dark surface, so use ESPN's dark-background
+      // logo variant — the default ones carry dark text and look wrong there.
+      ...(leader?.logo
+        ? { thumbnail: { url: leader.logo.replace('/500/', '/500-dark/') } }
+        : {}),
       footer: {
         text: `Best price across DK · FD · MGM · BR · CZR · Kalshi — showing ${shown.length} of ${all.length} · odds.day`,
       },
