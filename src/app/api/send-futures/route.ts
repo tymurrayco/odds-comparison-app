@@ -34,13 +34,24 @@ const BOOK_SHORT: Record<string, string> = {
   Caesars: 'CZR', Kalshi: 'KAL',
 };
 
-// Pro leagues share a city across teams (NY, LA), so "DEN Broncos" reads
-// better and stays short. College teams are one-per-school, so the school
-// name alone is clearest — and mascots there are long ("Fighting Irish").
-const PRO_LEAGUES = new Set([
-  'americanfootball_nfl', 'basketball_nba', 'baseball_mlb',
-  'icehockey_nhl', 'basketball_wnba', 'soccer_usa_mls',
-]);
+// Label strategy per league, tuned to keep lines short on mobile Discord:
+//   'abbrev'  — "DEN Broncos": pro leagues share cities (NY/LA), so the
+//               abbreviation disambiguates and stays compact.
+//   'mascot'  — "Golden Knights": NHL mascots are unique league-wide and its
+//               names run long, so the abbreviation is wasted width.
+//   'school'  — "Ohio State": college is one team per school, and the mascots
+//               there are the long ones ("Fighting Irish").
+const LABEL_STYLE: Record<string, 'abbrev' | 'mascot' | 'school'> = {
+  americanfootball_nfl: 'abbrev',
+  basketball_nba: 'abbrev',
+  baseball_mlb: 'abbrev',
+  basketball_wnba: 'abbrev',
+  soccer_usa_mls: 'abbrev',
+  icehockey_nhl: 'mascot',
+  americanfootball_ncaaf: 'school',
+  basketball_ncaab: 'school',
+  soccer_epl: 'school',
+};
 
 function webhookFor(sport: string): string | undefined {
   const suffix = LEAGUE_SUFFIX[sport];
@@ -100,9 +111,10 @@ export async function POST(request: NextRequest) {
       return `1:${Number.isInteger(y) ? y : y.toFixed(1)}`;
     };
     // Keep lines short enough to avoid wrapping in Discord's mobile code block
-    const isPro = PRO_LEAGUES.has(sport);
+    const style = LABEL_STYLE[sport] ?? 'school';
     const label = (t: { school?: string; abbrev?: string; mascot?: string; name: string }) => {
-      if (isPro && t.abbrev && t.mascot) return `${t.abbrev} ${t.mascot}`;
+      if (style === 'mascot' && t.mascot) return t.mascot;
+      if (style === 'abbrev' && t.abbrev && t.mascot) return `${t.abbrev} ${t.mascot}`;
       return t.school || t.name;
     };
     const width = Math.min(Math.max(...shown.map(t => label(t).length)), 20);
