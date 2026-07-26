@@ -311,7 +311,7 @@ export default function BetAdminPage() {
     setSendingBetId(bet.id);
 
     try {
-      const response = await fetch('/api/send-to-zapier', {
+      const response = await fetch('/api/send-bet', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(bet)
@@ -333,8 +333,8 @@ export default function BetAdminPage() {
       }, 3000);
 
     } catch (error) {
-      console.error('Error sending to Zapier:', error);
-      alert(`Failed to send bet to Zapier. Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error('Error sending bet:', error);
+      alert(`Failed to send bet. Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setSendingBetId(null);
     }
@@ -893,7 +893,7 @@ export default function BetAdminPage() {
                         onClick={() => handleSendToZapier(bet)}
                         disabled={sendingBetId === bet.id}
                         className="inline-flex items-center justify-center w-8 h-8 text-slate-500 hover:text-indigo-600 hover:bg-slate-50 rounded-lg disabled:opacity-50 transition"
-                        title="Send to Zapier"
+                        title="Post to Discord"
                       >
                         {sendingBetId === bet.id ? <IconSpinner /> : sentBets.has(bet.id) ? <span className="text-emerald-600"><IconCheck /></span> : <IconSend />}
                       </button>
@@ -995,7 +995,7 @@ export default function BetAdminPage() {
                             onClick={() => handleSendToZapier(bet)}
                             disabled={sendingBetId === bet.id}
                             className="inline-flex items-center justify-center w-8 h-8 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-lg disabled:opacity-50 transition"
-                            title="Send to Zapier"
+                            title="Post to Discord"
                           >
                             {sendingBetId === bet.id ? <IconSpinner /> : sentBets.has(bet.id) ? <span className="text-emerald-600"><IconCheck /></span> : <IconSend />}
                           </button>
