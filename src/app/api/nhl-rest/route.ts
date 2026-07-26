@@ -68,32 +68,49 @@ function getTeamAbbr(teamName: string): string {
   return ESPN_TEAM_ABBR[teamName] || teamName.substring(0, 3).toUpperCase();
 }
 
+// How many days of schedule history we fetch. Rest beyond this is unknowable,
+// so restDays is capped rather than reported as a sentinel.
+const LOOKBACK_DAYS = 6;
+const MAX_REST_DAYS = LOOKBACK_DAYS + 1; // ">= 7 days off" ceiling
+
+// All date math is UTC-based on YYYY-MM-DD strings. The previous version parsed
+// ISO strings as UTC but mutated them with local setDate(), which drifts a day
+// on any non-UTC server (fine on Vercel, wrong in local dev).
+function parseISO(dateStr: string): number {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return Date.UTC(y, m - 1, d);
+}
+
+function isoFromUTC(ms: number): string {
+  return new Date(ms).toISOString().split('T')[0];
+}
+
+function addDays(dateStr: string, delta: number): string {
+  return isoFromUTC(parseISO(dateStr) + delta * 86400000);
+}
+
 // Helper to format date for ESPN API (YYYYMMDD)
-function formatDateForESPN(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}${month}${day}`;
+function formatDateForESPN(dateStr: string): string {
+  return dateStr.replace(/-/g, '');
 }
 
-// Helper to get date string for comparison (YYYY-MM-DD)
-function getDateString(date: Date): string {
-  return date.toISOString().split('T')[0];
+// Whole days from date1 to date2 (both YYYY-MM-DD)
+function daysBetween(date1: string, date2: string): number {
+  return Math.round(Math.abs(parseISO(date2) - parseISO(date1)) / 86400000);
 }
 
-// Helper to calculate days between two dates
-function daysBetween(date1: Date, date2: Date): number {
-  const oneDay = 24 * 60 * 60 * 1000;
-  // Reset times to midnight for accurate day calculation
-  const d1 = new Date(date1.getFullYear(), date1.getMonth(), date1.getDate());
-  const d2 = new Date(date2.getFullYear(), date2.getMonth(), date2.getDate());
-  return Math.round(Math.abs((d2.getTime() - d1.getTime()) / oneDay));
+// "Today" in US Eastern — NHL schedules are ET. Intl handles EST/EDT, unlike
+// the previous hardcoded -5 offset (wrong for the entire spring + playoffs).
+function easternToday(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date());
 }
 
 // Fetch games for a specific date from ESPN
-async function fetchGamesForDate(date: Date): Promise<{ homeTeam: string; awayTeam: string; date: string }[]> {
-  const dateStr = formatDateForESPN(date);
-  const apiUrl = `https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard?dates=${dateStr}`;
+async function fetchGamesForDate(dateStr: string): Promise<{ homeTeam: string; awayTeam: string; date: string }[]> {
+  const apiUrl = `https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard?dates=${formatDateForESPN(dateStr)}`;
   
   try {
     const response = await fetch(apiUrl, { next: { revalidate: 300 } }); // Cache for 5 minutes
@@ -118,7 +135,7 @@ async function fetchGamesForDate(date: Date): Promise<{ homeTeam: string; awayTe
           games.push({
             homeTeam: homeTeam.team.displayName,
             awayTeam: awayTeam.team.displayName,
-            date: getDateString(date),
+            date: dateStr,
           });
         }
       }
@@ -133,35 +150,17 @@ async function fetchGamesForDate(date: Date): Promise<{ homeTeam: string; awayTe
 
 export async function GET() {
   try {
-    // Use US Eastern time for "today" since NHL schedules are in ET
-    // This prevents timezone issues where server (UTC) thinks games have happened
-    // but they haven't started yet in US timezones
-    const nowUTC = new Date();
-    const easternOffset = -5; // EST is UTC-5 (use -4 for EDT if needed)
-    const nowEastern = new Date(nowUTC.getTime() + (easternOffset * 60 * 60 * 1000));
-    
-    // Use Eastern date as "today"
-    const today = new Date(nowEastern.getFullYear(), nowEastern.getMonth(), nowEastern.getDate());
-    const todayStr = getDateString(today);
-    
-    // Fetch games for past 6 days + today + next 7 days (14 days total)
+    // NHL schedules are ET; Intl gives the correct Eastern calendar day
+    // year-round (EST and EDT), which the old fixed -5 offset did not.
+    const todayStr = easternToday();
+
+    // Past LOOKBACK_DAYS + today + next 7 days
     const datePromises: Promise<{ homeTeam: string; awayTeam: string; date: string }[]>[] = [];
-    const dates: Date[] = [];
-    
-    // Past 6 days
-    for (let i = 6; i >= 1; i--) {
-      const date = new Date(today);
-      date.setDate(today.getDate() - i);
-      dates.push(date);
-      datePromises.push(fetchGamesForDate(date));
+    for (let i = LOOKBACK_DAYS; i >= 1; i--) {
+      datePromises.push(fetchGamesForDate(addDays(todayStr, -i)));
     }
-    
-    // Today + next 7 days
     for (let i = 0; i <= 7; i++) {
-      const date = new Date(today);
-      date.setDate(today.getDate() + i);
-      dates.push(date);
-      datePromises.push(fetchGamesForDate(date));
+      datePromises.push(fetchGamesForDate(addDays(todayStr, i)));
     }
     
     const allGamesPerDay = await Promise.all(datePromises);
@@ -209,41 +208,31 @@ export async function GET() {
       const pastGames = gameDates.filter(d => d < gameDate).sort();
       const lastGameDate = pastGames.length > 0 ? pastGames[pastGames.length - 1] : null;
       
-      // Calculate rest days
-      let restDays = 99; // Default to lots of rest if no recent games
-      if (lastGameDate) {
-        restDays = daysBetween(new Date(lastGameDate), new Date(gameDate)) - 1;
-      }
-      
-      // Calculate games in last 4 days (before game date)
-      const fourDaysAgo = new Date(gameDate);
-      fourDaysAgo.setDate(fourDaysAgo.getDate() - 4);
-      const fourDaysAgoStr = getDateString(fourDaysAgo);
-      const gamesLast4Days = pastGames.filter(d => d > fourDaysAgoStr).length;
-      
-      // Calculate games in last 6 days (before game date)
-      const sixDaysAgo = new Date(gameDate);
-      sixDaysAgo.setDate(sixDaysAgo.getDate() - 6);
-      const sixDaysAgoStr = getDateString(sixDaysAgo);
-      const gamesLast6Days = pastGames.filter(d => d > sixDaysAgoStr).length;
-      
-      // Determine status flags
-      // B2B = 0 days rest (played day before)
+      // Rest days, capped at the lookback horizon. Previously an unseen prior
+      // game meant restDays = 99, which flowed into restAdvantageDays and
+      // rendered nonsense badges like "96RA" after a bye week / All-Star break.
+      const restDays = lastGameDate
+        ? Math.min(daysBetween(lastGameDate, gameDate) - 1, MAX_REST_DAYS)
+        : MAX_REST_DAYS;
+
+      // Games within the trailing N calendar days, INCLUSIVE of day N.
+      // The old windows used `d > gameDate - N`, silently dropping day N: the
+      // "3 in 4" test only saw days 1-2 back (really 3-in-3) and "4 in 6" only
+      // saw days 1-4 (really 4-in-5), so most true situations went unflagged.
+      const gamesWithin = (days: number) => {
+        const cutoff = addDays(gameDate, -days);
+        return pastGames.filter(d => d >= cutoff).length;
+      };
+
+      const gamesLast4Days = gamesWithin(4);
+      const gamesLast6Days = gamesWithin(6);
+
+      // B2B = 0 days rest (played the day before)
       const isB2B = restDays === 0;
-      
-      // 3in4 = playing 3rd game in 4 days (2 games in last 3 days + this game)
-      const threeDaysAgo = new Date(gameDate);
-      threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
-      const threeDaysAgoStr = getDateString(threeDaysAgo);
-      const gamesLast3Days = pastGames.filter(d => d > threeDaysAgoStr).length;
-      const is3in4 = gamesLast3Days >= 2; // 2 games + this game = 3 in 4
-      
-      // 4in6 = playing 4th game in 6 days
-      const fiveDaysAgo = new Date(gameDate);
-      fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
-      const fiveDaysAgoStr = getDateString(fiveDaysAgo);
-      const gamesLast5Days = pastGames.filter(d => d > fiveDaysAgoStr).length;
-      const is4in6 = gamesLast5Days >= 3; // 3 games + this game = 4 in 6
+      // 3 games across a 4-day span = 2 prior games within 3 days + this one
+      const is3in4 = gamesWithin(3) >= 2;
+      // 4 games across a 6-day span = 3 prior games within 5 days + this one
+      const is4in6 = gamesWithin(5) >= 3;
       
       return {
         teamName,
