@@ -271,17 +271,25 @@ export const CONFERENCES: ConferenceData = {
     "UTSA Roadrunners": "American",
     "Army Black Knights": "American",
     
-    // Mountain West
+    // Pac-12 (rebuilt for 2026-27: OSU/WSU + five from the MWC + Gonzaga + Texas State)
+    "Oregon State Beavers": "Pac-12",
+    "Washington State Cougars": "Pac-12",
+    "Boise State Broncos": "Pac-12",
+    "Colorado State Rams": "Pac-12",
+    "Fresno State Bulldogs": "Pac-12",
+    "San Diego State Aztecs": "Pac-12",
+    "Utah State Aggies": "Pac-12",
+    "Gonzaga Bulldogs": "Pac-12",
+    "Texas State Bobcats": "Pac-12",
+
+    // Mountain West (2026-27: lost five to the Pac-12; Hawaii + UTEP now full members)
     "Air Force Falcons": "Mountain West",
-    "Boise State Broncos": "Mountain West",
-    "Colorado State Rams": "Mountain West",
-    "Fresno State Bulldogs": "Mountain West",
+    "Hawaii Rainbow Warriors": "Mountain West",
     "Nevada Wolf Pack": "Mountain West",
     "New Mexico Lobos": "Mountain West",
-    "San Diego State Aztecs": "Mountain West",
     "San Jose State Spartans": "Mountain West",
     "UNLV Rebels": "Mountain West",
-    "Utah State Aggies": "Mountain West",
+    "UTEP Miners": "Mountain West",
     "Wyoming Cowboys": "Mountain West",
     
     // Atlantic 10
@@ -293,7 +301,6 @@ export const CONFERENCES: ConferenceData = {
     "George Washington Colonials": "Atlantic 10",
     "La Salle Explorers": "Atlantic 10",
     "Loyola Chicago Ramblers": "Atlantic 10",
-    "UMass Minutemen": "Atlantic 10",
     "Rhode Island Rams": "Atlantic 10",
     "Richmond Spiders": "Atlantic 10",
     "St. Bonaventure Bonnies": "Atlantic 10",
@@ -301,8 +308,7 @@ export const CONFERENCES: ConferenceData = {
     "Saint Louis Billikens": "Atlantic 10",
     "VCU Rams": "Atlantic 10",
     
-    // West Coast Conference
-    "Gonzaga Bulldogs": "WCC",
+    // West Coast Conference (2026-27: lost Gonzaga/OSU/WSU to the Pac-12; Seattle U joined 2025)
     "Loyola Marymount Lions": "WCC",
     "Pacific Tigers": "WCC",
     "Pepperdine Waves": "WCC",
@@ -311,8 +317,7 @@ export const CONFERENCES: ConferenceData = {
     "San Diego Toreros": "WCC",
     "San Francisco Dons": "WCC",
     "Santa Clara Broncos": "WCC",
-    "Washington State Cougars": "WCC",
-    "Oregon State Beavers": "WCC",
+    "Seattle U Redhawks": "WCC",
     
     // Missouri Valley Conference
     "Bradley Braves": "Missouri Valley",
@@ -326,21 +331,19 @@ export const CONFERENCES: ConferenceData = {
     "Valparaiso Beacons": "Missouri Valley",
     "Belmont Bruins": "Missouri Valley",
     
-    // Conference USA
+    // Conference USA (2026-27: lost Louisiana Tech to Sun Belt, UTEP to Mountain West)
     "FIU Panthers": "Conference USA",
     "Jacksonville State Gamecocks": "Conference USA",
     "Liberty Flames": "Conference USA",
-    "Louisiana Tech Bulldogs": "Conference USA",
     "Middle Tennessee Blue Raiders": "Conference USA",
     "New Mexico State Aggies": "Conference USA",
     "Sam Houston Bearkats": "Conference USA",
-    "UTEP Miners": "Conference USA",
     "Western Kentucky Hilltoppers": "Conference USA",
     "Kennesaw State Owls": "Conference USA",
     "Delaware Blue Hens": "Conference USA",
     "Missouri State Bears": "Conference USA",
 
-    // Sun Belt
+    // Sun Belt (2026-27: lost Texas State to the Pac-12; added Louisiana Tech)
     "Appalachian State Mountaineers": "Sun Belt",
     "Arkansas State Red Wolves": "Sun Belt",
     "Coastal Carolina Chanticleers": "Sun Belt",
@@ -348,15 +351,15 @@ export const CONFERENCES: ConferenceData = {
     "Georgia State Panthers": "Sun Belt",
     "James Madison Dukes": "Sun Belt",
     "Louisiana Ragin' Cajuns": "Sun Belt",
+    "Louisiana Tech Bulldogs": "Sun Belt",
     "Marshall Thundering Herd": "Sun Belt",
     "Old Dominion Monarchs": "Sun Belt",
     "South Alabama Jaguars": "Sun Belt",
     "Southern Miss Golden Eagles": "Sun Belt",
-    "Texas State Bobcats": "Sun Belt",
     "Troy Trojans": "Sun Belt",
     "UL Monroe Warhawks": "Sun Belt",
-    
-    // MAC
+
+    // MAC (UMass joined 2025; NIU non-football sports left for the Horizon League 2026)
     "Akron Zips": "MAC",
     "Ball State Cardinals": "MAC",
     "Bowling Green Falcons": "MAC",
@@ -365,10 +368,10 @@ export const CONFERENCES: ConferenceData = {
     "Eastern Michigan Eagles": "MAC",
     "Kent State Golden Flashes": "MAC",
     "Miami (OH) RedHawks": "MAC",
-    "Northern Illinois Huskies": "MAC",
     "Ohio Bobcats": "MAC",
     "Toledo Rockets": "MAC",
     "Western Michigan Broncos": "MAC",
+    "UMass Minutemen": "MAC",
     
     // Ivy League
     "Brown Bears": "Ivy League",
@@ -392,11 +395,12 @@ export const CONFERENCES: ConferenceData = {
     "Sacramento State Hornets": "Big Sky",
     "Weber State Wildcats": "Big Sky",
     
-    // Horizon League
+    // Horizon League (NIU joined 2026 — non-football sports from the MAC)
     "Cleveland State Vikings": "Horizon League",
     "Detroit Mercy Titans": "Horizon League",
     "Green Bay Phoenix": "Horizon League",
     "Milwaukee Panthers": "Horizon League",
+    "Northern Illinois Huskies": "Horizon League",
     "Northern Kentucky Norse": "Horizon League",
     "Oakland Golden Grizzlies": "Horizon League",
     "Purdue Fort Wayne Mastodons": "Horizon League",
@@ -404,7 +408,8 @@ export const CONFERENCES: ConferenceData = {
     "Wright State Raiders": "Horizon League",
     "Youngstown State Penguins": "Horizon League",
     
-    // Colonial Athletic Association
+    // Colonial Athletic Association (Campbell joined 2023)
+    "Campbell Fighting Camels": "Colonial",
     "Charleston Cougars": "Colonial",
     "Drexel Dragons": "Colonial",
     "Elon Phoenix": "Colonial",
@@ -440,16 +445,18 @@ export const CONFERENCES: ConferenceData = {
     "Lehigh Mountain Hawks": "Patriot League",
     "Loyola Maryland Greyhounds": "Patriot League",
     
-    // MAAC
+    // MAAC (Sacred Heart + Merrimack joined from the NEC 2024)
     "Canisius Golden Griffins": "MAAC",
     "Fairfield Stags": "MAAC",
     "Iona Gaels": "MAAC",
     "Manhattan Jaspers": "MAAC",
     "Marist Red Foxes": "MAAC",
+    "Merrimack Warriors": "MAAC",
     "Mount St. Mary's Mountaineers": "MAAC",
     "Niagara Purple Eagles": "MAAC",
     "Quinnipiac Bobcats": "MAAC",
     "Rider Broncs": "MAAC",
+    "Sacred Heart Pioneers": "MAAC",
     "Saint Peter's Peacocks": "MAAC",
     "Siena Saints": "MAAC",
     
@@ -464,20 +471,17 @@ export const CONFERENCES: ConferenceData = {
     "South Dakota State Jackrabbits": "Summit League",
     "St. Thomas Tommies": "Summit League",
     
-    // WAC
+    // WAC (Seattle U left for the WCC 2025; SFA returned to the Southland 2024)
     "Abilene Christian Wildcats": "WAC",
     "California Baptist Lancers": "WAC",
     "Grand Canyon Antelopes": "Mountain West",
-    "Seattle U Redhawks": "WAC",
     "Southern Utah Thunderbirds": "WAC",
-    "Stephen F. Austin Lumberjacks": "WAC",
     "Tarleton State Texans": "WAC",
     "UT Arlington Mavericks": "WAC",
     "Utah Tech Trailblazers": "WAC",
     "Utah Valley Wolverines": "WAC",
     
-    // Big South
-    "Campbell Fighting Camels": "Big South",
+    // Big South (Campbell left for the CAA 2023)
     "Charleston Southern Buccaneers": "Big South",
     "Gardner-Webb Bulldogs": "Big South",
     "High Point Panthers": "Big South",
@@ -488,9 +492,10 @@ export const CONFERENCES: ConferenceData = {
     "UNC Asheville Bulldogs": "Big South",
     "Winthrop Eagles": "Big South",
     
-    // Southland
+    // Southland (SFA returned 2024)
     "Houston Christian Huskies": "Southland",
     "Incarnate Word Cardinals": "Southland",
+    "Stephen F. Austin Lumberjacks": "Southland",
     "Lamar Cardinals": "Southland",
     "McNeese Cowboys": "Southland",
     "New Orleans Privateers": "Southland",
@@ -546,13 +551,11 @@ export const CONFERENCES: ConferenceData = {
     "UMBC Retrievers": "America East",
     "Vermont Catamounts": "America East",
     
-    // Northeast Conference
+    // Northeast Conference (lost Sacred Heart + Merrimack to the MAAC 2024;
+    // St. Francis Brooklyn discontinued athletics 2023)
     "Central Connecticut Blue Devils": "NEC",
     "Fairleigh Dickinson Knights": "NEC",
     "LIU Sharks": "NEC",
-    "Merrimack Warriors": "NEC",
-    "Sacred Heart Pioneers": "NEC",
-    "St. Francis Brooklyn Terriers": "NEC",
     "Stonehill Skyhawks": "NEC",
     "Wagner Seahawks": "NEC",
   }
