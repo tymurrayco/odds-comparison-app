@@ -81,27 +81,30 @@ export const CONFERENCES: ConferenceData = {
     "California Golden Bears": "ACC",
     "Stanford Cardinal": "ACC",
     
-    // Pac-12 (legacy/remaining)
+    // Pac-12 (rebuilt for 2026: OSU/WSU + five from the Mountain West + Texas State)
     "Oregon State Beavers": "Pac-12",
     "Washington State Cougars": "Pac-12",
-    
+    "Boise State Broncos": "Pac-12",
+    "Colorado State Rams": "Pac-12",
+    "Fresno State Bulldogs": "Pac-12",
+    "San Diego State Aztecs": "Pac-12",
+    "Utah State Aggies": "Pac-12",
+    "Texas State Bobcats": "Pac-12",
+
     // Independent
     "Notre Dame Fighting Irish": "Independent",
     "UConn Huskies": "Independent",
-    
-    // Mountain West
+
+    // Mountain West (2026: lost five to the Pac-12; added UTEP + NIU football)
     "Air Force Falcons": "Mountain West",
-    "Boise State Broncos": "Mountain West",
-    "Colorado State Rams": "Mountain West",
-    "Fresno State Bulldogs": "Mountain West",
     "Hawaii Rainbow Warriors": "Mountain West",
     "Nevada Wolf Pack": "Mountain West",
     "New Mexico Lobos": "Mountain West",
-    "San Diego State Aztecs": "Mountain West",
     "San Jose State Spartans": "Mountain West",
     "UNLV Rebels": "Mountain West",
-    "Utah State Aggies": "Mountain West",
     "Wyoming Cowboys": "Mountain West",
+    "UTEP Miners": "Mountain West",
+    "Northern Illinois Huskies": "Mountain West",
     
     // American
     "Army Black Knights": "American",
@@ -119,7 +122,7 @@ export const CONFERENCES: ConferenceData = {
     "UTSA Roadrunners": "American",
     "North Texas Mean Green": "American",
     
-    // Sun Belt
+    // Sun Belt (2026: lost Texas State to the Pac-12; added Louisiana Tech)
     "Appalachian State Mountaineers": "Sun Belt",
     "Arkansas State Red Wolves": "Sun Belt",
     "Coastal Carolina Chanticleers": "Sun Belt",
@@ -127,29 +130,27 @@ export const CONFERENCES: ConferenceData = {
     "Georgia State Panthers": "Sun Belt",
     "James Madison Dukes": "Sun Belt",
     "Louisiana Ragin' Cajuns": "Sun Belt",
+    "Louisiana Tech Bulldogs": "Sun Belt",
     "Marshall Thundering Herd": "Sun Belt",
     "Old Dominion Monarchs": "Sun Belt",
     "South Alabama Jaguars": "Sun Belt",
     "Southern Miss Golden Eagles": "Sun Belt",
-    "Texas State Bobcats": "Sun Belt",
     "Troy Trojans": "Sun Belt",
     "UL Monroe Warhawks": "Sun Belt",
-    
-    // Conference USA
+
+    // Conference USA (2026: lost Louisiana Tech to Sun Belt, UTEP to Mountain West)
     "FIU Panthers": "Conference USA",
     "Jacksonville State Gamecocks": "Conference USA",
     "Liberty Flames": "Conference USA",
-    "Louisiana Tech Bulldogs": "Conference USA",
     "Middle Tennessee Blue Raiders": "Conference USA",
     "New Mexico State Aggies": "Conference USA",
     "Sam Houston Bearkats": "Conference USA",
-    "UTEP Miners": "Conference USA",
     "Western Kentucky Hilltoppers": "Conference USA",
     "Delaware Blue Hens": "Conference USA",
     "Kennesaw State Owls": "Conference USA",
     "Missouri State Bears": "Conference USA",
-    
-    // MAC
+
+    // MAC (2026: NIU football left for the Mountain West)
     "Akron Zips": "MAC",
     "Ball State Cardinals": "MAC",
     "Bowling Green Falcons": "MAC",
@@ -158,7 +159,6 @@ export const CONFERENCES: ConferenceData = {
     "Eastern Michigan Eagles": "MAC",
     "Kent State Golden Flashes": "MAC",
     "Miami (OH) RedHawks": "MAC",
-    "Northern Illinois Huskies": "MAC",
     "Ohio Bobcats": "MAC",
     "Toledo Rockets": "MAC",
     "Western Michigan Broncos": "MAC",
