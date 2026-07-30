@@ -1,7 +1,7 @@
 // src/components/GameCard.tsx
 import { useState } from 'react';
 import OddsTable from './OddsTable';
-import TeamAnalysis from './TeamAnalysis';
+import AnalysisTabs from './AnalysisTabs';
 import { Game, ESPNGameScore } from '@/lib/api';
 import { GameRestData } from '@/lib/nhlRest';
 import { Bet } from '@/lib/betService';
@@ -450,8 +450,8 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
       
       {/* Show TeamAnalysis if analysis is selected */}
       {expandedMarket === 'analysis' && isNCAAF ? (
-        <div className="p-4">
-          <TeamAnalysis awayTeam={game.away_team} homeTeam={game.home_team} />
+        <div className="p-2">
+          <AnalysisTabs awayTeam={game.away_team} homeTeam={game.home_team} />
         </div>
       ) : (
         <OddsTable

@@ -1,0 +1,45 @@
+// src/components/AnalysisTabs.tsx
+//
+// Methodology tabs for the NCAAF Analysis section: FEI (efficiency ratings
+// from bcftoys) and Eckel (quality-drive metrics from CFBD drive data).
+
+import { useState } from 'react';
+import TeamAnalysis from './TeamAnalysis';
+import EckelMatchup from './EckelMatchup';
+
+interface AnalysisTabsProps {
+  awayTeam: string;
+  homeTeam: string;
+}
+
+const TABS = ['FEI', 'Eckel'] as const;
+type Tab = (typeof TABS)[number];
+
+export default function AnalysisTabs({ awayTeam, homeTeam }: AnalysisTabsProps) {
+  const [tab, setTab] = useState<Tab>('FEI');
+
+  return (
+    <div>
+      <div className="flex gap-1 border-b border-gray-200 px-3 pt-1">
+        {TABS.map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-t-md transition-colors ${
+              tab === t
+                ? 'bg-purple-100 text-purple-800 border border-b-0 border-gray-200'
+                : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50'
+            }`}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+      {tab === 'FEI' ? (
+        <TeamAnalysis awayTeam={awayTeam} homeTeam={homeTeam} />
+      ) : (
+        <EckelMatchup awayTeam={awayTeam} homeTeam={homeTeam} />
+      )}
+    </div>
+  );
+}
