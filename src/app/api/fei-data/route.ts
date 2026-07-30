@@ -4,15 +4,21 @@ import { FEITeamData } from '@/lib/feiData';
 
 export async function GET() {
   try {
-    const response = await fetch('https://bcftoys.com/2025-fei');
-    
-    if (!response.ok) {
-      throw new Error('Failed to fetch FEI data from source');
+    // Try the current season first, then fall back — bcftoys publishes
+    // {year}-fei preseason projections in summer, so the newest live page wins.
+    const year = new Date().getFullYear();
+    let teams: FEITeamData[] = [];
+    for (const url of [`https://bcftoys.com/${year}-fei`, `https://bcftoys.com/${year - 1}-fei`]) {
+      const response = await fetch(url);
+      if (!response.ok) continue;
+      const html = await response.text();
+      teams = parseeFEITable(html);
+      if (teams.length > 0) {
+        console.log(`[FEI] loaded ${teams.length} teams from ${url}`);
+        break;
+      }
     }
-    
-    const html = await response.text();
-    const teams = parseeFEITable(html);
-    
+
     return NextResponse.json(teams, {
       headers: {
         'Cache-Control': 's-maxage=3600, stale-while-revalidate',

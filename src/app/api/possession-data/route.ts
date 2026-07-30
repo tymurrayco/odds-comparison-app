@@ -17,15 +17,21 @@ export interface PossessionData {
 
 export async function GET() {
   try {
-    const response = await fetch('https://bcftoys.com/2025-pve');
-    
-    if (!response.ok) {
-      throw new Error('Failed to fetch possession data from source');
+    // Current season first, then fall back — {year}-pve publishes once games
+    // are played, so early-season this serves last year's pace data.
+    const year = new Date().getFullYear();
+    let teams: ReturnType<typeof parsePossessionTable> = [];
+    for (const url of [`https://bcftoys.com/${year}-pve`, `https://bcftoys.com/${year - 1}-pve`]) {
+      const response = await fetch(url);
+      if (!response.ok) continue;
+      const html = await response.text();
+      teams = parsePossessionTable(html);
+      if (teams.length > 0) {
+        console.log(`[PVE] loaded ${teams.length} teams from ${url}`);
+        break;
+      }
     }
-    
-    const html = await response.text();
-    const teams = parsePossessionTable(html);
-    
+
     return NextResponse.json(teams, {
       headers: {
         'Cache-Control': 's-maxage=3600, stale-while-revalidate',
