@@ -5,9 +5,7 @@
 // Supabase (eckel_snapshots), and returns a summary + validation warnings.
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
-import { computeEckel } from '@/lib/eckel';
-import { fetchSeason } from '@/lib/eckel/fetch';
+import { runEckelCompute } from '@/lib/eckel/run';
 export const dynamic = 'force-dynamic';
 
 export const maxDuration = 60; // full-season fetch + ridge fit
@@ -19,25 +17,10 @@ export async function POST(request: NextRequest) {
     const weekRaw = params.get('week');
     const week = weekRaw ? parseInt(weekRaw) : null;
 
-    const { drives, games } = await fetchSeason(year, week);
-    if (!games.length || !drives.length) {
+    const { snapshot, storeError } = await runEckelCompute(year, week);
+    if (storeError) {
       return NextResponse.json(
-        { error: `No CFBD data for ${year}${week ? ` through week ${week}` : ''}` },
-        { status: 404 }
-      );
-    }
-
-    const snapshot = computeEckel(drives, games, year, week);
-
-    const { error } = await supabase.from('eckel_snapshots').insert({
-      season: year,
-      week,
-      computed_at: snapshot.computedAt,
-      data: snapshot,
-    });
-    if (error) {
-      return NextResponse.json(
-        { error: `Computed but failed to store: ${error.message}`, validation: snapshot.validation },
+        { error: `Computed but failed to store: ${storeError}`, validation: snapshot.validation },
         { status: 500 }
       );
     }

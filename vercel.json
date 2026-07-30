@@ -3,6 +3,10 @@
     {
       "path": "/api/send-nhl-rest",
       "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/eckel/cron",
+      "schedule": "0 10 * * 0"
     }
   ]
 }
