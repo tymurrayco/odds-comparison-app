@@ -21,9 +21,10 @@ export const TD_POINTS = 7;
 export const FG_POINTS = 3;
 
 /** Ridge regression regularization strength for opponent adjustment.
- *  Standard for team-dummy designs at this sample size (~1,600 rows,
- *  ~270 columns) — shrinks small-sample teams toward average. */
-export const RIDGE_LAMBDA = 50;
+ *  Tuned on the 2025 season: 50 over-shrank a full season's team effects
+ *  (top power ~6 instead of a points-margin-like ~15); 20 preserves spread
+ *  while still stabilizing early-season samples. */
+export const RIDGE_LAMBDA = 20;
 
 /** Drives per game used to scale per-drive quantities into a per-game
  *  power rating ("vs an average FBS team on a neutral field"). */

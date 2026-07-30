@@ -100,6 +100,11 @@ export function computeEckel(
   // HFA in expected points: hfa(ER)*PPE_avg + hfa(PPE)*ER_avg, per game.
   const hfaPoints =
     DRIVES_PER_GAME * (adjER.hfa * adjPPE.intercept + adjPPE.hfa * adjER.intercept);
+  // Real CFB home-field is ~2-3.5 points; a big fitted HFA usually means
+  // non-FBS buy games (systematically FBS home blowouts) leaked in.
+  if (hfaPoints > 5 || hfaPoints < 0) {
+    validation.push(`Fitted HFA ${hfaPoints.toFixed(1)} pts outside the plausible 1-4 band`);
+  }
 
   return {
     season,

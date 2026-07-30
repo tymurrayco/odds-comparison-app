@@ -56,12 +56,27 @@ export interface CfbdMatch {
  * Find the CFBD school for an Odds API team name. cfbdTeams is the list of
  * team names present in the Eckel snapshot.
  */
+/** If the word right after a matched school prefix is one of these, the odds
+ *  team is a DIFFERENT school ("Tennessee State" is not "Tennessee",
+ *  "Alabama A&M" is not "Alabama"). Longest-prefix matching means multi-word
+ *  FBS schools ("Appalachian State", "Texas Tech") match their full name
+ *  first and never hit this guard. */
+const DIFFERENT_SCHOOL_CONTINUATIONS = new Set([
+  'state', 'st', 'a', 'am', 'tech', 'southern', 'central', 'western',
+  'eastern', 'northern', 'baptist', 'christian', 'valley', 'wesleyan',
+]);
+
 export function matchOddsToCfbd(oddsName: string, cfbdTeams: string[]): CfbdMatch {
   const n = norm(oddsName);
 
+  // An override declares the team's true identity — never fall through to
+  // prefix matching when it isn't in the snapshot (e.g. FCS Houston
+  // Christian must not degrade into FBS Houston).
   const override = OVERRIDES[n];
-  if (override && cfbdTeams.includes(override)) {
-    return { cfbdName: override, confidence: 'override' };
+  if (override) {
+    return cfbdTeams.includes(override)
+      ? { cfbdName: override, confidence: 'override' }
+      : { cfbdName: '', confidence: 'none' };
   }
 
   // exact normalized equality
@@ -70,17 +85,17 @@ export function matchOddsToCfbd(oddsName: string, cfbdTeams: string[]): CfbdMatc
   }
 
   // longest CFBD name that is a word-prefix of the odds name
-  // ("miami oh redhawks" matches "miami oh" over "miami")
-  let best: string | null = null;
-  let bestLen = 0;
-  for (const t of cfbdTeams) {
-    const tn = norm(t);
-    if ((n === tn || n.startsWith(tn + ' ')) && tn.length > bestLen) {
-      best = t;
-      bestLen = tn.length;
-    }
+  // ("miami oh redhawks" matches "miami oh" over "miami"), rejecting
+  // prefixes whose continuation indicates a different school.
+  const candidates = cfbdTeams
+    .map((t) => ({ t, tn: norm(t) }))
+    .filter(({ tn }) => n === tn || n.startsWith(tn + ' '))
+    .sort((a, b) => b.tn.length - a.tn.length);
+  for (const { t, tn } of candidates) {
+    const nextWord = n.slice(tn.length).trim().split(' ')[0] || '';
+    if (DIFFERENT_SCHOOL_CONTINUATIONS.has(nextWord)) continue;
+    return { cfbdName: t, confidence: 'prefix' };
   }
-  if (best) return { cfbdName: best, confidence: 'prefix' };
 
   return { cfbdName: '', confidence: 'none' };
 }

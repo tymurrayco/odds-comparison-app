@@ -111,14 +111,30 @@ export async function fetchDrives(year: number): Promise<EckelDrive[]> {
   }));
 }
 
-/** Season data, optionally truncated to weeks <= week (season-to-date). */
+export async function fetchFbsTeams(year: number): Promise<Set<string>> {
+  const raw = (await cfbdGet('/teams/fbs', { year: String(year) })) as Raw[];
+  return new Set(raw.map((t) => str(pick(t, 'school'))).filter(Boolean));
+}
+
+/** Season data, FBS-vs-FBS only, optionally truncated to weeks <= week.
+ *  classification=fbs on /games includes FCS buy games — those blowouts are
+ *  systematically FBS home games and poison the fitted HFA, so both teams
+ *  must be FBS. */
 export async function fetchSeason(
   year: number,
   week: number | null = null
 ): Promise<{ drives: EckelDrive[]; games: EckelGame[] }> {
-  const [games, drives] = await Promise.all([fetchGames(year), fetchDrives(year)]);
-  if (week == null) return { drives, games };
-  const keptGames = games.filter((g) => g.week <= week);
+  const [games, drives, fbs] = await Promise.all([
+    fetchGames(year),
+    fetchDrives(year),
+    fetchFbsTeams(year),
+  ]);
+  const keptGames = games.filter(
+    (g) =>
+      fbs.has(g.homeTeam) &&
+      fbs.has(g.awayTeam) &&
+      (week == null || g.week <= week)
+  );
   const keptIds = new Set(keptGames.map((g) => g.id));
   return { games: keptGames, drives: drives.filter((d) => keptIds.has(d.gameId)) };
 }
