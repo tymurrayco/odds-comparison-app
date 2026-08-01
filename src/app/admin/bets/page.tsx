@@ -479,13 +479,21 @@ export default function BetAdminPage() {
               <h1 className="text-xl sm:text-2xl font-semibold tracking-tight">Bet Admin</h1>
               <p className="text-xs sm:text-sm text-slate-500 mt-0.5">Track and manage your wagers</p>
             </div>
-            <button
-              onClick={() => router.push('/')}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition"
-            >
-              <IconArrowLeft />
-              Back
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => router.push('/admin/power-ratings')}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition"
+              >
+                Power Ratings
+              </button>
+              <button
+                onClick={() => router.push('/')}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition"
+              >
+                <IconArrowLeft />
+                Back
+              </button>
+            </div>
           </div>
 
           {/* Mobile view toggle */}
