@@ -3,11 +3,67 @@
 
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { PowerRatingRow, slugifySource } from '@/lib/powerRatings';
+import { PowerRatingRow, slugifySource, matchOddsNameToTeam } from '@/lib/powerRatings';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+const DEFAULT_HFA = 2.5;
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const teamsParam = searchParams.get('teams');
+
+  if (teamsParam) {
+    // Matchup mode: ?teams=<away odds name>,<home odds name>
+    const [awayName, homeName] = teamsParam.split(',').map((s) => s.trim());
+    if (!awayName || !homeName) {
+      return NextResponse.json({ error: 'teams must be "away,home"' }, { status: 400 });
+    }
+    const source = searchParams.get('source') ?? 'brad_powers';
+    const { data, error } = await supabase
+      .from('power_rating_sets')
+      .select('*')
+      .eq('sport', searchParams.get('sport') ?? 'ncaaf')
+      .eq('source', source)
+      .order('season', { ascending: false })
+      .limit(1);
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    const set = data?.[0];
+    if (!set) return NextResponse.json({ error: `No rating set found for ${source}` }, { status: 404 });
+
+    const rows: PowerRatingRow[] = set.ratings;
+    const teamNames = rows.map((r) => r.team);
+    const findRow = (oddsName: string) => {
+      const matched = matchOddsNameToTeam(oddsName, teamNames);
+      return { requested: oddsName, row: rows.find((r) => r.team === matched) ?? null };
+    };
+    const away = findRow(awayName);
+    const home = findRow(homeName);
+
+    let neutralSpread: number | null = null;
+    let homeSpread: number | null = null;
+    let hfaUsed: number | null = null;
+    if (away.row && home.row) {
+      hfaUsed = typeof home.row.hfa === 'number' ? home.row.hfa : DEFAULT_HFA;
+      // Home line: negative = home favored (rounded to 0.1 like the rest of the app)
+      neutralSpread = Math.round((away.row.thisYr - home.row.thisYr) * 10) / 10;
+      homeSpread = Math.round((away.row.thisYr - home.row.thisYr - hfaUsed) * 10) / 10;
+    }
+
+    return NextResponse.json({
+      success: true,
+      sourceLabel: set.source_label,
+      season: set.season,
+      asOf: set.as_of,
+      away,
+      home,
+      hfaUsed,
+      neutralSpread,
+      homeSpread,
+    });
+  }
+
   const { data, error } = await supabase
     .from('power_rating_sets')
     .select('*')

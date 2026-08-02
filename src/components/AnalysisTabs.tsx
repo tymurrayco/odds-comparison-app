@@ -1,18 +1,20 @@
 // src/components/AnalysisTabs.tsx
 //
 // Methodology tabs for the NCAAF Analysis section: FEI (efficiency ratings
-// from bcftoys) and Eckel (quality-drive metrics from CFBD drive data).
+// from bcftoys), Eckel (quality-drive metrics from CFBD drive data), and
+// Powers (Brad Powers' Vegas power ratings + per-team HFA spread projection).
 
 import { useState } from 'react';
 import TeamAnalysis from './TeamAnalysis';
 import EckelMatchup from './EckelMatchup';
+import PowersMatchup from './PowersMatchup';
 
 interface AnalysisTabsProps {
   awayTeam: string;
   homeTeam: string;
 }
 
-const TABS = ['FEI', 'Eckel'] as const;
+const TABS = ['FEI', 'Eckel', 'Powers'] as const;
 type Tab = (typeof TABS)[number];
 
 export default function AnalysisTabs({ awayTeam, homeTeam }: AnalysisTabsProps) {
@@ -37,8 +39,10 @@ export default function AnalysisTabs({ awayTeam, homeTeam }: AnalysisTabsProps) 
       </div>
       {tab === 'FEI' ? (
         <TeamAnalysis awayTeam={awayTeam} homeTeam={homeTeam} />
-      ) : (
+      ) : tab === 'Eckel' ? (
         <EckelMatchup awayTeam={awayTeam} homeTeam={homeTeam} />
+      ) : (
+        <PowersMatchup awayTeam={awayTeam} homeTeam={homeTeam} />
       )}
     </div>
   );

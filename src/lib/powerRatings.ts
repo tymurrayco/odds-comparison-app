@@ -70,6 +70,56 @@ export function buildTeamLogoMap(teams: string[], oddsNames: string[]): Record<s
   return map;
 }
 
+// Odds-API full names whose school part doesn't literally start with the
+// rating-set short name (keys/values are normalized before comparison).
+const ODDS_NAME_OVERRIDES: Record<string, string> = {
+  'Miami Hurricanes': 'Miami (FL)',
+  'South Florida Bulls': 'USF',
+  'FAU Owls': 'Florida Atlantic',
+  "Louisiana Ragin' Cajuns": 'UL-Lafayette',
+  'UConn Huskies': 'Connecticut',
+  'UMass Minutemen': 'Massachusetts',
+  'Sam Houston Bearkats': 'Sam Houston State',
+  'Florida International Panthers': 'FIU',
+};
+
+// If the odds name continues past the matched short name with one of these
+// words, it's a DIFFERENT school ("Tennessee State Tigers" ≠ "Tennessee").
+const DIFFERENT_SCHOOL_CONTINUATIONS = new Set([
+  'state', 'st', 'a', 'am', 'tech', 'southern', 'central', 'western', 'eastern',
+  'northern', 'baptist', 'christian', 'valley', 'wesleyan', 'atlantic', 'international',
+]);
+
+/**
+ * Match an odds-API name ("Ohio State Buckeyes") to a rating-set short name
+ * ("Ohio State"): overrides first, then the longest short name the odds name
+ * starts with — so "Oregon State Beavers" resolves to "Oregon State", not "Oregon".
+ */
+export function matchOddsNameToTeam(oddsName: string, teams: string[]): string | null {
+  const on = normName(oddsName);
+  const teamByNorm = new Map(teams.map((t) => [normName(t), t]));
+  for (const [key, val] of Object.entries(ODDS_NAME_OVERRIDES)) {
+    if (normName(key) === on) {
+      const hit = teamByNorm.get(normName(val));
+      if (hit) return hit;
+    }
+  }
+  let best: string | null = null;
+  let bestLen = -1;
+  for (const [tn, raw] of teamByNorm) {
+    if (on !== tn) {
+      if (!on.startsWith(tn + ' ')) continue;
+      const nextWord = on.slice(tn.length + 1).split(' ')[0];
+      if (DIFFERENT_SCHOOL_CONTINUATIONS.has(nextWord)) continue;
+    }
+    if (tn.length > bestLen) {
+      best = raw;
+      bestLen = tn.length;
+    }
+  }
+  return best;
+}
+
 export function slugifySource(label: string): string {
   return label
     .toLowerCase()
