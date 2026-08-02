@@ -223,6 +223,8 @@ export const FEI_TEAM_MAPPING: { [key: string]: string } = {
   'Utah State Aggies': 'Utah State',
   'Delaware Blue Hens': 'Delaware',
   'Missouri State Bears': 'Missouri State',
+  'North Dakota State Bison': 'North Dakota State',
+  'Sacramento State Hornets': 'Sacramento State',
   'New Mexico State Aggies': 'New Mexico State',
   'NMSU Aggies': 'New Mexico State',
   'Massachusetts Minutemen': 'Massachusetts',
@@ -636,6 +638,8 @@ export function getTeamLogoName(teamName: string): string {
     'Utah State': 'utahstateaggies',
     'Delaware': 'delawarebluehens',
     'Missouri State': 'missouristatebears',
+    'North Dakota State': 'northdakotastatebison',
+    'Sacramento State': 'sacramentostatehornets',
     'New Mexico State': 'newmexicostateaggies',
     'Massachusetts': 'massachusettsminutemen',
   };
