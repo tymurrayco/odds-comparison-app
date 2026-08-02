@@ -8,7 +8,12 @@ import { useRouter } from 'next/navigation';
 import { PowerRatingSet, parseRatingsPaste, buildTeamLogoMap } from '@/lib/powerRatings';
 import { CONFERENCES } from '@/lib/conferences';
 
-type SortKey = 'rank' | 'thisYr' | 'lastYr' | 'diff';
+type SortKey = 'rank' | 'team' | 'conference' | 'thisYr' | 'lastYr' | 'diff' | 'hfa';
+
+const STRING_KEYS: SortKey[] = ['team', 'conference'];
+
+const thCls =
+  'sticky top-0 z-10 bg-white px-3 py-2.5 cursor-pointer select-none shadow-[inset_0_-1px_0_#e2e8f0]';
 
 const fieldCls =
   'w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0052ff]/25 focus:border-[#0052ff]';
@@ -88,13 +93,22 @@ export default function PowerRatingsAdminPage() {
     }
     if (confFilter !== 'all') rows = rows.filter((r) => r.conference === confFilter);
     rows.sort((a, b) => {
-      let av: number | null, bv: number | null;
+      if (STRING_KEYS.includes(sortKey)) {
+        const as = (a[sortKey as 'team' | 'conference'] ?? '') as string;
+        const bs = (b[sortKey as 'team' | 'conference'] ?? '') as string;
+        if (!as && bs) return 1;
+        if (as && !bs) return -1;
+        return sortDesc ? bs.localeCompare(as) : as.localeCompare(bs);
+      }
+      let av: number | null | undefined, bv: number | null | undefined;
       if (sortKey === 'diff') { av = diffOf(a); bv = diffOf(b); }
-      else { av = a[sortKey]; bv = b[sortKey]; }
-      if (av === null && bv === null) return 0;
-      if (av === null) return 1;
-      if (bv === null) return -1;
-      return sortDesc ? bv - av : av - bv;
+      else { av = a[sortKey as 'rank' | 'thisYr' | 'lastYr' | 'hfa']; bv = b[sortKey as 'rank' | 'thisYr' | 'lastYr' | 'hfa']; }
+      const an = typeof av === 'number' ? av : null;
+      const bn = typeof bv === 'number' ? bv : null;
+      if (an === null && bn === null) return 0;
+      if (an === null) return 1;
+      if (bn === null) return -1;
+      return sortDesc ? bn - an : an - bn;
     });
     return rows;
   }, [activeSet, search, confFilter, sortKey, sortDesc]);
@@ -108,9 +122,11 @@ export default function PowerRatingsAdminPage() {
     if (sortKey === key) setSortDesc(!sortDesc);
     else {
       setSortKey(key);
-      setSortDesc(key !== 'rank');
+      setSortDesc(key !== 'rank' && !STRING_KEYS.includes(key));
     }
   };
+
+  const arrow = (key: SortKey) => (sortKey === key ? (sortDesc ? ' ↓' : ' ↑') : '');
 
   const handleImport = async () => {
     if (!importPreview || !importPreview.rows.length) return;
@@ -246,7 +262,7 @@ export default function PowerRatingsAdminPage() {
             </div>
             <div>
               <label className={labelCls}>
-                Ratings — one team per line, comma or tab separated: <span className="font-mono">Team, Rating [, LastYr] [, Conference]</span> (header row optional)
+                Ratings — one team per line, comma or tab separated: <span className="font-mono">Team, Rating [, LastYr] [, Conference]</span> (or a header row with any of: rank, team, rating, lastyr, conference, hfa)
               </label>
               <textarea
                 value={importText}
@@ -303,24 +319,17 @@ export default function PowerRatingsAdminPage() {
             No rating sets yet. Import one above, or run the seed SQL to load Brad Powers 2026.
           </div>
         ) : (
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-auto max-h-[calc(100vh-11rem)]">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-xs uppercase tracking-wide text-slate-500 border-b border-slate-200">
-                  <th className="px-3 py-2.5 cursor-pointer select-none" onClick={() => toggleSort('rank')}>
-                    Rk{sortKey === 'rank' && (sortDesc ? ' ↓' : ' ↑')}
-                  </th>
-                  <th className="px-3 py-2.5">Team</th>
-                  <th className="px-3 py-2.5 hidden sm:table-cell">Conf</th>
-                  <th className="px-3 py-2.5 text-right cursor-pointer select-none" onClick={() => toggleSort('thisYr')}>
-                    Rating{sortKey === 'thisYr' && (sortDesc ? ' ↓' : ' ↑')}
-                  </th>
-                  <th className="px-3 py-2.5 text-right cursor-pointer select-none" onClick={() => toggleSort('lastYr')}>
-                    Last Yr{sortKey === 'lastYr' && (sortDesc ? ' ↓' : ' ↑')}
-                  </th>
-                  <th className="px-3 py-2.5 text-right cursor-pointer select-none" onClick={() => toggleSort('diff')}>
-                    Diff{sortKey === 'diff' && (sortDesc ? ' ↓' : ' ↑')}
-                  </th>
+                <tr className="text-left text-xs uppercase tracking-wide text-slate-500">
+                  <th className={thCls} onClick={() => toggleSort('rank')}>Rk{arrow('rank')}</th>
+                  <th className={thCls} onClick={() => toggleSort('team')}>Team{arrow('team')}</th>
+                  <th className={`${thCls} hidden sm:table-cell`} onClick={() => toggleSort('conference')}>Conf{arrow('conference')}</th>
+                  <th className={`${thCls} text-right`} onClick={() => toggleSort('thisYr')}>Rating{arrow('thisYr')}</th>
+                  <th className={`${thCls} text-right`} onClick={() => toggleSort('lastYr')}>Last Yr{arrow('lastYr')}</th>
+                  <th className={`${thCls} text-right`} onClick={() => toggleSort('diff')}>Diff{arrow('diff')}</th>
+                  <th className={`${thCls} text-right`} onClick={() => toggleSort('hfa')}>HFA{arrow('hfa')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -355,11 +364,14 @@ export default function PowerRatingsAdminPage() {
                       }`}>
                         {diff === null ? '—' : `${diff > 0 ? '+' : ''}${diff.toFixed(2)}`}
                       </td>
+                      <td className="px-3 py-2 text-right tabular-nums text-slate-600">
+                        {typeof r.hfa === 'number' ? r.hfa.toFixed(2) : '—'}
+                      </td>
                     </tr>
                   );
                 })}
                 {!displayRows.length && (
-                  <tr><td colSpan={6} className="px-3 py-6 text-center text-slate-400">No teams match</td></tr>
+                  <tr><td colSpan={7} className="px-3 py-6 text-center text-slate-400">No teams match</td></tr>
                 )}
               </tbody>
             </table>

@@ -58,6 +58,7 @@ export async function POST(request: Request) {
       lastYr: Number.isFinite(r.lastYr as number) ? r.lastYr : null,
       thisYr: r.thisYr,
       conference: typeof r.conference === 'string' && r.conference.trim() ? r.conference.trim() : null,
+      hfa: Number.isFinite(r.hfa as number) ? r.hfa : null,
     });
   }
 

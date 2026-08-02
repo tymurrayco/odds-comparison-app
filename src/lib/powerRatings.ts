@@ -7,6 +7,7 @@ export interface PowerRatingRow {
   lastYr: number | null;
   thisYr: number;
   conference: string | null;
+  hfa?: number | null;
 }
 
 export interface PowerRatingSet {
@@ -82,6 +83,7 @@ const HEADER_ALIASES: Record<string, keyof PowerRatingRow> = {
   rating: 'thisYr', thisyr: 'thisYr', this_yr: 'thisYr', current: 'thisYr', power: 'thisYr',
   lastyr: 'lastYr', last_yr: 'lastYr', prev: 'lastYr', previous: 'lastYr', last: 'lastYr',
   conference: 'conference', conf: 'conference',
+  hfa: 'hfa', homefield: 'hfa', hca: 'hfa',
 };
 
 function cleanCell(s: string): string {
@@ -161,6 +163,7 @@ export function parseRatingsPaste(text: string): { rows: PowerRatingRow[]; error
       lastYr: row.lastYr ?? null,
       thisYr: row.thisYr,
       conference: row.conference ?? null,
+      hfa: row.hfa ?? null,
     });
   }
 
