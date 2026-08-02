@@ -1,11 +1,12 @@
 // src/components/GameCard.tsx
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import OddsTable from './OddsTable';
 import AnalysisTabs from './AnalysisTabs';
 import { Game, ESPNGameScore } from '@/lib/api';
 import { GameRestData } from '@/lib/nhlRest';
 import { Bet } from '@/lib/betService';
 import { usePendingBetsForGame, useTeamColorMap, wageredTeamColor, MyBetBadge } from '@/lib/myGameBets';
+import { NeutralGame, fetchNeutralGames, findNeutralGame } from '@/lib/neutralSites';
 
 interface GameCardProps {
   game: Game;
@@ -82,6 +83,20 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
   // Pending wagers on this game → header badge
   const myPendingBets = usePendingBetsForGame(game.away_team, game.home_team, game.commence_time);
   const teamColorMap = useTeamColorMap(game.sport_key);
+
+  // Neutral-site lookup (NCAAF only). The fetch is memoized module-side, so
+  // every card shares one request.
+  const [neutralGame, setNeutralGame] = useState<NeutralGame | null>(null);
+  useEffect(() => {
+    if (!isNCAAF) return;
+    let alive = true;
+    fetchNeutralGames().then((games) => {
+      if (alive) {
+        setNeutralGame(findNeutralGame(games, game.away_team, game.home_team, game.commence_time));
+      }
+    });
+    return () => { alive = false; };
+  }, [isNCAAF, game.away_team, game.home_team, game.commence_time]);
 
   const favoriteShareButtons = (
     <>
@@ -268,6 +283,23 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                 </p>
               )}
 
+              {/* Neutral site — no home-field edge is applied to this game */}
+              {neutralGame && (
+                <span
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600"
+                  title={neutralGame.venue ? `Neutral site — ${neutralGame.venue}` : 'Neutral site'}
+                >
+                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  Neutral
+                  {neutralGame.venue && (
+                    <span className="hidden md:inline text-slate-400">· {neutralGame.venue}</span>
+                  )}
+                </span>
+              )}
+
               {/* My pending wager badge(s) — strong team-color border + light fill.
                   order-last on mobile keeps the implied score glued to the date/time
                   (stable position) and lets the badge wrap to its own line alone. */}
@@ -451,7 +483,12 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
       {/* Show TeamAnalysis if analysis is selected */}
       {expandedMarket === 'analysis' && isNCAAF ? (
         <div className="p-2">
-          <AnalysisTabs awayTeam={game.away_team} homeTeam={game.home_team} />
+          <AnalysisTabs
+            awayTeam={game.away_team}
+            homeTeam={game.home_team}
+            isNeutralSite={!!neutralGame}
+            venue={neutralGame?.venue ?? null}
+          />
         </div>
       ) : (
         <OddsTable

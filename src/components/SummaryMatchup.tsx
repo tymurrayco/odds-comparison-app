@@ -11,6 +11,7 @@ import { PowerRatingRow } from '@/lib/powerRatings';
 interface SummaryMatchupProps {
   awayTeam: string; // odds-api names
   homeTeam: string;
+  isNeutralSite?: boolean;
 }
 
 interface SystemRow {
@@ -38,7 +39,7 @@ function TeamLogo({ oddsName, className }: { oddsName: string; className: string
   );
 }
 
-export default function SummaryMatchup({ awayTeam, homeTeam }: SummaryMatchupProps) {
+export default function SummaryMatchup({ awayTeam, homeTeam, isNeutralSite = false }: SummaryMatchupProps) {
   const [rows, setRows] = useState<SystemRow[] | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -49,13 +50,21 @@ export default function SummaryMatchup({ awayTeam, homeTeam }: SummaryMatchupPro
     const feiPromise = fetchFEIData().then((data) => {
       const away = getTeamFEIData(awayTeam, data);
       const home = getTeamFEIData(homeTeam, data);
-      const line = away && home ? -calculateExpectedScore(away, home).spread : null;
+      let line: number | null = null;
+      if (away && home) {
+        // calculateExpectedScore bakes a home bump into whichever team is passed
+        // as "home". On a neutral field, averaging both orientations cancels it.
+        const margin = isNeutralSite
+          ? (calculateExpectedScore(away, home).spread - calculateExpectedScore(home, away).spread) / 2
+          : calculateExpectedScore(away, home).spread;
+        line = -margin;
+      }
       return {
         system: 'FEI',
         awayLabel: away ? `${away.fei.toFixed(2)} (#${away.rank})` : null,
         homeLabel: home ? `${home.fei.toFixed(2)} (#${home.rank})` : null,
         homeLine: line === null ? null : round1(line),
-        note: 'score projection',
+        note: isNeutralSite ? 'score proj · neutral' : 'score projection',
       } as SystemRow;
     });
 
@@ -66,14 +75,14 @@ export default function SummaryMatchup({ awayTeam, homeTeam }: SummaryMatchupPro
       .then((d) => {
         const a: TeamSeasonMetrics | null = d.matchup?.[0]?.metrics ?? null;
         const h: TeamSeasonMetrics | null = d.matchup?.[1]?.metrics ?? null;
-        const hfa: number = d.hfaPoints ?? 2.5;
+        const hfa: number = isNeutralSite ? 0 : d.hfaPoints ?? 2.5;
         const line = a && h ? -(h.powerRating - a.powerRating + hfa) : null;
         return {
           system: 'Eckel',
           awayLabel: a ? `${a.powerRating.toFixed(1)} (#${d.matchup[0].rank})` : null,
           homeLabel: h ? `${h.powerRating.toFixed(1)} (#${d.matchup[1].rank})` : null,
           homeLine: line === null ? null : round1(line),
-          note: d.hfaSource === 'powers' ? 'Powers HFA' : 'fitted HFA',
+          note: isNeutralSite ? 'no HFA' : d.hfaSource === 'powers' ? 'Powers HFA' : 'fitted HFA',
         } as SystemRow;
       });
 
@@ -88,8 +97,10 @@ export default function SummaryMatchup({ awayTeam, homeTeam }: SummaryMatchupPro
           system: 'Powers',
           awayLabel: a ? `${a.thisYr.toFixed(1)} (#${a.rank})` : null,
           homeLabel: h ? `${h.thisYr.toFixed(1)} (#${h.rank})` : null,
-          homeLine: typeof d.homeSpread === 'number' ? d.homeSpread : null,
-          note: 'per-team HFA',
+          homeLine: isNeutralSite
+            ? (typeof d.neutralSpread === 'number' ? d.neutralSpread : null)
+            : (typeof d.homeSpread === 'number' ? d.homeSpread : null),
+          note: isNeutralSite ? 'no HFA' : 'per-team HFA',
         } as SystemRow;
       });
 
@@ -106,7 +117,7 @@ export default function SummaryMatchup({ awayTeam, homeTeam }: SummaryMatchupPro
     });
 
     return () => { alive = false; };
-  }, [awayTeam, homeTeam]);
+  }, [awayTeam, homeTeam, isNeutralSite]);
 
   if (loading) {
     return <div className="p-6 text-center text-sm text-gray-500">Loading projections…</div>;
@@ -182,8 +193,10 @@ export default function SummaryMatchup({ awayTeam, homeTeam }: SummaryMatchupPro
         </tbody>
       </table>
       <p className="mt-3 text-[10px] text-gray-400 text-center">
-        Line shown for the favorite (logo) · FEI = expected-score projection incl. home edge ·
-        Eckel & Powers = rating difference + Brad Powers&rsquo; per-team home HFA · ratings shown as value (#rank)
+        Line shown for the favorite (logo) · FEI = expected-score projection · Eckel & Powers =
+        rating difference{isNeutralSite
+          ? ' · neutral site, no home-field edge applied'
+          : ' + Brad Powers’ per-team home HFA'} · ratings shown as value (#rank)
       </p>
     </div>
   );

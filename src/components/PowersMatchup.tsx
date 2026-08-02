@@ -9,6 +9,7 @@ import { PowerRatingRow } from '@/lib/powerRatings';
 interface PowersMatchupProps {
   awayTeam: string; // odds-api names
   homeTeam: string;
+  isNeutralSite?: boolean;
 }
 
 interface MatchupSide {
@@ -73,7 +74,7 @@ function StatRow({
   );
 }
 
-export default function PowersMatchup({ awayTeam, homeTeam }: PowersMatchupProps) {
+export default function PowersMatchup({ awayTeam, homeTeam, isNeutralSite = false }: PowersMatchupProps) {
   const [data, setData] = useState<PowersResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -101,7 +102,8 @@ export default function PowersMatchup({ awayTeam, homeTeam }: PowersMatchupProps
   const a = data.away.row;
   const h = data.home.row;
   const bothMatched = !!(a && h);
-  const homeSpread = data.homeSpread;
+  // On a neutral field neither team gets its home edge.
+  const homeSpread = isNeutralSite ? data.neutralSpread : data.homeSpread;
 
   const diffOf = (r: PowerRatingRow) =>
     r.lastYr === null ? null : Math.round((r.thisYr - r.lastYr) * 100) / 100;
@@ -121,9 +123,15 @@ export default function PowersMatchup({ awayTeam, homeTeam }: PowersMatchupProps
                 {homeSpread <= 0 ? h!.team : a!.team} {spread(homeSpread <= 0 ? homeSpread : -homeSpread)}
               </p>
               <p className="text-[10px] text-gray-400">
-                incl. {data.hfaUsed?.toFixed(2)} home edge
-                {data.neutralSpread !== null && data.neutralSpread !== undefined &&
-                  ` · neutral ${spread(data.neutralSpread)}`}
+                {isNeutralSite ? (
+                  'neutral site · no home edge'
+                ) : (
+                  <>
+                    incl. {data.hfaUsed?.toFixed(2)} home edge
+                    {data.neutralSpread !== null && data.neutralSpread !== undefined &&
+                      ` · neutral ${spread(data.neutralSpread)}`}
+                  </>
+                )}
               </p>
             </>
           )}
@@ -159,8 +167,8 @@ export default function PowersMatchup({ awayTeam, homeTeam }: PowersMatchupProps
           />
           <p className="mt-3 text-[10px] text-gray-400 text-center">
             {data.sourceLabel} {data.season} preseason Vegas power ratings · line = rating
-            difference + home team&rsquo;s HFA (negative = home favored) · only the home
-            team&rsquo;s HFA is applied{data.asOf ? ` · as of ${data.asOf}` : ''}
+            difference{isNeutralSite ? ' only (neutral field)' : " + home team's HFA"} (negative =
+            home favored){data.asOf ? ` · as of ${data.asOf}` : ''}
           </p>
         </>
       )}

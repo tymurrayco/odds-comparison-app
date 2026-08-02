@@ -9,6 +9,7 @@ import { TeamSeasonMetrics } from '@/lib/eckel/types';
 interface EckelMatchupProps {
   awayTeam: string; // odds-api names
   homeTeam: string;
+  isNeutralSite?: boolean;
 }
 
 interface MatchupSide {
@@ -73,7 +74,7 @@ function StatRow({
   );
 }
 
-export default function EckelMatchup({ awayTeam, homeTeam }: EckelMatchupProps) {
+export default function EckelMatchup({ awayTeam, homeTeam, isNeutralSite = false }: EckelMatchupProps) {
   const [data, setData] = useState<EckelResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -104,7 +105,7 @@ export default function EckelMatchup({ awayTeam, homeTeam }: EckelMatchupProps) 
   const a = away.metrics;
   const h = home.metrics;
   const bothMatched = !!(a && h);
-  const hfa = data.hfaPoints ?? 2.2;
+  const hfa = isNeutralSite ? 0 : data.hfaPoints ?? 2.2;
   const expectedMargin = bothMatched ? h!.powerRating - a!.powerRating + hfa : null;
 
   const betterHigh = (av: number, hv: number): 'away' | 'home' | null =>
@@ -126,7 +127,9 @@ export default function EckelMatchup({ awayTeam, homeTeam }: EckelMatchupProps) 
                 {Math.abs(expectedMargin).toFixed(1)}
               </p>
               <p className="text-[10px] text-gray-400">
-                incl. {hfa.toFixed(hfa % 1 ? 2 : 1)} HFA{data.hfaSource === 'powers' ? ' (Powers)' : ''}
+                {isNeutralSite
+                  ? 'neutral site · no HFA'
+                  : `incl. ${hfa.toFixed(hfa % 1 ? 2 : 1)} HFA${data.hfaSource === 'powers' ? ' (Powers)' : ''}`}
               </p>
             </>
           )}

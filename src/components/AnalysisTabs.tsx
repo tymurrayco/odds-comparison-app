@@ -13,12 +13,16 @@ import SummaryMatchup from './SummaryMatchup';
 interface AnalysisTabsProps {
   awayTeam: string;
   homeTeam: string;
+  isNeutralSite?: boolean;
+  venue?: string | null;
 }
 
 const TABS = ['Summary', 'FEI', 'Eckel', 'Powers'] as const;
 type Tab = (typeof TABS)[number];
 
-export default function AnalysisTabs({ awayTeam, homeTeam }: AnalysisTabsProps) {
+export default function AnalysisTabs({
+  awayTeam, homeTeam, isNeutralSite = false, venue = null,
+}: AnalysisTabsProps) {
   const [tab, setTab] = useState<Tab>('Summary');
 
   return (
@@ -38,14 +42,19 @@ export default function AnalysisTabs({ awayTeam, homeTeam }: AnalysisTabsProps) 
           </button>
         ))}
       </div>
+      {isNeutralSite && (
+        <p className="px-3 pt-2 text-[10px] text-gray-500">
+          Neutral site{venue ? ` — ${venue}` : ''} · no home-field edge applied
+        </p>
+      )}
       {tab === 'Summary' ? (
-        <SummaryMatchup awayTeam={awayTeam} homeTeam={homeTeam} />
+        <SummaryMatchup awayTeam={awayTeam} homeTeam={homeTeam} isNeutralSite={isNeutralSite} />
       ) : tab === 'FEI' ? (
         <TeamAnalysis awayTeam={awayTeam} homeTeam={homeTeam} />
       ) : tab === 'Eckel' ? (
-        <EckelMatchup awayTeam={awayTeam} homeTeam={homeTeam} />
+        <EckelMatchup awayTeam={awayTeam} homeTeam={homeTeam} isNeutralSite={isNeutralSite} />
       ) : (
-        <PowersMatchup awayTeam={awayTeam} homeTeam={homeTeam} />
+        <PowersMatchup awayTeam={awayTeam} homeTeam={homeTeam} isNeutralSite={isNeutralSite} />
       )}
     </div>
   );
