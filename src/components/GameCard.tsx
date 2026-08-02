@@ -458,9 +458,6 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                       : null,
                   ].filter(Boolean).join(' · ')}
                 </span>
-                <span className="text-slate-400 text-[11px]">
-                  Neither team gets a home-field edge
-                </span>
               </div>
             )}
           </div>
