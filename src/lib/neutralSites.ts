@@ -10,7 +10,27 @@ export interface NeutralGame {
   homeTeam: string;   // CFBD names — the nominal home team
   awayTeam: string;
   venue: string | null;
+  city: string | null;
+  state: string | null;      // US state code; '' / null for international
+  country: string | null;    // ISO code, 'US' for domestic
+  dome: boolean | null;
+  capacity: number | null;
+  elevationFt: number | null;
 }
+
+/** "Dublin, Ireland" / "Atlanta, GA" — empty string if nothing is known. */
+export function venueLocation(g: NeutralGame): string {
+  const parts: string[] = [];
+  if (g.city) parts.push(g.city);
+  if (g.state) parts.push(g.state);
+  else if (g.country && g.country !== 'US') parts.push(COUNTRY_NAMES[g.country] ?? g.country);
+  return parts.join(', ');
+}
+
+const COUNTRY_NAMES: Record<string, string> = {
+  IE: 'Ireland', GB: 'United Kingdom', MX: 'Mexico', CA: 'Canada',
+  DE: 'Germany', AU: 'Australia', JP: 'Japan', BS: 'Bahamas', IT: 'Italy',
+};
 
 const normName = (s: string) =>
   s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();

@@ -18,9 +18,59 @@ interface RawGame {
   startDate?: string;
   start_date?: string;
   venue?: string;
+  venueId?: number;
+  venue_id?: number;
 }
 
-async function fetchSeasonType(year: number, seasonType: string, key: string): Promise<NeutralGame[]> {
+interface RawVenue {
+  id?: number;
+  name?: string;
+  city?: string;
+  state?: string;
+  countryCode?: string;
+  country_code?: string;
+  dome?: boolean;
+  capacity?: number;
+  elevation?: number; // meters
+}
+
+const M_TO_FT = 3.28084;
+
+type VenueInfo = Omit<NeutralGame, 'date' | 'homeTeam' | 'awayTeam' | 'venue'>;
+const EMPTY_VENUE: VenueInfo = {
+  city: null, state: null, country: null, dome: null, capacity: null, elevationFt: null,
+};
+
+async function fetchVenues(key: string): Promise<Map<number, VenueInfo>> {
+  const map = new Map<number, VenueInfo>();
+  const resp = await fetch(`${CFBD_BASE}/venues`, {
+    headers: { Authorization: `Bearer ${key}` },
+    next: { revalidate: 604_800 }, // venues essentially never change
+  });
+  if (!resp.ok) {
+    console.error(`[neutral-sites] CFBD /venues: HTTP ${resp.status}`);
+    return map;
+  }
+  for (const v of (await resp.json()) as RawVenue[]) {
+    if (typeof v.id !== 'number') continue;
+    map.set(v.id, {
+      city: v.city || null,
+      state: v.state || null,
+      country: v.countryCode ?? v.country_code ?? null,
+      dome: typeof v.dome === 'boolean' ? v.dome : null,
+      capacity: v.capacity || null,
+      elevationFt: typeof v.elevation === 'number' ? Math.round(v.elevation * M_TO_FT) : null,
+    });
+  }
+  return map;
+}
+
+async function fetchSeasonType(
+  year: number,
+  seasonType: string,
+  key: string,
+  venues: Map<number, VenueInfo>
+): Promise<NeutralGame[]> {
   const qs = new URLSearchParams({ year: String(year), seasonType });
   const resp = await fetch(`${CFBD_BASE}/games?${qs}`, {
     headers: { Authorization: `Bearer ${key}` },
@@ -34,12 +84,16 @@ async function fetchSeasonType(year: number, seasonType: string, key: string): P
   const raw = (await resp.json()) as RawGame[];
   return raw
     .filter((g) => g.neutralSite ?? g.neutral_site)
-    .map((g) => ({
-      date: (g.startDate ?? g.start_date ?? '').slice(0, 10),
-      homeTeam: g.homeTeam ?? g.home_team ?? '',
-      awayTeam: g.awayTeam ?? g.away_team ?? '',
-      venue: g.venue ?? null,
-    }))
+    .map((g) => {
+      const venueId = g.venueId ?? g.venue_id;
+      return {
+        date: (g.startDate ?? g.start_date ?? '').slice(0, 10),
+        homeTeam: g.homeTeam ?? g.home_team ?? '',
+        awayTeam: g.awayTeam ?? g.away_team ?? '',
+        venue: g.venue ?? null,
+        ...(typeof venueId === 'number' ? venues.get(venueId) ?? EMPTY_VENUE : EMPTY_VENUE),
+      };
+    })
     .filter((g) => g.date && g.homeTeam && g.awayTeam);
 }
 
@@ -53,9 +107,10 @@ export async function GET(request: NextRequest) {
   const year = parseInt(request.nextUrl.searchParams.get('year') || '') || new Date().getFullYear();
 
   try {
+    const venues = await fetchVenues(key);
     const [regular, postseason] = await Promise.all([
-      fetchSeasonType(year, 'regular', key),
-      fetchSeasonType(year, 'postseason', key),
+      fetchSeasonType(year, 'regular', key, venues),
+      fetchSeasonType(year, 'postseason', key, venues),
     ]);
     const games = [...regular, ...postseason];
 

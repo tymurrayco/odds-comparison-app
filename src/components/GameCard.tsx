@@ -6,7 +6,7 @@ import { Game, ESPNGameScore } from '@/lib/api';
 import { GameRestData } from '@/lib/nhlRest';
 import { Bet } from '@/lib/betService';
 import { usePendingBetsForGame, useTeamColorMap, wageredTeamColor, MyBetBadge } from '@/lib/myGameBets';
-import { NeutralGame, fetchNeutralGames, findNeutralGame } from '@/lib/neutralSites';
+import { NeutralGame, fetchNeutralGames, findNeutralGame, venueLocation } from '@/lib/neutralSites';
 
 interface GameCardProps {
   game: Game;
@@ -87,6 +87,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
   // Neutral-site lookup (NCAAF only). The fetch is memoized module-side, so
   // every card shares one request.
   const [neutralGame, setNeutralGame] = useState<NeutralGame | null>(null);
+  const [showVenue, setShowVenue] = useState(false);
   useEffect(() => {
     if (!isNCAAF) return;
     let alive = true;
@@ -283,11 +284,18 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                 </p>
               )}
 
-              {/* Neutral site — no home-field edge is applied to this game */}
+              {/* Neutral site — no home-field edge is applied to this game.
+                  Click for venue detail (inline, not a popover: the card is
+                  overflow-hidden and would clip an absolutely-positioned one). */}
               {neutralGame && (
-                <span
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600"
-                  title={neutralGame.venue ? `Neutral site — ${neutralGame.venue}` : 'Neutral site'}
+                <button
+                  onClick={(e) => { e.stopPropagation(); setShowVenue(!showVenue); }}
+                  aria-expanded={showVenue}
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium transition-colors ${
+                    showVenue
+                      ? 'bg-slate-700 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
                 >
                   <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -295,9 +303,11 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                   </svg>
                   Neutral
                   {neutralGame.venue && (
-                    <span className="hidden md:inline text-slate-400">· {neutralGame.venue}</span>
+                    <span className={`hidden md:inline ${showVenue ? 'text-slate-300' : 'text-slate-400'}`}>
+                      · {neutralGame.venue}
+                    </span>
                   )}
-                </span>
+                </button>
               )}
 
               {/* My pending wager badge(s) — strong team-color border + light fill.
@@ -429,8 +439,32 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                 </div>
               )}
             </div>
+
+            {/* Venue detail — expanded by the Neutral badge */}
+            {neutralGame && showVenue && (
+              <div className="mt-1.5 inline-flex flex-col gap-0.5 rounded-lg bg-slate-50 border border-slate-200 px-2.5 py-1.5 text-xs">
+                <span className="font-semibold text-slate-800">
+                  {neutralGame.venue ?? 'Neutral site'}
+                </span>
+                {venueLocation(neutralGame) && (
+                  <span className="text-slate-600">{venueLocation(neutralGame)}</span>
+                )}
+                <span className="text-slate-400 text-[11px]">
+                  {[
+                    neutralGame.dome === true ? 'Dome' : neutralGame.dome === false ? 'Outdoor' : null,
+                    neutralGame.capacity ? `${neutralGame.capacity.toLocaleString()} cap` : null,
+                    neutralGame.elevationFt && neutralGame.elevationFt >= 3000
+                      ? `${neutralGame.elevationFt.toLocaleString()} ft elevation`
+                      : null,
+                  ].filter(Boolean).join(' · ')}
+                </span>
+                <span className="text-slate-400 text-[11px]">
+                  Neither team gets a home-field edge
+                </span>
+              </div>
+            )}
           </div>
-          
+
           {/* Market toggle buttons */}
           <div className="flex space-x-1 md:space-x-2">
             <button 
@@ -487,7 +521,11 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
             awayTeam={game.away_team}
             homeTeam={game.home_team}
             isNeutralSite={!!neutralGame}
-            venue={neutralGame?.venue ?? null}
+            venue={
+              neutralGame
+                ? [neutralGame.venue, venueLocation(neutralGame)].filter(Boolean).join(', ')
+                : null
+            }
           />
         </div>
       ) : (
