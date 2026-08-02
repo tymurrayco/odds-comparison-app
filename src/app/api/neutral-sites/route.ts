@@ -31,10 +31,16 @@ interface RawVenue {
   country_code?: string;
   dome?: boolean;
   capacity?: number;
-  elevation?: number; // meters
+  elevation?: number | string; // meters — CFBD sends this one as a STRING
 }
 
 const M_TO_FT = 3.28084;
+
+/** CFBD types elevation as a string ("2200.153564"); capacity comes back numeric. */
+const toNum = (v: unknown): number | null => {
+  const n = typeof v === 'string' ? parseFloat(v) : typeof v === 'number' ? v : NaN;
+  return Number.isFinite(n) ? n : null;
+};
 
 type VenueInfo = Omit<NeutralGame, 'date' | 'homeTeam' | 'awayTeam' | 'venue'>;
 const EMPTY_VENUE: VenueInfo = {
@@ -53,13 +59,14 @@ async function fetchVenues(key: string): Promise<Map<number, VenueInfo>> {
   }
   for (const v of (await resp.json()) as RawVenue[]) {
     if (typeof v.id !== 'number') continue;
+    const meters = toNum(v.elevation);
     map.set(v.id, {
       city: v.city || null,
       state: v.state || null,
       country: v.countryCode ?? v.country_code ?? null,
       dome: typeof v.dome === 'boolean' ? v.dome : null,
-      capacity: v.capacity || null,
-      elevationFt: typeof v.elevation === 'number' ? Math.round(v.elevation * M_TO_FT) : null,
+      capacity: toNum(v.capacity),
+      elevationFt: meters === null ? null : Math.round(meters * M_TO_FT),
     });
   }
   return map;
