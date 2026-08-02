@@ -26,6 +26,7 @@ interface EckelResponse {
   week?: number | null;
   computedAt?: string;
   hfaPoints?: number;
+  hfaSource?: 'powers' | 'eckel-fit';
   matchup?: MatchupSide[];
 }
 
@@ -124,7 +125,9 @@ export default function EckelMatchup({ awayTeam, homeTeam }: EckelMatchupProps) 
                 {' by '}
                 {Math.abs(expectedMargin).toFixed(1)}
               </p>
-              <p className="text-[10px] text-gray-400">incl. {hfa.toFixed(1)} HFA</p>
+              <p className="text-[10px] text-gray-400">
+                incl. {hfa.toFixed(hfa % 1 ? 2 : 1)} HFA{data.hfaSource === 'powers' ? ' (Powers)' : ''}
+              </p>
             </>
           )}
         </div>

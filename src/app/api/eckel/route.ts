@@ -8,6 +8,24 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { EckelSnapshot, TeamSeasonMetrics } from '@/lib/eckel/types';
 import { matchOddsToCfbd } from '@/lib/eckel/teamNames';
+import { PowerRatingRow, matchOddsNameToTeam } from '@/lib/powerRatings';
+
+// Brad Powers' per-team homefield advantage for the HOME side of a matchup;
+// null if no rating set exists or the team isn't in it.
+async function powersHomeHfa(homeOddsName: string): Promise<number | null> {
+  const { data } = await supabase
+    .from('power_rating_sets')
+    .select('ratings')
+    .eq('sport', 'ncaaf')
+    .eq('source', 'brad_powers')
+    .order('season', { ascending: false })
+    .limit(1);
+  const rows: PowerRatingRow[] | undefined = data?.[0]?.ratings;
+  if (!rows?.length) return null;
+  const matched = matchOddsNameToTeam(homeOddsName, rows.map((r) => r.team));
+  const hfa = rows.find((r) => r.team === matched)?.hfa;
+  return typeof hfa === 'number' ? hfa : null;
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -69,12 +87,18 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // Prefer Brad Powers' per-team HFA for the home side (second team);
+    // fall back to the snapshot's fitted league-wide HFA.
+    const homeRequested = matchup[1]?.requested;
+    const powersHfa = homeRequested ? await powersHomeHfa(homeRequested) : null;
+
     return NextResponse.json({
       success: true,
       season: snapshot.season,
       week: snapshot.week,
       computedAt: snapshot.computedAt,
-      hfaPoints: snapshot.meta.hfaPoints,
+      hfaPoints: powersHfa ?? snapshot.meta.hfaPoints,
+      hfaSource: powersHfa !== null ? 'powers' : 'eckel-fit',
       matchup,
     });
   } catch (error) {
