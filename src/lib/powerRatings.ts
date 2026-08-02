@@ -21,6 +21,54 @@ export interface PowerRatingSet {
   updated_at: string;
 }
 
+// Rating-source short names that longest-prefix matching against odds-API
+// names can't resolve (different school name, or missing from CONFERENCES).
+const NCAAF_LOGO_OVERRIDES: Record<string, string> = {
+  'Miami (FL)': 'Miami Hurricanes',
+  'USF': 'South Florida Bulls',
+  'Florida Atlantic': 'Florida Atlantic Owls',
+  'UL-Lafayette': 'Louisiana Ragin Cajuns',
+  'Connecticut': 'UConn Huskies',
+  'Massachusetts': 'UMass Minutemen',
+  'Sam Houston State': 'Sam Houston State Bearkats',
+  'UCLA': 'UCLA Bruins',
+  'USC': 'USC Trojans',
+  'North Dakota State': 'North Dakota State Bison',
+  'Sacramento State': 'Sacramento State Hornets',
+  'FIU': 'Florida International Panthers',
+  'Southern Miss': 'Southern Mississippi Golden Eagles',
+};
+
+const logoPath = (oddsName: string) => `/team-logos/${oddsName.toLowerCase().replace(/\s+/g, '')}.png`;
+
+const normName = (s: string) =>
+  s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+
+/**
+ * Map rating-set short names ("Ohio State") to /team-logos/ paths, which are
+ * keyed by odds-API names ("Ohio State Buckeyes"). Each odds name is assigned
+ * to the LONGEST short name it starts with, so "Oregon State Beavers" pairs
+ * with "Oregon State", not "Oregon".
+ */
+export function buildTeamLogoMap(teams: string[], oddsNames: string[]): Record<string, string> {
+  const map: Record<string, string> = {};
+  const normTeams = teams.map((raw) => ({ raw, n: normName(raw) }));
+  for (const odds of oddsNames) {
+    const on = normName(odds);
+    let best: { raw: string; n: string } | null = null;
+    for (const t of normTeams) {
+      if (on === t.n || on.startsWith(t.n + ' ')) {
+        if (!best || t.n.length > best.n.length) best = t;
+      }
+    }
+    if (best && !(best.raw in map)) map[best.raw] = logoPath(odds);
+  }
+  for (const [team, oddsName] of Object.entries(NCAAF_LOGO_OVERRIDES)) {
+    if (teams.includes(team)) map[team] = logoPath(oddsName);
+  }
+  return map;
+}
+
 export function slugifySource(label: string): string {
   return label
     .toLowerCase()

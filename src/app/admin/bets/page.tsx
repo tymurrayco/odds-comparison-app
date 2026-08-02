@@ -474,21 +474,21 @@ export default function BetAdminPage() {
       {/* Header */}
       <div className="sticky top-0 z-10 bg-white/90 backdrop-blur border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <div className="flex items-center justify-between gap-3 h-14 sm:h-16">
-            <div className="flex items-center gap-1 min-w-0">
+          <div className="flex items-center justify-between gap-3 h-12">
+            <div className="flex items-center gap-0.5 min-w-0">
               <button
                 onClick={() => router.push('/')}
                 aria-label="Back"
-                className="inline-flex items-center justify-center w-9 h-9 -ml-2 rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition"
+                className="inline-flex items-center justify-center w-7 h-7 -ml-1.5 rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition"
               >
                 <IconArrowLeft />
               </button>
-              <h1 className="text-lg sm:text-xl font-bold tracking-tight truncate">Bet Admin</h1>
+              <h1 className="text-base font-bold tracking-tight truncate">Bet Admin</h1>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <button
                 onClick={() => router.push('/admin/power-ratings')}
-                className="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 transition"
+                className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 transition"
               >
                 Power Ratings
               </button>
@@ -497,20 +497,19 @@ export default function BetAdminPage() {
                   if (isDesktop) setShowForm(!showForm);
                   else { setView('form'); setShowForm(true); }
                 }}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold text-white bg-[#0052ff] hover:bg-[#0043d6] transition"
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold text-white bg-[#0052ff] hover:bg-[#0043d6] transition"
               >
-                <IconPlus />
                 {isDesktop && showForm ? 'Close Form' : 'New Bet'}
               </button>
             </div>
           </div>
 
           {/* Mobile segmented view switch */}
-          <div className="sm:hidden pb-3">
-            <div className="grid grid-cols-2 bg-slate-100 rounded-full p-1">
+          <div className="sm:hidden pb-2.5">
+            <div className="grid grid-cols-2 bg-slate-100 rounded-full p-0.5">
               <button
                 onClick={() => { setView('form'); setShowForm(true); }}
-                className={`py-1.5 rounded-full text-sm font-medium transition ${
+                className={`py-1 rounded-full text-xs font-medium transition ${
                   view === 'form' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'
                 }`}
               >
@@ -518,7 +517,7 @@ export default function BetAdminPage() {
               </button>
               <button
                 onClick={() => setView('list')}
-                className={`py-1.5 rounded-full text-sm font-medium transition ${
+                className={`py-1 rounded-full text-xs font-medium transition ${
                   view === 'list' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'
                 }`}
               >
@@ -573,7 +572,7 @@ export default function BetAdminPage() {
             <button
               onClick={handleSendFutures}
               disabled={futuresSending}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#0052ff] text-white rounded-full font-semibold text-sm hover:bg-[#0043d6] disabled:opacity-50 transition"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-[#0052ff] text-white rounded-full font-semibold text-xs hover:bg-[#0043d6] disabled:opacity-50 transition"
             >
               {futuresSending ? <IconSpinner /> : <IconSend />}
               {futuresSending ? 'Sending…' : 'Send'}
@@ -593,7 +592,7 @@ export default function BetAdminPage() {
             <button
               onClick={handleSendNhlRest}
               disabled={restSending}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-full font-semibold text-sm hover:bg-slate-700 disabled:opacity-50 transition"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-900 text-white rounded-full font-semibold text-xs hover:bg-slate-700 disabled:opacity-50 transition"
             >
               {restSending ? <IconSpinner /> : <IconSend />}
               {restSending ? 'Sending…' : 'Send rest report'}
@@ -926,7 +925,7 @@ export default function BetAdminPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#0052ff] text-white rounded-full font-semibold text-sm hover:bg-[#0043d6] disabled:opacity-50 transition"
+                className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-[#0052ff] text-white rounded-full font-semibold text-sm hover:bg-[#0043d6] disabled:opacity-50 transition"
               >
                 {loading && <IconSpinner />}
                 {loading ? 'Saving...' : editingBet ? 'Update Bet' : 'Add Bet'}
@@ -941,7 +940,7 @@ export default function BetAdminPage() {
                     setOddsInput('-110');
                     setParlayTeams(['', '']);
                   }}
-                  className="px-4 py-2.5 bg-slate-100 text-slate-700 rounded-full text-sm font-medium hover:bg-slate-200 transition"
+                  className="px-4 py-2 bg-slate-100 text-slate-700 rounded-full text-sm font-medium hover:bg-slate-200 transition"
                 >
                   Cancel
                 </button>
@@ -960,7 +959,7 @@ export default function BetAdminPage() {
                   <button
                     key={tab.key}
                     onClick={() => setFilter(tab.key)}
-                    className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition ${
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition ${
                       filter === tab.key
                         ? 'bg-slate-900 text-white'
                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -1200,10 +1199,10 @@ export default function BetAdminPage() {
 
 function StatCard({ label, value, sublabel }: { label: string; value: string; sublabel?: string }) {
   return (
-    <div className="p-4 sm:p-5">
-      <div className="text-xs font-medium text-slate-500">{label}</div>
-      <div className="text-xl sm:text-2xl font-bold text-slate-900 mt-1 tabular-nums tracking-tight">{value}</div>
-      {sublabel && <div className="text-xs text-slate-400 mt-0.5">{sublabel}</div>}
+    <div className="px-4 py-3">
+      <div className="text-[11px] font-medium text-slate-500">{label}</div>
+      <div className="text-lg font-bold text-slate-900 mt-0.5 tabular-nums tracking-tight">{value}</div>
+      {sublabel && <div className="text-[11px] text-slate-400">{sublabel}</div>}
     </div>
   );
 }

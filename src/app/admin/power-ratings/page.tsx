@@ -5,12 +5,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { PowerRatingSet, parseRatingsPaste } from '@/lib/powerRatings';
+import { PowerRatingSet, parseRatingsPaste, buildTeamLogoMap } from '@/lib/powerRatings';
+import { CONFERENCES } from '@/lib/conferences';
 
 type SortKey = 'rank' | 'thisYr' | 'lastYr' | 'diff';
 
 const fieldCls =
-  'w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent';
+  'w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0052ff]/25 focus:border-[#0052ff]';
 const labelCls = 'block text-xs font-medium text-slate-500 mb-1';
 
 function diffOf(r: { thisYr: number; lastYr: number | null }): number | null {
@@ -64,6 +65,14 @@ export default function PowerRatingsAdminPage() {
   }, [loadSets]);
 
   const activeSet = sets.find((s) => s.id === activeSetId) ?? null;
+
+  const logoMap = useMemo(() => {
+    if (!activeSet || activeSet.sport !== 'ncaaf') return {};
+    return buildTeamLogoMap(
+      activeSet.ratings.map((r) => r.team),
+      Object.keys(CONFERENCES.americanfootball_ncaaf ?? {})
+    );
+  }, [activeSet]);
 
   const conferences = useMemo(() => {
     if (!activeSet) return [];
@@ -152,27 +161,25 @@ export default function PowerRatingsAdminPage() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-white/80 backdrop-blur border-b border-slate-200">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h1 className="text-xl sm:text-2xl font-semibold tracking-tight">Power Ratings</h1>
-              <p className="text-xs sm:text-sm text-slate-500 mt-0.5">NCAAF rating sets by source</p>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => router.push('/admin/bets')}
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition"
-              >
-                Bet Admin
-              </button>
+      <div className="sticky top-0 z-10 bg-white/90 backdrop-blur border-b border-slate-200">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <div className="flex items-center justify-between gap-3 h-12">
+            <div className="flex items-center gap-0.5 min-w-0">
               <button
                 onClick={() => router.push('/')}
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition"
+                aria-label="Back"
+                className="inline-flex items-center justify-center w-7 h-7 -ml-1.5 rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition"
               >
-                Back
+                <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
               </button>
+              <h1 className="text-base font-bold tracking-tight truncate">Power Ratings</h1>
             </div>
+            <button
+              onClick={() => router.push('/admin/bets')}
+              className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 transition"
+            >
+              Bet Admin
+            </button>
           </div>
         </div>
       </div>
@@ -200,14 +207,14 @@ export default function PowerRatingsAdminPage() {
           </div>
           <button
             onClick={() => setShowImport(!showImport)}
-            className="px-3 py-2 text-sm font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition"
+            className="px-3 py-1.5 text-xs font-semibold rounded-full bg-[#0052ff] text-white hover:bg-[#0043d6] transition"
           >
             {showImport ? 'Close Import' : '+ Import Set'}
           </button>
           {activeSet && (
             <button
               onClick={handleDelete}
-              className="px-3 py-2 text-sm font-medium rounded-lg bg-white border border-red-200 text-red-600 hover:bg-red-50 transition"
+              className="px-3 py-1.5 text-xs font-semibold rounded-full bg-red-50 text-red-600 hover:bg-red-100 transition"
             >
               Delete
             </button>
@@ -263,7 +270,7 @@ export default function PowerRatingsAdminPage() {
             <button
               onClick={handleImport}
               disabled={saving || !importLabel.trim() || !importPreview?.rows.length}
-              className="px-4 py-2 text-sm font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
+              className="px-3.5 py-1.5 text-xs font-semibold rounded-full bg-[#0052ff] text-white hover:bg-[#0043d6] disabled:opacity-40 disabled:cursor-not-allowed transition"
             >
               {saving ? 'Saving…' : 'Save Set'}
             </button>
@@ -323,8 +330,22 @@ export default function PowerRatingsAdminPage() {
                     <tr key={r.team} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
                       <td className="px-3 py-2 text-slate-400 tabular-nums">{r.rank}</td>
                       <td className="px-3 py-2 font-medium">
-                        {r.team}
-                        {r.conference && <span className="sm:hidden text-xs text-slate-400 font-normal"> · {r.conference}</span>}
+                        <span className="flex items-center gap-2">
+                          {logoMap[r.team] && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={logoMap[r.team]}
+                              alt=""
+                              className="sm:hidden w-5 h-5 object-contain flex-shrink-0"
+                              loading="lazy"
+                              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                            />
+                          )}
+                          <span>
+                            {r.team}
+                            {r.conference && <span className="sm:hidden text-xs text-slate-400 font-normal"> · {r.conference}</span>}
+                          </span>
+                        </span>
                       </td>
                       <td className="px-3 py-2 text-slate-500 hidden sm:table-cell">{r.conference ?? '—'}</td>
                       <td className="px-3 py-2 text-right tabular-nums font-semibold">{r.thisYr.toFixed(2)}</td>
