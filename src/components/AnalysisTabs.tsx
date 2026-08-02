@@ -8,17 +8,18 @@ import { useState } from 'react';
 import TeamAnalysis from './TeamAnalysis';
 import EckelMatchup from './EckelMatchup';
 import PowersMatchup from './PowersMatchup';
+import SummaryMatchup from './SummaryMatchup';
 
 interface AnalysisTabsProps {
   awayTeam: string;
   homeTeam: string;
 }
 
-const TABS = ['FEI', 'Eckel', 'Powers'] as const;
+const TABS = ['Summary', 'FEI', 'Eckel', 'Powers'] as const;
 type Tab = (typeof TABS)[number];
 
 export default function AnalysisTabs({ awayTeam, homeTeam }: AnalysisTabsProps) {
-  const [tab, setTab] = useState<Tab>('FEI');
+  const [tab, setTab] = useState<Tab>('Summary');
 
   return (
     <div>
@@ -37,7 +38,9 @@ export default function AnalysisTabs({ awayTeam, homeTeam }: AnalysisTabsProps) 
           </button>
         ))}
       </div>
-      {tab === 'FEI' ? (
+      {tab === 'Summary' ? (
+        <SummaryMatchup awayTeam={awayTeam} homeTeam={homeTeam} />
+      ) : tab === 'FEI' ? (
         <TeamAnalysis awayTeam={awayTeam} homeTeam={homeTeam} />
       ) : tab === 'Eckel' ? (
         <EckelMatchup awayTeam={awayTeam} homeTeam={homeTeam} />
