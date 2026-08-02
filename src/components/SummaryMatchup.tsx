@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import { fetchFEIData, getTeamFEIData, calculateExpectedScore } from '@/lib/feiData';
 import { TeamSeasonMetrics } from '@/lib/eckel/types';
 import { PowerRatingRow } from '@/lib/powerRatings';
+import { cachedJson } from '@/lib/matchupCache';
 
 interface SummaryMatchupProps {
   awayTeam: string; // odds-api names
@@ -68,28 +69,33 @@ export default function SummaryMatchup({ awayTeam, homeTeam, isNeutralSite = fal
       } as SystemRow;
     });
 
-    const eckelPromise = fetch(
-      `/api/eckel?teams=${encodeURIComponent(awayTeam)},${encodeURIComponent(homeTeam)}`
-    )
-      .then((r) => r.json())
+    const eckelPromise = cachedJson<{
+      matchup?: Array<{ metrics: TeamSeasonMetrics | null; rank: number | null }>;
+      hfaPoints?: number;
+      hfaSource?: string;
+    }>(`/api/eckel?teams=${encodeURIComponent(awayTeam)},${encodeURIComponent(homeTeam)}`)
       .then((d) => {
         const a: TeamSeasonMetrics | null = d.matchup?.[0]?.metrics ?? null;
         const h: TeamSeasonMetrics | null = d.matchup?.[1]?.metrics ?? null;
+        const awayRank = d.matchup?.[0]?.rank ?? null;
+        const homeRank = d.matchup?.[1]?.rank ?? null;
         const hfa: number = isNeutralSite ? 0 : d.hfaPoints ?? 2.5;
         const line = a && h ? -(h.powerRating - a.powerRating + hfa) : null;
         return {
           system: 'Eckel',
-          awayLabel: a ? `${a.powerRating.toFixed(1)} (#${d.matchup[0].rank})` : null,
-          homeLabel: h ? `${h.powerRating.toFixed(1)} (#${d.matchup[1].rank})` : null,
+          awayLabel: a ? `${a.powerRating.toFixed(1)} (#${awayRank})` : null,
+          homeLabel: h ? `${h.powerRating.toFixed(1)} (#${homeRank})` : null,
           homeLine: line === null ? null : round1(line),
           note: isNeutralSite ? 'no HFA' : d.hfaSource === 'powers' ? 'Powers HFA' : 'fitted HFA',
         } as SystemRow;
       });
 
-    const powersPromise = fetch(
-      `/api/power-ratings?teams=${encodeURIComponent(awayTeam)},${encodeURIComponent(homeTeam)}`
-    )
-      .then((r) => r.json())
+    const powersPromise = cachedJson<{
+      away?: { row: PowerRatingRow | null };
+      home?: { row: PowerRatingRow | null };
+      homeSpread?: number;
+      neutralSpread?: number;
+    }>(`/api/power-ratings?teams=${encodeURIComponent(awayTeam)},${encodeURIComponent(homeTeam)}`)
       .then((d) => {
         const a: PowerRatingRow | null = d.away?.row ?? null;
         const h: PowerRatingRow | null = d.home?.row ?? null;

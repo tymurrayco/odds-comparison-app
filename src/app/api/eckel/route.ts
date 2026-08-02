@@ -92,15 +92,20 @@ export async function GET(request: NextRequest) {
     const homeRequested = matchup[1]?.requested;
     const powersHfa = homeRequested ? await powersHomeHfa(homeRequested) : null;
 
-    return NextResponse.json({
-      success: true,
-      season: snapshot.season,
-      week: snapshot.week,
-      computedAt: snapshot.computedAt,
-      hfaPoints: powersHfa ?? snapshot.meta.hfaPoints,
-      hfaSource: powersHfa !== null ? 'powers' : 'eckel-fit',
-      matchup,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        season: snapshot.season,
+        week: snapshot.week,
+        computedAt: snapshot.computedAt,
+        hfaPoints: powersHfa ?? snapshot.meta.hfaPoints,
+        hfaSource: powersHfa !== null ? 'powers' : 'eckel-fit',
+        matchup,
+      },
+      // Snapshots are recomputed weekly; a short shared cache absorbs the
+      // per-card fan-out without making an admin recompute feel stale.
+      { headers: { 'Cache-Control': 's-maxage=300, stale-while-revalidate=3600' } }
+    );
   } catch (error) {
     console.error('[Eckel] Error:', error);
     return NextResponse.json(

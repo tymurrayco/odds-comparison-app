@@ -5,6 +5,7 @@
 
 import { useEffect, useState } from 'react';
 import { TeamSeasonMetrics } from '@/lib/eckel/types';
+import { cachedJson } from '@/lib/matchupCache';
 
 interface EckelMatchupProps {
   awayTeam: string; // odds-api names
@@ -81,8 +82,9 @@ export default function EckelMatchup({ awayTeam, homeTeam, isNeutralSite = false
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    fetch(`/api/eckel?teams=${encodeURIComponent(awayTeam)},${encodeURIComponent(homeTeam)}`)
-      .then((r) => r.json())
+    cachedJson<EckelResponse>(
+      `/api/eckel?teams=${encodeURIComponent(awayTeam)},${encodeURIComponent(homeTeam)}`
+    )
       .then((d) => { if (alive) { setData(d); setLoading(false); } })
       .catch(() => { if (alive) { setData({ error: 'Failed to load Eckel data' }); setLoading(false); } });
     return () => { alive = false; };

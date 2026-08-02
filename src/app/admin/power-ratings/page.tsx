@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { PowerRatingSet, parseRatingsPaste, buildTeamLogoMap } from '@/lib/powerRatings';
 import { CONFERENCES } from '@/lib/conferences';
+import { clearMatchupCache } from '@/lib/matchupCache';
 
 type SortKey = 'rank' | 'team' | 'conference' | 'thisYr' | 'lastYr' | 'diff' | 'hfa';
 
@@ -149,6 +150,7 @@ export default function PowerRatingsAdminPage() {
       setMessage(`Saved "${importLabel}" ${importSeason} (${importPreview.rows.length} teams)`);
       setShowImport(false);
       setImportText('');
+      clearMatchupCache(); // matchup tabs must not keep serving the old set
       await loadSets(json.set.id);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Import failed');

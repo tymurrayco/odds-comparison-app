@@ -51,17 +51,22 @@ export async function GET(request: Request) {
       homeSpread = Math.round((away.row.thisYr - home.row.thisYr - hfaUsed) * 10) / 10;
     }
 
-    return NextResponse.json({
-      success: true,
-      sourceLabel: set.source_label,
-      season: set.season,
-      asOf: set.as_of,
-      away,
-      home,
-      hfaUsed,
-      neutralSpread,
-      homeSpread,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        sourceLabel: set.source_label,
+        season: set.season,
+        asOf: set.as_of,
+        away,
+        home,
+        hfaUsed,
+        neutralSpread,
+        homeSpread,
+      },
+      // Matchup lookups only change when a set is re-imported. The admin list
+      // (no `teams` param) stays uncached so imports show up immediately.
+      { headers: { 'Cache-Control': 's-maxage=300, stale-while-revalidate=3600' } }
+    );
   }
 
   const { data, error } = await supabase
