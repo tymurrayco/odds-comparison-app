@@ -336,7 +336,7 @@ export default function PowerRatingsAdminPage() {
                             <img
                               src={logoMap[r.team]}
                               alt=""
-                              className="sm:hidden w-5 h-5 object-contain flex-shrink-0"
+                              className="w-5 h-5 object-contain flex-shrink-0"
                               loading="lazy"
                               onError={(e) => { e.currentTarget.style.display = 'none'; }}
                             />
