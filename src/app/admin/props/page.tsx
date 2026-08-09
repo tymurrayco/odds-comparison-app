@@ -13,6 +13,12 @@ import {
 } from '@/lib/props/engine';
 import { PROP_MARKETS, PropMarketDef, PlayerGameLog, Distribution } from '@/lib/props/markets';
 import { PropReference, measurePlayer, MeasuredStats } from '@/lib/props/reference';
+import DistributionChart from './DistributionChart';
+
+const MARKET_UNITS: { [key: string]: string } = {
+  rush_yds: 'yds', rec_yds: 'yds', pass_yds: 'yds',
+  rush_attempts: 'att', receptions: 'rec', pass_attempts: 'att', pass_completions: 'comp',
+};
 
 const NFL_SPORTS = [
   { key: 'americanfootball_nfl', label: 'NFL' },
@@ -861,6 +867,17 @@ export default function PropsAdminPage() {
                 <input value={underPriceInput} onChange={(e) => setUnderPriceInput(e.target.value)} inputMode="numeric" placeholder="-102" className={fieldCls} />
               </div>
             </div>
+
+            {hasProj && sd !== null && sd > 0 && (
+              <DistributionChart
+                values={measured?.values ?? []}
+                mean={projNum}
+                sd={sd}
+                line={hasLine ? line : null}
+                dist={dist}
+                unit={MARKET_UNITS[marketDef.key] ?? ''}
+              />
+            )}
 
             {result && sd !== null && (
               <>
