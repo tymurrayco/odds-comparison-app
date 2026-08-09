@@ -26,26 +26,34 @@ export async function GET(request: Request) {
 
   if (q !== null) {
     if (q.trim().length < 2) return NextResponse.json({ success: true, players: [] });
-    const { data, error } = await supabase
-      .from('nfl_player_game_logs')
-      .select('player_id, player_name, position, team, season')
-      .ilike('player_name', `%${q.trim()}%`)
-      .order('season', { ascending: false })
-      .limit(300);
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    // Distinct players, keeping the most recent team/season
+    // Distinct players, keeping the most recent team/season. Dedup happens
+    // AFTER the row cap, and one player-season is ~17 rows — so paginate
+    // until we have 20 distinct players (or run out) instead of trusting a
+    // single capped page, which drops older players on common substrings.
     const seen = new Map<string, { player_id: string; player_name: string; position: string; team: string; last_season: number }>();
-    for (const r of data ?? []) {
-      if (!seen.has(r.player_id)) {
-        seen.set(r.player_id, {
-          player_id: r.player_id,
-          player_name: r.player_name,
-          position: r.position,
-          team: r.team,
-          last_season: r.season,
-        });
+    const PAGE = 1000;
+    for (let from = 0; from < 5 * PAGE; from += PAGE) {
+      const { data, error } = await supabase
+        .from('nfl_player_game_logs')
+        .select('player_id, player_name, position, team, season')
+        .ilike('player_name', `%${q.trim()}%`)
+        .order('season', { ascending: false })
+        .order('id', { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      for (const r of data ?? []) {
+        if (!seen.has(r.player_id)) {
+          seen.set(r.player_id, {
+            player_id: r.player_id,
+            player_name: r.player_name,
+            position: r.position,
+            team: r.team,
+            last_season: r.season,
+          });
+        }
       }
+      if (!data || data.length < PAGE || seen.size >= 20) break;
     }
     return NextResponse.json({ success: true, players: Array.from(seen.values()).slice(0, 20) });
   }

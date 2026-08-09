@@ -73,7 +73,7 @@ export function parseWeeklyStats(csv: string): PlayerGameLog[] {
     receiving_yards: col('receiving_yards'),
     receiving_tds: col('receiving_tds'),
   };
-  const required = ['player_id', 'player_display_name', 'position', 'season', 'week', 'season_type'] as const;
+  const required = ['player_id', 'player_display_name', 'position', 'season', 'week', 'season_type', 'team'] as const;
   for (const k of required) {
     if (idx[k] === -1) throw new Error(`nflverse CSV missing column: ${k}`);
   }

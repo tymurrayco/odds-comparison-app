@@ -14,6 +14,7 @@ import {
 import { PROP_MARKETS, PropMarketDef, PlayerGameLog, Distribution } from '@/lib/props/markets';
 import { PropReference, measurePlayer, MeasuredStats } from '@/lib/props/reference';
 import DistributionChart from './DistributionChart';
+import { useDebounce } from '@/app/ratings/hooks/useDebounce';
 
 const MARKET_UNITS: { [key: string]: string } = {
   rush_yds: 'yds', rec_yds: 'yds', pass_yds: 'yds',
@@ -69,6 +70,19 @@ interface RawBookmaker {
 const fmtAmerican = (o: number | null | undefined): string =>
   o === null || o === undefined || Number.isNaN(o) ? '—' : o > 0 ? `+${o}` : `${o}`;
 
+/** American odds are always <= -100 or >= +100; anything else is a typo
+ *  (e.g. decimal odds pasted by habit) and must not reach the EV math. */
+const parseAmerican = (s: string): number | null => {
+  if (!s.trim()) return null;
+  const n = Number(s);
+  return Number.isFinite(n) && Math.abs(n) >= 100 ? n : null;
+};
+
+/** Loose name normalization so "A.J. Dillon" matches "AJ Dillon" and
+ *  suffixes (Jr./Sr./III) don't break the odds→game-log join. */
+const normName = (s: string): string =>
+  s.toLowerCase().replace(/\./g, '').replace(/\b(jr|sr|ii|iii|iv|v)\b/g, '').replace(/\s+/g, ' ').trim();
+
 const fmtPct = (p: number | null | undefined, dp = 1): string =>
   p === null || p === undefined || Number.isNaN(p) ? '—' : `${(p * 100).toFixed(dp)}%`;
 
@@ -118,6 +132,7 @@ export default function PropsAdminPage() {
 
   // Pricing inputs
   const [projection, setProjection] = useState('');
+  const [projectionEdited, setProjectionEdited] = useState(false); // user typed → stop defaulting
   const [sdMode, setSdMode] = useState<'measured' | 'league' | 'tier' | 'custom'>('measured');
   const [sdCustom, setSdCustom] = useState('');
   const [distMode, setDistMode] = useState<'auto' | Distribution>('auto');
@@ -195,7 +210,8 @@ export default function PropsAdminPage() {
     try {
       const res = await fetch(`/api/props?sport=${sport}`);
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      // /api/props error shape: { error, details } with details at top level
+      if (!res.ok) throw new Error(json.details || json.error || `HTTP ${res.status}`);
       setEvents(Array.isArray(json) ? json : []);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load events');
@@ -205,13 +221,27 @@ export default function PropsAdminPage() {
     }
   }, []);
 
-  useEffect(() => {
-    loadEvents(sportKey);
-    setEventId('');
+  // Quotes/line/prices are all derived from one (event, market, player)
+  // selection — any change to that tuple must drop the stale odds state.
+  const resetOddsSelection = useCallback(() => {
     setQuotes(new Map());
     setAltLoaded(false);
     setOddsPlayer('');
-  }, [sportKey, loadEvents]);
+    setLineInput('');
+    setOverPriceInput('');
+    setUnderPriceInput('');
+  }, []);
+
+  useEffect(() => {
+    loadEvents(sportKey);
+    setEventId('');
+    resetOddsSelection();
+  }, [sportKey, loadEvents, resetOddsSelection]);
+
+  // Switching games invalidates the previous game's quotes
+  useEffect(() => {
+    resetOddsSelection();
+  }, [eventId, resetOddsSelection]);
 
   const extractQuotes = (bookmakers: RawBookmaker[]): Map<string, Quote[]> => {
     const map = new Map<string, Quote[]>();
@@ -243,7 +273,7 @@ export default function PropsAdminPage() {
       const remaining = res.headers.get('x-requests-remaining');
       if (remaining) setApiRemaining(remaining);
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error?.details || json.error || `HTTP ${res.status}`);
+      if (!res.ok) throw new Error(json.details || json.error || `HTTP ${res.status}`);
       const map = extractQuotes(json.bookmakers ?? []);
       setQuotes(map);
       setAltLoaded(withAlts);
@@ -256,15 +286,12 @@ export default function PropsAdminPage() {
     }
   };
 
-  // Reset odds state when the market changes (quotes are per-market)
+  // Reset odds state when the market changes (quotes are per-market); the
+  // projection default also re-applies for the new market's stat.
   useEffect(() => {
-    setQuotes(new Map());
-    setAltLoaded(false);
-    setOddsPlayer('');
-    setLineInput('');
-    setOverPriceInput('');
-    setUnderPriceInput('');
-  }, [marketKey]);
+    resetOddsSelection();
+    setProjectionEdited(false);
+  }, [marketKey, resetOddsSelection]);
 
   // ---------- player logs ----------
 
@@ -279,6 +306,7 @@ export default function PropsAdminPage() {
     setSelectedPlayer(p);
     setGamesLoading(true);
     setPlayerGames([]);
+    setProjectionEdited(false); // new player → fresh measured-mean default
     try {
       const res = await fetch(`/api/nfl-props/players?playerId=${encodeURIComponent(p.player_id)}`);
       const json = await res.json();
@@ -294,36 +322,54 @@ export default function PropsAdminPage() {
     }
   }, []);
 
-  // Picking a player from the odds list auto-matches game logs by name
+  // Picking a player from the odds list auto-matches game logs by name.
+  // Only a (normalized) exact name match auto-attaches — a near-miss must be
+  // resolved by hand, or the whole page silently prices the wrong player.
   const pickOddsPlayer = async (name: string) => {
     setOddsPlayer(name);
+    setLineInput('');
+    setOverPriceInput('');
+    setUnderPriceInput('');
     if (!name) return;
     setError(null);
     try {
-      const results = await searchPlayers(name);
-      const exact = results.find((r) => r.player_name.toLowerCase() === name.toLowerCase());
-      const pick = exact ?? results[0];
+      let results = await searchPlayers(name);
+      if (!results.length) {
+        // Full string missed (punctuation/suffix differences) — retry surname
+        const surname = name.trim().split(/\s+/).pop() ?? '';
+        if (surname.length >= 2) results = await searchPlayers(surname);
+      }
+      const exact = results.find((r) => normName(r.player_name) === normName(name));
       setPlayerResults(results);
-      if (pick) await selectPlayer(pick);
-      else {
+      if (exact) {
+        await selectPlayer(exact);
+      } else {
         setSelectedPlayer(null);
         setPlayerGames([]);
-        setMessage(`No game logs found for "${name}" — sync seasons or search manually`);
+        if (results.length) {
+          setPlayerSearch(name);
+          setMessage(`No exact game-log match for "${name}" — pick the right player from the search list`);
+        } else {
+          setMessage(`No game logs found for "${name}" — sync seasons or search manually`);
+        }
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Player lookup failed');
     }
   };
 
-  // Manual search (debounced)
+  // Manual search: shared debounce hook + cancellation so a slow earlier
+  // response can't land after a newer one and show stale results
+  const debouncedPlayerSearch = useDebounce(playerSearch, 300);
   useEffect(() => {
-    if (playerSearch.trim().length < 2) { setPlayerResults([]); return; }
-    const t = setTimeout(async () => {
-      try { setPlayerResults(await searchPlayers(playerSearch)); }
-      catch { /* ignore */ }
-    }, 300);
-    return () => clearTimeout(t);
-  }, [playerSearch, searchPlayers]);
+    const q = debouncedPlayerSearch.trim();
+    if (q.length < 2) { setPlayerResults([]); return; }
+    let cancelled = false;
+    searchPlayers(q)
+      .then((r) => { if (!cancelled) setPlayerResults(r); })
+      .catch(() => { /* ignore */ });
+    return () => { cancelled = true; };
+  }, [debouncedPlayerSearch, searchPlayers]);
 
   // ---------- measured stats ----------
 
@@ -342,9 +388,10 @@ export default function PropsAdminPage() {
   }, [playerGames, seasonsSelected, includePost, minOpp, marketDef]);
 
   // Default projection follows measured mean until the user edits it
+  // (projectionEdited flips on typing; clearing the box re-enables the default)
   useEffect(() => {
-    if (measured) setProjection(measured.mean.toFixed(1));
-  }, [measured]);
+    if (measured && !projectionEdited) setProjection(measured.mean.toFixed(1));
+  }, [measured, projectionEdited]);
 
   // ---------- market quotes for selected player ----------
 
@@ -384,13 +431,16 @@ export default function PropsAdminPage() {
     return best;
   }, [playerQuotes]);
 
-  // Auto-fill prices from the best book at the chosen line (editable after)
+  // Auto-fill prices from the best book at the chosen line (editable after).
+  // Both sides are set unconditionally — an unquoted side must CLEAR, or the
+  // previous line's price silently prices the new line. Skipped entirely in
+  // manual mode (no quotes) so typed prices survive line edits.
   useEffect(() => {
-    if (!hasLine) return;
+    if (!hasLine || !playerQuotes.length) return;
     const over = bestAt(line, 'over');
     const under = bestAt(line, 'under');
-    if (over) setOverPriceInput(String(over.price));
-    if (under) setUnderPriceInput(String(under.price));
+    setOverPriceInput(over ? String(over.price) : '');
+    setUnderPriceInput(under ? String(under.price) : '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [line, playerQuotes]);
 
@@ -415,9 +465,9 @@ export default function PropsAdminPage() {
     }
     if (!fairs.length) {
       // Manual fallback: devig the typed prices
-      const o = Number(overPriceInput);
-      const u = Number(underPriceInput);
-      if (Number.isFinite(o) && Number.isFinite(u) && o !== 0 && u !== 0 && overPriceInput && underPriceInput) {
+      const o = parseAmerican(overPriceInput);
+      const u = parseAmerican(underPriceInput);
+      if (o !== null && u !== null) {
         const d = devig(o, u);
         return { pOver: d.pOver, overround: d.overround, books: 0 };
       }
@@ -450,15 +500,15 @@ export default function PropsAdminPage() {
 
   const dist: Distribution = distMode === 'auto' ? marketDef.defaultDist : distMode;
 
-  const overPrice = Number(overPriceInput);
-  const hasOverPrice = Number.isFinite(overPrice) && overPrice !== 0 && overPriceInput !== '';
+  const overPrice = parseAmerican(overPriceInput);
+  const underPrice = parseAmerican(underPriceInput);
 
   const result = useMemo(() => {
     if (!hasProj || !sd || !hasLine) return null;
     const pNormal = probOver(projNum, sd, line, 'normal');
     const pLog = probOver(projNum, sd, line, 'lognormal');
     const p = dist === 'normal' ? pNormal : pLog;
-    const be = hasOverPrice ? americanToProb(overPrice) : null;
+    const be = overPrice !== null ? americanToProb(overPrice) : null;
     return {
       pNormal,
       pLog,
@@ -466,12 +516,10 @@ export default function PropsAdminPage() {
       fair: probToAmerican(p),
       breakeven: be,
       edge: be !== null ? p - be : null,
-      ev: hasOverPrice ? expectedValue(p, overPrice) : null,
-      evUnder: hasOverPrice && underPriceInput && Number.isFinite(Number(underPriceInput))
-        ? expectedValue(1 - p, Number(underPriceInput))
-        : null,
+      ev: overPrice !== null ? expectedValue(p, overPrice) : null,
+      evUnder: overPrice !== null && underPrice !== null ? expectedValue(1 - p, underPrice) : null,
     };
-  }, [hasProj, projNum, sd, hasLine, line, dist, hasOverPrice, overPrice, underPriceInput]);
+  }, [hasProj, projNum, sd, hasLine, line, dist, overPrice, underPrice]);
 
   const ladder = useMemo(() => {
     if (!hasProj || !sd) return [];
@@ -797,7 +845,12 @@ export default function PropsAdminPage() {
             <div className="flex flex-wrap items-end gap-3">
               <div className="w-28">
                 <label className={labelCls}>Projection</label>
-                <input value={projection} onChange={(e) => setProjection(e.target.value)} inputMode="decimal" className={fieldCls} />
+                <input
+                  value={projection}
+                  onChange={(e) => { setProjection(e.target.value); setProjectionEdited(e.target.value !== ''); }}
+                  inputMode="decimal"
+                  className={fieldCls}
+                />
               </div>
               <div>
                 <label className={labelCls}>SD source</label>
@@ -860,11 +913,25 @@ export default function PropsAdminPage() {
               </div>
               <div className="w-24">
                 <label className={labelCls}>Over price</label>
-                <input value={overPriceInput} onChange={(e) => setOverPriceInput(e.target.value)} inputMode="numeric" placeholder="-120" className={fieldCls} />
+                <input
+                  value={overPriceInput}
+                  onChange={(e) => setOverPriceInput(e.target.value)}
+                  inputMode="numeric"
+                  placeholder="-120"
+                  title="American odds (±100 or beyond)"
+                  className={`${fieldCls}${overPriceInput && overPrice === null ? ' ring-2 ring-red-300' : ''}`}
+                />
               </div>
               <div className="w-24">
                 <label className={labelCls}>Under price</label>
-                <input value={underPriceInput} onChange={(e) => setUnderPriceInput(e.target.value)} inputMode="numeric" placeholder="-102" className={fieldCls} />
+                <input
+                  value={underPriceInput}
+                  onChange={(e) => setUnderPriceInput(e.target.value)}
+                  inputMode="numeric"
+                  placeholder="-102"
+                  title="American odds (±100 or beyond)"
+                  className={`${fieldCls}${underPriceInput && underPrice === null ? ' ring-2 ring-red-300' : ''}`}
+                />
               </div>
             </div>
 
@@ -931,7 +998,7 @@ export default function PropsAdminPage() {
                 )}
                 {result.evUnder !== null && result.evUnder > 0 && (
                   <div className="text-xs text-slate-500">
-                    Under shows {`+${(result.evUnder * 100).toFixed(1)}%`} at {fmtAmerican(Number(underPriceInput))}.
+                    Under shows {`+${(result.evUnder * 100).toFixed(1)}%`} at {fmtAmerican(underPrice)}.
                   </div>
                 )}
               </>
