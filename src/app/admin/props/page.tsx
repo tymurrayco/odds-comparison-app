@@ -1,0 +1,992 @@
+'use client';
+
+// src/app/admin/props/page.tsx
+// Admin: NFL prop pricer — projection + measured distribution → P(over),
+// devigged market fair, EV, and a full alt-line ladder. Methodology: mean ≠
+// median (yardage props are right-skewed → lognormal at the main line).
+
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import {
+  probOver, probToAmerican, americanToProb, devig, expectedValue,
+  priceLadder, syntheticLines, median as medianOf,
+} from '@/lib/props/engine';
+import { PROP_MARKETS, PropMarketDef, PlayerGameLog, Distribution } from '@/lib/props/markets';
+import { PropReference, measurePlayer, MeasuredStats } from '@/lib/props/reference';
+
+const NFL_SPORTS = [
+  { key: 'americanfootball_nfl', label: 'NFL' },
+  { key: 'americanfootball_nfl_preseason', label: 'Preseason' },
+];
+
+const fieldCls =
+  'w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0052ff]/25 focus:border-[#0052ff]';
+const labelCls = 'block text-xs font-medium text-slate-500 mb-1';
+const cardCls = 'bg-white rounded-xl border border-slate-200 shadow-sm p-4';
+const btnCls =
+  'px-3 py-1.5 text-xs font-semibold rounded-full bg-[#0052ff] text-white hover:bg-[#0043d6] disabled:opacity-40 disabled:cursor-not-allowed transition';
+const btnGhostCls =
+  'px-3 py-1.5 text-xs font-medium rounded-full bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-40 transition';
+
+// ---------- types ----------
+
+interface OddsEvent {
+  id: string;
+  commence_time: string;
+  home_team: string;
+  away_team: string;
+}
+
+interface Quote {
+  book: string;
+  side: 'over' | 'under';
+  price: number;
+  point: number;
+}
+
+interface PlayerSearchResult {
+  player_id: string;
+  player_name: string;
+  position: string;
+  team: string;
+  last_season: number;
+}
+
+interface RawBookmaker {
+  title: string;
+  markets: {
+    key: string;
+    outcomes: { name: string; description?: string; price: number; point?: number }[];
+  }[];
+}
+
+const fmtAmerican = (o: number | null | undefined): string =>
+  o === null || o === undefined || Number.isNaN(o) ? '—' : o > 0 ? `+${o}` : `${o}`;
+
+const fmtPct = (p: number | null | undefined, dp = 1): string =>
+  p === null || p === undefined || Number.isNaN(p) ? '—' : `${(p * 100).toFixed(dp)}%`;
+
+const evCls = (ev: number | null): string =>
+  ev === null ? 'text-slate-400'
+    : ev > 0.02 ? 'text-emerald-600 font-semibold'
+    : ev > 0 ? 'text-emerald-500'
+    : ev > -0.02 ? 'text-red-400'
+    : 'text-red-600';
+
+export default function PropsAdminPage() {
+  const router = useRouter();
+
+  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  // Data panel
+  const [showData, setShowData] = useState(false);
+  const [syncCounts, setSyncCounts] = useState<{ season: number; rows: number }[]>([]);
+  const [syncing, setSyncing] = useState<number | null>(null);
+  const [reference, setReference] = useState<PropReference | null>(null);
+  const [refComputing, setRefComputing] = useState(false);
+
+  // Odds
+  const [sportKey, setSportKey] = useState(NFL_SPORTS[0].key);
+  const [events, setEvents] = useState<OddsEvent[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
+  const [eventId, setEventId] = useState('');
+  const [marketKey, setMarketKey] = useState('rush_yds');
+  const [quotes, setQuotes] = useState<Map<string, Quote[]>>(new Map());
+  const [oddsLoading, setOddsLoading] = useState(false);
+  const [altLoaded, setAltLoaded] = useState(false);
+  const [apiRemaining, setApiRemaining] = useState<string | null>(null);
+
+  // Player
+  const [oddsPlayer, setOddsPlayer] = useState('');
+  const [playerSearch, setPlayerSearch] = useState('');
+  const [playerResults, setPlayerResults] = useState<PlayerSearchResult[]>([]);
+  const [selectedPlayer, setSelectedPlayer] = useState<PlayerSearchResult | null>(null);
+  const [playerGames, setPlayerGames] = useState<PlayerGameLog[]>([]);
+  const [gamesLoading, setGamesLoading] = useState(false);
+
+  // Measurement window
+  const [seasonsSelected, setSeasonsSelected] = useState<number[]>([]);
+  const [includePost, setIncludePost] = useState(false);
+  const [minOpp, setMinOpp] = useState('0');
+
+  // Pricing inputs
+  const [projection, setProjection] = useState('');
+  const [sdMode, setSdMode] = useState<'measured' | 'league' | 'tier' | 'custom'>('measured');
+  const [sdCustom, setSdCustom] = useState('');
+  const [distMode, setDistMode] = useState<'auto' | Distribution>('auto');
+  const [lineInput, setLineInput] = useState('');
+  const [overPriceInput, setOverPriceInput] = useState('');
+  const [underPriceInput, setUnderPriceInput] = useState('');
+
+  const marketDef: PropMarketDef = useMemo(
+    () => PROP_MARKETS.find((m) => m.key === marketKey) ?? PROP_MARKETS[0],
+    [marketKey]
+  );
+
+  // ---------- data panel ----------
+
+  const loadSyncCounts = useCallback(async () => {
+    try {
+      const res = await fetch('/api/nfl-props/sync');
+      const json = await res.json();
+      if (res.ok) setSyncCounts(json.seasons ?? []);
+    } catch { /* non-blocking */ }
+  }, []);
+
+  const loadReference = useCallback(async () => {
+    try {
+      const res = await fetch('/api/nfl-props/reference');
+      const json = await res.json();
+      if (res.ok) setReference(json.reference);
+    } catch { /* non-blocking */ }
+  }, []);
+
+  useEffect(() => {
+    loadSyncCounts();
+    loadReference();
+  }, [loadSyncCounts, loadReference]);
+
+  const handleSync = async (season: number) => {
+    setSyncing(season);
+    setError(null);
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/nfl-props/sync?season=${season}`, { method: 'POST' });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      setMessage(`Synced ${season}: ${json.rows} game rows`);
+      await loadSyncCounts();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Sync failed');
+    } finally {
+      setSyncing(null);
+    }
+  };
+
+  const handleRecomputeReference = async () => {
+    setRefComputing(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const res = await fetch('/api/nfl-props/reference', { method: 'POST' });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      setReference(json.reference);
+      setMessage(`Reference recomputed from ${json.gameRows} game rows`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Recompute failed');
+    } finally {
+      setRefComputing(false);
+    }
+  };
+
+  // ---------- odds ----------
+
+  const loadEvents = useCallback(async (sport: string) => {
+    setEventsLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/props?sport=${sport}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      setEvents(Array.isArray(json) ? json : []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load events');
+      setEvents([]);
+    } finally {
+      setEventsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadEvents(sportKey);
+    setEventId('');
+    setQuotes(new Map());
+    setAltLoaded(false);
+    setOddsPlayer('');
+  }, [sportKey, loadEvents]);
+
+  const extractQuotes = (bookmakers: RawBookmaker[]): Map<string, Quote[]> => {
+    const map = new Map<string, Quote[]>();
+    for (const bm of bookmakers ?? []) {
+      for (const mkt of bm.markets ?? []) {
+        if (mkt.key !== marketDef.oddsApiKey && mkt.key !== marketDef.oddsApiAltKey) continue;
+        for (const oc of mkt.outcomes ?? []) {
+          const playerName = oc.description;
+          const side = oc.name?.toLowerCase();
+          if (!playerName || (side !== 'over' && side !== 'under') || typeof oc.point !== 'number') continue;
+          const arr = map.get(playerName) ?? [];
+          arr.push({ book: bm.title, side, price: oc.price, point: oc.point });
+          map.set(playerName, arr);
+        }
+      }
+    }
+    return map;
+  };
+
+  const loadOdds = async (withAlts: boolean) => {
+    if (!eventId) return;
+    setOddsLoading(true);
+    setError(null);
+    try {
+      const markets = withAlts && marketDef.oddsApiAltKey
+        ? `${marketDef.oddsApiKey},${marketDef.oddsApiAltKey}`
+        : marketDef.oddsApiKey;
+      const res = await fetch(`/api/props?sport=${sportKey}&eventId=${eventId}&markets=${markets}`);
+      const remaining = res.headers.get('x-requests-remaining');
+      if (remaining) setApiRemaining(remaining);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error?.details || json.error || `HTTP ${res.status}`);
+      const map = extractQuotes(json.bookmakers ?? []);
+      setQuotes(map);
+      setAltLoaded(withAlts);
+      if (!map.size) setMessage('No quotes posted for this market yet');
+      else if (oddsPlayer && !map.has(oddsPlayer)) setOddsPlayer('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load odds');
+    } finally {
+      setOddsLoading(false);
+    }
+  };
+
+  // Reset odds state when the market changes (quotes are per-market)
+  useEffect(() => {
+    setQuotes(new Map());
+    setAltLoaded(false);
+    setOddsPlayer('');
+    setLineInput('');
+    setOverPriceInput('');
+    setUnderPriceInput('');
+  }, [marketKey]);
+
+  // ---------- player logs ----------
+
+  const searchPlayers = useCallback(async (q: string): Promise<PlayerSearchResult[]> => {
+    const res = await fetch(`/api/nfl-props/players?q=${encodeURIComponent(q)}`);
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+    return json.players ?? [];
+  }, []);
+
+  const selectPlayer = useCallback(async (p: PlayerSearchResult) => {
+    setSelectedPlayer(p);
+    setGamesLoading(true);
+    setPlayerGames([]);
+    try {
+      const res = await fetch(`/api/nfl-props/players?playerId=${encodeURIComponent(p.player_id)}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      const games: PlayerGameLog[] = json.games ?? [];
+      setPlayerGames(games);
+      const seasons = Array.from(new Set(games.map((g) => g.season))).sort((a, b) => b - a);
+      setSeasonsSelected(seasons.slice(0, 1)); // default: most recent season
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load game logs');
+    } finally {
+      setGamesLoading(false);
+    }
+  }, []);
+
+  // Picking a player from the odds list auto-matches game logs by name
+  const pickOddsPlayer = async (name: string) => {
+    setOddsPlayer(name);
+    if (!name) return;
+    setError(null);
+    try {
+      const results = await searchPlayers(name);
+      const exact = results.find((r) => r.player_name.toLowerCase() === name.toLowerCase());
+      const pick = exact ?? results[0];
+      setPlayerResults(results);
+      if (pick) await selectPlayer(pick);
+      else {
+        setSelectedPlayer(null);
+        setPlayerGames([]);
+        setMessage(`No game logs found for "${name}" — sync seasons or search manually`);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Player lookup failed');
+    }
+  };
+
+  // Manual search (debounced)
+  useEffect(() => {
+    if (playerSearch.trim().length < 2) { setPlayerResults([]); return; }
+    const t = setTimeout(async () => {
+      try { setPlayerResults(await searchPlayers(playerSearch)); }
+      catch { /* ignore */ }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [playerSearch, searchPlayers]);
+
+  // ---------- measured stats ----------
+
+  const availableSeasons = useMemo(
+    () => Array.from(new Set(playerGames.map((g) => g.season))).sort((a, b) => b - a),
+    [playerGames]
+  );
+
+  const measured: MeasuredStats | null = useMemo(() => {
+    if (!playerGames.length || !seasonsSelected.length) return null;
+    return measurePlayer(playerGames, marketDef, {
+      seasons: seasonsSelected,
+      includePost,
+      minOpportunities: Number(minOpp) || 0,
+    });
+  }, [playerGames, seasonsSelected, includePost, minOpp, marketDef]);
+
+  // Default projection follows measured mean until the user edits it
+  useEffect(() => {
+    if (measured) setProjection(measured.mean.toFixed(1));
+  }, [measured]);
+
+  // ---------- market quotes for selected player ----------
+
+  const playerQuotes: Quote[] = useMemo(
+    () => (oddsPlayer ? quotes.get(oddsPlayer) ?? [] : []),
+    [quotes, oddsPlayer]
+  );
+
+  const bookLines = useMemo(
+    () => Array.from(new Set(playerQuotes.map((q) => q.point))).sort((a, b) => a - b),
+    [playerQuotes]
+  );
+
+  // Consensus main line = most common point among over quotes
+  const consensusLine = useMemo(() => {
+    const counts = new Map<number, number>();
+    for (const q of playerQuotes) if (q.side === 'over') counts.set(q.point, (counts.get(q.point) ?? 0) + 1);
+    let best: number | null = null;
+    let bestN = 0;
+    for (const [pt, n] of counts) if (n > bestN) { best = pt; bestN = n; }
+    return best;
+  }, [playerQuotes]);
+
+  useEffect(() => {
+    if (consensusLine !== null) setLineInput(String(consensusLine));
+  }, [consensusLine]);
+
+  const line = Number(lineInput);
+  const hasLine = Number.isFinite(line) && lineInput !== '';
+
+  const bestAt = useCallback((pt: number, side: 'over' | 'under'): Quote | null => {
+    let best: Quote | null = null;
+    for (const q of playerQuotes) {
+      if (q.point !== pt || q.side !== side) continue;
+      if (!best || q.price > best.price) best = q;
+    }
+    return best;
+  }, [playerQuotes]);
+
+  // Auto-fill prices from the best book at the chosen line (editable after)
+  useEffect(() => {
+    if (!hasLine) return;
+    const over = bestAt(line, 'over');
+    const under = bestAt(line, 'under');
+    if (over) setOverPriceInput(String(over.price));
+    if (under) setUnderPriceInput(String(under.price));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [line, playerQuotes]);
+
+  // Market fair probability: devig each book quoting both sides at the line, take the median
+  const marketFair = useMemo(() => {
+    if (!hasLine) return null;
+    const byBook = new Map<string, { over?: number; under?: number }>();
+    for (const q of playerQuotes) {
+      if (q.point !== line) continue;
+      const b = byBook.get(q.book) ?? {};
+      b[q.side] = q.price;
+      byBook.set(q.book, b);
+    }
+    const fairs: number[] = [];
+    const rounds: number[] = [];
+    for (const b of byBook.values()) {
+      if (b.over !== undefined && b.under !== undefined) {
+        const d = devig(b.over, b.under);
+        fairs.push(d.pOver);
+        rounds.push(d.overround);
+      }
+    }
+    if (!fairs.length) {
+      // Manual fallback: devig the typed prices
+      const o = Number(overPriceInput);
+      const u = Number(underPriceInput);
+      if (Number.isFinite(o) && Number.isFinite(u) && o !== 0 && u !== 0 && overPriceInput && underPriceInput) {
+        const d = devig(o, u);
+        return { pOver: d.pOver, overround: d.overround, books: 0 };
+      }
+      return null;
+    }
+    return { pOver: medianOf(fairs), overround: medianOf(rounds), books: fairs.length };
+  }, [playerQuotes, line, hasLine, overPriceInput, underPriceInput]);
+
+  // ---------- pricing ----------
+
+  const projNum = Number(projection);
+  const hasProj = Number.isFinite(projNum) && projNum > 0;
+
+  const position = selectedPlayer?.position ?? marketDef.positions[0];
+  const posRef = reference?.markets?.[marketDef.key]?.[position] ?? null;
+  const leagueMult = posRef?.overall.multiplier ?? null;
+  const tierMult = useMemo(() => {
+    if (!posRef || !hasProj) return null;
+    const t = posRef.tiers.find((t) => projNum >= t.min && (t.max === null || projNum < t.max));
+    return t?.multiplier ?? null;
+  }, [posRef, hasProj, projNum]);
+
+  const sd = useMemo(() => {
+    if (sdMode === 'measured') return measured?.sd ?? null;
+    if (sdMode === 'league') return leagueMult !== null && hasProj ? leagueMult * projNum : null;
+    if (sdMode === 'tier') return tierMult !== null && hasProj ? tierMult * projNum : null;
+    const c = Number(sdCustom);
+    return Number.isFinite(c) && c > 0 ? c : null;
+  }, [sdMode, measured, leagueMult, tierMult, hasProj, projNum, sdCustom]);
+
+  const dist: Distribution = distMode === 'auto' ? marketDef.defaultDist : distMode;
+
+  const overPrice = Number(overPriceInput);
+  const hasOverPrice = Number.isFinite(overPrice) && overPrice !== 0 && overPriceInput !== '';
+
+  const result = useMemo(() => {
+    if (!hasProj || !sd || !hasLine) return null;
+    const pNormal = probOver(projNum, sd, line, 'normal');
+    const pLog = probOver(projNum, sd, line, 'lognormal');
+    const p = dist === 'normal' ? pNormal : pLog;
+    const be = hasOverPrice ? americanToProb(overPrice) : null;
+    return {
+      pNormal,
+      pLog,
+      p,
+      fair: probToAmerican(p),
+      breakeven: be,
+      edge: be !== null ? p - be : null,
+      ev: hasOverPrice ? expectedValue(p, overPrice) : null,
+      evUnder: hasOverPrice && underPriceInput && Number.isFinite(Number(underPriceInput))
+        ? expectedValue(1 - p, Number(underPriceInput))
+        : null,
+    };
+  }, [hasProj, projNum, sd, hasLine, line, dist, hasOverPrice, overPrice, underPriceInput]);
+
+  const ladder = useMemo(() => {
+    if (!hasProj || !sd) return [];
+    const lines = bookLines.length > 1 ? bookLines : syntheticLines(projNum, marketDef.ladderStep);
+    const book = new Map<number, { over: number | null; under: number | null }>();
+    for (const pt of lines) {
+      book.set(pt, { over: bestAt(pt, 'over')?.price ?? null, under: bestAt(pt, 'under')?.price ?? null });
+    }
+    return priceLadder(projNum, sd, dist, lines, book);
+  }, [hasProj, projNum, sd, dist, bookLines, marketDef.ladderStep, bestAt]);
+
+  const oddsPlayers = useMemo(() => Array.from(quotes.keys()).sort(), [quotes]);
+
+  // ---------- render ----------
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-900">
+      {/* Header */}
+      <div className="sticky top-0 z-10 bg-white/90 backdrop-blur border-b border-slate-200">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <div className="flex items-center justify-between gap-3 h-12">
+            <div className="flex items-center gap-0.5 min-w-0">
+              <button
+                onClick={() => router.push('/')}
+                aria-label="Back"
+                className="inline-flex items-center justify-center w-7 h-7 -ml-1.5 rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition"
+              >
+                <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
+              </button>
+              <h1 className="text-base font-bold tracking-tight truncate">Prop Pricer</h1>
+              {apiRemaining && (
+                <span className="ml-2 text-[10px] text-slate-400 whitespace-nowrap">API {apiRemaining} left</span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setShowData(!showData)} className={btnGhostCls}>
+                {showData ? 'Hide Data' : 'Data'}
+              </button>
+              <button onClick={() => router.push('/admin/power-ratings')} className={btnGhostCls}>
+                Power Ratings
+              </button>
+              <button onClick={() => router.push('/admin/bets')} className={`${btnGhostCls} hidden sm:inline-flex`}>
+                Bet Admin
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-4">
+        {error && <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{error}</div>}
+        {message && <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-sm text-emerald-700">{message}</div>}
+
+        {/* Data panel */}
+        {showData && (
+          <div className={`${cardCls} space-y-4`}>
+            <div>
+              <div className="text-sm font-semibold mb-2">Game Logs (nflverse weekly stats)</div>
+              <div className="flex flex-wrap gap-2">
+                {[2022, 2023, 2024, 2025, 2026].map((season) => {
+                  const count = syncCounts.find((s) => s.season === season)?.rows;
+                  return (
+                    <button
+                      key={season}
+                      onClick={() => handleSync(season)}
+                      disabled={syncing !== null}
+                      className={`${btnGhostCls} flex items-center gap-1.5`}
+                    >
+                      {syncing === season ? 'Syncing…' : `Sync ${season}`}
+                      {count !== undefined && (
+                        <span className="text-[10px] text-slate-400">{count.toLocaleString()}</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="text-xs text-slate-400 mt-1.5">
+                Run each season once; re-run the current season weekly during the year. Requires the sql/nfl_props.sql tables.
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="text-sm font-semibold">SD Multiplier Reference</div>
+                <button onClick={handleRecomputeReference} disabled={refComputing} className={btnCls}>
+                  {refComputing ? 'Computing…' : 'Recompute'}
+                </button>
+                {reference && (
+                  <span className="text-xs text-slate-400">
+                    seasons {reference.seasons.join(', ')} · {new Date(reference.computedAt).toLocaleDateString()}
+                  </span>
+                )}
+              </div>
+              {reference ? (
+                <div className="overflow-x-auto">
+                  <table className="text-xs w-full">
+                    <thead>
+                      <tr className="text-left text-slate-500 uppercase tracking-wide">
+                        <th className="py-1 pr-3">Market</th>
+                        <th className="py-1 pr-3">Pos</th>
+                        <th className="py-1 pr-3 text-right">Multiplier</th>
+                        <th className="py-1 pr-3 text-right">n</th>
+                        <th className="py-1 pr-3">Tiers (per-game mean)</th>
+                        <th className="py-1 text-right">Mean&gt;Median</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {PROP_MARKETS.flatMap((m) =>
+                        m.positions.map((pos) => {
+                          const r = reference.markets[m.key]?.[pos];
+                          if (!r) return null;
+                          return (
+                            <tr key={`${m.key}-${pos}`} className="border-t border-slate-100">
+                              <td className="py-1 pr-3">{m.label}</td>
+                              <td className="py-1 pr-3">{pos}</td>
+                              <td className="py-1 pr-3 text-right tabular-nums font-semibold">
+                                {r.overall.multiplier ?? '—'}
+                              </td>
+                              <td className="py-1 pr-3 text-right tabular-nums text-slate-400">{r.overall.n}</td>
+                              <td className="py-1 pr-3 text-slate-500">
+                                {r.tiers.map((t) => `${t.label}: ${t.multiplier ?? '—'} (${t.n})`).join(' · ')}
+                              </td>
+                              <td className="py-1 text-right tabular-nums text-slate-500">
+                                {r.meanAboveMedianPct !== null ? `${r.meanAboveMedianPct}%` : '—'}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-xs text-slate-400">No reference yet — sync seasons, then Recompute.</div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Game / market / player selection */}
+        <div className={`${cardCls} space-y-3`}>
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <label className={labelCls}>League</label>
+              <div className="flex rounded-lg border border-slate-200 overflow-hidden">
+                {NFL_SPORTS.map((s) => (
+                  <button
+                    key={s.key}
+                    onClick={() => setSportKey(s.key)}
+                    className={`px-3 py-2 text-xs font-medium transition ${
+                      sportKey === s.key ? 'bg-[#0052ff] text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex-1 min-w-[220px]">
+              <label className={labelCls}>Game {eventsLoading && '(loading…)'}</label>
+              <select value={eventId} onChange={(e) => setEventId(e.target.value)} className={fieldCls}>
+                <option value="">Select game…</option>
+                {events.map((ev) => (
+                  <option key={ev.id} value={ev.id}>
+                    {ev.away_team} @ {ev.home_team} —{' '}
+                    {new Date(ev.commence_time).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>Market</label>
+              <select value={marketKey} onChange={(e) => setMarketKey(e.target.value)} className={fieldCls}>
+                {PROP_MARKETS.map((m) => (
+                  <option key={m.key} value={m.key}>{m.label}</option>
+                ))}
+              </select>
+            </div>
+            <button onClick={() => loadOdds(false)} disabled={!eventId || oddsLoading} className={btnCls}>
+              {oddsLoading ? 'Loading…' : 'Load Odds'}
+            </button>
+            {marketDef.oddsApiAltKey && (
+              <button
+                onClick={() => loadOdds(true)}
+                disabled={!eventId || oddsLoading || altLoaded}
+                className={btnGhostCls}
+                title="Also fetch alternate lines (extra Odds API cost)"
+              >
+                {altLoaded ? 'Alts Loaded' : '+ Alt Lines'}
+              </button>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-end gap-3">
+            {oddsPlayers.length > 0 && (
+              <div className="flex-1 min-w-[200px]">
+                <label className={labelCls}>Player (from odds — {oddsPlayers.length})</label>
+                <select value={oddsPlayer} onChange={(e) => pickOddsPlayer(e.target.value)} className={fieldCls}>
+                  <option value="">Select player…</option>
+                  {oddsPlayers.map((p) => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <div className="flex-1 min-w-[200px] relative">
+              <label className={labelCls}>Or search game logs</label>
+              <input
+                value={playerSearch}
+                onChange={(e) => setPlayerSearch(e.target.value)}
+                placeholder="Josh Jacobs…"
+                className={fieldCls}
+              />
+              {playerSearch.trim().length >= 2 && playerResults.length > 0 && (
+                <div className="absolute z-20 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-56 overflow-auto">
+                  {playerResults.map((p) => (
+                    <button
+                      key={p.player_id}
+                      onClick={() => { selectPlayer(p); setPlayerSearch(''); }}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex justify-between"
+                    >
+                      <span>{p.player_name}</span>
+                      <span className="text-xs text-slate-400">{p.position} · {p.team} · {p.last_season}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {selectedPlayer && (
+              <div className="text-sm px-3 py-2 bg-slate-100 rounded-lg">
+                <span className="font-semibold">{selectedPlayer.player_name}</span>{' '}
+                <span className="text-slate-500 text-xs">{selectedPlayer.position} · {selectedPlayer.team}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Measured distribution */}
+        {selectedPlayer && (
+          <div className={`${cardCls} space-y-3`}>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="text-sm font-semibold">Measured — {marketDef.label}</div>
+              {gamesLoading && <span className="text-xs text-slate-400">loading game logs…</span>}
+              <div className="flex gap-1.5">
+                {availableSeasons.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() =>
+                      setSeasonsSelected((prev) =>
+                        prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]
+                      )
+                    }
+                    className={`px-2.5 py-1 text-xs rounded-full font-medium transition ${
+                      seasonsSelected.includes(s)
+                        ? 'bg-[#0052ff] text-white'
+                        : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                    }`}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+              <label className="flex items-center gap-1.5 text-xs text-slate-600">
+                <input type="checkbox" checked={includePost} onChange={(e) => setIncludePost(e.target.checked)} />
+                Include playoffs
+              </label>
+              <label className="flex items-center gap-1.5 text-xs text-slate-600">
+                Min {marketDef.opportunityStat}
+                <input
+                  value={minOpp}
+                  onChange={(e) => setMinOpp(e.target.value)}
+                  inputMode="numeric"
+                  className="w-12 px-2 py-1 text-xs border border-slate-200 rounded-lg"
+                />
+              </label>
+            </div>
+
+            {measured ? (
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 text-center">
+                {[
+                  ['Games', String(measured.games)],
+                  ['Mean', measured.mean.toFixed(1)],
+                  ['Median', measured.median.toFixed(1)],
+                  ['SD', measured.sd.toFixed(1)],
+                  ['SD/Mean', measured.cv.toFixed(2)],
+                  [`${marketDef.opportunityStat}/g`, measured.oppMean.toFixed(1)],
+                ].map(([label, val]) => (
+                  <div key={label} className="bg-slate-50 rounded-lg py-2">
+                    <div className="text-[10px] uppercase tracking-wide text-slate-400">{label}</div>
+                    <div className="text-sm font-semibold tabular-nums">{val}</div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              !gamesLoading && (
+                <div className="text-xs text-slate-400">
+                  Not enough games in the selected window (need 2+).
+                </div>
+              )
+            )}
+
+            {measured && measured.mean > measured.median && (
+              <div className="text-xs text-amber-600">
+                Mean &gt; median by {(measured.mean - measured.median).toFixed(1)} — right skew present; the
+                lognormal number is the honest one at the main line.
+              </div>
+            )}
+            {leagueMult !== null && (
+              <div className="text-xs text-slate-400">
+                League {position} multiplier {leagueMult}
+                {tierMult !== null && ` · tier ${tierMult}`}
+                {measured && ` · this player ${measured.cv.toFixed(2)}`}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Pricing */}
+        {(selectedPlayer || playerQuotes.length > 0) && (
+          <div className={`${cardCls} space-y-4`}>
+            <div className="text-sm font-semibold">Price It</div>
+
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="w-28">
+                <label className={labelCls}>Projection</label>
+                <input value={projection} onChange={(e) => setProjection(e.target.value)} inputMode="decimal" className={fieldCls} />
+              </div>
+              <div>
+                <label className={labelCls}>SD source</label>
+                <div className="flex rounded-lg border border-slate-200 overflow-hidden">
+                  {([
+                    ['measured', measured ? `Measured ${measured.sd.toFixed(1)}` : 'Measured'],
+                    ['league', leagueMult !== null && hasProj ? `League ${(leagueMult * projNum).toFixed(1)}` : 'League'],
+                    ['tier', tierMult !== null && hasProj ? `Tier ${(tierMult * projNum).toFixed(1)}` : 'Tier'],
+                    ['custom', 'Custom'],
+                  ] as const).map(([mode, label]) => (
+                    <button
+                      key={mode}
+                      onClick={() => setSdMode(mode)}
+                      className={`px-2.5 py-2 text-xs font-medium transition whitespace-nowrap ${
+                        sdMode === mode ? 'bg-[#0052ff] text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {sdMode === 'custom' && (
+                <div className="w-24">
+                  <label className={labelCls}>SD</label>
+                  <input value={sdCustom} onChange={(e) => setSdCustom(e.target.value)} inputMode="decimal" className={fieldCls} />
+                </div>
+              )}
+              <div>
+                <label className={labelCls}>Distribution</label>
+                <div className="flex rounded-lg border border-slate-200 overflow-hidden">
+                  {([
+                    ['auto', `Auto (${marketDef.defaultDist === 'lognormal' ? 'Log' : 'Norm'})`],
+                    ['normal', 'Normal'],
+                    ['lognormal', 'Lognormal'],
+                  ] as const).map(([mode, label]) => (
+                    <button
+                      key={mode}
+                      onClick={() => setDistMode(mode)}
+                      className={`px-2.5 py-2 text-xs font-medium transition ${
+                        distMode === mode ? 'bg-[#0052ff] text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="w-24">
+                <label className={labelCls}>Line</label>
+                {bookLines.length > 0 ? (
+                  <select value={lineInput} onChange={(e) => setLineInput(e.target.value)} className={fieldCls}>
+                    {bookLines.map((l) => (
+                      <option key={l} value={l}>{l}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input value={lineInput} onChange={(e) => setLineInput(e.target.value)} inputMode="decimal" placeholder="72.5" className={fieldCls} />
+                )}
+              </div>
+              <div className="w-24">
+                <label className={labelCls}>Over price</label>
+                <input value={overPriceInput} onChange={(e) => setOverPriceInput(e.target.value)} inputMode="numeric" placeholder="-120" className={fieldCls} />
+              </div>
+              <div className="w-24">
+                <label className={labelCls}>Under price</label>
+                <input value={underPriceInput} onChange={(e) => setUnderPriceInput(e.target.value)} inputMode="numeric" placeholder="-102" className={fieldCls} />
+              </div>
+            </div>
+
+            {result && sd !== null && (
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 text-center">
+                  <div className="bg-slate-50 rounded-lg py-2.5">
+                    <div className="text-[10px] uppercase tracking-wide text-slate-400">P(Over) Normal</div>
+                    <div className={`text-sm tabular-nums ${dist === 'normal' ? 'font-bold' : 'text-slate-500'}`}>
+                      {fmtPct(result.pNormal)}
+                    </div>
+                  </div>
+                  <div className="bg-slate-50 rounded-lg py-2.5">
+                    <div className="text-[10px] uppercase tracking-wide text-slate-400">P(Over) Lognormal</div>
+                    <div className={`text-sm tabular-nums ${dist === 'lognormal' ? 'font-bold' : 'text-slate-500'}`}>
+                      {fmtPct(result.pLog)}
+                    </div>
+                  </div>
+                  <div className="bg-slate-50 rounded-lg py-2.5">
+                    <div className="text-[10px] uppercase tracking-wide text-slate-400">Model Fair</div>
+                    <div className="text-sm font-semibold tabular-nums">{fmtAmerican(result.fair)}</div>
+                  </div>
+                  <div className="bg-slate-50 rounded-lg py-2.5">
+                    <div className="text-[10px] uppercase tracking-wide text-slate-400">Breakeven</div>
+                    <div className="text-sm tabular-nums">{fmtPct(result.breakeven)}</div>
+                  </div>
+                  <div className="bg-slate-50 rounded-lg py-2.5">
+                    <div className="text-[10px] uppercase tracking-wide text-slate-400">Market Fair</div>
+                    <div className="text-sm tabular-nums">
+                      {marketFair ? fmtPct(marketFair.pOver) : '—'}
+                      {marketFair && marketFair.books > 0 && (
+                        <span className="text-[10px] text-slate-400"> ({marketFair.books}bk)</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="bg-slate-50 rounded-lg py-2.5">
+                    <div className="text-[10px] uppercase tracking-wide text-slate-400">Overround</div>
+                    <div className="text-sm tabular-nums">{marketFair ? fmtPct(marketFair.overround) : '—'}</div>
+                  </div>
+                  <div className={`rounded-lg py-2.5 ${result.ev !== null && result.ev > 0 ? 'bg-emerald-50' : 'bg-slate-50'}`}>
+                    <div className="text-[10px] uppercase tracking-wide text-slate-400">EV (Over)</div>
+                    <div className={`text-sm tabular-nums ${evCls(result.ev)}`}>
+                      {result.ev !== null ? `${result.ev > 0 ? '+' : ''}${(result.ev * 100).toFixed(1)}%` : '—'}
+                    </div>
+                  </div>
+                </div>
+
+                {marketFair && Math.abs(result.p - marketFair.pOver) > 0.12 && (
+                  <div className="text-xs text-amber-600">
+                    Your number is {fmtPct(Math.abs(result.p - marketFair.pOver))} from the market&apos;s fair
+                    number — more likely you&apos;re missing something than the whole market is.
+                  </div>
+                )}
+                {result.evUnder !== null && result.evUnder > 0 && (
+                  <div className="text-xs text-slate-500">
+                    Under shows {`+${(result.evUnder * 100).toFixed(1)}%`} at {fmtAmerican(Number(underPriceInput))}.
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Ladder */}
+            {ladder.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Ladder — {dist}
+                  </div>
+                  {bookLines.length <= 1 && (
+                    <span className="text-[10px] text-slate-400">synthetic lines (load alt lines for book prices)</span>
+                  )}
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-left text-slate-500 uppercase tracking-wide">
+                        <th className="py-1.5 pr-3">Line</th>
+                        <th className="py-1.5 pr-3 text-right">P(Over)</th>
+                        <th className="py-1.5 pr-3 text-right">Fair</th>
+                        <th className="py-1.5 pr-3 text-right">Best Over</th>
+                        <th className="py-1.5 pr-3 text-right">EV Over</th>
+                        <th className="py-1.5 pr-3 text-right">Best Under</th>
+                        <th className="py-1.5 text-right">EV Under</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ladder.map((r) => {
+                        const overQ = bestAt(r.line, 'over');
+                        const underQ = bestAt(r.line, 'under');
+                        return (
+                          <tr
+                            key={r.line}
+                            className={`border-t border-slate-100 ${hasLine && r.line === line ? 'bg-blue-50/60' : ''}`}
+                          >
+                            <td className="py-1.5 pr-3 font-medium tabular-nums">{r.line}</td>
+                            <td className="py-1.5 pr-3 text-right tabular-nums">{fmtPct(r.pOver)}</td>
+                            <td className="py-1.5 pr-3 text-right tabular-nums text-slate-500">{fmtAmerican(r.fairOver)}</td>
+                            <td className="py-1.5 pr-3 text-right tabular-nums">
+                              {fmtAmerican(r.overOdds)}
+                              {overQ && <span className="text-[10px] text-slate-400"> {overQ.book}</span>}
+                            </td>
+                            <td className={`py-1.5 pr-3 text-right tabular-nums ${evCls(r.overEv)}`}>
+                              {r.overEv !== null ? `${r.overEv > 0 ? '+' : ''}${(r.overEv * 100).toFixed(1)}%` : '—'}
+                            </td>
+                            <td className="py-1.5 pr-3 text-right tabular-nums">
+                              {fmtAmerican(r.underOdds)}
+                              {underQ && <span className="text-[10px] text-slate-400"> {underQ.book}</span>}
+                            </td>
+                            <td className={`py-1.5 text-right tabular-nums ${evCls(r.underEv)}`}>
+                              {r.underEv !== null ? `${r.underEv > 0 ? '+' : ''}${(r.underEv * 100).toFixed(1)}%` : '—'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="text-[11px] text-slate-400 pb-6">
+          Projection = mean; the market prices the median. Yardage props are right-skewed, so at the main line the
+          over is worse than the symmetric math says — deep alt overs can be better. Multipliers derived from
+          nflverse game logs (median SD/mean across qualifying player-seasons, 8+ games, real role).
+        </div>
+      </div>
+    </div>
+  );
+}

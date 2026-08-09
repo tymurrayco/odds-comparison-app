@@ -92,16 +92,20 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const sport = searchParams.get('sport');
   const eventId = searchParams.get('eventId');
-  
+  // Optional explicit market list (e.g. alternate lines for the prop pricer)
+  const marketsOverride = searchParams.get('markets');
+
   if (!sport) {
     return NextResponse.json({ error: 'Missing sport parameter' }, { status: 400 });
   }
 
   const apiKey = process.env.ODDS_API_KEY;
-  
+
   // If eventId is provided, fetch props for that specific event
   if (eventId) {
-    const markets = PROP_MARKETS[sport];
+    const markets = marketsOverride
+      ? marketsOverride.split(',').map((m) => m.trim()).filter(Boolean)
+      : PROP_MARKETS[sport];
     if (!markets || markets.length === 0) {
       return NextResponse.json({ error: 'No prop markets available for this sport' }, { status: 400 });
     }
