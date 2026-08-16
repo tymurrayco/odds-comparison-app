@@ -5,7 +5,7 @@
 // devigged market fair, EV, and a full alt-line ladder. Methodology: mean ≠
 // median (yardage props are right-skewed → lognormal at the main line).
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   probOver, probToAmerican, americanToProb, devig, expectedValue,
@@ -292,6 +292,110 @@ export default function PropsAdminPage() {
     resetOddsSelection();
     setProjectionEdited(false);
   }, [marketKey, resetOddsSelection]);
+
+  // ---------- refresh persistence ----------
+  // Selections and inputs survive a page refresh via localStorage. Quotes and
+  // event lists are NOT persisted (they go stale and re-fetching burns Odds
+  // API credits) — the player, market, measurement window, and every Price It
+  // input come back; reload odds manually when needed.
+  interface SavedPricerState {
+    sportKey?: string;
+    marketKey?: string;
+    player?: PlayerSearchResult | null;
+    seasonsSelected?: number[];
+    includePost?: boolean;
+    minOpp?: string;
+    projection?: string;
+    projectionEdited?: boolean;
+    sdMode?: 'measured' | 'league' | 'tier' | 'custom';
+    sdCustom?: string;
+    distMode?: 'auto' | Distribution;
+    lineInput?: string;
+    overPriceInput?: string;
+    underPriceInput?: string;
+  }
+  const PERSIST_KEY = 'prop-pricer-v1';
+  const pendingRestoreRef = useRef<SavedPricerState | null>(null);
+  const hydratedRef = useRef(false);
+
+  // Phase 1 (mount): read saved state, set the selection tuple, and start the
+  // player-log fetch. The input fields are NOT applied here — the sport/market
+  // reset effects above fire when those keys change and would clobber them.
+  useEffect(() => {
+    let saved: SavedPricerState | null = null;
+    try {
+      const raw = localStorage.getItem(PERSIST_KEY);
+      if (raw) saved = JSON.parse(raw) as SavedPricerState;
+    } catch { /* corrupted state — start fresh */ }
+    if (!saved || (!saved.player && !saved.marketKey)) {
+      hydratedRef.current = true;
+      return;
+    }
+    pendingRestoreRef.current = saved;
+    if (saved.sportKey) setSportKey(saved.sportKey);
+    if (saved.marketKey) setMarketKey(saved.marketKey);
+    const p = saved.player;
+    const savedSeasons = saved.seasonsSelected;
+    if (p) {
+      setSelectedPlayer(p);
+      setGamesLoading(true);
+      (async () => {
+        try {
+          const res = await fetch(`/api/nfl-props/players?playerId=${encodeURIComponent(p.player_id)}`);
+          const json = await res.json();
+          if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+          const games: PlayerGameLog[] = json.games ?? [];
+          setPlayerGames(games);
+          const seasons = Array.from(new Set(games.map((g) => g.season))).sort((a, b) => b - a);
+          setSeasonsSelected(savedSeasons?.length ? savedSeasons : seasons.slice(0, 1));
+        } catch (e) {
+          setError(e instanceof Error ? e.message : 'Failed to restore game logs');
+        } finally {
+          setGamesLoading(false);
+        }
+      })();
+    }
+  }, []);
+
+  // Phase 2: once the restored sport/market keys have committed (so their
+  // reset effects, declared ABOVE, have already fired this commit), re-apply
+  // the inputs. Declaration order after those effects makes this deterministic.
+  useEffect(() => {
+    const s = pendingRestoreRef.current;
+    if (!s) return;
+    if (s.marketKey && marketKey !== s.marketKey) return; // not committed yet
+    if (s.sportKey && sportKey !== s.sportKey) return;
+    pendingRestoreRef.current = null;
+    if (s.includePost !== undefined) setIncludePost(s.includePost);
+    if (s.minOpp !== undefined) setMinOpp(s.minOpp);
+    if (s.sdMode) setSdMode(s.sdMode);
+    if (s.sdCustom !== undefined) setSdCustom(s.sdCustom);
+    if (s.distMode) setDistMode(s.distMode);
+    if (s.lineInput !== undefined) setLineInput(s.lineInput);
+    if (s.overPriceInput !== undefined) setOverPriceInput(s.overPriceInput);
+    if (s.underPriceInput !== undefined) setUnderPriceInput(s.underPriceInput);
+    if (s.projectionEdited && s.projection) {
+      setProjection(s.projection);
+      setProjectionEdited(true); // hand-typed projection survives; defaults re-derive otherwise
+    }
+    hydratedRef.current = true;
+  }, [marketKey, sportKey]);
+
+  // Save on every change once hydration is done (so the initial empty render
+  // never overwrites a saved session).
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    try {
+      localStorage.setItem(PERSIST_KEY, JSON.stringify({
+        sportKey, marketKey, player: selectedPlayer,
+        seasonsSelected, includePost, minOpp,
+        projection, projectionEdited, sdMode, sdCustom, distMode,
+        lineInput, overPriceInput, underPriceInput,
+      } satisfies SavedPricerState));
+    } catch { /* storage full/blocked — non-blocking */ }
+  }, [sportKey, marketKey, selectedPlayer, seasonsSelected, includePost, minOpp,
+      projection, projectionEdited, sdMode, sdCustom, distMode,
+      lineInput, overPriceInput, underPriceInput]);
 
   // ---------- player logs ----------
 
