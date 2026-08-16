@@ -86,6 +86,17 @@ const normName = (s: string): string =>
 const fmtPct = (p: number | null | undefined, dp = 1): string =>
   p === null || p === undefined || Number.isNaN(p) ? '—' : `${(p * 100).toFixed(dp)}%`;
 
+// ---- team theming (page tints to the selected player's team) ----
+const normalizeTeamKey = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+// nflverse team codes that differ from ESPN abbreviations
+const TEAM_CODE_ALIASES: Record<string, string> = { LA: 'LAR', WAS: 'WSH', JAC: 'JAX' };
+const hexToRgba = (hex: string, alpha: number): string => {
+  const h = hex.replace('#', '').trim();
+  if (h.length !== 6) return `rgba(0,0,0,${alpha})`;
+  return `rgba(${parseInt(h.slice(0, 2), 16)},${parseInt(h.slice(2, 4), 16)},${parseInt(h.slice(4, 6), 16)},${alpha})`;
+};
+interface TeamTheme { color: string; logo: string }
+
 const evCls = (ev: number | null): string =>
   ev === null ? 'text-slate-400'
     : ev > 0.02 ? 'text-emerald-600 font-semibold'
@@ -133,6 +144,32 @@ export default function PropsAdminPage() {
   // Per-game manual excludes (uncheck a row in the game log) + log visibility
   const [excludedGames, setExcludedGames] = useState<Set<string>>(new Set());
   const [showGameLog, setShowGameLog] = useState(false);
+
+  // Team theme: page tints to the selected player's team colors. The NFL
+  // team map (ESPN colors/logos) is fetched once and cached for the session.
+  const [teamTheme, setTeamTheme] = useState<TeamTheme | null>(null);
+  const teamMapRef = useRef<Record<string, { color: string; logo: string }> | null>(null);
+  useEffect(() => {
+    if (!selectedPlayer?.team) { setTeamTheme(null); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        if (!teamMapRef.current) {
+          const resp = await fetch('/api/bet-team-logos?league=NFL');
+          if (!resp.ok) return;
+          teamMapRef.current = (await resp.json()).teams ?? {};
+        }
+        const code = selectedPlayer.team.toUpperCase();
+        const info = teamMapRef.current?.[normalizeTeamKey(TEAM_CODE_ALIASES[code] ?? code)];
+        if (!cancelled) setTeamTheme(info?.color ? { color: info.color, logo: info.logo } : null);
+      } catch { /* theming is cosmetic — never block */ }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedPlayer]);
+
+  const themedCard = teamTheme
+    ? { borderTop: `3px solid #${teamTheme.color}` }
+    : undefined;
 
   // Pricing inputs
   const [projection, setProjection] = useState('');
@@ -687,9 +724,17 @@ export default function PropsAdminPage() {
   // ---------- render ----------
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
+    <div
+      className="min-h-screen bg-slate-50 text-slate-900"
+      style={teamTheme ? {
+        backgroundImage: `linear-gradient(180deg, ${hexToRgba(teamTheme.color, 0.08)} 0%, rgba(248,250,252,0) 260px)`,
+      } : undefined}
+    >
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-white/90 backdrop-blur border-b border-slate-200">
+      <div
+        className="sticky top-0 z-10 bg-white/90 backdrop-blur border-b border-slate-200"
+        style={teamTheme ? { borderBottom: `2px solid #${teamTheme.color}` } : undefined}
+      >
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between gap-3 h-12">
             <div className="flex items-center gap-0.5 min-w-0">
@@ -813,7 +858,7 @@ export default function PropsAdminPage() {
         {/* Player-first selection: pick the player, toggle through his
             markets (instant — logs carry every stat), then optionally attach
             book quotes below. */}
-        <div className={`${cardCls} space-y-3`}>
+        <div className={`${cardCls} space-y-3`} style={themedCard}>
           <div className="flex flex-wrap items-end gap-3">
             <div className="flex-1 min-w-[220px] relative">
               <label className={labelCls}>Player</label>
@@ -839,7 +884,17 @@ export default function PropsAdminPage() {
               )}
             </div>
             {selectedPlayer && (
-              <div className="text-sm px-3 py-2 bg-slate-100 rounded-lg">
+              <div
+                className="flex items-center gap-2 text-sm px-3 py-2 rounded-lg bg-slate-100"
+                style={teamTheme ? {
+                  background: hexToRgba(teamTheme.color, 0.1),
+                  border: `1px solid ${hexToRgba(teamTheme.color, 0.35)}`,
+                } : undefined}
+              >
+                {teamTheme?.logo && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={teamTheme.logo} alt="" className="h-5 w-5 object-contain" />
+                )}
                 <span className="font-semibold">{selectedPlayer.player_name}</span>{' '}
                 <span className="text-slate-500 text-xs">{selectedPlayer.position} · {selectedPlayer.team}</span>
               </div>
@@ -925,7 +980,7 @@ export default function PropsAdminPage() {
 
         {/* Measured distribution */}
         {selectedPlayer && (
-          <div className={`${cardCls} space-y-3`}>
+          <div className={`${cardCls} space-y-3`} style={themedCard}>
             <div className="flex flex-wrap items-center gap-3">
               <div className="text-sm font-semibold">Measured — {marketDef.label}</div>
               {gamesLoading && <span className="text-xs text-slate-400">loading game logs…</span>}
@@ -1092,7 +1147,7 @@ export default function PropsAdminPage() {
 
         {/* Pricing */}
         {(selectedPlayer || playerQuotes.length > 0) && (
-          <div className={`${cardCls} space-y-4`}>
+          <div className={`${cardCls} space-y-4`} style={themedCard}>
             <div className="text-sm font-semibold">Price It</div>
 
             <div className="flex flex-wrap items-end gap-3">
