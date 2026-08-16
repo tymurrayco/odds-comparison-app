@@ -733,10 +733,11 @@ export default function PropsAdminPage() {
       pLog,
       p,
       fair: probToAmerican(p),
+      fairUnder: probToAmerican(1 - p),
       breakeven: be,
       edge: be !== null ? p - be : null,
       ev: overPrice !== null ? expectedValue(p, overPrice) : null,
-      evUnder: overPrice !== null && underPrice !== null ? expectedValue(1 - p, underPrice) : null,
+      evUnder: underPrice !== null ? expectedValue(1 - p, underPrice) : null,
     };
   }, [hasProj, projNum, sd, hasLine, line, dist, overPrice, underPrice]);
 
@@ -1377,7 +1378,7 @@ export default function PropsAdminPage() {
 
             {result && sd !== null && (
               <>
-                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 text-center">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 text-center">
                   <div className="bg-slate-50 rounded-lg py-2.5">
                     <div className="text-[10px] uppercase tracking-wide text-slate-400">P(Over) Balanced</div>
                     <div className={`text-sm tabular-nums ${dist === 'normal' ? 'font-bold' : 'text-slate-500'}`}>
@@ -1391,8 +1392,12 @@ export default function PropsAdminPage() {
                     </div>
                   </div>
                   <div className="bg-slate-50 rounded-lg py-2.5">
-                    <div className="text-[10px] uppercase tracking-wide text-slate-400">Model Fair</div>
+                    <div className="text-[10px] uppercase tracking-wide text-slate-400">Fair Over</div>
                     <div className="text-sm font-semibold tabular-nums">{fmtAmerican(result.fair)}</div>
+                  </div>
+                  <div className="bg-slate-50 rounded-lg py-2.5">
+                    <div className="text-[10px] uppercase tracking-wide text-slate-400">Fair Under</div>
+                    <div className="text-sm font-semibold tabular-nums">{fmtAmerican(result.fairUnder)}</div>
                   </div>
                   <div className="bg-slate-50 rounded-lg py-2.5">
                     <div className="text-[10px] uppercase tracking-wide text-slate-400">Breakeven</div>
@@ -1417,17 +1422,18 @@ export default function PropsAdminPage() {
                       {result.ev !== null ? `${result.ev > 0 ? '+' : ''}${(result.ev * 100).toFixed(1)}%` : '—'}
                     </div>
                   </div>
+                  <div className={`rounded-lg py-2.5 ${result.evUnder !== null && result.evUnder > 0 ? 'bg-emerald-50' : 'bg-slate-50'}`}>
+                    <div className="text-[10px] uppercase tracking-wide text-slate-400">EV (Under)</div>
+                    <div className={`text-sm tabular-nums ${evCls(result.evUnder)}`}>
+                      {result.evUnder !== null ? `${result.evUnder > 0 ? '+' : ''}${(result.evUnder * 100).toFixed(1)}%` : '—'}
+                    </div>
+                  </div>
                 </div>
 
                 {marketFair && Math.abs(result.p - marketFair.pOver) > 0.12 && (
                   <div className="text-xs text-amber-600">
                     Your number is {fmtPct(Math.abs(result.p - marketFair.pOver))} from the market&apos;s fair
                     number — more likely you&apos;re missing something than the whole market is.
-                  </div>
-                )}
-                {result.evUnder !== null && result.evUnder > 0 && (
-                  <div className="text-xs text-slate-500">
-                    Under shows {`+${(result.evUnder * 100).toFixed(1)}%`} at {fmtAmerican(underPrice)}.
                   </div>
                 )}
               </>

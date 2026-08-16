@@ -243,20 +243,20 @@ export default function DistributionChart({ values, mean, sd, line, dist, unit }
               <line x1={model.x(hover.v)} x2={model.x(hover.v)} y1={M.top} y2={H - M.bottom} stroke={INK_MUTED} strokeWidth={1} />
               {(() => {
                 const onLeft = model.x(hover.v) > width / 2;
-                const bx = onLeft ? model.x(hover.v) - 186 : model.x(hover.v) + 8;
+                const bx = onLeft ? model.x(hover.v) - 224 : model.x(hover.v) + 8;
                 return (
                   <g>
-                    <rect x={bx} y={M.top} width={178} height={46} rx={6} fill="white" stroke="#e2e8f0" />
+                    <rect x={bx} y={M.top} width={216} height={46} rx={6} fill="white" stroke="#e2e8f0" />
                     <text x={bx + 8} y={M.top + 14} fontSize={10} fontWeight={600} fill={INK}>
                       over {hover.v.toFixed(1)} {unit}
                     </text>
                     <text x={bx + 8} y={M.top + 27} fontSize={10} fill={INK}>
                       <tspan fill={COLOR_NORMAL}>●</tspan> Balanced {(hover.p.normal * 100).toFixed(1)}%
-                      <tspan fill={INK_MUTED}> · fair {fairOdds(hover.p.normal)}</tspan>
+                      <tspan fill={INK_MUTED}> · O {fairOdds(hover.p.normal)} U {fairOdds(1 - hover.p.normal)}</tspan>
                     </text>
                     <text x={bx + 8} y={M.top + 40} fontSize={10} fill={INK}>
                       <tspan fill={COLOR_LOGNORMAL}>●</tspan> Boom/Bust {(hover.p.lognormal * 100).toFixed(1)}%
-                      <tspan fill={INK_MUTED}> · fair {fairOdds(hover.p.lognormal)}</tspan>
+                      <tspan fill={INK_MUTED}> · O {fairOdds(hover.p.lognormal)} U {fairOdds(1 - hover.p.lognormal)}</tspan>
                     </text>
                   </g>
                 );
