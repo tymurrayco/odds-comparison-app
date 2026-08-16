@@ -857,8 +857,8 @@ export default function PropsAdminPage() {
                 <div className="flex rounded-lg border border-slate-200 overflow-hidden">
                   {([
                     ['measured', measured ? `Measured ${measured.sd.toFixed(1)}` : 'Measured'],
-                    ['league', leagueMult !== null && hasProj ? `League ${(leagueMult * projNum).toFixed(1)}` : 'League'],
                     ['tier', tierMult !== null && hasProj ? `Tier ${(tierMult * projNum).toFixed(1)}` : 'Tier'],
+                    ['league', leagueMult !== null && hasProj ? `League ${(leagueMult * projNum).toFixed(1)}` : 'League'],
                     ['custom', 'Custom'],
                   ] as const).map(([mode, label]) => (
                     <button
@@ -872,6 +872,16 @@ export default function PropsAdminPage() {
                     </button>
                   ))}
                 </div>
+                {sdMode !== 'custom' && (
+                  <div className="mt-1 max-w-[300px] text-[11px] leading-snug text-slate-400">
+                    {sdMode === 'measured' &&
+                      `This player's own game-to-game swings${measured ? ` (${measured.values.length} games)` : ''} — best when he has real history.`}
+                    {sdMode === 'tier' &&
+                      'Volatility of players at a similar projected volume — the right fallback for rookies and new roles.'}
+                    {sdMode === 'league' &&
+                      `One blended multiplier for all ${position}s — coarse backstop: runs wide for stars, tight for role players.`}
+                  </div>
+                )}
               </div>
               {sdMode === 'custom' && (
                 <div className="w-24">
