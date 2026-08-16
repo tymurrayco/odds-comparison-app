@@ -129,6 +129,7 @@ export default function PropsAdminPage() {
   const [seasonsSelected, setSeasonsSelected] = useState<number[]>([]);
   const [includePost, setIncludePost] = useState(false);
   const [minOpp, setMinOpp] = useState('0');
+  const [excludeZero, setExcludeZero] = useState(false);
 
   // Pricing inputs
   const [projection, setProjection] = useState('');
@@ -305,6 +306,7 @@ export default function PropsAdminPage() {
     seasonsSelected?: number[];
     includePost?: boolean;
     minOpp?: string;
+    excludeZero?: boolean;
     projection?: string;
     projectionEdited?: boolean;
     sdMode?: 'measured' | 'league' | 'tier' | 'custom';
@@ -368,6 +370,7 @@ export default function PropsAdminPage() {
     pendingRestoreRef.current = null;
     if (s.includePost !== undefined) setIncludePost(s.includePost);
     if (s.minOpp !== undefined) setMinOpp(s.minOpp);
+    if (s.excludeZero !== undefined) setExcludeZero(s.excludeZero);
     if (s.sdMode) setSdMode(s.sdMode);
     if (s.sdCustom !== undefined) setSdCustom(s.sdCustom);
     if (s.distMode) setDistMode(s.distMode);
@@ -388,12 +391,12 @@ export default function PropsAdminPage() {
     try {
       localStorage.setItem(PERSIST_KEY, JSON.stringify({
         sportKey, marketKey, player: selectedPlayer,
-        seasonsSelected, includePost, minOpp,
+        seasonsSelected, includePost, minOpp, excludeZero,
         projection, projectionEdited, sdMode, sdCustom, distMode,
         lineInput, overPriceInput, underPriceInput,
       } satisfies SavedPricerState));
     } catch { /* storage full/blocked — non-blocking */ }
-  }, [sportKey, marketKey, selectedPlayer, seasonsSelected, includePost, minOpp,
+  }, [sportKey, marketKey, selectedPlayer, seasonsSelected, includePost, minOpp, excludeZero,
       projection, projectionEdited, sdMode, sdCustom, distMode,
       lineInput, overPriceInput, underPriceInput]);
 
@@ -488,8 +491,9 @@ export default function PropsAdminPage() {
       seasons: seasonsSelected,
       includePost,
       minOpportunities: Number(minOpp) || 0,
+      excludeZero,
     });
-  }, [playerGames, seasonsSelected, includePost, minOpp, marketDef]);
+  }, [playerGames, seasonsSelected, includePost, minOpp, excludeZero, marketDef]);
 
   // Default projection follows measured mean until the user edits it
   // (projectionEdited flips on typing; clearing the box re-enables the default)
@@ -889,6 +893,13 @@ export default function PropsAdminPage() {
               <label className="flex items-center gap-1.5 text-xs text-slate-600">
                 <input type="checkbox" checked={includePost} onChange={(e) => setIncludePost(e.target.checked)} />
                 Include playoffs
+              </label>
+              <label
+                className="flex items-center gap-1.5 text-xs text-slate-600"
+                title="Drops games where this stat was 0. Careful: a 0 on real playing time is a legitimate outcome — removing it inflates every Over. Prefer the min-opps floor for injury/rest games."
+              >
+                <input type="checkbox" checked={excludeZero} onChange={(e) => setExcludeZero(e.target.checked)} />
+                Exclude 0 games
               </label>
               <label className="flex items-center gap-1.5 text-xs text-slate-600">
                 Min {marketDef.opportunityStat}

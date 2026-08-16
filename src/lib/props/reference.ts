@@ -118,18 +118,21 @@ export interface MeasuredStats {
 /**
  * Measure a player's distribution for one market from selected game logs.
  * minOpportunities excludes games below a volume floor (injury exits, week 18
- * rest games); 0 keeps everything.
+ * rest games); 0 keeps everything. excludeZero drops games where the STAT
+ * itself is 0 — blunt vs the min-opps floor: real played-but-blanked zeros
+ * are legitimate outcomes, so this biases P(over) upward when overused.
  */
 export function measurePlayer(
   games: PlayerGameLog[],
   def: PropMarketDef,
-  opts: { seasons?: number[]; includePost?: boolean; minOpportunities?: number } = {}
+  opts: { seasons?: number[]; includePost?: boolean; minOpportunities?: number; excludeZero?: boolean } = {}
 ): MeasuredStats | null {
   const minOpp = opts.minOpportunities ?? 0;
   const filtered = games
     .filter((g) => (opts.seasons ? opts.seasons.includes(g.season) : true))
     .filter((g) => (opts.includePost ? true : g.season_type === 'REG'))
     .filter((g) => (g[def.opportunityStat] ?? 0) >= minOpp)
+    .filter((g) => (opts.excludeZero ? (g[def.stat] ?? 0) > 0 : true))
     .sort((a, b) => a.season - b.season || a.week - b.week);
 
   if (filtered.length < 2) return null;
