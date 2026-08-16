@@ -31,6 +31,21 @@ const normName = (s: string): string =>
 const fmtAmerican = (o: number | null | undefined): string =>
   o === null || o === undefined || Number.isNaN(o) ? '—' : o > 0 ? `+${o}` : `${o}`;
 
+// Kalshi charges 7%·p·(1−p) per contract; quote fee-INCLUSIVE American odds so
+// rung prices compare apples-to-apples with book prices (same convention as
+// the game-lines integration in src/lib/kalshi.ts — conservative rounding).
+const KALSHI_FEE = 0.07;
+const kalshiCostToAmerican = (priceDollars: number): number | null => {
+  const c = priceDollars + KALSHI_FEE * priceDollars * (1 - priceDollars);
+  if (c <= 0 || c >= 1) return null;
+  return c <= 0.5 ? Math.floor((1 / c - 1) * 100) : -Math.ceil((c / (1 - c)) * 100);
+};
+
+interface KalshiRung {
+  player: string; strike: number; yesBid: number | null; yesAsk: number | null;
+  ticker: string; eventTitle: string;
+}
+
 const evCls = (ev: number | null): string =>
   ev === null ? 'text-slate-400'
     : ev > 0.02 ? 'text-emerald-600 font-semibold'
@@ -75,6 +90,7 @@ interface Row {
   value: number | null;     // max EV across sides — the ranking key
   valueSide: 'Over' | 'Under' | null;
   note: string | null;      // why unpriced (no logs / thin history / no prices)
+  kalshiStrike?: number;    // set on Kalshi ladder-rung rows (Over = Yes, Under = No)
 }
 
 export default function PropTablePage() {
@@ -159,6 +175,12 @@ export default function PropTablePage() {
         } catch { referenceRef.current = {}; }
       }
 
+      // Kalshi player-prop ladders load in parallel with the book sweep —
+      // free public endpoint, no Odds API credits.
+      const kalshiPromise: Promise<KalshiRung[]> = fetch(`/api/kalshi-props?market=${marketDef.key}`)
+        .then(async (r) => (r.ok ? ((await r.json()).rungs ?? []) : []))
+        .catch(() => []);
+
       setProgress('loading events…');
       const evRes = await fetch(`/api/props?sport=${sportKey}`);
       const evRem = evRes.headers.get('x-requests-remaining');
@@ -196,9 +218,12 @@ export default function PropTablePage() {
         } catch { /* skip event */ }
       }
 
-      if (quotesByPlayer.size === 0) {
+      setProgress('loading Kalshi…');
+      const kalshiRungs = await kalshiPromise;
+
+      if (quotesByPlayer.size === 0 && kalshiRungs.length === 0) {
         setProgress('');
-        setError('No posted lines for this market yet — books typically post props a few days before games.');
+        setError('No posted lines for this market yet — books and Kalshi typically post props close to game week.');
         return;
       }
 
@@ -207,6 +232,46 @@ export default function PropTablePage() {
       const out: Row[] = [];
       const minG = Number(minGames) || 0;
       const ref = referenceRef.current;
+
+      // Model per player (match → logs → measured mean/sd/shape) — shared by
+      // book consensus rows and Kalshi rung rows, computed once per player.
+      type Model =
+        | { ok: true; match: PlayerSearchResult; games: number; proj: number; sd: number; dist: Distribution }
+        | { ok: false; match: PlayerSearchResult | null; games: number; note: string };
+      const modelCache = new Map<string, Model>();
+
+      const computeModel = async (name: string): Promise<Model> => {
+        const cacheKey = normName(name);
+        const hit = modelCache.get(cacheKey);
+        if (hit) return hit;
+        const store = (m: Model): Model => { modelCache.set(cacheKey, m); return m; };
+        const match = await findPlayer(name);
+        if (!match) return store({ ok: false, match: null, games: 0, note: 'no game logs matched' });
+        const games = await getLogs(match.player_id);
+        if (!games.length) return store({ ok: false, match, games: 0, note: 'no game logs' });
+        const latest = Math.max(...games.map((g) => g.season));
+        const measured = measurePlayer(games, marketDef, { seasons: [latest] });
+        if (!measured || measured.games < minG) {
+          return store({ ok: false, match, games: measured?.games ?? 0, note: `thin history (${measured?.games ?? 0} games)` });
+        }
+        const proj = measured.mean;
+
+        // Volatility per the standard setting, with graceful fallback
+        const posRef = ref?.markets?.[marketDef.key]?.[match.position];
+        const tierMult = posRef?.tiers.find((t) => proj >= t.min && (t.max === null || proj < t.max))?.multiplier ?? null;
+        const leagueMult = posRef?.overall.multiplier ?? null;
+        let sd: number | null = null;
+        if (sdSetting === 'measured') sd = measured.sd || (tierMult !== null ? tierMult * proj : null);
+        else if (sdSetting === 'tier') sd = tierMult !== null ? tierMult * proj : measured.sd;
+        else sd = leagueMult !== null ? leagueMult * proj : measured.sd;
+        if (!sd || sd <= 0) return store({ ok: false, match, games: measured.games, note: 'no volatility estimate' });
+
+        // Shape-aware auto curve (same rule as the Pricer)
+        const dist: Distribution = measured.games >= 8 && measured.median > 0
+          ? ((measured.mean - measured.median) / measured.median > 0.05 ? 'lognormal' : 'normal')
+          : marketDef.defaultDist;
+        return store({ ok: true, match, games: measured.games, proj, sd, dist });
+      };
 
       let done = 0;
       const pricePlayer = async (name: string): Promise<Row> => {
@@ -231,33 +296,9 @@ export default function PropTablePage() {
           marketPOver, evOver: null, evUnder: null, value: null, valueSide: null, note: null,
         };
 
-        const match = await findPlayer(name);
-        if (!match) return { ...base, note: 'no game logs matched' };
-        base.match = match;
-        const games = await getLogs(match.player_id);
-        if (!games.length) return { ...base, note: 'no game logs' };
-        const latest = Math.max(...games.map((g) => g.season));
-        const measured = measurePlayer(games, marketDef, { seasons: [latest] });
-        if (!measured || measured.games < minG) {
-          return { ...base, games: measured?.games ?? 0, note: `thin history (${measured?.games ?? 0} games)` };
-        }
-        base.games = measured.games;
-        const proj = measured.mean;
-
-        // Volatility per the standard setting, with graceful fallback
-        const posRef = ref?.markets?.[marketDef.key]?.[match.position];
-        const tierMult = posRef?.tiers.find((t) => proj >= t.min && (t.max === null || proj < t.max))?.multiplier ?? null;
-        const leagueMult = posRef?.overall.multiplier ?? null;
-        let sd: number | null = null;
-        if (sdSetting === 'measured') sd = measured.sd || (tierMult !== null ? tierMult * proj : null);
-        else if (sdSetting === 'tier') sd = tierMult !== null ? tierMult * proj : measured.sd;
-        else sd = leagueMult !== null ? leagueMult * proj : measured.sd;
-        if (!sd || sd <= 0) return { ...base, note: 'no volatility estimate' };
-
-        // Shape-aware auto curve (same rule as the Pricer)
-        const dist: Distribution = measured.games >= 8 && measured.median > 0
-          ? ((measured.mean - measured.median) / measured.median > 0.05 ? 'lognormal' : 'normal')
-          : marketDef.defaultDist;
+        const model = await computeModel(name);
+        if (!model.ok) return { ...base, match: model.match, games: model.games, note: model.note };
+        const { match, games, proj, sd, dist } = model;
 
         const pOver = probOver(proj, sd, line, dist);
         const evOver = bestOver ? expectedValue(pOver, bestOver.price) : null;
@@ -267,6 +308,7 @@ export default function PropTablePage() {
           : null;
         return {
           ...base,
+          match, games,
           projection: proj, sd, dist, pOver,
           fairOver: probToAmerican(pOver), fairUnder: probToAmerican(1 - pOver),
           evOver, evUnder, value,
@@ -274,17 +316,52 @@ export default function PropTablePage() {
         };
       };
 
-      // Small concurrency pool so 50 players don't hammer the logs API at once
+      // Small concurrency pool so 50 players don't hammer the logs API at once.
+      // Kalshi-only players (no book quote) just warm the model cache here.
+      const modelNames = Array.from(new Set([...names, ...kalshiRungs.map((r) => r.player)]));
       const POOL = 4;
-      const queue = [...names];
+      const queue = [...modelNames];
       await Promise.all(Array.from({ length: POOL }, async () => {
         while (queue.length) {
           const name = queue.shift()!;
-          out.push(await pricePlayer(name));
+          if (quotesByPlayer.has(name)) out.push(await pricePlayer(name));
+          else await computeModel(name);
           done++;
-          setProgress(`pricing ${done}/${names.length}…`);
+          setProgress(`pricing ${done}/${modelNames.length}…`);
         }
       }));
+
+      // Kalshi rung rows: every open threshold priced fee-inclusive against the
+      // model. Over buys Yes at the ask; Under buys No at (1 − yes bid).
+      for (const rung of kalshiRungs) {
+        const model = modelCache.get(normName(rung.player));
+        if (!model || !model.ok) continue;
+        const pOver = probOver(model.proj, model.sd, rung.strike, model.dist);
+        if (pOver < 0.005 || pOver > 0.995) continue; // dead-certain rungs are noise
+        const overPrice = rung.yesAsk !== null ? kalshiCostToAmerican(rung.yesAsk) : null;
+        const underPrice = rung.yesBid !== null ? kalshiCostToAmerican(1 - rung.yesBid) : null;
+        if (overPrice === null && underPrice === null) continue;
+        const evOver = overPrice !== null ? expectedValue(pOver, overPrice) : null;
+        const evUnder = underPrice !== null ? expectedValue(1 - pOver, underPrice) : null;
+        const value = evOver !== null || evUnder !== null
+          ? Math.max(evOver ?? -Infinity, evUnder ?? -Infinity)
+          : null;
+        out.push({
+          key: `k-${rung.ticker}`,
+          playerName: rung.player,
+          match: model.match, games: model.games,
+          projection: model.proj, sd: model.sd, dist: model.dist,
+          line: rung.strike, pOver,
+          fairOver: probToAmerican(pOver), fairUnder: probToAmerican(1 - pOver),
+          bestOver: overPrice !== null ? { price: overPrice, book: 'Kalshi' } : null,
+          bestUnder: underPrice !== null ? { price: underPrice, book: 'Kalshi' } : null,
+          marketPOver: rung.yesBid !== null && rung.yesAsk !== null ? (rung.yesBid + rung.yesAsk) / 2 : null,
+          evOver, evUnder, value,
+          valueSide: value === null ? null : (evOver ?? -Infinity) >= (evUnder ?? -Infinity) ? 'Over' : 'Under',
+          note: null,
+          kalshiStrike: rung.strike,
+        });
+      }
 
       // Priced rows ranked best-first; unpriced rows at the bottom
       out.sort((a, b) => {
@@ -402,8 +479,9 @@ export default function PropTablePage() {
             </div>
             <div className="mt-1.5 text-[11px] leading-snug text-slate-400">
               Standard pricing: projection = his latest-season average · curve auto from his shape ·
-              consensus line = most-quoted point · EV vs the best book price each side. Rows ranked
-              best value first; tap a row to open it in the Pricer.
+              consensus line = most-quoted point · EV vs the best book price each side. Violet rows are
+              Kalshi threshold markets (Over buys Yes, Under buys No, trading fee included in the price).
+              Rows ranked best value first; tap a row to open it in the Pricer.
             </div>
           </div>
         </div>
@@ -440,6 +518,11 @@ export default function PropTablePage() {
                       <td className="py-1.5 pr-2 text-slate-400 tabular-nums">{i + 1}</td>
                       <td className="py-1.5 pr-3">
                         <span className="font-medium">{r.playerName}</span>
+                        {r.kalshiStrike !== undefined && (
+                          <span className="ml-1.5 inline-flex px-1 py-0.5 rounded bg-violet-100 text-violet-700 text-[10px] font-semibold">
+                            Kalshi {Math.ceil(r.kalshiStrike)}+
+                          </span>
+                        )}
                         {r.match && (
                           <span className="ml-1.5 text-[10px] text-slate-400">
                             {r.match.position} · {r.match.team} · {r.games}g
