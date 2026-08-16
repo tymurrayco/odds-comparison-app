@@ -783,6 +783,12 @@ export default function PropsAdminPage() {
               )}
             </div>
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => router.push('/admin/prop-table')}
+                className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 transition"
+              >
+                Table
+              </button>
               <button onClick={() => setShowData(!showData)} className={btnGhostCls}>
                 {showData ? 'Hide Data' : 'Data'}
               </button>
