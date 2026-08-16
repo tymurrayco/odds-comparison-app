@@ -30,6 +30,8 @@ export interface BetTeamInfo {
   logo: string;
   color: string;          // hex without leading #, e.g., "aa182c"
   alternateColor?: string;
+  abbreviation?: string;  // ESPN abbreviation (e.g., "KC", "TEX") — used by
+                          // MyBets to shorten bet text so the spread fits
 }
 
 function normalize(s: string): string {
@@ -86,6 +88,7 @@ export async function GET(request: Request) {
         logo,
         color: t.color || '',
         alternateColor: t.alternateColor,
+        abbreviation: t.abbreviation,
       };
 
       const variants = [t.displayName, t.shortDisplayName, t.abbreviation, t.name, t.nickname];

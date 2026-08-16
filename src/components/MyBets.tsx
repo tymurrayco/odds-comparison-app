@@ -24,6 +24,7 @@ interface BetTeamInfo {
   logo: string;
   color: string;          // hex without leading #
   alternateColor?: string;
+  abbreviation?: string;  // ESPN abbreviation, e.g., "KC", "TEX"
 }
 
 // Keep in sync with src/app/api/bet-team-logos/route.ts (duplicated to avoid
@@ -410,6 +411,29 @@ export default function MyBets() {
     return null;
   };
 
+  // Shorten team names in bet text to ESPN abbreviations so the line/spread
+  // stays visible ("Texas Longhorns -3.5" -> "TEX -3.5"). Longest-prefix
+  // match against the team map (up to 4 words) so "Kansas City Chiefs"
+  // resolves before "Kansas" could. Parlay/teaser legs split on "&" and
+  // shorten independently. Falls back to the original text when no
+  // abbreviation resolves (totals like "Over 45.5", unsupported leagues).
+  const abbreviateBetText = (bet: Bet): string => {
+    if (!bet.bet) return bet.bet;
+    const shorten = (segment: string): string => {
+      const words = segment.trim().split(/\s+/);
+      for (let n = Math.min(words.length, 4); n >= 1; n--) {
+        const lead = words.slice(0, n).join(' ');
+        const abbr = lookupTeamInfo(bet.league, lead)?.abbreviation;
+        if (abbr) {
+          const rest = words.slice(n).join(' ');
+          return rest ? `${abbr} ${rest}` : abbr;
+        }
+      }
+      return segment.trim();
+    };
+    return bet.bet.split(/\s*&\s*/).map(shorten).join(' & ');
+  };
+
   // ESPN logo first, legacy local file as fallback.
   const logoSrcs = (league: string, teamName: string): string[] => {
     const espn = lookupTeamInfo(league, teamName)?.logo;
@@ -751,17 +775,25 @@ export default function MyBets() {
                           ? 'flex-1 text-left sm:text-right' 
                           : 'min-w-[60px] sm:min-w-[80px] text-right'
                       }`}>
-                        {/* MOBILE: Show DESCRIPTION for futures, BET for games */}
+                        {/* MOBILE: Show DESCRIPTION for futures, abbreviated BET for
+                            games — team names shortened to ESPN abbreviations so the
+                            spread stays visible ("TEX -3.5" instead of "Texas Long...") */}
                         <span className="sm:hidden">
-                          {viewType === 'games' 
-                            ? (bet.bet.length > 15 ? bet.bet.substring(0, 15) + '...' : bet.bet)
+                          {viewType === 'games'
+                            ? (() => {
+                                const short = abbreviateBetText(bet);
+                                return short.length > 20 ? short.substring(0, 20) + '...' : short;
+                              })()
                             : bet.description}
                         </span>
-                        {/* DESKTOP: Always show BET field */}
+                        {/* DESKTOP: abbreviated BET for games (full names already shown
+                            at left), full BET for futures */}
                         <span className="hidden sm:inline">
-                          {viewType === 'futures' && bet.bet.length > 25 
-                            ? bet.bet.substring(0, 25) + '...' 
-                            : bet.bet}
+                          {viewType === 'games'
+                            ? abbreviateBetText(bet)
+                            : bet.bet.length > 25
+                              ? bet.bet.substring(0, 25) + '...'
+                              : bet.bet}
                         </span>
                       </span>
 
