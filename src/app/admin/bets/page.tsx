@@ -150,9 +150,10 @@ export default function BetAdminPage() {
     loadBets();
   }, []);
 
-  // Lazy-load team logo/color maps for each supported league present in the bet list.
+  // Lazy-load team logo/color maps for each supported league present in the bet
+  // list, plus the league selected on the form (feeds the official-name pickers).
   useEffect(() => {
-    const needed = Array.from(new Set(bets.map(b => b.league)))
+    const needed = Array.from(new Set([...bets.map(b => b.league), formData.league]))
       .filter(lg => SUPPORTED_LEAGUES.has(lg) && !teamMaps[lg]);
     if (needed.length === 0) return;
     let cancelled = false;
@@ -174,21 +175,55 @@ export default function BetAdminPage() {
       });
     });
     return () => { cancelled = true; };
-  }, [bets, teamMaps]);
+  }, [bets, teamMaps, formData.league]);
 
-  // Resolve a bet's primary team: prefer `team` (futures), then homeTeam, then awayTeam,
-  // then try the leading word(s) of `bet.bet` (e.g., "Chiefs -3.5" → "Chiefs").
+  // Exact ESPN team names for the form's league — powers the away/home datalist
+  // so manual entries use the same strings the logo lookup keys on.
+  const officialTeamNames = useMemo(() => {
+    const map = teamMaps[formData.league];
+    if (!map) return [];
+    return Array.from(new Set(Object.values(map).map(t => t.displayName).filter(Boolean))).sort();
+  }, [teamMaps, formData.league]);
+
+  // Snap free-typed input to the official ESPN displayName when it matches any
+  // known variant (nickname, abbreviation, short name) — "Ohio State" → "Ohio
+  // State Buckeyes". Non-matching text (typos, unsupported leagues) passes through.
+  const toOfficialName = (input: string): string => {
+    const map = teamMaps[formData.league];
+    const info = map?.[normalizeTeamKey(input)];
+    return info?.displayName || input;
+  };
+
+  // Correct the team portion of the bet text ("Oregon +6" → "Oregon Ducks +6")
+  // so the card logo resolves to the team actually bet on.
+  const snapBetLead = (text: string): string => {
+    const m = text.match(/^([A-Za-z .'-]+?)(\s+[-+].*|\s+ml\b.*)?$/i);
+    if (!m || !m[1]) return text;
+    const official = toOfficialName(m[1].trim());
+    if (official === m[1].trim()) return text;
+    return official + (m[2] ?? '');
+  };
+
+  // Resolve a bet's primary team. The logo should be the team the wager is ON:
+  // `team` (futures), then the leading word(s) of `bet.bet` (e.g., "Chiefs -3.5"
+  // → "Chiefs"), and only then home/away as fallbacks — home-first here once put
+  // the opponent's logo on away-team spread bets. Totals have no side, use home.
   const getTeamInfo = (bet: Bet): BetTeamInfo | null => {
     const map = teamMaps[bet.league];
     if (!map) return null;
 
     const candidates: string[] = [];
-    if (bet.team) candidates.push(bet.team);
-    if (bet.homeTeam) candidates.push(bet.homeTeam);
-    if (bet.awayTeam) candidates.push(bet.awayTeam);
     // Parse leading tokens from bet text — stop at number, comma, or spread/ml indicator.
     const betLead = bet.bet?.match(/^([A-Za-z .'-]+?)(?:\s+[-+0-9]|,|$)/)?.[1]?.trim();
-    if (betLead) candidates.push(betLead);
+    if (bet.betType === 'total') {
+      if (bet.homeTeam) candidates.push(bet.homeTeam);
+      if (bet.awayTeam) candidates.push(bet.awayTeam);
+    } else {
+      if (bet.team) candidates.push(bet.team);
+      if (betLead) candidates.push(betLead.replace(/\s+(ml|moneyline)$/i, '').trim());
+      if (bet.homeTeam) candidates.push(bet.homeTeam);
+      if (bet.awayTeam) candidates.push(bet.awayTeam);
+    }
 
     for (const c of candidates) {
       const key = normalizeTeamKey(c);
@@ -416,7 +451,7 @@ export default function BetAdminPage() {
     for (const pattern of patterns) {
       const match = formData.description.match(pattern);
       if (match) {
-        setFormData({ ...formData, awayTeam: match[1].trim(), homeTeam: match[2].trim() });
+        setFormData({ ...formData, awayTeam: toOfficialName(match[1].trim()), homeTeam: toOfficialName(match[2].trim()) });
         break;
       }
     }
@@ -826,6 +861,11 @@ export default function BetAdminPage() {
                       type="text"
                       value={formData.awayTeam}
                       onChange={(e) => setFormData({ ...formData, awayTeam: e.target.value })}
+                      onBlur={(e) => {
+                        const v = toOfficialName(e.target.value.trim());
+                        if (v !== formData.awayTeam) setFormData(prev => ({ ...prev, awayTeam: v }));
+                      }}
+                      list={officialTeamNames.length > 0 ? 'official-team-list' : undefined}
                       placeholder="Optional"
                       className={fieldCls}
                     />
@@ -838,10 +878,20 @@ export default function BetAdminPage() {
                       type="text"
                       value={formData.homeTeam}
                       onChange={(e) => setFormData({ ...formData, homeTeam: e.target.value })}
+                      onBlur={(e) => {
+                        const v = toOfficialName(e.target.value.trim());
+                        if (v !== formData.homeTeam) setFormData(prev => ({ ...prev, homeTeam: v }));
+                      }}
+                      list={officialTeamNames.length > 0 ? 'official-team-list' : undefined}
                       placeholder="Optional"
                       className={fieldCls}
                     />
                   </div>
+                  {officialTeamNames.length > 0 && (
+                    <datalist id="official-team-list">
+                      {officialTeamNames.map(name => <option key={name} value={name} />)}
+                    </datalist>
+                  )}
                 </div>
               )}
 
@@ -851,6 +901,11 @@ export default function BetAdminPage() {
                   type="text"
                   value={formData.bet}
                   onChange={(e) => setFormData({ ...formData, bet: e.target.value })}
+                  onBlur={(e) => {
+                    if (formData.betType !== 'spread' && formData.betType !== 'moneyline') return;
+                    const v = snapBetLead(e.target.value.trim());
+                    if (v !== formData.bet) setFormData(prev => ({ ...prev, bet: v }));
+                  }}
                   placeholder={
                     formData.betType === 'spread' ? 'Team -3.5' :
                     formData.betType === 'total' ? 'Over 52.5' :
