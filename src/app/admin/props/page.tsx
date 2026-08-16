@@ -1207,7 +1207,7 @@ export default function PropsAdminPage() {
                   />
                 </div>
                 <div>
-                  <label className={labelCls}>SD source</label>
+                  <label className={labelCls}>Swinginess</label>
                   <div className="flex rounded-lg border border-slate-200 overflow-hidden">
                     {([
                       ['measured', measured ? `Measured ${measured.sd.toFixed(1)}` : 'Measured'],
@@ -1229,7 +1229,7 @@ export default function PropsAdminPage() {
                 </div>
                 {sdMode === 'custom' && (
                   <div className="w-20">
-                    <label className={labelCls}>SD</label>
+                    <label className={labelCls}>Amount</label>
                     <input value={sdCustom} onChange={(e) => setSdCustom(e.target.value)} inputMode="decimal" className={fieldCls} />
                   </div>
                 )}
@@ -1259,7 +1259,7 @@ export default function PropsAdminPage() {
                 <span className="font-medium text-slate-500">Projection</span> = his average — the curve
                 derives the median.
                 {' · '}
-                <span className="font-medium text-slate-500">SD</span>{' '}
+                <span className="font-medium text-slate-500">Swinginess</span>{' '}
                 {sdMode === 'measured' && `= his own swings${measured ? ` (${measured.values.length} games)` : ''}.`}
                 {sdMode === 'tier' && '= players at his projected volume (rookie/new-role fallback).'}
                 {sdMode === 'league' && `= all ${position}s blended (coarse backstop).`}

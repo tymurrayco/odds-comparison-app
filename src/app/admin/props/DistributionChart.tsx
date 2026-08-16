@@ -7,8 +7,14 @@
 // Scrub (mouse or touch-drag) to read P(over x) at any line.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { lognormalParams, median } from '@/lib/props/engine';
+import { lognormalParams, median, probToAmerican } from '@/lib/props/engine';
 import { Distribution } from '@/lib/props/markets';
+
+// Fair American odds for a probability, compact ("+121" / "-135" / "—").
+const fairOdds = (p: number): string => {
+  const o = probToAmerican(p);
+  return Number.isNaN(o) ? '—' : o > 0 ? `+${o}` : `${o}`;
+};
 
 const COLOR_NORMAL = '#0052ff';
 const COLOR_LOGNORMAL = '#16a34a';  // Boom/Bust curve: vivid green (was orange;
@@ -237,18 +243,20 @@ export default function DistributionChart({ values, mean, sd, line, dist, unit }
               <line x1={model.x(hover.v)} x2={model.x(hover.v)} y1={M.top} y2={H - M.bottom} stroke={INK_MUTED} strokeWidth={1} />
               {(() => {
                 const onLeft = model.x(hover.v) > width / 2;
-                const bx = onLeft ? model.x(hover.v) - 148 : model.x(hover.v) + 8;
+                const bx = onLeft ? model.x(hover.v) - 186 : model.x(hover.v) + 8;
                 return (
                   <g>
-                    <rect x={bx} y={M.top} width={140} height={46} rx={6} fill="white" stroke="#e2e8f0" />
+                    <rect x={bx} y={M.top} width={178} height={46} rx={6} fill="white" stroke="#e2e8f0" />
                     <text x={bx + 8} y={M.top + 14} fontSize={10} fontWeight={600} fill={INK}>
                       over {hover.v.toFixed(1)} {unit}
                     </text>
                     <text x={bx + 8} y={M.top + 27} fontSize={10} fill={INK}>
                       <tspan fill={COLOR_NORMAL}>●</tspan> Balanced {(hover.p.normal * 100).toFixed(1)}%
+                      <tspan fill={INK_MUTED}> · fair {fairOdds(hover.p.normal)}</tspan>
                     </text>
                     <text x={bx + 8} y={M.top + 40} fontSize={10} fill={INK}>
                       <tspan fill={COLOR_LOGNORMAL}>●</tspan> Boom/Bust {(hover.p.lognormal * 100).toFixed(1)}%
+                      <tspan fill={INK_MUTED}> · fair {fairOdds(hover.p.lognormal)}</tspan>
                     </text>
                   </g>
                 );
