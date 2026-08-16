@@ -487,6 +487,12 @@ export default function BetAdminPage() {
             </div>
             <div className="flex items-center gap-1.5">
               <button
+                onClick={() => router.push('/admin/props')}
+                className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 transition"
+              >
+                Props
+              </button>
+              <button
                 onClick={() => router.push('/admin/power-ratings')}
                 className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 transition"
               >

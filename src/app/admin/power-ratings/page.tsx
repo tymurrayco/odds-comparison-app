@@ -193,12 +193,7 @@ export default function PowerRatingsAdminPage() {
               <h1 className="text-base font-bold tracking-tight truncate">Power Ratings</h1>
             </div>
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => router.push('/admin/props')}
-                className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 transition"
-              >
-                Props
-              </button>
+              {/* Props link moved up to the Bet Admin header (2026-08-16) */}
               <button
                 onClick={() => router.push('/admin/bets')}
                 className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 transition"
