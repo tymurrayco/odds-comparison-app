@@ -1068,14 +1068,44 @@ export default function PropsAdminPage() {
             </div>
 
             {hasProj && sd !== null && sd > 0 && (
-              <DistributionChart
-                values={measured?.values ?? []}
-                mean={projNum}
-                sd={sd}
-                line={hasLine ? line : null}
-                dist={dist}
-                unit={MARKET_UNITS[marketDef.key] ?? ''}
-              />
+              <>
+                <DistributionChart
+                  values={measured?.values ?? []}
+                  mean={projNum}
+                  sd={sd}
+                  line={hasLine ? line : null}
+                  dist={dist}
+                  unit={MARKET_UNITS[marketDef.key] ?? ''}
+                />
+                {/* One-sentence automatic chart read: the single most relevant
+                    thing the picture is saying, in plain English. Priority:
+                    bust-dragged average (don't trust the curves yet) > line
+                    vs typical game > boom-inflated average. */}
+                {measured && (() => {
+                  const gap = measured.mean - measured.median;
+                  const rel = measured.median > 0 ? gap / measured.median : 0;
+                  let read: string | null = null;
+                  if (rel < -0.08) {
+                    read = `His average (${measured.mean.toFixed(1)}) sits BELOW his typical game (${measured.median.toFixed(1)}) — dud games are dragging it down, so the curves sit left of his real cluster; vet the log (Min ${marketDef.opportunityStat} / Exclude 0) before trusting the verdict.`;
+                  } else if (hasLine) {
+                    const d = line - measured.median;
+                    if (Math.abs(d) <= Math.max(2, 0.04 * measured.median)) {
+                      read = `The line (${line}) sits right on his typical game (${measured.median.toFixed(1)}) — his history alone calls this a near coin-flip; the curves add the shape.`;
+                    } else if (d > 0) {
+                      read = `The line (${line}) is ${d.toFixed(1)} above his typical game (${measured.median.toFixed(1)}) — the Over needs a better-than-usual day.`;
+                    } else {
+                      read = `The line (${line}) is ${(-d).toFixed(1)} below his typical game (${measured.median.toFixed(1)}) — the Under needs a worse-than-usual day.`;
+                    }
+                  } else if (rel > 0.08) {
+                    read = `Booms lift his average ${gap.toFixed(1)} above his typical game (${measured.median.toFixed(1)}) — trust the Boom/Bust number at the main line.`;
+                  }
+                  return read ? (
+                    <div className="text-xs text-slate-500">
+                      <span className="font-medium text-slate-600">Chart read:</span> {read}
+                    </div>
+                  ) : null;
+                })()}
+              </>
             )}
 
             {result && sd !== null && (
