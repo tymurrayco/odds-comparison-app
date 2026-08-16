@@ -236,6 +236,20 @@ function midPrice(m: KalshiMarketRaw): number | null {
   return validPrice(m.last_price_dollars) ?? ask ?? bid;
 }
 
+/** Bid/ask width in dollars; 1 (max) when either side is missing. */
+function bookWidth(m: KalshiMarketRaw): number {
+  const bid = validPrice(m.yes_bid_dollars);
+  const ask = validPrice(m.yes_ask_dollars);
+  return bid !== null && ask !== null ? ask - bid : 1;
+}
+
+// Consensus-line selection must ignore zombie quotes: a 30c-bid/70c-ask
+// dead market has a mid of exactly 0.50 by arithmetic accident and would
+// beat the REAL line quoted 46/56 with all the volume (JVST@NDSU 2026-08-16:
+// picker said -3.5 while every book and Kalshi's own tight market said
+// -6.5/-7). Only markets at most this wide may vote; if none qualify, all do.
+const MAX_CONSENSUS_WIDTH = 0.15;
+
 /**
  * Parse game title to extract team names. Handles multiple formats:
  * - "Detroit at Philadelphia Winner?"  (regular game)
@@ -395,6 +409,7 @@ function buildSpreadOdds(marketsByEvent: Map<string, KalshiMarketRaw[]>): Kalshi
       buyYes: number;     // cost to buy YES (favorite covers), 0-1
       buyNo: number;      // cost to buy NO (underdog covers), 0-1
       mid: number;        // bid/ask midpoint, used for consensus-line selection
+      width: number;      // bid/ask width — zombie-quote filter for consensus
       isAway: boolean;
     }
     const entries: SpreadEntry[] = [];
@@ -407,6 +422,7 @@ function buildSpreadOdds(marketsByEvent: Map<string, KalshiMarketRaw[]>): Kalshi
       const buyNo = buyNoPrice(m);
       const mid = midPrice(m);
       if (buyYes === null || buyNo === null || mid === null) continue;
+      const width = bookWidth(m);
 
       const marketSuffix = m.ticker.split('-').pop()?.toLowerCase() || '';
       const teamAbbrev = marketSuffix.replace(/\d+$/, '');
@@ -421,7 +437,7 @@ function buildSpreadOdds(marketsByEvent: Map<string, KalshiMarketRaw[]>): Kalshi
       if (isAway && !awayTeam) awayTeam = teamName;
       if (isHome && !homeTeam) homeTeam = teamName;
 
-      entries.push({ teamName, strike, buyYes, buyNo, mid, isAway });
+      entries.push({ teamName, strike, buyYes, buyNo, mid, width, isAway });
 
       if (!commenceTime && m.expected_expiration_time) {
         const endTime = new Date(m.expected_expiration_time);
@@ -432,12 +448,15 @@ function buildSpreadOdds(marketsByEvent: Map<string, KalshiMarketRaw[]>): Kalshi
 
     if (!awayTeam || !homeTeam) continue;
 
-    // Find the consensus spread: the market whose bid/ask midpoint is closest to
-    // 0.50. "Team wins by over X" at ~0.50 means the market thinks the true spread is ~X.
+    // Find the consensus spread: among TIGHT markets (see MAX_CONSENSUS_WIDTH),
+    // the one whose bid/ask midpoint is closest to 0.50. "Team wins by over X"
+    // at ~0.50 means the market thinks the true spread is ~X.
+    const tight = entries.filter((e) => e.width <= MAX_CONSENSUS_WIDTH);
+    const pool = tight.length > 0 ? tight : entries;
     let bestEntry: SpreadEntry | null = null;
     let bestDistFrom50 = Infinity;
 
-    for (const e of entries) {
+    for (const e of pool) {
       const dist = Math.abs(e.mid - 0.50);
       if (dist < bestDistFrom50) {
         bestDistFrom50 = dist;
@@ -523,6 +542,7 @@ function buildTotalsOdds(marketsByEvent: Map<string, KalshiMarketRaw[]>): Kalshi
       buyYes: number;     // cost to buy YES (over), 0-1
       buyNo: number;      // cost to buy NO (under), 0-1
       mid: number;        // bid/ask midpoint, used for main-line selection
+      width: number;      // bid/ask width — zombie-quote filter for consensus
     }
     const entries: TotalEntry[] = [];
     let commenceTime = '';
@@ -536,7 +556,7 @@ function buildTotalsOdds(marketsByEvent: Map<string, KalshiMarketRaw[]>): Kalshi
       const mid = midPrice(m);
       if (buyYes === null || buyNo === null || mid === null) continue;
 
-      entries.push({ line, buyYes, buyNo, mid });
+      entries.push({ line, buyYes, buyNo, mid, width: bookWidth(m) });
 
       if (!commenceTime && m.expected_expiration_time) {
         const endTime = new Date(m.expected_expiration_time);
@@ -547,10 +567,13 @@ function buildTotalsOdds(marketsByEvent: Map<string, KalshiMarketRaw[]>): Kalshi
 
     if (entries.length === 0) continue;
 
-    // Main line: bid/ask midpoint closest to 0.50 = market's consensus line
+    // Main line: among TIGHT markets (zombie-quote filter, see
+    // MAX_CONSENSUS_WIDTH), bid/ask midpoint closest to 0.50.
+    const tight = entries.filter((e) => e.width <= MAX_CONSENSUS_WIDTH);
+    const pool = tight.length > 0 ? tight : entries;
     let bestEntry: TotalEntry | null = null;
     let bestDistFrom50 = Infinity;
-    for (const e of entries) {
+    for (const e of pool) {
       const dist = Math.abs(e.mid - 0.50);
       if (dist < bestDistFrom50) {
         bestDistFrom50 = dist;
