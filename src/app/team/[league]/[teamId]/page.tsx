@@ -264,14 +264,18 @@ export default function TeamPage() {
                     </div>
                     <Link
                       href={`/team/${league}/${g.opponent.id}`}
-                      className="flex items-center gap-2 min-w-0 flex-1 group"
+                      className="flex items-center gap-1.5 min-w-0 flex-1 group"
                     >
+                      {/* Mobile shows "@ (icon)" for road games, just "(icon)" at home
+                          (fixed-width slot keeps the icons aligned); the full name is sm+ only */}
+                      <span className="w-5 shrink-0 text-right text-sm text-slate-400">
+                        {g.home || g.neutral ? <span className="hidden sm:inline">vs</span> : '@'}
+                      </span>
                       {g.opponent.logo && (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={g.opponent.logo} alt="" className="w-6 h-6 shrink-0" />
+                        <img src={g.opponent.logo} alt={g.opponent.name} className="w-6 h-6 shrink-0" />
                       )}
-                      <span className="text-sm truncate">
-                        <span className="text-slate-400 mr-1">{g.neutral ? 'vs' : g.home ? 'vs' : '@'}</span>
+                      <span className="hidden sm:block text-sm truncate">
                         {g.opponent.rank && <span className="text-[10px] font-semibold text-slate-500 mr-1">#{g.opponent.rank}</span>}
                         <span className="font-medium group-hover:underline">{g.opponent.name}</span>
                         {g.neutral && <span className="ml-1 text-[10px] text-slate-400">(neutral)</span>}
