@@ -9,7 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   probOver, probToAmerican, americanToProb, devig, expectedValue,
-  priceLadder, syntheticLines, median as medianOf,
+  priceLadder, syntheticLines, median as medianOf, lognormalParams,
 } from '@/lib/props/engine';
 import { PROP_MARKETS, PropMarketDef, PlayerGameLog, Distribution } from '@/lib/props/markets';
 import { PropReference, measurePlayer, MeasuredStats } from '@/lib/props/reference';
@@ -1122,8 +1122,8 @@ export default function PropsAdminPage() {
                   ))}
                 </div>
               </div>
-              <div className="w-24">
-                <label className={labelCls}>Line</label>
+              <div className="w-28">
+                <label className={labelCls}>Line (book&apos;s)</label>
                 {bookLines.length > 0 ? (
                   <select value={lineInput} onChange={(e) => setLineInput(e.target.value)} className={fieldCls}>
                     {bookLines.map((l) => (
@@ -1133,6 +1133,22 @@ export default function PropsAdminPage() {
                 ) : (
                   <input value={lineInput} onChange={(e) => setLineInput(e.target.value)} inputMode="decimal" placeholder="72.5" className={fieldCls} />
                 )}
+                {/* The model's fair line: where P(over)=50% — the projection
+                    for Balanced, the lognormal median for Boom/Bust. */}
+                {hasProj && sd !== null && sd > 0 && (() => {
+                  const fairLine = dist === 'normal' ? projNum : lognormalParams(projNum, sd).median;
+                  const diff = hasLine ? line - fairLine : null;
+                  return (
+                    <div className="mt-1 text-[11px] leading-snug text-slate-400 whitespace-nowrap">
+                      Model fair: <span className="font-medium text-slate-500">{fairLine.toFixed(1)}</span>
+                      {diff !== null && Math.abs(diff) >= 0.5 && (
+                        <span className={diff > 0 ? 'text-red-500' : 'text-emerald-600'}>
+                          {' '}(book {diff > 0 ? '+' : ''}{diff.toFixed(1)})
+                        </span>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
               <div className="w-24">
                 <label className={labelCls}>Over price</label>
