@@ -149,6 +149,25 @@ export default function PropsAdminPage() {
     [marketKey]
   );
 
+  // Player-first flow: the markets that apply to the selected player's
+  // position (all markets when nobody is selected). Game logs carry every
+  // stat, so toggling markets is instant — no refetch.
+  const availableMarkets = useMemo(
+    () => (selectedPlayer
+      ? PROP_MARKETS.filter((m) => m.positions.includes(selectedPlayer.position))
+      : PROP_MARKETS),
+    [selectedPlayer]
+  );
+
+  // If the current market doesn't exist for the player's position, hop to
+  // the first one that does (no-op when the market is already valid, so a
+  // restored session keeps its market).
+  useEffect(() => {
+    if (!selectedPlayer) return;
+    const ok = PROP_MARKETS.some((m) => m.key === marketKey && m.positions.includes(selectedPlayer.position));
+    if (!ok && availableMarkets.length) setMarketKey(availableMarkets[0].key);
+  }, [selectedPlayer, marketKey, availableMarkets]);
+
   // ---------- data panel ----------
 
   const loadSyncCounts = useCallback(async () => {
@@ -791,9 +810,64 @@ export default function PropsAdminPage() {
           </div>
         )}
 
-        {/* Game / market / player selection */}
+        {/* Player-first selection: pick the player, toggle through his
+            markets (instant — logs carry every stat), then optionally attach
+            book quotes below. */}
         <div className={`${cardCls} space-y-3`}>
           <div className="flex flex-wrap items-end gap-3">
+            <div className="flex-1 min-w-[220px] relative">
+              <label className={labelCls}>Player</label>
+              <input
+                value={playerSearch}
+                onChange={(e) => setPlayerSearch(e.target.value)}
+                placeholder="Josh Jacobs…"
+                className={fieldCls}
+              />
+              {playerSearch.trim().length >= 2 && playerResults.length > 0 && (
+                <div className="absolute z-20 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-56 overflow-auto">
+                  {playerResults.map((p) => (
+                    <button
+                      key={p.player_id}
+                      onClick={() => { selectPlayer(p); setPlayerSearch(''); }}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex justify-between"
+                    >
+                      <span>{p.player_name}</span>
+                      <span className="text-xs text-slate-400">{p.position} · {p.team} · {p.last_season}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {selectedPlayer && (
+              <div className="text-sm px-3 py-2 bg-slate-100 rounded-lg">
+                <span className="font-semibold">{selectedPlayer.player_name}</span>{' '}
+                <span className="text-slate-500 text-xs">{selectedPlayer.position} · {selectedPlayer.team}</span>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className={labelCls}>
+              Market{selectedPlayer ? ` — ${selectedPlayer.position} (${availableMarkets.length})` : ''}
+            </label>
+            <div className="flex flex-wrap gap-1.5">
+              {availableMarkets.map((m) => (
+                <button
+                  key={m.key}
+                  onClick={() => setMarketKey(m.key)}
+                  className={`px-2.5 py-1.5 text-xs rounded-full font-medium transition ${
+                    marketKey === m.key
+                      ? 'bg-[#0052ff] text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-end gap-3 pt-2 border-t border-slate-100">
             <div>
               <label className={labelCls}>League</label>
               <div className="flex rounded-lg border border-slate-200 overflow-hidden">
@@ -822,14 +896,6 @@ export default function PropsAdminPage() {
                 ))}
               </select>
             </div>
-            <div>
-              <label className={labelCls}>Market</label>
-              <select value={marketKey} onChange={(e) => setMarketKey(e.target.value)} className={fieldCls}>
-                {PROP_MARKETS.map((m) => (
-                  <option key={m.key} value={m.key}>{m.label}</option>
-                ))}
-              </select>
-            </div>
             <button onClick={() => loadOdds(false)} disabled={!eventId || oddsLoading} className={btnCls}>
               {oddsLoading ? 'Loading…' : 'Load Odds'}
             </button>
@@ -843,47 +909,15 @@ export default function PropsAdminPage() {
                 {altLoaded ? 'Alts Loaded' : '+ Alt Lines'}
               </button>
             )}
-          </div>
-
-          <div className="flex flex-wrap items-end gap-3">
             {oddsPlayers.length > 0 && (
               <div className="flex-1 min-w-[200px]">
-                <label className={labelCls}>Player (from odds — {oddsPlayers.length})</label>
+                <label className={labelCls}>Match odds player ({oddsPlayers.length})</label>
                 <select value={oddsPlayer} onChange={(e) => pickOddsPlayer(e.target.value)} className={fieldCls}>
                   <option value="">Select player…</option>
                   {oddsPlayers.map((p) => (
                     <option key={p} value={p}>{p}</option>
                   ))}
                 </select>
-              </div>
-            )}
-            <div className="flex-1 min-w-[200px] relative">
-              <label className={labelCls}>Or search game logs</label>
-              <input
-                value={playerSearch}
-                onChange={(e) => setPlayerSearch(e.target.value)}
-                placeholder="Josh Jacobs…"
-                className={fieldCls}
-              />
-              {playerSearch.trim().length >= 2 && playerResults.length > 0 && (
-                <div className="absolute z-20 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-56 overflow-auto">
-                  {playerResults.map((p) => (
-                    <button
-                      key={p.player_id}
-                      onClick={() => { selectPlayer(p); setPlayerSearch(''); }}
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex justify-between"
-                    >
-                      <span>{p.player_name}</span>
-                      <span className="text-xs text-slate-400">{p.position} · {p.team} · {p.last_season}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            {selectedPlayer && (
-              <div className="text-sm px-3 py-2 bg-slate-100 rounded-lg">
-                <span className="font-semibold">{selectedPlayer.player_name}</span>{' '}
-                <span className="text-slate-500 text-xs">{selectedPlayer.position} · {selectedPlayer.team}</span>
               </div>
             )}
           </div>
