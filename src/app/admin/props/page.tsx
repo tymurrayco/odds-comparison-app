@@ -843,7 +843,7 @@ export default function PropsAdminPage() {
             <div className="text-sm font-semibold">Price It</div>
 
             <div className="flex flex-wrap items-end gap-3">
-              <div className="w-28">
+              <div className="w-36">
                 <label className={labelCls}>Projection</label>
                 <input
                   value={projection}
@@ -851,6 +851,10 @@ export default function PropsAdminPage() {
                   inputMode="decimal"
                   className={fieldCls}
                 />
+                <div className="mt-1 text-[11px] leading-snug text-slate-400">
+                  Enter his <span className="font-medium text-slate-500">average</span> (mean), not the
+                  median — the curve converts it to a median for you. Median in = skew counted twice.
+                </div>
               </div>
               <div>
                 <label className={labelCls}>SD source</label>
