@@ -2,6 +2,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import Link from 'next/link';
 import { Game, BOOKMAKERS } from '@/lib/api';
 import { formatOdds } from '@/lib/utils';
 import { createBet } from '@/lib/betService';
@@ -502,7 +503,17 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                   <tr key={team}>
                     <td className={`px-2 md:px-4 py-3 text-xs md:text-sm font-medium text-gray-900 sticky left-0 z-10 bg-white border-r border-gray-100 ${index === 0 ? 'border-b border-b-gray-200' : ''} ${restData ? 'min-w-[70px]' : 'max-w-[120px] whitespace-nowrap'}`}>
                       {/* Logo only on mobile / name on desktop — name shows on mobile too when the logo is missing */}
-                      <TeamLogoOrName srcs={logoSrcs} name={team} restBadge={restBadge} />
+                      {game.sport_key === 'americanfootball_ncaaf' ? (
+                        // NCAAF team cells link to the team page (logo is the tap target on mobile)
+                        <Link
+                          href={`/team/ncaaf/${encodeURIComponent(team)}`}
+                          className="block hover:text-blue-700"
+                        >
+                          <TeamLogoOrName srcs={logoSrcs} name={team} restBadge={restBadge} />
+                        </Link>
+                      ) : (
+                        <TeamLogoOrName srcs={logoSrcs} name={team} restBadge={restBadge} />
+                      )}
                     </td>
                     
                     {activeBookmakers.map(book => {

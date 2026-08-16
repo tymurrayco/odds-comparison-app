@@ -1,6 +1,5 @@
 // src/components/GameCard.tsx
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import OddsTable from './OddsTable';
 import AnalysisTabs from './AnalysisTabs';
 import { Game, ESPNGameScore } from '@/lib/api';
@@ -216,28 +215,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                 icons onto their own line; icons right edge on mobile, inline on sm+ */}
             <div className="flex items-center">
               <h3 className="text-sm md:text-lg font-semibold text-gray-900 truncate min-w-0">
-                {isNCAAF ? (
-                  // NCAAF team names link to their team pages (/team/ncaaf/[name])
-                  <>
-                    <Link
-                      href={`/team/ncaaf/${encodeURIComponent(game.away_team)}`}
-                      onClick={(e) => e.stopPropagation()}
-                      className="underline decoration-dotted decoration-gray-300 underline-offset-4 hover:text-blue-700 hover:decoration-blue-500"
-                    >
-                      {game.away_team}
-                    </Link>
-                    {' @ '}
-                    <Link
-                      href={`/team/ncaaf/${encodeURIComponent(game.home_team)}`}
-                      onClick={(e) => e.stopPropagation()}
-                      className="underline decoration-dotted decoration-gray-300 underline-offset-4 hover:text-blue-700 hover:decoration-blue-500"
-                    >
-                      {game.home_team}
-                    </Link>
-                  </>
-                ) : (
-                  <>{game.away_team} @ {game.home_team}</>
-                )}
+                {game.away_team} @ {game.home_team}
               </h3>
               <span className="ml-auto pl-2 sm:ml-2 sm:pl-0 flex items-center flex-shrink-0">
                 {favoriteShareButtons}
