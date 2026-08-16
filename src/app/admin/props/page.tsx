@@ -1191,138 +1191,146 @@ export default function PropsAdminPage() {
           <div className={`${cardCls} space-y-4`} style={themedCard}>
             <div className="text-sm font-semibold">Price It</div>
 
-            <div className="flex flex-wrap items-end gap-3">
-              <div className="w-36">
-                <label className={labelCls}>Projection</label>
-                <input
-                  value={projection}
-                  onChange={(e) => { setProjection(e.target.value); setProjectionEdited(e.target.value !== ''); }}
-                  inputMode="decimal"
-                  className={fieldCls}
-                />
-                <div className="mt-1 text-[11px] leading-snug text-slate-400">
-                  Enter his <span className="font-medium text-slate-500">average</span> (mean), not the
-                  median — the curve converts it to a median for you. Median in = skew counted twice.
-                </div>
-              </div>
-              <div>
-                <label className={labelCls}>SD source</label>
-                <div className="flex rounded-lg border border-slate-200 overflow-hidden">
-                  {([
-                    ['measured', measured ? `Measured ${measured.sd.toFixed(1)}` : 'Measured'],
-                    ['tier', tierMult !== null && hasProj ? `Tier ${(tierMult * projNum).toFixed(1)}` : 'Tier'],
-                    ['league', leagueMult !== null && hasProj ? `League ${(leagueMult * projNum).toFixed(1)}` : 'League'],
-                    ['custom', 'Custom'],
-                  ] as const).map(([mode, label]) => (
-                    <button
-                      key={mode}
-                      onClick={() => setSdMode(mode)}
-                      className={`px-2.5 py-2 text-xs font-medium transition whitespace-nowrap ${
-                        sdMode === mode ? 'bg-[#0052ff] text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                {sdMode !== 'custom' && (
-                  <div className="mt-1 max-w-[300px] text-[11px] leading-snug text-slate-400">
-                    {sdMode === 'measured' &&
-                      `This player's own game-to-game swings${measured ? ` (${measured.values.length} games)` : ''} — best when he has real history.`}
-                    {sdMode === 'tier' &&
-                      'Volatility of players at a similar projected volume — the right fallback for rookies and new roles.'}
-                    {sdMode === 'league' &&
-                      `One blended multiplier for all ${position}s — coarse backstop: runs wide for stars, tight for role players.`}
-                  </div>
-                )}
-              </div>
-              {sdMode === 'custom' && (
+            {/* Two clean rows: YOUR MODEL (projection / SD / curve) with one
+                combined explainer line, then THE BOOK'S OFFER (line + prices)
+                with the model-fair verdict as a stat chip on the right. */}
+            <div className="space-y-1.5">
+              <div className="text-[10px] uppercase tracking-wide text-slate-400 font-medium">Your model</div>
+              <div className="flex flex-wrap items-end gap-3">
                 <div className="w-24">
-                  <label className={labelCls}>SD</label>
-                  <input value={sdCustom} onChange={(e) => setSdCustom(e.target.value)} inputMode="decimal" className={fieldCls} />
+                  <label className={labelCls}>Projection</label>
+                  <input
+                    value={projection}
+                    onChange={(e) => { setProjection(e.target.value); setProjectionEdited(e.target.value !== ''); }}
+                    inputMode="decimal"
+                    className={fieldCls}
+                  />
                 </div>
-              )}
-              <div>
-                <label className={labelCls}>Distribution</label>
-                <div className="flex rounded-lg border border-slate-200 overflow-hidden">
-                  {([
-                    // Casual-friendly names for the curve shapes: Balanced =
-                    // symmetric bell (normal), Boom/Bust = right-skewed with a
-                    // big-game tail (lognormal). Auto shows what it picked.
-                    ['auto', `Auto (${autoDist.dist === 'lognormal' ? 'Boom/Bust' : 'Balanced'})`],
-                    ['normal', 'Balanced'],
-                    ['lognormal', 'Boom/Bust'],
-                  ] as const).map(([mode, label]) => (
-                    <button
-                      key={mode}
-                      onClick={() => setDistMode(mode)}
-                      className={`px-2.5 py-2 text-xs font-medium transition ${
-                        distMode === mode ? 'bg-[#0052ff] text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
+                <div>
+                  <label className={labelCls}>SD source</label>
+                  <div className="flex rounded-lg border border-slate-200 overflow-hidden">
+                    {([
+                      ['measured', measured ? `Measured ${measured.sd.toFixed(1)}` : 'Measured'],
+                      ['tier', tierMult !== null && hasProj ? `Tier ${(tierMult * projNum).toFixed(1)}` : 'Tier'],
+                      ['league', leagueMult !== null && hasProj ? `League ${(leagueMult * projNum).toFixed(1)}` : 'League'],
+                      ['custom', 'Custom'],
+                    ] as const).map(([mode, label]) => (
+                      <button
+                        key={mode}
+                        onClick={() => setSdMode(mode)}
+                        className={`px-2.5 py-2 text-xs font-medium transition whitespace-nowrap ${
+                          sdMode === mode ? 'bg-[#0052ff] text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                {distMode === 'auto' && (
-                  <div className="mt-1 max-w-[300px] text-[11px] leading-snug text-slate-400">
-                    {autoDist.basis === 'shape' && measured
-                      ? autoDist.dist === 'lognormal'
-                        ? `Picked from HIS shape: average ${(measured.mean - measured.median).toFixed(1)} above his typical game — boom/bust pattern.`
-                        : `Picked from HIS shape: average ≈ typical game (${measured.mean.toFixed(1)} vs ${measured.median.toFixed(1)}) — steady, no skew discount.`
-                      : 'Market default — needs 8+ games to read his own shape.'}
+                {sdMode === 'custom' && (
+                  <div className="w-20">
+                    <label className={labelCls}>SD</label>
+                    <input value={sdCustom} onChange={(e) => setSdCustom(e.target.value)} inputMode="decimal" className={fieldCls} />
                   </div>
                 )}
-              </div>
-              <div className="w-28">
-                <label className={labelCls}>Line (book&apos;s)</label>
-                {bookLines.length > 0 ? (
-                  <select value={lineInput} onChange={(e) => setLineInput(e.target.value)} className={fieldCls}>
-                    {bookLines.map((l) => (
-                      <option key={l} value={l}>{l}</option>
+                <div>
+                  <label className={labelCls}>Curve</label>
+                  <div className="flex rounded-lg border border-slate-200 overflow-hidden">
+                    {([
+                      ['auto', `Auto (${autoDist.dist === 'lognormal' ? 'Boom/Bust' : 'Balanced'})`],
+                      ['normal', 'Balanced'],
+                      ['lognormal', 'Boom/Bust'],
+                    ] as const).map(([mode, label]) => (
+                      <button
+                        key={mode}
+                        onClick={() => setDistMode(mode)}
+                        className={`px-2.5 py-2 text-xs font-medium transition whitespace-nowrap ${
+                          distMode === mode ? 'bg-[#0052ff] text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
+                        }`}
+                      >
+                        {label}
+                      </button>
                     ))}
-                  </select>
-                ) : (
-                  <input value={lineInput} onChange={(e) => setLineInput(e.target.value)} inputMode="decimal" placeholder="72.5" className={fieldCls} />
-                )}
-                {/* The model's fair line: where P(over)=50% — the projection
-                    for Balanced, the lognormal median for Boom/Bust. */}
+                  </div>
+                </div>
+              </div>
+              {/* One combined explainer line for the whole model row */}
+              <div className="text-[11px] leading-snug text-slate-400">
+                <span className="font-medium text-slate-500">Projection</span> = his average — the curve
+                derives the median.
+                {' · '}
+                <span className="font-medium text-slate-500">SD</span>{' '}
+                {sdMode === 'measured' && `= his own swings${measured ? ` (${measured.values.length} games)` : ''}.`}
+                {sdMode === 'tier' && '= players at his projected volume (rookie/new-role fallback).'}
+                {sdMode === 'league' && `= all ${position}s blended (coarse backstop).`}
+                {sdMode === 'custom' && '= set by hand.'}
+                {' · '}
+                <span className="font-medium text-slate-500">Curve</span>{' '}
+                {distMode !== 'auto' && '= set by hand.'}
+                {distMode === 'auto' && (autoDist.basis === 'shape' && measured
+                  ? autoDist.dist === 'lognormal'
+                    ? `auto from his shape: average ${(measured.mean - measured.median).toFixed(1)} above his typical game — boom/bust.`
+                    : `auto from his shape: average ≈ typical (${measured.mean.toFixed(1)} vs ${measured.median.toFixed(1)}) — steady.`
+                  : 'auto = market default (needs 8+ games to read his shape).')}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="text-[10px] uppercase tracking-wide text-slate-400 font-medium">The book&apos;s offer</div>
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="w-24">
+                  <label className={labelCls}>Line</label>
+                  {bookLines.length > 0 ? (
+                    <select value={lineInput} onChange={(e) => setLineInput(e.target.value)} className={fieldCls}>
+                      {bookLines.map((l) => (
+                        <option key={l} value={l}>{l}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input value={lineInput} onChange={(e) => setLineInput(e.target.value)} inputMode="decimal" placeholder="72.5" className={fieldCls} />
+                  )}
+                </div>
+                <div className="w-24">
+                  <label className={labelCls}>Over price</label>
+                  <input
+                    value={overPriceInput}
+                    onChange={(e) => setOverPriceInput(e.target.value)}
+                    inputMode="numeric"
+                    placeholder="-120"
+                    title="American odds (±100 or beyond)"
+                    className={`${fieldCls}${overPriceInput && overPrice === null ? ' ring-2 ring-red-300' : ''}`}
+                  />
+                </div>
+                <div className="w-24">
+                  <label className={labelCls}>Under price</label>
+                  <input
+                    value={underPriceInput}
+                    onChange={(e) => setUnderPriceInput(e.target.value)}
+                    inputMode="numeric"
+                    placeholder="-102"
+                    title="American odds (±100 or beyond)"
+                    className={`${fieldCls}${underPriceInput && underPrice === null ? ' ring-2 ring-red-300' : ''}`}
+                  />
+                </div>
+                {/* Model fair verdict chip: where P(over)=50% (projection for
+                    Balanced, lognormal median for Boom/Bust) vs the book */}
                 {hasProj && sd !== null && sd > 0 && (() => {
                   const fairLine = dist === 'normal' ? projNum : lognormalParams(projNum, sd).median;
                   const diff = hasLine ? line - fairLine : null;
                   return (
-                    <div className="mt-1 text-[11px] leading-snug text-slate-400 whitespace-nowrap">
-                      Model fair: <span className="font-medium text-slate-500">{fairLine.toFixed(1)}</span>
-                      {diff !== null && Math.abs(diff) >= 0.5 && (
-                        <span className={diff > 0 ? 'text-red-500' : 'text-emerald-600'}>
-                          {' '}(book {diff > 0 ? '+' : ''}{diff.toFixed(1)})
-                        </span>
-                      )}
+                    <div className="ml-auto text-center bg-slate-50 rounded-lg px-3 py-1.5">
+                      <div className="text-[10px] uppercase tracking-wide text-slate-400">Model fair line</div>
+                      <div className="text-sm font-semibold tabular-nums">
+                        {fairLine.toFixed(1)}
+                        {diff !== null && Math.abs(diff) >= 0.5 && (
+                          <span className={`ml-1 text-xs font-medium ${diff > 0 ? 'text-red-500' : 'text-emerald-600'}`}>
+                            book {diff > 0 ? '+' : ''}{diff.toFixed(1)}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   );
                 })()}
-              </div>
-              <div className="w-24">
-                <label className={labelCls}>Over price</label>
-                <input
-                  value={overPriceInput}
-                  onChange={(e) => setOverPriceInput(e.target.value)}
-                  inputMode="numeric"
-                  placeholder="-120"
-                  title="American odds (±100 or beyond)"
-                  className={`${fieldCls}${overPriceInput && overPrice === null ? ' ring-2 ring-red-300' : ''}`}
-                />
-              </div>
-              <div className="w-24">
-                <label className={labelCls}>Under price</label>
-                <input
-                  value={underPriceInput}
-                  onChange={(e) => setUnderPriceInput(e.target.value)}
-                  inputMode="numeric"
-                  placeholder="-102"
-                  title="American odds (±100 or beyond)"
-                  className={`${fieldCls}${underPriceInput && underPrice === null ? ' ring-2 ring-red-300' : ''}`}
-                />
               </div>
             </div>
 
