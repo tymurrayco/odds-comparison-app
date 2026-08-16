@@ -130,6 +130,9 @@ export default function PropsAdminPage() {
   const [includePost, setIncludePost] = useState(false);
   const [minOpp, setMinOpp] = useState('0');
   const [excludeZero, setExcludeZero] = useState(false);
+  // Per-game manual excludes (uncheck a row in the game log) + log visibility
+  const [excludedGames, setExcludedGames] = useState<Set<string>>(new Set());
+  const [showGameLog, setShowGameLog] = useState(false);
 
   // Pricing inputs
   const [projection, setProjection] = useState('');
@@ -307,6 +310,7 @@ export default function PropsAdminPage() {
     includePost?: boolean;
     minOpp?: string;
     excludeZero?: boolean;
+    excludedGames?: string[];
     projection?: string;
     projectionEdited?: boolean;
     sdMode?: 'measured' | 'league' | 'tier' | 'custom';
@@ -371,6 +375,7 @@ export default function PropsAdminPage() {
     if (s.includePost !== undefined) setIncludePost(s.includePost);
     if (s.minOpp !== undefined) setMinOpp(s.minOpp);
     if (s.excludeZero !== undefined) setExcludeZero(s.excludeZero);
+    if (s.excludedGames?.length) setExcludedGames(new Set(s.excludedGames));
     if (s.sdMode) setSdMode(s.sdMode);
     if (s.sdCustom !== undefined) setSdCustom(s.sdCustom);
     if (s.distMode) setDistMode(s.distMode);
@@ -392,12 +397,13 @@ export default function PropsAdminPage() {
       localStorage.setItem(PERSIST_KEY, JSON.stringify({
         sportKey, marketKey, player: selectedPlayer,
         seasonsSelected, includePost, minOpp, excludeZero,
+        excludedGames: Array.from(excludedGames),
         projection, projectionEdited, sdMode, sdCustom, distMode,
         lineInput, overPriceInput, underPriceInput,
       } satisfies SavedPricerState));
     } catch { /* storage full/blocked — non-blocking */ }
   }, [sportKey, marketKey, selectedPlayer, seasonsSelected, includePost, minOpp, excludeZero,
-      projection, projectionEdited, sdMode, sdCustom, distMode,
+      excludedGames, projection, projectionEdited, sdMode, sdCustom, distMode,
       lineInput, overPriceInput, underPriceInput]);
 
   // ---------- player logs ----------
@@ -413,6 +419,7 @@ export default function PropsAdminPage() {
     setSelectedPlayer(p);
     setGamesLoading(true);
     setPlayerGames([]);
+    setExcludedGames(new Set()); // manual excludes are per-player
     setProjectionEdited(false); // new player → fresh measured-mean default
     try {
       const res = await fetch(`/api/nfl-props/players?playerId=${encodeURIComponent(p.player_id)}`);
@@ -485,15 +492,19 @@ export default function PropsAdminPage() {
     [playerGames]
   );
 
+  // One key per game row so manual excludes survive re-renders and persist.
+  const gameKey = (g: PlayerGameLog): string => `${g.season}-${g.season_type}-${g.week}`;
+
   const measured: MeasuredStats | null = useMemo(() => {
     if (!playerGames.length || !seasonsSelected.length) return null;
-    return measurePlayer(playerGames, marketDef, {
+    const kept = playerGames.filter((g) => !excludedGames.has(gameKey(g)));
+    return measurePlayer(kept, marketDef, {
       seasons: seasonsSelected,
       includePost,
       minOpportunities: Number(minOpp) || 0,
       excludeZero,
     });
-  }, [playerGames, seasonsSelected, includePost, minOpp, excludeZero, marketDef]);
+  }, [playerGames, seasonsSelected, includePost, minOpp, excludeZero, excludedGames, marketDef]);
 
   // Default projection follows measured mean until the user edits it
   // (projectionEdited flips on typing; clearing the box re-enables the default)
@@ -947,6 +958,86 @@ export default function PropsAdminPage() {
                 League {position} multiplier {leagueMult}
                 {tierMult !== null && ` · tier ${tierMult}`}
                 {measured && ` · this player ${measured.cv.toFixed(2)}`}
+              </div>
+            )}
+
+            {/* Game log — uncheck a row to exclude that game from the sample */}
+            {playerGames.length > 0 && seasonsSelected.length > 0 && (
+              <div>
+                <button
+                  onClick={() => setShowGameLog(!showGameLog)}
+                  className="text-xs font-medium text-slate-500 hover:text-slate-700 transition"
+                >
+                  {showGameLog ? '▾' : '▸'} Game log
+                  {excludedGames.size > 0 && (
+                    <span className="ml-1.5 text-amber-600">({excludedGames.size} excluded by hand)</span>
+                  )}
+                </button>
+                {showGameLog && (() => {
+                  const minOppN = Number(minOpp) || 0;
+                  const rows = playerGames
+                    .filter((g) => seasonsSelected.includes(g.season))
+                    .filter((g) => (includePost ? true : g.season_type === 'REG'))
+                    .sort((a, b) => b.season - a.season || b.week - a.week);
+                  return (
+                    <div className="mt-1.5 overflow-x-auto">
+                      <table className="text-xs">
+                        <thead>
+                          <tr className="text-left text-slate-400 uppercase tracking-wide">
+                            <th className="py-1 pr-2">In</th>
+                            <th className="py-1 pr-3">Season</th>
+                            <th className="py-1 pr-3">Wk</th>
+                            <th className="py-1 pr-3">Opp</th>
+                            <th className="py-1 pr-3 text-right">{marketDef.opportunityStat}</th>
+                            <th className="py-1 pr-3 text-right">{marketDef.label}</th>
+                            <th className="py-1"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rows.map((g) => {
+                            const k = gameKey(g);
+                            const opp = g[marketDef.opportunityStat] ?? 0;
+                            const val = g[marketDef.stat] ?? 0;
+                            const manualOut = excludedGames.has(k);
+                            const autoOut = !manualOut && (opp < minOppN || (excludeZero && val <= 0));
+                            const out = manualOut || autoOut;
+                            return (
+                              <tr key={k} className={`border-t border-slate-100 ${out ? 'opacity-45' : ''}`}>
+                                <td className="py-1 pr-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={!manualOut}
+                                    onChange={() =>
+                                      setExcludedGames((prev) => {
+                                        const next = new Set(prev);
+                                        if (next.has(k)) next.delete(k); else next.add(k);
+                                        return next;
+                                      })
+                                    }
+                                  />
+                                </td>
+                                <td className="py-1 pr-3 tabular-nums">{g.season}</td>
+                                <td className="py-1 pr-3 tabular-nums">
+                                  {g.week}{g.season_type !== 'REG' ? ' P' : ''}
+                                </td>
+                                <td className="py-1 pr-3">{g.opponent ?? '—'}</td>
+                                <td className="py-1 pr-3 text-right tabular-nums text-slate-500">{opp}</td>
+                                <td className={`py-1 pr-3 text-right tabular-nums font-medium ${
+                                  measured && !out ? (val >= measured.median ? 'text-emerald-600' : 'text-red-500') : ''
+                                }`}>
+                                  {val}
+                                </td>
+                                <td className="py-1 text-[10px] text-slate-400">
+                                  {manualOut ? 'excluded' : autoOut ? (opp < minOppN ? 'min-opps' : 'zero') : ''}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </div>
