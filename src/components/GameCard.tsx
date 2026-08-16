@@ -222,7 +222,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                     <Link
                       href={`/team/ncaaf/${encodeURIComponent(game.away_team)}`}
                       onClick={(e) => e.stopPropagation()}
-                      className="hover:underline"
+                      className="underline decoration-dotted decoration-gray-300 underline-offset-4 hover:text-blue-700 hover:decoration-blue-500"
                     >
                       {game.away_team}
                     </Link>
@@ -230,7 +230,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                     <Link
                       href={`/team/ncaaf/${encodeURIComponent(game.home_team)}`}
                       onClick={(e) => e.stopPropagation()}
-                      className="hover:underline"
+                      className="underline decoration-dotted decoration-gray-300 underline-offset-4 hover:text-blue-700 hover:decoration-blue-500"
                     >
                       {game.home_team}
                     </Link>
