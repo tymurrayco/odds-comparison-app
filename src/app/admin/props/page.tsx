@@ -617,7 +617,20 @@ export default function PropsAdminPage() {
     return Number.isFinite(c) && c > 0 ? c : null;
   }, [sdMode, measured, leagueMult, tierMult, hasProj, projNum, sdCustom]);
 
-  const dist: Distribution = distMode === 'auto' ? marketDef.defaultDist : distMode;
+  // Auto distribution now reads the PLAYER'S measured shape, not just the
+  // stat type: mean meaningfully above median (>5%) = boom/bust pattern ->
+  // lognormal; otherwise (steady or dud-dragged) -> normal. Falls back to
+  // the market default until the sample is big enough (8+ games) for the
+  // mean/median comparison to be trustworthy.
+  const autoDist: { dist: Distribution; basis: 'shape' | 'default' } = useMemo(() => {
+    if (measured && measured.games >= 8 && measured.median > 0) {
+      const rel = (measured.mean - measured.median) / measured.median;
+      return { dist: rel > 0.05 ? 'lognormal' : 'normal', basis: 'shape' };
+    }
+    return { dist: marketDef.defaultDist, basis: 'default' };
+  }, [measured, marketDef]);
+
+  const dist: Distribution = distMode === 'auto' ? autoDist.dist : distMode;
 
   const overPrice = parseAmerican(overPriceInput);
   const underPrice = parseAmerican(underPriceInput);
@@ -1105,8 +1118,8 @@ export default function PropsAdminPage() {
                   {([
                     // Casual-friendly names for the curve shapes: Balanced =
                     // symmetric bell (normal), Boom/Bust = right-skewed with a
-                    // big-game tail (lognormal).
-                    ['auto', `Auto (${marketDef.defaultDist === 'lognormal' ? 'Boom/Bust' : 'Balanced'})`],
+                    // big-game tail (lognormal). Auto shows what it picked.
+                    ['auto', `Auto (${autoDist.dist === 'lognormal' ? 'Boom/Bust' : 'Balanced'})`],
                     ['normal', 'Balanced'],
                     ['lognormal', 'Boom/Bust'],
                   ] as const).map(([mode, label]) => (
@@ -1121,6 +1134,15 @@ export default function PropsAdminPage() {
                     </button>
                   ))}
                 </div>
+                {distMode === 'auto' && (
+                  <div className="mt-1 max-w-[300px] text-[11px] leading-snug text-slate-400">
+                    {autoDist.basis === 'shape' && measured
+                      ? autoDist.dist === 'lognormal'
+                        ? `Picked from HIS shape: average ${(measured.mean - measured.median).toFixed(1)} above his typical game — boom/bust pattern.`
+                        : `Picked from HIS shape: average ≈ typical game (${measured.mean.toFixed(1)} vs ${measured.median.toFixed(1)}) — steady, no skew discount.`
+                      : 'Market default — needs 8+ games to read his own shape.'}
+                  </div>
+                )}
               </div>
               <div className="w-28">
                 <label className={labelCls}>Line (book&apos;s)</label>
