@@ -1,17 +1,23 @@
 'use client';
 
-// src/app/team/ncaaf/[teamId]/page.tsx
-// Standardized college-football team page: identity header themed to the
-// team's colors, coach/stadium/conference facts, and the full-season schedule
-// with results and current betting lines. [teamId] accepts an ESPN numeric id
-// or any common team-name variant (resolved by /api/cfb-team), so links can
-// be built straight from Odds API team strings. Data is live ESPN — nothing
-// is stored. This is v1 of a template we iterate on.
+// src/app/team/[league]/[teamId]/page.tsx
+// Standardized football team page (NCAAF + NFL): identity header themed to
+// the team's colors, coach/stadium/conference facts, and the full-season
+// schedule with results and current betting lines. [teamId] accepts an ESPN
+// numeric id or any common team-name variant (resolved by /api/team-page), so
+// links can be built straight from Odds API team strings. Data is live ESPN —
+// nothing is stored. This is the template we iterate on.
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { fetchOdds, Game } from '@/lib/api';
+
+// League slug → odds-board sport keys to scan for lines on upcoming games.
+const LEAGUE_ODDS_KEYS: Record<string, string[]> = {
+  ncaaf: ['americanfootball_ncaaf'],
+  nfl: ['americanfootball_nfl', 'americanfootball_nfl_preseason'],
+};
 
 interface TeamVenue {
   name: string | null; city: string | null; state: string | null;
@@ -25,7 +31,8 @@ interface TeamInfo {
   coach: string | null; coachSeasons: number | null; venue: TeamVenue;
 }
 interface ScheduleGame {
-  id: string; date: string; week: number | null; seasonType: 'regular' | 'postseason';
+  id: string; date: string; week: number | null;
+  seasonType: 'preseason' | 'regular' | 'postseason';
   home: boolean; neutral: boolean; venue: string | null; tv: string | null;
   opponent: { id: string; name: string; abbreviation: string | null; logo: string | null; rank: number | null };
   state: 'pre' | 'in' | 'post'; completed: boolean; result: 'W' | 'L' | 'T' | null;
@@ -81,21 +88,23 @@ function gameLines(odds: Game, teamName: string): { spread: number | null; total
 
 const fmtSpread = (n: number): string => (n > 0 ? `+${n}` : `${n}`);
 
-export default function CfbTeamPage() {
-  const params = useParams<{ teamId: string }>();
+export default function TeamPage() {
+  const params = useParams<{ league: string; teamId: string }>();
   const router = useRouter();
+  const league = (params?.league ?? '').toLowerCase();
   const teamId = decodeURIComponent(params?.teamId ?? '');
+  const leagueSupported = league in LEAGUE_ODDS_KEYS;
 
   const [data, setData] = useState<TeamPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [odds, setOdds] = useState<Game[]>([]);
 
   useEffect(() => {
-    if (!teamId) return;
+    if (!teamId || !leagueSupported) return;
     let cancelled = false;
     setData(null);
     setError(null);
-    fetch(`/api/cfb-team?team=${encodeURIComponent(teamId)}`)
+    fetch(`/api/team-page?league=${league}&team=${encodeURIComponent(teamId)}`)
       .then(async (r) => {
         const json = await r.json();
         if (!r.ok) throw new Error(json.error || `HTTP ${r.status}`);
@@ -103,14 +112,17 @@ export default function CfbTeamPage() {
       })
       .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load team'); });
     return () => { cancelled = true; };
-  }, [teamId]);
+  }, [league, teamId, leagueSupported]);
 
-  // Current NCAAF board (server-cached) for lines on upcoming games.
+  // Current odds board (server-cached) for lines on upcoming games.
   useEffect(() => {
+    if (!leagueSupported) return;
     let cancelled = false;
-    fetchOdds('americanfootball_ncaaf').then((r) => { if (!cancelled) setOdds(r.data); });
+    Promise.all(LEAGUE_ODDS_KEYS[league].map((k) => fetchOdds(k))).then((results) => {
+      if (!cancelled) setOdds(results.flatMap((r) => r.data));
+    });
     return () => { cancelled = true; };
-  }, []);
+  }, [league, leagueSupported]);
 
   useEffect(() => {
     if (data) document.title = `${data.team.displayName} — odds.day`;
@@ -138,6 +150,16 @@ export default function CfbTeamPage() {
     return map;
   }, [data, odds]);
 
+  if (!leagueSupported) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+        <div className="text-center">
+          <div className="text-sm text-red-600 mb-3">Team pages aren&apos;t available for “{league}” yet.</div>
+          <button onClick={() => router.push('/')} className="text-sm text-blue-600 hover:underline">← Back to odds</button>
+        </div>
+      </div>
+    );
+  }
   if (error) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
@@ -157,6 +179,8 @@ export default function CfbTeamPage() {
   }
 
   const { team, season, schedule } = data;
+  const groupLabel = league === 'nfl' ? 'Division' : 'Conference';
+  const postLabel = league === 'nfl' ? 'Post' : 'Bowl';
   const facts: [string, string][] = [];
   if (team.coach) facts.push(['Head Coach', team.coach + (team.coachSeasons ? ` · ${team.coachSeasons}${['st', 'nd', 'rd'][team.coachSeasons - 1] ?? 'th'} season` : '')]);
   if (team.venue.name) {
@@ -167,7 +191,7 @@ export default function CfbTeamPage() {
     const surface = team.venue.grass === null ? null : team.venue.grass ? 'Grass' : 'Turf';
     if (surface) facts.push(['Surface', surface + (team.venue.indoor ? ' · Indoor' : '')]);
   }
-  if (team.conference) facts.push(['Conference', team.conference]);
+  if (team.conference) facts.push([groupLabel, team.conference]);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -189,9 +213,9 @@ export default function CfbTeamPage() {
                 {team.record && <span className="font-semibold">{team.record}</span>}
                 {team.standingSummary && <span>· {team.standingSummary}</span>}
               </div>
-              {team.conferenceShort && (
+              {(team.conferenceShort ?? team.conference) && (
                 <span className="inline-flex mt-2 px-2 py-0.5 rounded-full bg-white/15 text-white text-xs font-medium">
-                  {team.conferenceShort}
+                  {team.conferenceShort ?? team.conference}
                 </span>
               )}
             </div>
@@ -229,13 +253,17 @@ export default function CfbTeamPage() {
                 return (
                   <div key={g.id} className="flex items-center gap-3 py-2.5">
                     <div className="w-10 shrink-0 text-center">
-                      <div className="text-[10px] uppercase text-slate-400">{g.seasonType === 'postseason' ? 'Bowl' : `Wk ${g.week ?? '—'}`}</div>
+                      <div className="text-[10px] uppercase text-slate-400">
+                        {g.seasonType === 'postseason' ? postLabel
+                          : g.seasonType === 'preseason' ? 'Pre'
+                          : `Wk ${g.week ?? '—'}`}
+                      </div>
                       <div className="text-xs font-medium text-slate-600">
                         {d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                       </div>
                     </div>
                     <Link
-                      href={`/team/ncaaf/${g.opponent.id}`}
+                      href={`/team/${league}/${g.opponent.id}`}
                       className="flex items-center gap-2 min-w-0 flex-1 group"
                     >
                       {g.opponent.logo && (

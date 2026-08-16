@@ -1,20 +1,39 @@
-// src/app/api/cfb-team/route.ts
-// Standardized college-football team payload for the /team/ncaaf/[teamId]
-// pages: identity + colors, coach, stadium, conference, and the full-season
+// src/app/api/team-page/route.ts
+// Standardized football team payload for the /team/[league]/[teamId] pages:
+// identity + colors, coach, stadium, conference/division, and the full-season
 // schedule. Aggregated live from ESPN (site + core APIs) with server-side
 // caching — no database storage; every team page renders from this one shape.
 //
-// ?team= accepts an ESPN numeric id OR a team name (any common variant),
-// so links can be built from Odds API names without an id lookup table.
-// ?season= optional override; defaults to the current CFB season year.
+// ?league= ncaaf | nfl. ?team= accepts an ESPN numeric id OR a team name
+// (any common variant), so links can be built from Odds API names without an
+// id lookup table. ?season= optional override; defaults to the current season.
 
 import { NextResponse } from 'next/server';
 
-const SITE = 'https://site.api.espn.com/apis/site/v2/sports/football/college-football';
-const CORE = 'https://sports.core.api.espn.com/v2/sports/football/leagues/college-football';
-
 const DAY = 60 * 60 * 24;
 const HOUR = 60 * 60;
+
+type SeasonType = 'preseason' | 'regular' | 'postseason';
+
+interface LeagueConfig {
+  site: string;   // site.api base for this league
+  core: string;   // core.api base for this league
+  seasonTypes: [SeasonType, number][]; // which schedule segments to fetch
+}
+
+const LEAGUES: Record<string, LeagueConfig> = {
+  ncaaf: {
+    site: 'https://site.api.espn.com/apis/site/v2/sports/football/college-football',
+    core: 'https://sports.core.api.espn.com/v2/sports/football/leagues/college-football',
+    seasonTypes: [['regular', 2], ['postseason', 3]],
+  },
+  nfl: {
+    site: 'https://site.api.espn.com/apis/site/v2/sports/football/nfl',
+    core: 'https://sports.core.api.espn.com/v2/sports/football/leagues/nfl',
+    // NFL preseason games are bettable and on the odds board — include them.
+    seasonTypes: [['preseason', 1], ['regular', 2], ['postseason', 3]],
+  },
+};
 
 const normalize = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -36,7 +55,7 @@ interface ScheduleGame {
   id: string;
   date: string;
   week: number | null;
-  seasonType: 'regular' | 'postseason';
+  seasonType: SeasonType;
   home: boolean;
   neutral: boolean;
   venue: string | null;
@@ -62,7 +81,7 @@ export interface TeamPayload {
     alternateColor: string | null;
     record: string | null;
     standingSummary: string | null;
-    conference: string | null;
+    conference: string | null;       // NCAAF conference / NFL division
     conferenceShort: string | null;
     coach: string | null;
     coachSeasons: number | null;
@@ -80,15 +99,16 @@ export interface TeamPayload {
   schedule: ScheduleGame[];
 }
 
-// CFB season year: Jan bowl games belong to the prior season's year.
+// Season year: Jan/Feb games (bowls, Super Bowl) belong to the prior year's
+// season; from March on we point at the season starting that fall.
 function currentSeason(): number {
   const now = new Date();
-  return now.getUTCMonth() >= 1 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
+  return now.getUTCMonth() >= 2 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
 }
 
-async function resolveTeamId(team: string): Promise<string | null> {
+async function resolveTeamId(cfg: LeagueConfig, team: string): Promise<string | null> {
   if (/^\d+$/.test(team)) return team;
-  const data: any = await getJson(`${SITE}/teams?limit=1000`, DAY);
+  const data: any = await getJson(`${cfg.site}/teams?limit=1000`, DAY);
   const entries: any[] = data?.sports?.[0]?.leagues?.[0]?.teams ?? [];
   const want = normalize(team);
   for (const entry of entries) {
@@ -101,7 +121,7 @@ async function resolveTeamId(team: string): Promise<string | null> {
   return null;
 }
 
-function parseSchedule(data: any, teamId: string, seasonType: 'regular' | 'postseason'): ScheduleGame[] {
+function parseSchedule(data: any, teamId: string, seasonType: SeasonType): ScheduleGame[] {
   const out: ScheduleGame[] = [];
   for (const e of data?.events ?? []) {
     const comp = e?.competitions?.[0];
@@ -127,7 +147,7 @@ function parseSchedule(data: any, teamId: string, seasonType: 'regular' | 'posts
         id: String(them.team?.id ?? ''),
         name: them.team?.displayName ?? them.team?.shortDisplayName ?? '?',
         abbreviation: them.team?.abbreviation ?? null,
-        logo: them.team?.logos?.[0]?.href ?? (them.team?.id ? `https://a.espncdn.com/i/teamlogos/ncaa/500/${them.team.id}.png` : null),
+        logo: them.team?.logos?.[0]?.href ?? null,
         rank: typeof oppRank === 'number' && oppRank <= 25 ? oppRank : null,
       },
       state: (status.state as 'pre' | 'in' | 'post') ?? 'pre',
@@ -145,22 +165,27 @@ function parseSchedule(data: any, teamId: string, seasonType: 'regular' | 'posts
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
+  const league = (searchParams.get('league') ?? 'ncaaf').toLowerCase();
+  const cfg = LEAGUES[league];
+  if (!cfg) {
+    return NextResponse.json({ error: `Unsupported league: ${league}` }, { status: 400 });
+  }
   const teamParam = searchParams.get('team');
   if (!teamParam) {
     return NextResponse.json({ error: 'Missing team parameter' }, { status: 400 });
   }
   const season = Number(searchParams.get('season')) || currentSeason();
 
-  const teamId = await resolveTeamId(teamParam);
+  const teamId = await resolveTeamId(cfg, teamParam);
   if (!teamId) {
     return NextResponse.json({ error: `Unknown team: ${teamParam}` }, { status: 404 });
   }
 
-  const [siteTeam, coreTeam, schedReg, schedPost] = await Promise.all([
-    getJson(`${SITE}/teams/${teamId}`, HOUR),
-    getJson(`${CORE}/seasons/${season}/teams/${teamId}`, DAY),
-    getJson(`${SITE}/teams/${teamId}/schedule?season=${season}&seasontype=2`, HOUR),
-    getJson(`${SITE}/teams/${teamId}/schedule?season=${season}&seasontype=3`, HOUR),
+  const [siteTeam, coreTeam, ...scheds] = await Promise.all([
+    getJson(`${cfg.site}/teams/${teamId}`, HOUR),
+    getJson(`${cfg.core}/seasons/${season}/teams/${teamId}`, DAY),
+    ...cfg.seasonTypes.map(([, st]) =>
+      getJson(`${cfg.site}/teams/${teamId}/schedule?season=${season}&seasontype=${st}`, HOUR)),
   ]);
 
   const t: any = (siteTeam as any)?.team;
@@ -168,7 +193,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Team lookup failed' }, { status: 502 });
   }
 
-  // Conference, coach, and full venue live behind core-API $refs.
+  // Conference/division, coach, and full venue live behind core-API $refs.
   const core: any = coreTeam ?? {};
   const [group, coachList, venueFull] = await Promise.all([
     core.groups?.$ref ? getJson(core.groups.$ref, DAY) : null,
@@ -190,10 +215,9 @@ export async function GET(request: Request) {
   const recordItems: any[] = t.record?.items ?? [];
   const record = recordItems.find((r) => r.type === 'total')?.summary ?? recordItems[0]?.summary ?? null;
 
-  const schedule = [
-    ...parseSchedule(schedReg, teamId, 'regular'),
-    ...parseSchedule(schedPost, teamId, 'postseason'),
-  ].sort((a, b) => a.date.localeCompare(b.date));
+  const schedule = cfg.seasonTypes
+    .flatMap(([label], i) => parseSchedule(scheds[i], teamId, label))
+    .sort((a, b) => a.date.localeCompare(b.date));
 
   const payload: TeamPayload = {
     team: {
@@ -202,7 +226,7 @@ export async function GET(request: Request) {
       nickname: t.nickname ?? null,
       abbreviation: t.abbreviation ?? null,
       location: t.location ?? null,
-      logo: t.logos?.[0]?.href ?? `https://a.espncdn.com/i/teamlogos/ncaa/500/${teamId}.png`,
+      logo: t.logos?.[0]?.href ?? null,
       color: t.color ?? null,
       alternateColor: t.alternateColor ?? null,
       record,

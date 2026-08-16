@@ -10,6 +10,13 @@ import { GameRestData, TeamRestInfo } from '@/lib/nhlRest';
 import { resolveDeepLink, fillLinkTemplate, promptForState } from '@/lib/betLinks';
 import { useTeamColorMap, teamInfoFromMap } from '@/lib/myGameBets';
 
+// Sport keys whose team cells link to /team/[league]/[name] pages
+const TEAM_PAGE_LEAGUES: Record<string, string> = {
+  americanfootball_ncaaf: 'ncaaf',
+  americanfootball_nfl: 'nfl',
+  americanfootball_nfl_preseason: 'nfl',
+};
+
 interface OddsTableProps {
   games: Game[];
   view?: 'moneyline' | 'spread' | 'totals' | 'spreads_h1';
@@ -503,10 +510,10 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                   <tr key={team}>
                     <td className={`px-2 md:px-4 py-3 text-xs md:text-sm font-medium text-gray-900 sticky left-0 z-10 bg-white border-r border-gray-100 ${index === 0 ? 'border-b border-b-gray-200' : ''} ${restData ? 'min-w-[70px]' : 'max-w-[120px] whitespace-nowrap'}`}>
                       {/* Logo only on mobile / name on desktop — name shows on mobile too when the logo is missing */}
-                      {game.sport_key === 'americanfootball_ncaaf' ? (
-                        // NCAAF team cells link to the team page (logo is the tap target on mobile)
+                      {TEAM_PAGE_LEAGUES[game.sport_key] ? (
+                        // Football team cells link to the team page (logo is the tap target on mobile)
                         <Link
-                          href={`/team/ncaaf/${encodeURIComponent(team)}`}
+                          href={`/team/${TEAM_PAGE_LEAGUES[game.sport_key]}/${encodeURIComponent(team)}`}
                           className="block hover:text-blue-700"
                         >
                           <TeamLogoOrName srcs={logoSrcs} name={team} restBadge={restBadge} />
