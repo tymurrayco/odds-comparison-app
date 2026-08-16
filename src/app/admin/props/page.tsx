@@ -95,6 +95,24 @@ const hexToRgba = (hex: string, alpha: number): string => {
   if (h.length !== 6) return `rgba(0,0,0,${alpha})`;
   return `rgba(${parseInt(h.slice(0, 2), 16)},${parseInt(h.slice(2, 4), 16)},${parseInt(h.slice(4, 6), 16)},${alpha})`;
 };
+const luminance = (hex: string): number => {
+  const h = hex.replace('#', '').trim();
+  if (h.length !== 6) return 128;
+  return 0.2126 * parseInt(h.slice(0, 2), 16) + 0.7152 * parseInt(h.slice(2, 4), 16) + 0.0722 * parseInt(h.slice(4, 6), 16);
+};
+// ESPN's "primary" is sometimes the near-black/navy of the pair (Broncos:
+// dark navy primary, orange alternate) — as a 3px accent that reads as plain
+// black. Prefer the alternate when the primary is very dark or very light
+// and the alternate is more usable.
+const pickAccent = (color?: string, alt?: string): string | null => {
+  if (!color) return alt ?? null;
+  const l = luminance(color);
+  if ((l < 50 || l > 225) && alt) {
+    const la = luminance(alt);
+    if (la >= 50 && la <= 225) return alt;
+  }
+  return color;
+};
 interface TeamTheme { color: string; logo: string }
 
 const evCls = (ev: number | null): string =>
@@ -160,8 +178,10 @@ export default function PropsAdminPage() {
           teamMapRef.current = (await resp.json()).teams ?? {};
         }
         const code = selectedPlayer.team.toUpperCase();
-        const info = teamMapRef.current?.[normalizeTeamKey(TEAM_CODE_ALIASES[code] ?? code)];
-        if (!cancelled) setTeamTheme(info?.color ? { color: info.color, logo: info.logo } : null);
+        const info = teamMapRef.current?.[normalizeTeamKey(TEAM_CODE_ALIASES[code] ?? code)] as
+          ({ color: string; logo: string; alternateColor?: string } | undefined);
+        const accent = pickAccent(info?.color, info?.alternateColor);
+        if (!cancelled) setTeamTheme(accent ? { color: accent, logo: info?.logo ?? '' } : null);
       } catch { /* theming is cosmetic — never block */ }
     })();
     return () => { cancelled = true; };
@@ -170,6 +190,17 @@ export default function PropsAdminPage() {
   const themedCard = teamTheme
     ? { borderTop: `3px solid #${teamTheme.color}` }
     : undefined;
+
+  // × on the player badge: clear the player and everything derived from him.
+  const clearPlayer = () => {
+    setSelectedPlayer(null);
+    setPlayerGames([]);
+    setExcludedGames(new Set());
+    setSeasonsSelected([]);
+    setProjection('');
+    setProjectionEdited(false);
+    setPlayerSearch('');
+  };
 
   // Pricing inputs
   const [projection, setProjection] = useState('');
@@ -859,33 +890,13 @@ export default function PropsAdminPage() {
             markets (instant — logs carry every stat), then optionally attach
             book quotes below. */}
         <div className={`${cardCls} space-y-3`} style={themedCard}>
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="flex-1 min-w-[220px] relative">
-              <label className={labelCls}>Player</label>
-              <input
-                value={playerSearch}
-                onChange={(e) => setPlayerSearch(e.target.value)}
-                placeholder="Josh Jacobs…"
-                className={fieldCls}
-              />
-              {playerSearch.trim().length >= 2 && playerResults.length > 0 && (
-                <div className="absolute z-20 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-56 overflow-auto">
-                  {playerResults.map((p) => (
-                    <button
-                      key={p.player_id}
-                      onClick={() => { selectPlayer(p); setPlayerSearch(''); }}
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex justify-between"
-                    >
-                      <span>{p.player_name}</span>
-                      <span className="text-xs text-slate-400">{p.position} · {p.team} · {p.last_season}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            {selectedPlayer && (
+          <div>
+            <label className={labelCls}>Player</label>
+            {selectedPlayer ? (
+              /* Compact team-themed badge replaces the search bar; × clears
+                 the player and brings the search back. */
               <div
-                className="flex items-center gap-2 text-sm px-3 py-2 rounded-lg bg-slate-100"
+                className="inline-flex items-center gap-2 text-sm pl-3 pr-1.5 py-1.5 rounded-full bg-slate-100"
                 style={teamTheme ? {
                   background: hexToRgba(teamTheme.color, 0.1),
                   border: `1px solid ${hexToRgba(teamTheme.color, 0.35)}`,
@@ -895,8 +906,38 @@ export default function PropsAdminPage() {
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={teamTheme.logo} alt="" className="h-5 w-5 object-contain" />
                 )}
-                <span className="font-semibold">{selectedPlayer.player_name}</span>{' '}
+                <span className="font-semibold">{selectedPlayer.player_name}</span>
                 <span className="text-slate-500 text-xs">{selectedPlayer.position} · {selectedPlayer.team}</span>
+                <button
+                  onClick={clearPlayer}
+                  aria-label="Clear player"
+                  className="ml-0.5 inline-flex items-center justify-center w-5 h-5 rounded-full text-slate-400 hover:bg-white/70 hover:text-slate-700 transition"
+                >
+                  <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
+                </button>
+              </div>
+            ) : (
+              <div className="max-w-sm relative">
+                <input
+                  value={playerSearch}
+                  onChange={(e) => setPlayerSearch(e.target.value)}
+                  placeholder="Josh Jacobs…"
+                  className={fieldCls}
+                />
+                {playerSearch.trim().length >= 2 && playerResults.length > 0 && (
+                  <div className="absolute z-20 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-56 overflow-auto">
+                    {playerResults.map((p) => (
+                      <button
+                        key={p.player_id}
+                        onClick={() => { selectPlayer(p); setPlayerSearch(''); }}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex justify-between"
+                      >
+                        <span>{p.player_name}</span>
+                        <span className="text-xs text-slate-400">{p.position} · {p.team} · {p.last_season}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
