@@ -1207,7 +1207,7 @@ export default function PropsAdminPage() {
                   />
                 </div>
                 <div>
-                  <label className={labelCls}>Swinginess</label>
+                  <label className={labelCls}>Volatility</label>
                   <div className="flex rounded-lg border border-slate-200 overflow-hidden">
                     {([
                       ['measured', measured ? `Measured ${measured.sd.toFixed(1)}` : 'Measured'],
@@ -1259,8 +1259,8 @@ export default function PropsAdminPage() {
                 <span className="font-medium text-slate-500">Projection</span> = his average — the curve
                 derives the median.
                 {' · '}
-                <span className="font-medium text-slate-500">Swinginess</span>{' '}
-                {sdMode === 'measured' && `= his own swings${measured ? ` (${measured.values.length} games)` : ''}.`}
+                <span className="font-medium text-slate-500">Volatility</span>{' '}
+                {sdMode === 'measured' && `= his own game-to-game swings${measured ? ` (${measured.values.length} games)` : ''}.`}
                 {sdMode === 'tier' && '= players at his projected volume (rookie/new-role fallback).'}
                 {sdMode === 'league' && `= all ${position}s blended (coarse backstop).`}
                 {sdMode === 'custom' && '= set by hand.'}
