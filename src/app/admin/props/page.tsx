@@ -300,6 +300,10 @@ export default function PropsAdminPage() {
     setError(null);
     try {
       const res = await fetch(`/api/props?sport=${sport}`);
+      // The free events call carries the quota header too — surface the
+      // "API N left" readout on page open, not only after a paid Load Odds.
+      const rem = res.headers.get('x-requests-remaining');
+      if (rem) setApiRemaining(rem);
       const json = await res.json();
       // /api/props error shape: { error, details } with details at top level
       if (!res.ok) throw new Error(json.details || json.error || `HTTP ${res.status}`);

@@ -161,6 +161,8 @@ export default function PropTablePage() {
 
       setProgress('loading events…');
       const evRes = await fetch(`/api/props?sport=${sportKey}`);
+      const evRem = evRes.headers.get('x-requests-remaining');
+      if (evRem) setApiRemaining(evRem);
       const evJson = await evRes.json();
       if (!evRes.ok) throw new Error(evJson.details || evJson.error || `HTTP ${evRes.status}`);
       const events: OddsEvent[] = Array.isArray(evJson) ? evJson : [];
