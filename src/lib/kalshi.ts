@@ -15,7 +15,9 @@ const SPORT_TO_KALSHI_MONEYLINE: Record<string, string[]> = {
   'icehockey_nhl': ['KXNHLGAME'],
   'soccer_epl': ['KXEPLGAME'],
   'americanfootball_nfl': ['KXNFLGAME'],
-  'americanfootball_ncaaf': ['KXNCAAFBGAME'],
+  // Renamed by Kalshi for the 2026 season: KXNCAAFBGAME (2025) -> KXNCAAFGAME
+  // (old series now 404s; audited 2026-08-16 via UNC@TCU).
+  'americanfootball_ncaaf': ['KXNCAAFGAME'],
 };
 
 // Maps the-odds-api sport keys to Kalshi series tickers for spreads
@@ -23,7 +25,7 @@ const SPORT_TO_KALSHI_SPREAD: Record<string, string[]> = {
   'basketball_ncaab': ['KXNCAAMBSPREAD'],
   'basketball_nba': ['KXNBASPREAD'],
   'americanfootball_nfl': ['KXNFLSPREAD'],
-  'americanfootball_ncaaf': ['KXNCAAFBSPREAD'],
+  'americanfootball_ncaaf': ['KXNCAAFSPREAD'], // renamed 2026 (was KXNCAAFBSPREAD)
   'baseball_mlb': ['KXMLBSPREAD'],
   'icehockey_nhl': ['KXNHLSPREAD'],
 };
@@ -31,6 +33,7 @@ const SPORT_TO_KALSHI_SPREAD: Record<string, string[]> = {
 // Maps the-odds-api sport keys to Kalshi series tickers for totals (over/under)
 const SPORT_TO_KALSHI_TOTAL: Record<string, string[]> = {
   'baseball_mlb': ['KXMLBTOTAL'],
+  'americanfootball_ncaaf': ['KXNCAAFTOTAL'], // new for 2026 — Kalshi added CFB totals
 };
 
 // Kalshi web URLs are /markets/{series}/{slug}/{event} — the slug is the
@@ -56,6 +59,7 @@ const KALSHI_SERIES_SLUGS: Record<string, string> = {
   'KXNHLGAME': 'nhl-game',
   'KXEPLGAME': 'english-premier-league-game',
   'KXNFLGAME': 'professional-football-game',
+  'KXNCAAFGAME': 'college-football-game', // confirmed against a real page URL 2026-08-16
   'KXNCAAMBCBC': 'mens-college-basketball-crown-winner',
   'KXNCAAMBNIT': 'mens-nit-tournament-champion',
   // Spreads
@@ -64,8 +68,10 @@ const KALSHI_SERIES_SLUGS: Record<string, string> = {
   'KXNFLSPREAD': 'pro-football-spread',
   'KXMLBSPREAD': 'pro-baseball-spread',
   'KXNHLSPREAD': 'nhl-spread',
+  'KXNCAAFSPREAD': 'college-football-spread', // kebab of series title "College Football Spread"
   // Totals
   'KXMLBTOTAL': 'pro-baseball-total-points',
+  'KXNCAAFTOTAL': 'college-football-total-points',
 };
 
 /**
@@ -238,7 +244,14 @@ function midPrice(m: KalshiMarketRaw): number | null {
  * - "College Basketball Crown Final: Oklahoma vs West Virginia"  (tournament)
  */
 function parseTitle(title: string): { away: string; home: string } | null {
-  // Tournament format first: "Label: Team1 vs Team2" (check before standard to avoid
+  // 2026 CFB format: "Will TCU win the North Carolina vs TCU college football game?"
+  // — must run before the standard regex, which would eat "Will TCU win the …"
+  // as a team name.
+  const willWin = title.match(/win the\s+(.+?)\s+vs\.?\s+(.+?)\s+(?:college football|professional \w+)?\s*game\??$/i);
+  if (willWin) {
+    return { away: willWin[1].trim(), home: willWin[2].trim() };
+  }
+  // Tournament format: "Label: Team1 vs Team2" (check before standard to avoid
   // the standard regex eating the label prefix as a team name)
   if (title.includes(':')) {
     const tournMatch = title.match(/:\s+(.+?)\s+vs\.?\s+(.+?)$/i);
@@ -487,12 +500,16 @@ function buildTotalsOdds(marketsByEvent: Map<string, KalshiMarketRaw[]>): Kalshi
     const activeMarkets = markets.filter(m => m.status === 'active');
     if (activeMarkets.length < 1) continue;
 
-    // Parse team names from market title, e.g. "Toronto vs Arizona Total Runs?"
+    // Parse team names from market title. Two known formats:
+    //   MLB:   "Toronto vs Arizona Total Runs?"
+    //   NCAAF: "North Carolina vs TCU college football game: Over 27.5 points scored?"
     // Kalshi uses "vs" for both home/away and neutral — order matches ticker (away first).
     let awayTeam = '';
     let homeTeam = '';
     for (const m of activeMarkets) {
-      const match = m.title?.match(/^(.+?)\s+(?:at|vs)\s+(.+?)\s+Total\s+Runs\??$/i);
+      const match =
+        m.title?.match(/^(.+?)\s+(?:at|vs)\s+(.+?)\s+Total\s+Runs\??$/i) ||
+        m.title?.match(/^(.+?)\s+(?:at|vs)\s+(.+?)\s+(?:college football|professional \w+)\s+game:/i);
       if (match) {
         awayTeam = match[1].trim();
         homeTeam = match[2].trim();
