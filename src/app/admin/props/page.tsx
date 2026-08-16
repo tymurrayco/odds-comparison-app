@@ -11,7 +11,7 @@ import {
   probOver, probToAmerican, americanToProb, devig, expectedValue,
   priceLadder, syntheticLines, median as medianOf, lognormalParams,
 } from '@/lib/props/engine';
-import { PROP_MARKETS, PropMarketDef, PlayerGameLog, Distribution } from '@/lib/props/markets';
+import { PROP_MARKETS, PROP_BOOKS, PropMarketDef, PlayerGameLog, Distribution } from '@/lib/props/markets';
 import { PropReference, measurePlayer, MeasuredStats } from '@/lib/props/reference';
 import DistributionChart from './DistributionChart';
 import { useDebounce } from '@/app/ratings/hooks/useDebounce';
@@ -341,6 +341,7 @@ export default function PropsAdminPage() {
   const extractQuotes = (bookmakers: RawBookmaker[]): Map<string, Quote[]> => {
     const map = new Map<string, Quote[]>();
     for (const bm of bookmakers ?? []) {
+      if (!PROP_BOOKS.has(bm.title)) continue;
       for (const mkt of bm.markets ?? []) {
         if (mkt.key !== marketDef.oddsApiKey && mkt.key !== marketDef.oddsApiAltKey) continue;
         for (const oc of mkt.outcomes ?? []) {

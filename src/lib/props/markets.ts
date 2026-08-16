@@ -32,6 +32,12 @@ export type StatColumn =
 
 export type Distribution = 'normal' | 'lognormal';
 
+// Books the app tracks — same set as BOOKMAKERS in src/lib/api.ts, minus
+// Kalshi/BetOnline which don't quote player props. Keys are Odds API `title`
+// strings; anything else the API returns (Fanatics, ESPN BET, Bovada, …) is
+// dropped so consensus lines and best-price EV only use books Tyler can bet.
+export const PROP_BOOKS = new Set(['DraftKings', 'FanDuel', 'BetMGM', 'BetRivers', 'Caesars']);
+
 export interface PropMarketDef {
   key: string;               // internal key
   label: string;

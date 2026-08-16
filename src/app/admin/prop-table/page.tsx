@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { probOver, probToAmerican, expectedValue, devig } from '@/lib/props/engine';
-import { PROP_MARKETS, PropMarketDef, PlayerGameLog, Distribution } from '@/lib/props/markets';
+import { PROP_MARKETS, PROP_BOOKS, PropMarketDef, PlayerGameLog, Distribution } from '@/lib/props/markets';
 import { measurePlayer } from '@/lib/props/reference';
 
 const NFL_SPORTS = [
@@ -181,6 +181,7 @@ export default function PropTablePage() {
           if (!res.ok) continue;
           const data = await res.json();
           for (const bm of (data.bookmakers ?? []) as RawBookmaker[]) {
+            if (!bm.title || !PROP_BOOKS.has(bm.title)) continue;
             for (const mkt of bm.markets ?? []) {
               if (mkt.key !== marketDef.oddsApiKey) continue;
               for (const oc of mkt.outcomes ?? []) {
