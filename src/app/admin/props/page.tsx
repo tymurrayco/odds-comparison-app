@@ -823,8 +823,8 @@ export default function PropsAdminPage() {
 
             {measured && measured.mean > measured.median && (
               <div className="text-xs text-amber-600">
-                Mean &gt; median by {(measured.mean - measured.median).toFixed(1)} — right skew present; the
-                lognormal number is the honest one at the main line.
+                Mean &gt; median by {(measured.mean - measured.median).toFixed(1)} — boom/bust pattern
+                present; the Boom/Bust number is the honest one at the main line.
               </div>
             )}
             {leagueMult !== null && (
@@ -897,9 +897,12 @@ export default function PropsAdminPage() {
                 <label className={labelCls}>Distribution</label>
                 <div className="flex rounded-lg border border-slate-200 overflow-hidden">
                   {([
-                    ['auto', `Auto (${marketDef.defaultDist === 'lognormal' ? 'Log' : 'Norm'})`],
-                    ['normal', 'Normal'],
-                    ['lognormal', 'Lognormal'],
+                    // Casual-friendly names for the curve shapes: Balanced =
+                    // symmetric bell (normal), Boom/Bust = right-skewed with a
+                    // big-game tail (lognormal).
+                    ['auto', `Auto (${marketDef.defaultDist === 'lognormal' ? 'Boom/Bust' : 'Balanced'})`],
+                    ['normal', 'Balanced'],
+                    ['lognormal', 'Boom/Bust'],
                   ] as const).map(([mode, label]) => (
                     <button
                       key={mode}
@@ -964,13 +967,13 @@ export default function PropsAdminPage() {
               <>
                 <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 text-center">
                   <div className="bg-slate-50 rounded-lg py-2.5">
-                    <div className="text-[10px] uppercase tracking-wide text-slate-400">P(Over) Normal</div>
+                    <div className="text-[10px] uppercase tracking-wide text-slate-400">P(Over) Balanced</div>
                     <div className={`text-sm tabular-nums ${dist === 'normal' ? 'font-bold' : 'text-slate-500'}`}>
                       {fmtPct(result.pNormal)}
                     </div>
                   </div>
                   <div className="bg-slate-50 rounded-lg py-2.5">
-                    <div className="text-[10px] uppercase tracking-wide text-slate-400">P(Over) Lognormal</div>
+                    <div className="text-[10px] uppercase tracking-wide text-slate-400">P(Over) Boom/Bust</div>
                     <div className={`text-sm tabular-nums ${dist === 'lognormal' ? 'font-bold' : 'text-slate-500'}`}>
                       {fmtPct(result.pLog)}
                     </div>
@@ -1023,7 +1026,7 @@ export default function PropsAdminPage() {
               <div>
                 <div className="flex items-center gap-2 mb-1.5">
                   <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Ladder — {dist}
+                    Ladder — {dist === 'lognormal' ? 'Boom/Bust' : 'Balanced'}
                   </div>
                   {bookLines.length <= 1 && (
                     <span className="text-[10px] text-slate-400">synthetic lines (load alt lines for book prices)</span>

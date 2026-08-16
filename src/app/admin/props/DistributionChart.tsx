@@ -149,11 +149,11 @@ export default function DistributionChart({ values, mean, sd, line, dist, unit }
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-1 text-[11px] text-slate-600">
         <span className="flex items-center gap-1.5">
           <span className="inline-block w-3.5 h-0.5 rounded" style={{ background: COLOR_NORMAL, opacity: dist === 'normal' ? 1 : 0.45 }} />
-          Normal
+          Balanced
         </span>
         <span className="flex items-center gap-1.5">
           <span className="inline-block w-3.5 h-0.5 rounded" style={{ background: COLOR_LOGNORMAL, opacity: dist === 'lognormal' ? 1 : 0.45 }} />
-          Lognormal
+          Boom/Bust
         </span>
         {values.length >= 4 && (
           <span className="flex items-center gap-1.5">
@@ -231,10 +231,10 @@ export default function DistributionChart({ values, mean, sd, line, dist, unit }
                       over {hover.v.toFixed(1)} {unit}
                     </text>
                     <text x={bx + 8} y={M.top + 27} fontSize={10} fill={INK}>
-                      <tspan fill={COLOR_NORMAL}>●</tspan> Normal {(hover.p.normal * 100).toFixed(1)}%
+                      <tspan fill={COLOR_NORMAL}>●</tspan> Balanced {(hover.p.normal * 100).toFixed(1)}%
                     </text>
                     <text x={bx + 8} y={M.top + 40} fontSize={10} fill={INK}>
-                      <tspan fill={COLOR_LOGNORMAL}>●</tspan> Lognormal {(hover.p.lognormal * 100).toFixed(1)}%
+                      <tspan fill={COLOR_LOGNORMAL}>●</tspan> Boom/Bust {(hover.p.lognormal * 100).toFixed(1)}%
                     </text>
                   </g>
                 );
