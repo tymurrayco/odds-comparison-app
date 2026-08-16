@@ -7,11 +7,17 @@
 // Scrub (mouse or touch-drag) to read P(over x) at any line.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { lognormalParams } from '@/lib/props/engine';
+import { lognormalParams, median } from '@/lib/props/engine';
 import { Distribution } from '@/lib/props/markets';
 
-const COLOR_NORMAL = '#0052ff';   // validated pair: ΔE(CVD) 33.9 on white
-const COLOR_LOGNORMAL = '#e8590c';
+const COLOR_NORMAL = '#0052ff';
+const COLOR_LOGNORMAL = '#16a34a';  // Boom/Bust curve: vivid green (was orange;
+                                    // blue/green stays distinguishable for
+                                    // red-green CVD since blue differs on both)
+// Histogram bars: light green above the player's median, light red below —
+// kept pale so they stay the context layer under the curves.
+const BAR_ABOVE = '#bbf7d0';
+const BAR_BELOW = '#fecaca';
 const INK_MUTED = '#94a3b8';
 const INK = '#334155';
 
@@ -157,8 +163,9 @@ export default function DistributionChart({ values, mean, sd, line, dist, unit }
         </span>
         {values.length >= 4 && (
           <span className="flex items-center gap-1.5">
-            <span className="inline-block w-2.5 h-2.5 rounded-sm bg-slate-200" />
-            Actual games ({values.length})
+            <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: BAR_ABOVE }} />
+            <span className="inline-block w-2.5 h-2.5 -ml-1 rounded-sm" style={{ background: BAR_BELOW }} />
+            Actual games above/below his median ({values.length})
           </span>
         )}
         <span className="text-slate-400 ml-auto hidden sm:inline">drag to read P(over)</span>
@@ -185,17 +192,23 @@ export default function DistributionChart({ values, mean, sd, line, dist, unit }
             </g>
           ))}
 
-          {/* histogram (context layer) */}
-          {model.bars.map((b) => {
-            const bx = model.x(b.x0);
-            const bw = Math.max(model.x(b.x1) - bx - 2, 1.5);
-            const by = model.y(b.d);
-            return (
-              <rect key={b.x0} x={bx + 1} y={by} width={bw} height={H - M.bottom - by} rx={2} fill="#e2e8f0">
-                <title>{`${b.x0}–${b.x1} ${unit}: ${b.n} game${b.n === 1 ? '' : 's'}`}</title>
-              </rect>
-            );
-          })}
+          {/* histogram (context layer) — green above the player's median,
+              red below (bin midpoint decides straddling bins) */}
+          {(() => {
+            const med = median(values);
+            return model.bars.map((b) => {
+              const bx = model.x(b.x0);
+              const bw = Math.max(model.x(b.x1) - bx - 2, 1.5);
+              const by = model.y(b.d);
+              const above = (b.x0 + b.x1) / 2 >= med;
+              return (
+                <rect key={b.x0} x={bx + 1} y={by} width={bw} height={H - M.bottom - by} rx={2}
+                  fill={above ? BAR_ABOVE : BAR_BELOW}>
+                  <title>{`${b.x0}–${b.x1} ${unit}: ${b.n} game${b.n === 1 ? '' : 's'} (${above ? 'above' : 'below'} median)`}</title>
+                </rect>
+              );
+            });
+          })()}
 
           {/* P(over) tail shade under the active curve */}
           {model.tail && <path d={model.tail} fill={activeColor} opacity={0.12} />}
