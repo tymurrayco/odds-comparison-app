@@ -12,6 +12,7 @@ import {
   priceLadder, syntheticLines, median as medianOf, lognormalParams,
 } from '@/lib/props/engine';
 import { PROP_MARKETS, PROP_BOOKS, PropMarketDef, PlayerGameLog, Distribution } from '@/lib/props/markets';
+import { KalshiRung, kalshiCostToAmerican, fetchKalshiRungs } from '@/lib/props/kalshiProps';
 import { PropReference, measurePlayer, MeasuredStats } from '@/lib/props/reference';
 import DistributionChart from './DistributionChart';
 import { useDebounce } from '@/app/ratings/hooks/useDebounce';
@@ -153,6 +154,10 @@ export default function PropsAdminPage() {
   const [selectedPlayer, setSelectedPlayer] = useState<PlayerSearchResult | null>(null);
   const [playerGames, setPlayerGames] = useState<PlayerGameLog[]>([]);
   const [gamesLoading, setGamesLoading] = useState(false);
+
+  // Kalshi threshold ladder for the current market (free public endpoint,
+  // 60s server cache) — filtered to the selected player at render time.
+  const [kalshiRungs, setKalshiRungs] = useState<KalshiRung[]>([]);
 
   // Measurement window
   const [seasonsSelected, setSeasonsSelected] = useState<number[]>([]);
@@ -757,6 +762,41 @@ export default function PropsAdminPage() {
   }, [hasProj, projNum, sd, dist, bookLines, marketDef.ladderStep, bestAt]);
 
   const oddsPlayers = useMemo(() => Array.from(quotes.keys()).sort(), [quotes]);
+
+  useEffect(() => {
+    if (!selectedPlayer) { setKalshiRungs([]); return; }
+    let cancelled = false;
+    fetchKalshiRungs(marketDef.key).then((rungs) => {
+      if (!cancelled) setKalshiRungs(rungs);
+    });
+    return () => { cancelled = true; };
+  }, [marketDef.key, selectedPlayer]);
+
+  // The selected player's Kalshi thresholds, priced live off the CURRENT model
+  // (projection/volatility/curve edits reprice every rung instantly).
+  // Over = buy Yes at the ask, Under = buy No at (1 − yes bid), fee included.
+  const kalshiLadder = useMemo(() => {
+    if (!selectedPlayer || !hasProj || !sd) return [];
+    const key = normName(selectedPlayer.player_name);
+    return kalshiRungs
+      .filter((r) => normName(r.player) === key)
+      .sort((a, b) => a.strike - b.strike)
+      .map((r) => {
+        const p = probOver(projNum, sd, r.strike, dist);
+        const overOdds = r.yesAsk !== null ? kalshiCostToAmerican(r.yesAsk) : null;
+        const underOdds = r.yesBid !== null ? kalshiCostToAmerican(1 - r.yesBid) : null;
+        return {
+          strike: r.strike,
+          ticker: r.ticker,
+          pOver: p,
+          fairOver: probToAmerican(p),
+          overOdds,
+          underOdds,
+          overEv: overOdds !== null ? expectedValue(p, overOdds) : null,
+          underEv: underOdds !== null ? expectedValue(1 - p, underOdds) : null,
+        };
+      });
+  }, [kalshiRungs, selectedPlayer, hasProj, sd, projNum, dist]);
 
   // ---------- render ----------
 
@@ -1508,6 +1548,53 @@ export default function PropsAdminPage() {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Kalshi threshold ladder — shows whenever the model can price the
+            selected player, independent of book odds being loaded. */}
+        {kalshiLadder.length > 0 && (
+          <div className="bg-white rounded-xl border border-violet-200 shadow-sm p-4">
+            <div className="flex items-center gap-2 mb-1.5">
+              <div className="text-xs font-semibold uppercase tracking-wide text-violet-600">
+                Kalshi — {kalshiLadder.length} threshold{kalshiLadder.length > 1 ? 's' : ''}
+              </div>
+              <span className="text-[10px] text-slate-400">
+                Over buys Yes · Under buys No · trading fee included in the prices
+              </span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-left text-slate-500 uppercase tracking-wide">
+                    <th className="py-1.5 pr-3">Threshold</th>
+                    <th className="py-1.5 pr-3 text-right">P(Reach)</th>
+                    <th className="py-1.5 pr-3 text-right">Fair</th>
+                    <th className="py-1.5 pr-3 text-right">Over (Yes)</th>
+                    <th className="py-1.5 pr-3 text-right">EV Over</th>
+                    <th className="py-1.5 pr-3 text-right">Under (No)</th>
+                    <th className="py-1.5 text-right">EV Under</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {kalshiLadder.map((r) => (
+                    <tr key={r.ticker} className="border-t border-slate-100">
+                      <td className="py-1.5 pr-3 font-medium tabular-nums">{Math.ceil(r.strike)}+</td>
+                      <td className="py-1.5 pr-3 text-right tabular-nums">{fmtPct(r.pOver)}</td>
+                      <td className="py-1.5 pr-3 text-right tabular-nums text-slate-500">{fmtAmerican(r.fairOver)}</td>
+                      <td className="py-1.5 pr-3 text-right tabular-nums">{fmtAmerican(r.overOdds)}</td>
+                      <td className={`py-1.5 pr-3 text-right tabular-nums ${evCls(r.overEv)}`}>
+                        {r.overEv !== null ? `${r.overEv > 0 ? '+' : ''}${(r.overEv * 100).toFixed(1)}%` : '—'}
+                      </td>
+                      <td className="py-1.5 pr-3 text-right tabular-nums">{fmtAmerican(r.underOdds)}</td>
+                      <td className={`py-1.5 text-right tabular-nums ${evCls(r.underEv)}`}>
+                        {r.underEv !== null ? `${r.underEv > 0 ? '+' : ''}${(r.underEv * 100).toFixed(1)}%` : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 

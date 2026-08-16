@@ -13,6 +13,7 @@ import { useRouter } from 'next/navigation';
 import { probOver, probToAmerican, expectedValue, devig } from '@/lib/props/engine';
 import { PROP_MARKETS, PROP_BOOKS, PropMarketDef, PlayerGameLog, Distribution } from '@/lib/props/markets';
 import { measurePlayer } from '@/lib/props/reference';
+import { KalshiRung, kalshiCostToAmerican, fetchKalshiRungs } from '@/lib/props/kalshiProps';
 
 const NFL_SPORTS = [
   { key: 'americanfootball_nfl', label: 'NFL' },
@@ -30,21 +31,6 @@ const normName = (s: string): string =>
 
 const fmtAmerican = (o: number | null | undefined): string =>
   o === null || o === undefined || Number.isNaN(o) ? '—' : o > 0 ? `+${o}` : `${o}`;
-
-// Kalshi charges 7%·p·(1−p) per contract; quote fee-INCLUSIVE American odds so
-// rung prices compare apples-to-apples with book prices (same convention as
-// the game-lines integration in src/lib/kalshi.ts — conservative rounding).
-const KALSHI_FEE = 0.07;
-const kalshiCostToAmerican = (priceDollars: number): number | null => {
-  const c = priceDollars + KALSHI_FEE * priceDollars * (1 - priceDollars);
-  if (c <= 0 || c >= 1) return null;
-  return c <= 0.5 ? Math.floor((1 / c - 1) * 100) : -Math.ceil((c / (1 - c)) * 100);
-};
-
-interface KalshiRung {
-  player: string; strike: number; yesBid: number | null; yesAsk: number | null;
-  ticker: string; eventTitle: string;
-}
 
 const evCls = (ev: number | null): string =>
   ev === null ? 'text-slate-400'
@@ -177,9 +163,7 @@ export default function PropTablePage() {
 
       // Kalshi player-prop ladders load in parallel with the book sweep —
       // free public endpoint, no Odds API credits.
-      const kalshiPromise: Promise<KalshiRung[]> = fetch(`/api/kalshi-props?market=${marketDef.key}`)
-        .then(async (r) => (r.ok ? ((await r.json()).rungs ?? []) : []))
-        .catch(() => []);
+      const kalshiPromise: Promise<KalshiRung[]> = fetchKalshiRungs(marketDef.key);
 
       setProgress('loading events…');
       const evRes = await fetch(`/api/props?sport=${sportKey}`);
