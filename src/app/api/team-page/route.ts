@@ -67,6 +67,13 @@ interface ScheduleGame {
   teamScore: string | null;
   oppScore: string | null;
   detail: string | null;
+  // Closing line vs result, filled for completed games scored by computeAts
+  closing: {
+    spread: number | null;           // team-relative closing spread
+    atsRes: 'W' | 'L' | 'P' | null;
+    total: number | null;
+    ouRes: 'O' | 'U' | 'P' | null;
+  } | null;
 }
 
 export interface TeamPayload {
@@ -89,6 +96,8 @@ export interface TeamPayload {
     // ATS endpoint returns empty for every season/league). Falls back to the
     // prior season when the current one has no completed games yet.
     ats: { season: number; spreadRecord: string; ouRecord: string; games: number } | null;
+    leaders: { category: string; athlete: string; position: string | null; value: string; season: number }[];
+    injuries: { name: string; position: string | null; status: string }[];
     venue: {
       name: string | null;
       city: string | null;
@@ -101,6 +110,7 @@ export interface TeamPayload {
   };
   season: number;
   schedule: ScheduleGame[];
+  news: { headline: string; url: string | null; published: string | null }[];
 }
 
 // Season year: Jan/Feb games (bowls, Super Bowl) belong to the prior year's
@@ -162,6 +172,7 @@ function parseSchedule(data: any, teamId: string, seasonType: SeasonType): Sched
       teamScore: usScore,
       oppScore: themScore,
       detail: status.shortDetail ?? null,
+      closing: null,
     });
   }
   return out;
@@ -181,10 +192,12 @@ const toCompleted = (schedule: ScheduleGame[]): CompletedLite[] =>
 
 // ATS + over/under record from ESPN's per-event odds (closing spread is
 // home-relative: -9.5 = home favored by 9.5). Completed games never change,
-// so their odds fetches cache for a week.
+// so their odds fetches cache for a week. Also returns each game's closing
+// line + result keyed by event id, so schedule rows can show covered/missed.
 async function computeAts(
   cfg: LeagueConfig, teamId: string, schedule: ScheduleGame[], season: number
-): Promise<TeamPayload['team']['ats']> {
+): Promise<{ ats: TeamPayload['team']['ats']; perGame: Map<string, NonNullable<ScheduleGame['closing']>> }> {
+  const perGame = new Map<string, NonNullable<ScheduleGame['closing']>>();
   let completed = toCompleted(schedule);
   let atsSeason = season;
   if (completed.length === 0) {
@@ -193,7 +206,7 @@ async function computeAts(
     const prior = await Promise.all(cfg.seasonTypes.map(([, st]) =>
       getJson(`${cfg.site}/teams/${teamId}/schedule?season=${atsSeason}&seasontype=${st}`, DAY)));
     completed = toCompleted(cfg.seasonTypes.flatMap(([label], i) => parseSchedule(prior[i], teamId, label)));
-    if (completed.length === 0) return null;
+    if (completed.length === 0) return { ats: null, perGame };
   }
 
   let w = 0, l = 0, p = 0, over = 0, under = 0, ouPush = 0, games = 0;
@@ -202,25 +215,93 @@ async function computeAts(
     const item = (o?.items ?? []).find((it: any) =>
       typeof it?.spread === 'number' || typeof it?.overUnder === 'number');
     if (!item) return;
-    let counted = false;
+    const closing: NonNullable<ScheduleGame['closing']> = { spread: null, atsRes: null, total: null, ouRes: null };
     if (typeof item.spread === 'number') {
       const teamSpread = g.home ? item.spread : -item.spread;
       const edge = g.margin + teamSpread;
+      closing.spread = teamSpread;
+      closing.atsRes = edge > 0 ? 'W' : edge < 0 ? 'L' : 'P';
       if (edge > 0) w++; else if (edge < 0) l++; else p++;
-      counted = true;
     }
     if (typeof item.overUnder === 'number') {
+      closing.total = item.overUnder;
+      closing.ouRes = g.total > item.overUnder ? 'O' : g.total < item.overUnder ? 'U' : 'P';
       if (g.total > item.overUnder) over++;
       else if (g.total < item.overUnder) under++;
       else ouPush++;
-      counted = true;
     }
-    if (counted) games++;
+    if (closing.atsRes || closing.ouRes) {
+      games++;
+      perGame.set(g.eventId, closing);
+    }
   }));
-  if (games === 0) return null;
+  if (games === 0) return { ats: null, perGame };
 
   const rec = (a: number, b: number, push: number) => `${a}-${b}${push ? `-${push}` : ''}`;
-  return { season: atsSeason, spreadRecord: rec(w, l, p), ouRecord: rec(over, under, ouPush), games };
+  return {
+    ats: { season: atsSeason, spreadRecord: rec(w, l, p), ouRecord: rec(over, under, ouPush), games },
+    perGame,
+  };
+}
+
+// Season stat leaders (passing / rushing / receiving yards) — athlete names
+// live behind one $ref each.
+const LEADER_CATEGORIES: [string, string][] = [
+  ['passingYards', 'Passing'], ['rushingYards', 'Rushing'], ['receivingYards', 'Receiving'],
+];
+
+async function fetchLeaders(
+  cfg: LeagueConfig, teamId: string, season: number
+): Promise<TeamPayload['team']['leaders']> {
+  const data: any = await getJson(`${cfg.core}/seasons/${season}/types/2/teams/${teamId}/leaders`, DAY);
+  const cats: any[] = data?.categories ?? [];
+  const out: TeamPayload['team']['leaders'] = [];
+  await Promise.all(LEADER_CATEGORIES.map(async ([key, label]) => {
+    const top = cats.find((c) => c?.name === key)?.leaders?.[0];
+    if (!top?.displayValue) return;
+    const athlete: any = top.athlete?.$ref ? await getJson(top.athlete.$ref, DAY) : null;
+    if (!athlete?.displayName) return;
+    out.push({
+      category: label,
+      athlete: athlete.displayName,
+      position: athlete.position?.abbreviation ?? null,
+      value: `${top.displayValue} yds`,
+      season,
+    });
+  }));
+  const order = new Map(LEADER_CATEGORIES.map(([, label], i) => [label, i]));
+  return out.sort((a, b) => (order.get(a.category) ?? 9) - (order.get(b.category) ?? 9));
+}
+
+// Current injury designations from the roster (injuries come inline — the
+// dedicated site injuries endpoint returns {} and the core one needs two
+// fetches per entry).
+async function fetchInjuries(cfg: LeagueConfig, teamId: string): Promise<TeamPayload['team']['injuries']> {
+  const data: any = await getJson(`${cfg.site}/teams/${teamId}/roster`, HOUR);
+  const out: TeamPayload['team']['injuries'] = [];
+  for (const grp of data?.athletes ?? []) {
+    for (const a of grp?.items ?? []) {
+      const status = a?.injuries?.[0]?.status;
+      if (!status || status === 'Active') continue;
+      out.push({
+        name: a.displayName ?? '?',
+        position: a.position?.abbreviation ?? null,
+        status,
+      });
+    }
+  }
+  // Outs first, then questionable — and keep the card short.
+  const sev = (s: string) => (/(out|injured reserve|ir)/i.test(s) ? 0 : /doubtful/i.test(s) ? 1 : 2);
+  return out.sort((a, b) => sev(a.status) - sev(b.status)).slice(0, 10);
+}
+
+async function fetchNews(cfg: LeagueConfig, teamId: string): Promise<TeamPayload['news']> {
+  const data: any = await getJson(`${cfg.site}/news?team=${teamId}&limit=6`, HOUR);
+  return (data?.articles ?? []).slice(0, 5).map((a: any) => ({
+    headline: a?.headline ?? '',
+    url: a?.links?.web?.href ?? null,
+    published: a?.published ?? null,
+  })).filter((a: { headline: string }) => a.headline);
 }
 
 export async function GET(request: Request) {
@@ -279,7 +360,17 @@ export async function GET(request: Request) {
     .flatMap(([label], i) => parseSchedule(scheds[i], teamId, label))
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  const ats = await computeAts(cfg, teamId, schedule, season);
+  const [{ ats, perGame }, injuries, news] = await Promise.all([
+    computeAts(cfg, teamId, schedule, season),
+    fetchInjuries(cfg, teamId),
+    fetchNews(cfg, teamId),
+  ]);
+  // Leaders come from the season the ATS record covers (current until games
+  // play, then this season) so the card is never empty in the offseason.
+  const leaders = await fetchLeaders(cfg, teamId, ats?.season ?? season);
+  for (const g of schedule) {
+    g.closing = perGame.get(g.id) ?? null;
+  }
 
   const payload: TeamPayload = {
     team: {
@@ -298,6 +389,8 @@ export async function GET(request: Request) {
       coach,
       coachSeasons,
       ats,
+      leaders,
+      injuries,
       venue: {
         name: venue.fullName ?? null,
         city: venue.address?.city ?? null,
@@ -310,6 +403,7 @@ export async function GET(request: Request) {
     },
     season,
     schedule,
+    news,
   };
 
   return NextResponse.json(payload);

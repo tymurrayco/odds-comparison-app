@@ -12,6 +12,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { fetchOdds, fetchFutures, Game, FuturesMarket } from '@/lib/api';
+import { getTeamFEIData, FEITeamData } from '@/lib/feiData';
 
 // League slug → odds-board sport keys to scan for lines on upcoming games.
 const LEAGUE_ODDS_KEYS: Record<string, string[]> = {
@@ -32,6 +33,8 @@ interface TeamInfo {
   conference: string | null; conferenceShort: string | null;
   coach: string | null; coachSeasons: number | null;
   ats: { season: number; spreadRecord: string; ouRecord: string; games: number } | null;
+  leaders: { category: string; athlete: string; position: string | null; value: string; season: number }[];
+  injuries: { name: string; position: string | null; status: string }[];
   venue: TeamVenue;
 }
 interface ScheduleGame {
@@ -41,8 +44,10 @@ interface ScheduleGame {
   opponent: { id: string; name: string; abbreviation: string | null; logo: string | null; rank: number | null };
   state: 'pre' | 'in' | 'post'; completed: boolean; result: 'W' | 'L' | 'T' | null;
   teamScore: string | null; oppScore: string | null; detail: string | null;
+  closing: { spread: number | null; atsRes: 'W' | 'L' | 'P' | null; total: number | null; ouRes: 'O' | 'U' | 'P' | null } | null;
 }
-interface TeamPayload { team: TeamInfo; season: number; schedule: ScheduleGame[] }
+interface NewsItem { headline: string; url: string | null; published: string | null }
+interface TeamPayload { team: TeamInfo; season: number; schedule: ScheduleGame[]; news: NewsItem[] }
 
 const normName = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -144,6 +149,7 @@ export default function TeamPage() {
   const [error, setError] = useState<string | null>(null);
   const [odds, setOdds] = useState<Game[]>([]);
   const [futures, setFutures] = useState<FuturesMarket[]>([]);
+  const [ratings, setRatings] = useState<{ eckel: number | null; fei: number | null }>({ eckel: null, fei: null });
 
   useEffect(() => {
     if (!teamId || !leagueSupported) return;
@@ -175,6 +181,29 @@ export default function TeamPage() {
   useEffect(() => {
     if (data) document.title = `${data.team.displayName} — odds.day`;
   }, [data]);
+
+  // NCAAF analytics ranks from the site's own rating systems.
+  useEffect(() => {
+    if (league !== 'ncaaf' || !data) return;
+    let cancelled = false;
+    const name = data.team.displayName;
+    fetch(`/api/eckel?teams=${encodeURIComponent(name)}`)
+      .then((r) => r.json())
+      .then((j) => {
+        const rank = j?.matchup?.[0]?.rank ?? null;
+        if (!cancelled && typeof rank === 'number') setRatings((p) => ({ ...p, eckel: rank }));
+      })
+      .catch(() => {});
+    fetch('/api/fei-data')
+      .then((r) => r.json())
+      .then((arr: FEITeamData[]) => {
+        if (!Array.isArray(arr)) return;
+        const t = getTeamFEIData(name, arr);
+        if (!cancelled && t) setRatings((p) => ({ ...p, fei: t.rank }));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [league, data]);
 
   const accent = useMemo(
     () => pickAccent(data?.team.color ?? null, data?.team.alternateColor ?? null),
@@ -250,6 +279,20 @@ export default function TeamPage() {
     facts.push([`Over/Under (${team.ats.season})`, team.ats.ouRecord]);
   }
   if (futuresBest) facts.push([FUTURES_LABEL[league], `${fmtMl(futuresBest.odds)} · ${futuresBest.book}`]);
+  if (ratings.eckel !== null) facts.push(['Eckel Rating', `#${ratings.eckel}`]);
+  if (ratings.fei !== null) facts.push(['FEI Rating', `#${ratings.fei}`]);
+
+  // Last 5 completed games, oldest → newest, plus the active streak
+  const completedGames = schedule.filter((g) => g.completed && g.result);
+  const form = completedGames.slice(-5);
+  let streak = 0;
+  for (let i = completedGames.length - 1; i >= 0; i--) {
+    if (completedGames[i].result === completedGames[completedGames.length - 1].result) streak++;
+    else break;
+  }
+  const streakLabel = completedGames.length
+    ? `${completedGames[completedGames.length - 1].result === 'W' ? 'Won' : completedGames[completedGames.length - 1].result === 'L' ? 'Lost' : 'Tied'} ${streak}`
+    : null;
 
   const nextGame = schedule.find((g) => g.state === 'pre') ?? null;
   const nextLines = nextGame ? linesByGameId.get(nextGame.id) : null;
@@ -307,6 +350,25 @@ export default function TeamPage() {
                 </div>
               ))}
             </div>
+            {form.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-2">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Form</span>
+                <span className="flex gap-1">
+                  {form.map((g) => (
+                    <span
+                      key={g.id}
+                      title={`${g.home ? 'vs' : '@'} ${g.opponent.name} ${g.teamScore}–${g.oppScore}`}
+                      className={`inline-flex items-center justify-center w-5 h-5 rounded text-[10px] font-bold text-white ${
+                        g.result === 'W' ? 'bg-emerald-500' : g.result === 'L' ? 'bg-red-500' : 'bg-slate-400'
+                      }`}
+                    >
+                      {g.result}
+                    </span>
+                  ))}
+                </span>
+                {streakLabel && <span className="text-xs text-slate-500">{streakLabel}</span>}
+              </div>
+            )}
           </div>
         )}
 
@@ -362,6 +424,54 @@ export default function TeamPage() {
           </div>
         )}
 
+        {/* Team leaders + injuries */}
+        {(team.leaders.length > 0 || team.injuries.length > 0) && (
+          <div className="grid sm:grid-cols-2 gap-4">
+            {team.leaders.length > 0 && (
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
+                  Team Leaders ({team.leaders[0].season})
+                </div>
+                <div className="space-y-2">
+                  {team.leaders.map((l) => (
+                    <div key={l.category} className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mr-2">{l.category}</span>
+                        <span className="text-sm font-medium truncate">{l.athlete}</span>
+                        {l.position && <span className="ml-1 text-[10px] text-slate-400">{l.position}</span>}
+                      </div>
+                      <span className="text-sm tabular-nums text-slate-600 shrink-0">{l.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {team.injuries.length > 0 && (
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Injuries</div>
+                <div className="space-y-1.5">
+                  {team.injuries.map((inj) => (
+                    <div key={`${inj.name}-${inj.status}`} className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-medium truncate">
+                        {inj.name}
+                        {inj.position && <span className="ml-1 text-[10px] text-slate-400">{inj.position}</span>}
+                      </span>
+                      <span className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                        /(out|injured reserve|ir)/i.test(inj.status) ? 'bg-red-100 text-red-700'
+                          : /doubtful/i.test(inj.status) ? 'bg-orange-100 text-orange-700'
+                          : /questionable|day/i.test(inj.status) ? 'bg-amber-100 text-amber-700'
+                          : 'bg-slate-100 text-slate-600'
+                      }`}>
+                        {inj.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Schedule */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
@@ -407,9 +517,24 @@ export default function TeamPage() {
                     </Link>
                     <div className="shrink-0 text-right">
                       {g.completed && g.result ? (
-                        <span className={`text-sm font-semibold tabular-nums ${g.result === 'W' ? 'text-emerald-600' : g.result === 'L' ? 'text-red-600' : 'text-slate-500'}`}>
-                          {g.result} {g.teamScore}–{g.oppScore}
-                        </span>
+                        <div>
+                          <span className={`text-sm font-semibold tabular-nums ${g.result === 'W' ? 'text-emerald-600' : g.result === 'L' ? 'text-red-600' : 'text-slate-500'}`}>
+                            {g.result} {g.teamScore}–{g.oppScore}
+                          </span>
+                          {g.closing && (g.closing.atsRes || g.closing.ouRes) && (
+                            <div className="text-[10px] tabular-nums text-slate-500">
+                              {g.closing.spread !== null && g.closing.atsRes && (
+                                <span className={g.closing.atsRes === 'W' ? 'text-emerald-600' : g.closing.atsRes === 'L' ? 'text-red-500' : ''}>
+                                  {fmtSpread(g.closing.spread)} {g.closing.atsRes === 'W' ? '✓' : g.closing.atsRes === 'L' ? '✗' : '='}
+                                </span>
+                              )}
+                              {g.closing.spread !== null && g.closing.atsRes && g.closing.total !== null && g.closing.ouRes && ' · '}
+                              {g.closing.total !== null && g.closing.ouRes && (
+                                <span>{g.closing.ouRes === 'P' ? 'Push' : g.closing.ouRes} {g.closing.total}</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       ) : g.state === 'in' ? (
                         <span className="text-sm font-semibold text-emerald-600">{g.detail ?? 'Live'} {g.teamScore}–{g.oppScore}</span>
                       ) : (
@@ -435,8 +560,34 @@ export default function TeamPage() {
           )}
         </div>
 
+        {/* News */}
+        {data.news.length > 0 && (
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">News</div>
+            <div className="space-y-2">
+              {data.news.map((n) => (
+                <div key={n.headline} className="flex items-baseline gap-2">
+                  {n.published && (
+                    <span className="shrink-0 text-[10px] text-slate-400 tabular-nums">
+                      {new Date(n.published).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                    </span>
+                  )}
+                  {n.url ? (
+                    <a href={n.url} target="_blank" rel="noopener noreferrer" className="text-sm hover:underline" style={{ color: accent }}>
+                      {n.headline}
+                    </a>
+                  ) : (
+                    <span className="text-sm">{n.headline}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="text-[11px] text-slate-400 pb-6">
-          Live from ESPN · lines are the median book spread/total from the current odds board · times local.
+          Live from ESPN · lines are the median book spread/total from the current odds board ·
+          per-game ✓/✗ = against the closing spread · times local.
         </div>
       </div>
     </div>
