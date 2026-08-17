@@ -275,8 +275,7 @@ export default function TeamPage() {
   }
   if (team.conference) facts.push([groupLabel, team.conference]);
   if (team.ats) {
-    facts.push([`ATS (${team.ats.season})`, team.ats.spreadRecord]);
-    facts.push([`Over/Under (${team.ats.season})`, team.ats.ouRecord]);
+    facts.push([`ATS · O/U (${team.ats.season})`, `${team.ats.spreadRecord} · ${team.ats.ouRecord}`]);
   }
   if (futuresBest) facts.push([FUTURES_LABEL[league], `${fmtMl(futuresBest.odds)} · ${futuresBest.book}`]);
   if (ratings.eckel !== null) facts.push(['Eckel Rating', `#${ratings.eckel}`]);
