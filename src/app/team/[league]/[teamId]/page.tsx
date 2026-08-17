@@ -293,6 +293,30 @@ export default function TeamPage() {
     ? `${completedGames[completedGames.length - 1].result === 'W' ? 'Won' : completedGames[completedGames.length - 1].result === 'L' ? 'Lost' : 'Tied'} ${streak}`
     : null;
 
+  // Bye weeks: regular-season week numbers missing between the first and last
+  // scheduled week, rendered inline as muted rows.
+  type ScheduleRow = { type: 'game'; g: ScheduleGame } | { type: 'bye'; week: number };
+  const regWeeks = schedule
+    .filter((g) => g.seasonType === 'regular' && g.week !== null)
+    .map((g) => g.week as number);
+  const byeQueue: number[] = [];
+  if (regWeeks.length > 1) {
+    const seen = new Set(regWeeks);
+    for (let w = Math.min(...regWeeks) + 1; w < Math.max(...regWeeks); w++) {
+      if (!seen.has(w)) byeQueue.push(w);
+    }
+  }
+  const scheduleRows: ScheduleRow[] = [];
+  {
+    const pending = [...byeQueue];
+    for (const g of schedule) {
+      if (g.seasonType === 'regular' && g.week !== null) {
+        while (pending.length && pending[0] < g.week) scheduleRows.push({ type: 'bye', week: pending.shift()! });
+      }
+      scheduleRows.push({ type: 'game', g });
+    }
+  }
+
   const nextGame = schedule.find((g) => g.state === 'pre') ?? null;
   const nextLines = nextGame ? linesByGameId.get(nextGame.id) : null;
   const daysToNext = nextGame
@@ -505,7 +529,19 @@ export default function TeamPage() {
             <div className="text-sm text-slate-400 py-4 text-center">Schedule not published yet.</div>
           ) : (
             <div className="divide-y divide-slate-100">
-              {schedule.map((g) => {
+              {scheduleRows.map((row) => {
+                if (row.type === 'bye') {
+                  return (
+                    <div key={`bye-${row.week}`} className="flex items-center gap-3 py-2.5 opacity-60">
+                      <div className="w-10 shrink-0 text-center">
+                        <div className="text-[10px] uppercase text-slate-400">Wk {row.week}</div>
+                      </div>
+                      <span className="w-5 shrink-0" />
+                      <span className="text-sm text-slate-400 italic">Bye week</span>
+                    </div>
+                  );
+                }
+                const g = row.g;
                 const d = new Date(g.date);
                 const lines = linesByGameId.get(g.id);
                 return (
