@@ -85,6 +85,10 @@ export interface TeamPayload {
     conferenceShort: string | null;
     coach: string | null;
     coachSeasons: number | null;
+    // Computed from ESPN per-event closing lines vs final scores (ESPN's own
+    // ATS endpoint returns empty for every season/league). Falls back to the
+    // prior season when the current one has no completed games yet.
+    ats: { season: number; spreadRecord: string; ouRecord: string; games: number } | null;
     venue: {
       name: string | null;
       city: string | null;
@@ -163,6 +167,62 @@ function parseSchedule(data: any, teamId: string, seasonType: SeasonType): Sched
   return out;
 }
 
+interface CompletedLite { eventId: string; home: boolean; margin: number; total: number }
+
+const toCompleted = (schedule: ScheduleGame[]): CompletedLite[] =>
+  schedule
+    .filter((g) => g.completed && g.teamScore !== null && g.oppScore !== null && g.seasonType !== 'preseason')
+    .map((g) => ({
+      eventId: g.id,
+      home: g.home,
+      margin: Number(g.teamScore) - Number(g.oppScore),
+      total: Number(g.teamScore) + Number(g.oppScore),
+    }));
+
+// ATS + over/under record from ESPN's per-event odds (closing spread is
+// home-relative: -9.5 = home favored by 9.5). Completed games never change,
+// so their odds fetches cache for a week.
+async function computeAts(
+  cfg: LeagueConfig, teamId: string, schedule: ScheduleGame[], season: number
+): Promise<TeamPayload['team']['ats']> {
+  let completed = toCompleted(schedule);
+  let atsSeason = season;
+  if (completed.length === 0) {
+    // Season hasn't started — score last season instead.
+    atsSeason = season - 1;
+    const prior = await Promise.all(cfg.seasonTypes.map(([, st]) =>
+      getJson(`${cfg.site}/teams/${teamId}/schedule?season=${atsSeason}&seasontype=${st}`, DAY)));
+    completed = toCompleted(cfg.seasonTypes.flatMap(([label], i) => parseSchedule(prior[i], teamId, label)));
+    if (completed.length === 0) return null;
+  }
+
+  let w = 0, l = 0, p = 0, over = 0, under = 0, ouPush = 0, games = 0;
+  await Promise.all(completed.slice(0, 30).map(async (g) => {
+    const o: any = await getJson(`${cfg.core}/events/${g.eventId}/competitions/${g.eventId}/odds`, 7 * DAY);
+    const item = (o?.items ?? []).find((it: any) =>
+      typeof it?.spread === 'number' || typeof it?.overUnder === 'number');
+    if (!item) return;
+    let counted = false;
+    if (typeof item.spread === 'number') {
+      const teamSpread = g.home ? item.spread : -item.spread;
+      const edge = g.margin + teamSpread;
+      if (edge > 0) w++; else if (edge < 0) l++; else p++;
+      counted = true;
+    }
+    if (typeof item.overUnder === 'number') {
+      if (g.total > item.overUnder) over++;
+      else if (g.total < item.overUnder) under++;
+      else ouPush++;
+      counted = true;
+    }
+    if (counted) games++;
+  }));
+  if (games === 0) return null;
+
+  const rec = (a: number, b: number, push: number) => `${a}-${b}${push ? `-${push}` : ''}`;
+  return { season: atsSeason, spreadRecord: rec(w, l, p), ouRecord: rec(over, under, ouPush), games };
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const league = (searchParams.get('league') ?? 'ncaaf').toLowerCase();
@@ -219,6 +279,8 @@ export async function GET(request: Request) {
     .flatMap(([label], i) => parseSchedule(scheds[i], teamId, label))
     .sort((a, b) => a.date.localeCompare(b.date));
 
+  const ats = await computeAts(cfg, teamId, schedule, season);
+
   const payload: TeamPayload = {
     team: {
       id: teamId,
@@ -235,6 +297,7 @@ export async function GET(request: Request) {
       conferenceShort: (group as any)?.shortName ?? null,
       coach,
       coachSeasons,
+      ats,
       venue: {
         name: venue.fullName ?? null,
         city: venue.address?.city ?? null,

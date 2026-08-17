@@ -11,13 +11,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { fetchOdds, Game } from '@/lib/api';
+import { fetchOdds, fetchFutures, Game, FuturesMarket } from '@/lib/api';
+import { fetchBets, Bet } from '@/lib/betService';
 
 // League slug → odds-board sport keys to scan for lines on upcoming games.
 const LEAGUE_ODDS_KEYS: Record<string, string[]> = {
   ncaaf: ['americanfootball_ncaaf'],
   nfl: ['americanfootball_nfl', 'americanfootball_nfl_preseason'],
 };
+const FUTURES_KEY: Record<string, string> = { ncaaf: 'americanfootball_ncaaf', nfl: 'americanfootball_nfl' };
+const FUTURES_LABEL: Record<string, string> = { ncaaf: 'Championship', nfl: 'Super Bowl' };
+const BET_LEAGUE: Record<string, string> = { ncaaf: 'NCAAF', nfl: 'NFL' };
 
 interface TeamVenue {
   name: string | null; city: string | null; state: string | null;
@@ -28,7 +32,9 @@ interface TeamInfo {
   location: string | null; logo: string | null; color: string | null; alternateColor: string | null;
   record: string | null; standingSummary: string | null;
   conference: string | null; conferenceShort: string | null;
-  coach: string | null; coachSeasons: number | null; venue: TeamVenue;
+  coach: string | null; coachSeasons: number | null;
+  ats: { season: number; spreadRecord: string; ouRecord: string; games: number } | null;
+  venue: TeamVenue;
 }
 interface ScheduleGame {
   id: string; date: string; week: number | null;
@@ -67,10 +73,20 @@ const medianOf = (xs: number[]): number | null => {
   return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
 };
 
-// Median book line for one scheduled game: the team's spread + the total.
-function gameLines(odds: Game, teamName: string): { spread: number | null; total: number | null } {
+interface MatchedLines {
+  spread: number | null;
+  total: number | null;
+  ml: number | null;
+  oddsId: string;     // Odds API game id → /game/[id] deep link
+  sportKey: string;
+}
+
+// Median book lines for one scheduled game: the team's spread, the total,
+// and the team's moneyline.
+function gameLines(odds: Game, teamName: string): MatchedLines {
   const spreads: number[] = [];
   const totals: number[] = [];
+  const mls: number[] = [];
   const teamKey = normName(teamName);
   for (const bm of odds.bookmakers ?? []) {
     for (const mkt of bm.markets ?? []) {
@@ -80,13 +96,53 @@ function gameLines(odds: Game, teamName: string): { spread: number | null; total
       } else if (mkt.key === 'totals') {
         const oc = mkt.outcomes?.find((o) => o.name === 'Over');
         if (oc?.point !== undefined) totals.push(oc.point);
+      } else if (mkt.key === 'h2h') {
+        const oc = mkt.outcomes?.find((o) => normName(o.name) === teamKey);
+        if (oc?.price !== undefined) mls.push(oc.price);
       }
     }
   }
-  return { spread: medianOf(spreads), total: medianOf(totals) };
+  return {
+    spread: medianOf(spreads),
+    total: medianOf(totals),
+    ml: medianOf(mls),
+    oddsId: odds.id,
+    sportKey: odds.sport_key,
+  };
 }
 
 const fmtSpread = (n: number): string => (n > 0 ? `+${n}` : `${n}`);
+const fmtMl = (n: number): string => {
+  const r = Math.round(n);
+  return r > 0 ? `+${r}` : `${r}`;
+};
+
+// Best (highest-payout) futures price across books for one team entry.
+function bestFuturesPrice(markets: FuturesMarket[], teamName: string): { odds: number; book: string } | null {
+  const teamKey = normName(teamName);
+  let best: { odds: number; book: string } | null = null;
+  for (const m of markets) {
+    for (const t of m.teams) {
+      if (normName(t.team) !== teamKey) continue;
+      for (const [book, odds] of Object.entries(t.odds)) {
+        const payout = odds > 0 ? 1 + odds / 100 : 1 + 100 / -odds;
+        const bestPayout = best ? (best.odds > 0 ? 1 + best.odds / 100 : 1 + 100 / -best.odds) : 0;
+        if (payout > bestPayout) best = { odds, book };
+      }
+    }
+  }
+  return best;
+}
+
+// Which team is this bet ON? Leading token of the bet text (e.g. "TCU -6.5"),
+// falling back to the explicit team field (futures).
+const betTeamCandidates = (b: Bet): string[] => {
+  const out: string[] = [];
+  if (b.team) out.push(b.team);
+  const lead = b.bet?.match(/^([A-Za-z .'-]+?)(?:\s+[-+0-9]|,|$)/)?.[1]?.trim();
+  if (lead) out.push(lead.replace(/\s+(ml|moneyline)$/i, '').trim());
+  return out;
+};
 
 export default function TeamPage() {
   const params = useParams<{ league: string; teamId: string }>();
@@ -98,6 +154,8 @@ export default function TeamPage() {
   const [data, setData] = useState<TeamPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [odds, setOdds] = useState<Game[]>([]);
+  const [futures, setFutures] = useState<FuturesMarket[]>([]);
+  const [bets, setBets] = useState<Bet[]>([]);
 
   useEffect(() => {
     if (!teamId || !leagueSupported) return;
@@ -114,13 +172,16 @@ export default function TeamPage() {
     return () => { cancelled = true; };
   }, [league, teamId, leagueSupported]);
 
-  // Current odds board (server-cached) for lines on upcoming games.
+  // Current odds board, futures prices, and bet history (all server-cached /
+  // cheap) for the hero card, futures fact, and my-record card.
   useEffect(() => {
     if (!leagueSupported) return;
     let cancelled = false;
     Promise.all(LEAGUE_ODDS_KEYS[league].map((k) => fetchOdds(k))).then((results) => {
       if (!cancelled) setOdds(results.flatMap((r) => r.data));
     });
+    fetchFutures(FUTURES_KEY[league]).then((r) => { if (!cancelled) setFutures(r.data); });
+    fetchBets().then((b) => { if (!cancelled) setBets(b); });
     return () => { cancelled = true; };
   }, [league, leagueSupported]);
 
@@ -133,9 +194,43 @@ export default function TeamPage() {
     [data]
   );
 
+  const futuresBest = useMemo(
+    () => (data ? bestFuturesPrice(futures, data.team.displayName) : null),
+    [futures, data]
+  );
+
+  // My record on this team: completed + pending wagers whose bet text (or
+  // futures team field) is on this team, within this league.
+  const myRecord = useMemo(() => {
+    if (!data) return null;
+    const t = data.team;
+    const keys = new Set(
+      [t.displayName, t.location, t.abbreviation, t.location && t.nickname ? `${t.location} ${t.nickname}` : null]
+        .filter((s): s is string => !!s).map(normName)
+    );
+    // Bare nicknames are unique in the NFL ("Broncos") but heavily shared in
+    // college ("Tigers", "Bulldogs") — only match them for NFL.
+    if (league === 'nfl' && t.nickname) keys.add(normName(t.nickname));
+    keys.delete('');
+
+    const mine = bets.filter((b) =>
+      b.league === BET_LEAGUE[league] &&
+      betTeamCandidates(b).some((c) => keys.has(normName(c)))
+    );
+    if (!mine.length) return null;
+    let w = 0, l = 0, p = 0, pending = 0, units = 0;
+    for (const b of mine) {
+      if (b.status === 'won') { w++; units += b.odds > 0 ? b.stake * b.odds / 100 : b.stake * 100 / -b.odds; }
+      else if (b.status === 'lost') { l++; units -= b.stake; }
+      else if (b.status === 'push') p++;
+      else pending++;
+    }
+    return { w, l, p, pending, units, total: mine.length };
+  }, [bets, data, league]);
+
   // Match schedule games to the odds board by both team names.
   const linesByGameId = useMemo(() => {
-    const map = new Map<string, { spread: number | null; total: number | null }>();
+    const map = new Map<string, MatchedLines>();
     if (!data || !odds.length) return map;
     const usKey = normName(data.team.displayName);
     for (const g of data.schedule) {
@@ -192,6 +287,17 @@ export default function TeamPage() {
     if (surface) facts.push(['Surface', surface + (team.venue.indoor ? ' · Indoor' : '')]);
   }
   if (team.conference) facts.push([groupLabel, team.conference]);
+  if (team.ats) {
+    facts.push([`ATS (${team.ats.season})`, team.ats.spreadRecord]);
+    facts.push([`Over/Under (${team.ats.season})`, team.ats.ouRecord]);
+  }
+  if (futuresBest) facts.push([FUTURES_LABEL[league], `${fmtMl(futuresBest.odds)} · ${futuresBest.book}`]);
+
+  const nextGame = schedule.find((g) => g.state === 'pre') ?? null;
+  const nextLines = nextGame ? linesByGameId.get(nextGame.id) : null;
+  const daysToNext = nextGame
+    ? Math.max(0, Math.round((new Date(nextGame.date).getTime() - Date.now()) / 86400000))
+    : 0;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -224,9 +330,85 @@ export default function TeamPage() {
       </div>
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-5 space-y-4">
+        {/* Next game hero */}
+        {nextGame && (
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4" style={{ borderLeft: `4px solid ${accent}` }}>
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Next Game{daysToNext > 0 ? ` · in ${daysToNext}d` : ' · today'}
+              </div>
+              {nextLines && (
+                <Link
+                  href={`/game/${nextLines.oddsId}?league=${nextLines.sportKey}`}
+                  className="text-xs font-medium hover:underline"
+                  style={{ color: accent }}
+                >
+                  Full odds →
+                </Link>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <Link href={`/team/${league}/${nextGame.opponent.id}`} className="flex items-center gap-2 group">
+                {nextGame.opponent.logo && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={nextGame.opponent.logo} alt="" className="w-8 h-8" />
+                )}
+                <span className="text-sm font-semibold group-hover:underline">
+                  <span className="text-slate-400 font-normal mr-1">{nextGame.home || nextGame.neutral ? 'vs' : '@'}</span>
+                  {nextGame.opponent.rank && <span className="text-[10px] text-slate-500 mr-1">#{nextGame.opponent.rank}</span>}
+                  {nextGame.opponent.name}
+                </span>
+              </Link>
+              <span className="text-xs text-slate-500 tabular-nums">
+                {new Date(nextGame.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                {' · '}
+                {new Date(nextGame.date).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
+                {nextGame.tv && ` · ${nextGame.tv}`}
+              </span>
+              {nextLines && (nextLines.spread !== null || nextLines.ml !== null || nextLines.total !== null) && (
+                <span className="flex items-center gap-1.5">
+                  {nextLines.spread !== null && (
+                    <span className="px-2 py-0.5 rounded-md bg-slate-100 text-xs font-semibold tabular-nums">{fmtSpread(nextLines.spread)}</span>
+                  )}
+                  {nextLines.ml !== null && (
+                    <span className="px-2 py-0.5 rounded-md bg-slate-100 text-xs font-semibold tabular-nums">ML {fmtMl(nextLines.ml)}</span>
+                  )}
+                  {nextLines.total !== null && (
+                    <span className="px-2 py-0.5 rounded-md bg-slate-100 text-xs font-semibold tabular-nums">O/U {nextLines.total}</span>
+                  )}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* My record on this team */}
+        {myRecord && (
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex flex-wrap items-center gap-x-4 gap-y-1">
+            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">My Bets on {team.nickname ?? team.displayName}</span>
+            <span className="text-sm font-semibold tabular-nums">
+              {myRecord.w}-{myRecord.l}{myRecord.p ? `-${myRecord.p}` : ''}
+            </span>
+            <span className={`text-sm font-semibold tabular-nums ${myRecord.units > 0 ? 'text-emerald-600' : myRecord.units < 0 ? 'text-red-600' : 'text-slate-500'}`}>
+              {myRecord.units > 0 ? '+' : ''}{myRecord.units.toFixed(1)}u
+            </span>
+            {myRecord.pending > 0 && (
+              <span className="text-xs text-amber-600">{myRecord.pending} pending</span>
+            )}
+          </div>
+        )}
+
         {/* Facts */}
         {facts.length > 0 && (
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+            {team.venue.image && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={team.venue.image}
+                alt={team.venue.name ?? ''}
+                className="w-full h-36 sm:h-48 object-cover rounded-lg mb-3"
+              />
+            )}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3">
               {facts.map(([label, value]) => (
                 <div key={label}>
