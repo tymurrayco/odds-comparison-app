@@ -12,7 +12,6 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { fetchOdds, fetchFutures, Game, FuturesMarket } from '@/lib/api';
-import { fetchBets, Bet } from '@/lib/betService';
 
 // League slug → odds-board sport keys to scan for lines on upcoming games.
 const LEAGUE_ODDS_KEYS: Record<string, string[]> = {
@@ -21,7 +20,6 @@ const LEAGUE_ODDS_KEYS: Record<string, string[]> = {
 };
 const FUTURES_KEY: Record<string, string> = { ncaaf: 'americanfootball_ncaaf', nfl: 'americanfootball_nfl' };
 const FUTURES_LABEL: Record<string, string> = { ncaaf: 'Championship', nfl: 'Super Bowl' };
-const BET_LEAGUE: Record<string, string> = { ncaaf: 'NCAAF', nfl: 'NFL' };
 
 interface TeamVenue {
   name: string | null; city: string | null; state: string | null;
@@ -134,15 +132,6 @@ function bestFuturesPrice(markets: FuturesMarket[], teamName: string): { odds: n
   return best;
 }
 
-// Which team is this bet ON? Leading token of the bet text (e.g. "TCU -6.5"),
-// falling back to the explicit team field (futures).
-const betTeamCandidates = (b: Bet): string[] => {
-  const out: string[] = [];
-  if (b.team) out.push(b.team);
-  const lead = b.bet?.match(/^([A-Za-z .'-]+?)(?:\s+[-+0-9]|,|$)/)?.[1]?.trim();
-  if (lead) out.push(lead.replace(/\s+(ml|moneyline)$/i, '').trim());
-  return out;
-};
 
 export default function TeamPage() {
   const params = useParams<{ league: string; teamId: string }>();
@@ -155,7 +144,6 @@ export default function TeamPage() {
   const [error, setError] = useState<string | null>(null);
   const [odds, setOdds] = useState<Game[]>([]);
   const [futures, setFutures] = useState<FuturesMarket[]>([]);
-  const [bets, setBets] = useState<Bet[]>([]);
 
   useEffect(() => {
     if (!teamId || !leagueSupported) return;
@@ -172,8 +160,8 @@ export default function TeamPage() {
     return () => { cancelled = true; };
   }, [league, teamId, leagueSupported]);
 
-  // Current odds board, futures prices, and bet history (all server-cached /
-  // cheap) for the hero card, futures fact, and my-record card.
+  // Current odds board + futures prices (server-cached) for the hero card
+  // and futures fact.
   useEffect(() => {
     if (!leagueSupported) return;
     let cancelled = false;
@@ -181,7 +169,6 @@ export default function TeamPage() {
       if (!cancelled) setOdds(results.flatMap((r) => r.data));
     });
     fetchFutures(FUTURES_KEY[league]).then((r) => { if (!cancelled) setFutures(r.data); });
-    fetchBets().then((b) => { if (!cancelled) setBets(b); });
     return () => { cancelled = true; };
   }, [league, leagueSupported]);
 
@@ -198,35 +185,6 @@ export default function TeamPage() {
     () => (data ? bestFuturesPrice(futures, data.team.displayName) : null),
     [futures, data]
   );
-
-  // My record on this team: completed + pending wagers whose bet text (or
-  // futures team field) is on this team, within this league.
-  const myRecord = useMemo(() => {
-    if (!data) return null;
-    const t = data.team;
-    const keys = new Set(
-      [t.displayName, t.location, t.abbreviation, t.location && t.nickname ? `${t.location} ${t.nickname}` : null]
-        .filter((s): s is string => !!s).map(normName)
-    );
-    // Bare nicknames are unique in the NFL ("Broncos") but heavily shared in
-    // college ("Tigers", "Bulldogs") — only match them for NFL.
-    if (league === 'nfl' && t.nickname) keys.add(normName(t.nickname));
-    keys.delete('');
-
-    const mine = bets.filter((b) =>
-      b.league === BET_LEAGUE[league] &&
-      betTeamCandidates(b).some((c) => keys.has(normName(c)))
-    );
-    if (!mine.length) return null;
-    let w = 0, l = 0, p = 0, pending = 0, units = 0;
-    for (const b of mine) {
-      if (b.status === 'won') { w++; units += b.odds > 0 ? b.stake * b.odds / 100 : b.stake * 100 / -b.odds; }
-      else if (b.status === 'lost') { l++; units -= b.stake; }
-      else if (b.status === 'push') p++;
-      else pending++;
-    }
-    return { w, l, p, pending, units, total: mine.length };
-  }, [bets, data, league]);
 
   // Match schedule games to the odds board by both team names.
   const linesByGameId = useMemo(() => {
@@ -330,6 +288,28 @@ export default function TeamPage() {
       </div>
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-5 space-y-4">
+        {/* Facts */}
+        {facts.length > 0 && (
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+            {team.venue.image && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={team.venue.image}
+                alt={team.venue.name ?? ''}
+                className="w-full h-36 sm:h-48 object-cover rounded-lg mb-3"
+              />
+            )}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3">
+              {facts.map(([label, value]) => (
+                <div key={label}>
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</div>
+                  <div className="text-sm font-medium text-slate-800">{value}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Next game hero */}
         {nextGame && (
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4" style={{ borderLeft: `4px solid ${accent}` }}>
@@ -378,44 +358,6 @@ export default function TeamPage() {
                   )}
                 </span>
               )}
-            </div>
-          </div>
-        )}
-
-        {/* My record on this team */}
-        {myRecord && (
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex flex-wrap items-center gap-x-4 gap-y-1">
-            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">My Bets on {team.nickname ?? team.displayName}</span>
-            <span className="text-sm font-semibold tabular-nums">
-              {myRecord.w}-{myRecord.l}{myRecord.p ? `-${myRecord.p}` : ''}
-            </span>
-            <span className={`text-sm font-semibold tabular-nums ${myRecord.units > 0 ? 'text-emerald-600' : myRecord.units < 0 ? 'text-red-600' : 'text-slate-500'}`}>
-              {myRecord.units > 0 ? '+' : ''}{myRecord.units.toFixed(1)}u
-            </span>
-            {myRecord.pending > 0 && (
-              <span className="text-xs text-amber-600">{myRecord.pending} pending</span>
-            )}
-          </div>
-        )}
-
-        {/* Facts */}
-        {facts.length > 0 && (
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
-            {team.venue.image && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={team.venue.image}
-                alt={team.venue.name ?? ''}
-                className="w-full h-36 sm:h-48 object-cover rounded-lg mb-3"
-              />
-            )}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3">
-              {facts.map(([label, value]) => (
-                <div key={label}>
-                  <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</div>
-                  <div className="text-sm font-medium text-slate-800">{value}</div>
-                </div>
-              ))}
             </div>
           </div>
         )}
