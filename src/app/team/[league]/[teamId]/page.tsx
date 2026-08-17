@@ -372,6 +372,54 @@ export default function TeamPage() {
           </div>
         )}
 
+        {/* Team leaders + news */}
+        {(team.leaders.length > 0 || data.news.length > 0) && (
+          <div className="grid sm:grid-cols-2 gap-4">
+            {team.leaders.length > 0 && (
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
+                  Team Leaders ({team.leaders[0].season})
+                </div>
+                <div className="space-y-2">
+                  {team.leaders.map((l) => (
+                    <div key={l.category} className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mr-2">{l.category}</span>
+                        <span className="text-sm font-medium truncate">{l.athlete}</span>
+                        {l.position && <span className="ml-1 text-[10px] text-slate-400">{l.position}</span>}
+                      </div>
+                      <span className="text-sm tabular-nums text-slate-600 shrink-0">{l.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {data.news.length > 0 && (
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">News</div>
+                <div className="space-y-2">
+                  {data.news.map((n) => (
+                    <div key={n.headline} className="flex items-baseline gap-2">
+                      {n.published && (
+                        <span className="shrink-0 text-[10px] text-slate-400 tabular-nums">
+                          {new Date(n.published).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                        </span>
+                      )}
+                      {n.url ? (
+                        <a href={n.url} target="_blank" rel="noopener noreferrer" className="text-sm hover:underline" style={{ color: accent }}>
+                          {n.headline}
+                        </a>
+                      ) : (
+                        <span className="text-sm">{n.headline}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Next game hero */}
         {nextGame && (
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4" style={{ borderLeft: `4px solid ${accent}` }}>
@@ -424,51 +472,28 @@ export default function TeamPage() {
           </div>
         )}
 
-        {/* Team leaders + injuries */}
-        {(team.leaders.length > 0 || team.injuries.length > 0) && (
-          <div className="grid sm:grid-cols-2 gap-4">
-            {team.leaders.length > 0 && (
-              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
-                  Team Leaders ({team.leaders[0].season})
+        {/* Injuries */}
+        {team.injuries.length > 0 && (
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Injuries</div>
+            <div className="grid sm:grid-cols-2 gap-x-6 gap-y-1.5">
+              {team.injuries.map((inj) => (
+                <div key={`${inj.name}-${inj.status}`} className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium truncate">
+                    {inj.name}
+                    {inj.position && <span className="ml-1 text-[10px] text-slate-400">{inj.position}</span>}
+                  </span>
+                  <span className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                    /(out|injured reserve|ir)/i.test(inj.status) ? 'bg-red-100 text-red-700'
+                      : /doubtful/i.test(inj.status) ? 'bg-orange-100 text-orange-700'
+                      : /questionable|day/i.test(inj.status) ? 'bg-amber-100 text-amber-700'
+                      : 'bg-slate-100 text-slate-600'
+                  }`}>
+                    {inj.status}
+                  </span>
                 </div>
-                <div className="space-y-2">
-                  {team.leaders.map((l) => (
-                    <div key={l.category} className="flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mr-2">{l.category}</span>
-                        <span className="text-sm font-medium truncate">{l.athlete}</span>
-                        {l.position && <span className="ml-1 text-[10px] text-slate-400">{l.position}</span>}
-                      </div>
-                      <span className="text-sm tabular-nums text-slate-600 shrink-0">{l.value}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {team.injuries.length > 0 && (
-              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Injuries</div>
-                <div className="space-y-1.5">
-                  {team.injuries.map((inj) => (
-                    <div key={`${inj.name}-${inj.status}`} className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-medium truncate">
-                        {inj.name}
-                        {inj.position && <span className="ml-1 text-[10px] text-slate-400">{inj.position}</span>}
-                      </span>
-                      <span className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-                        /(out|injured reserve|ir)/i.test(inj.status) ? 'bg-red-100 text-red-700'
-                          : /doubtful/i.test(inj.status) ? 'bg-orange-100 text-orange-700'
-                          : /questionable|day/i.test(inj.status) ? 'bg-amber-100 text-amber-700'
-                          : 'bg-slate-100 text-slate-600'
-                      }`}>
-                        {inj.status}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+              ))}
+            </div>
           </div>
         )}
 
@@ -559,31 +584,6 @@ export default function TeamPage() {
             </div>
           )}
         </div>
-
-        {/* News */}
-        {data.news.length > 0 && (
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
-            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">News</div>
-            <div className="space-y-2">
-              {data.news.map((n) => (
-                <div key={n.headline} className="flex items-baseline gap-2">
-                  {n.published && (
-                    <span className="shrink-0 text-[10px] text-slate-400 tabular-nums">
-                      {new Date(n.published).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                    </span>
-                  )}
-                  {n.url ? (
-                    <a href={n.url} target="_blank" rel="noopener noreferrer" className="text-sm hover:underline" style={{ color: accent }}>
-                      {n.headline}
-                    </a>
-                  ) : (
-                    <span className="text-sm">{n.headline}</span>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         <div className="text-[11px] text-slate-400 pb-6">
           Live from ESPN · lines are the median book spread/total from the current odds board ·
