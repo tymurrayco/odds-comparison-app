@@ -4,6 +4,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { fetchBets, createBet, updateBet, deleteBet, Bet, BetStatus, BetType } from '@/lib/betService';
+import CreditGauge from '@/components/CreditGauge';
 
 interface BetTeamInfo {
   displayName: string;
@@ -576,6 +577,9 @@ export default function BetAdminPage() {
       </div>
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+        {/* Odds API fuel gauge */}
+        <CreditGauge />
+
         {/* Futures -> Discord */}
         <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-4 sm:p-5">
           <div className="flex items-center justify-between mb-3">

@@ -1,5 +1,6 @@
 // src/app/api/odds/route.ts
 import { NextResponse } from 'next/server';
+import { recordCreditSnapshot } from '@/lib/creditUsage';
 
 // Whitelist of sport keys we proxy to the Odds API. Anything else is rejected
 // before it hits the paid API to prevent quota abuse via arbitrary sport keys.
@@ -54,7 +55,12 @@ export async function GET(request: Request) {
     const requestsRemaining = response.headers.get('x-requests-remaining');
     const requestsUsed = response.headers.get('x-requests-used');
     console.log('Odds API rate limit — remaining:', requestsRemaining, 'used:', requestsUsed);
-    
+
+    // Fuel gauge: persist the counter (5-min throttle) so the Bet Admin
+    // credits panel has history. Awaited — serverless may kill the lambda
+    // after the response otherwise — but never throws.
+    await recordCreditSnapshot(requestsRemaining, requestsUsed, 'odds-route');
+
     // Create a new response with the data and pass through the headers
     const nextResponse = NextResponse.json(data);
     
