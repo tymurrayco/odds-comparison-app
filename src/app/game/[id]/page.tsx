@@ -22,46 +22,49 @@ async function getGame(id: string, league?: string | null) {
     const apiKey = process.env.ODDS_API_KEY;
     if (!apiKey) return null;
 
-    // If league is provided and valid, check that league first (1 API call instead of up to 9!)
-    if (league && ALL_LEAGUES.includes(league)) {
-      const response = await fetch(
-        `https://api.the-odds-api.com/v4/sports/${league}/odds/?apiKey=${apiKey}&regions=us&markets=spreads,totals,h2h&oddsFormat=american`,
-        { next: { revalidate: 60 } } // Cache for 60 seconds
-      );
-      
-      if (response.ok) {
-        const games = await response.json();
-        const game = games.find((g: { id: string }) => g.id === id);
-        
-        if (game) {
-          return { ...game, sport_key: league };
-        }
-      }
-      // If not found in specified league, fall through to check all leagues
-      // This handles edge cases where league param might be stale/wrong
-    }
-    
-    // Fallback: Try each league until we find the game (for old links without league param)
-    for (const leagueKey of ALL_LEAGUES) {
-      // Skip the league we already checked above
-      if (leagueKey === league) continue;
-      
+    // One paid odds call for a known league (3 credits: 3 markets x 1 region)
+    const fetchLeagueOdds = async (leagueKey: string) => {
       const response = await fetch(
         `https://api.the-odds-api.com/v4/sports/${leagueKey}/odds/?apiKey=${apiKey}&regions=us&markets=spreads,totals,h2h&oddsFormat=american`,
         { next: { revalidate: 60 } } // Cache for 60 seconds
       );
-      
-      if (!response.ok) continue;
-      
+      if (!response.ok) return null;
       const games = await response.json();
       const game = games.find((g: { id: string }) => g.id === id);
-      
-      if (game) {
-        return { ...game, sport_key: leagueKey };
-      }
+      return game ? { ...game, sport_key: leagueKey } : null;
+    };
+
+    // If league is provided and valid, check that league first (1 API call instead of up to 9!)
+    if (league && ALL_LEAGUES.includes(league)) {
+      const game = await fetchLeagueOdds(league);
+      if (game) return game;
+      // If not found in specified league, fall through to the resolver
+      // This handles edge cases where league param might be stale/wrong
     }
-    
-    return null;
+
+    // Sport-less link (pre-league-param shares) or stale league: resolve which
+    // league owns this game id via the FREE events endpoint (verified
+    // x-requests-last: 0), then pay for exactly one odds call. The old
+    // fallback paid for odds in every league — 27 credits per miss — and
+    // Discord/iMessage link previews hit this path on each unfurl.
+    const remaining = ALL_LEAGUES.filter((l) => l !== league);
+    const matches = await Promise.all(
+      remaining.map(async (leagueKey) => {
+        try {
+          const res = await fetch(
+            `https://api.the-odds-api.com/v4/sports/${leagueKey}/events?apiKey=${apiKey}`,
+            { next: { revalidate: 60 } }
+          );
+          if (!res.ok) return null;
+          const events = await res.json();
+          return events.some((e: { id: string }) => e.id === id) ? leagueKey : null;
+        } catch {
+          return null;
+        }
+      })
+    );
+    const found = matches.find((l) => l !== null);
+    return found ? await fetchLeagueOdds(found) : null;
   } catch (error) {
     console.error('Error fetching game:', error);
     return null;
@@ -505,7 +508,10 @@ export async function generateMetadata({
       description,
       type: 'website',
       siteName: 'odds.day',
-      url: `https://www.odds.day/game/${id}`,
+      // Canonical URL must carry the league — platforms and crawlers follow
+      // og:url, and a sport-less address sends every unfurl through the
+      // 9-league resolver instead of a single direct lookup.
+      url: `https://www.odds.day/game/${id}?league=${game.sport_key}`,
       images: [
         {
           url: ogImageUrl,
