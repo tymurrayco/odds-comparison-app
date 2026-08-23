@@ -86,6 +86,28 @@ const PROP_MARKETS: { [key: string]: string[] } = {
   ]
 };
 
+// Sports this route will proxy. PROP_MARKETS' keys are the whitelist; NFL
+// preseason rides on the NFL market list (the prop pricer offers it but the
+// map has no entry of its own). Anything else is rejected before it reaches
+// the paid API — same quota-abuse guard as /api/odds.
+const SPORT_ALIASES: { [key: string]: string } = {
+  'americanfootball_nfl_preseason': 'americanfootball_nfl',
+};
+const marketsForSport = (sport: string): string[] | undefined =>
+  PROP_MARKETS[sport] ?? PROP_MARKETS[SPORT_ALIASES[sport]];
+
+// A caller-supplied markets override may only name markets from the sport's
+// own list, plus their `_alternate` variants (the prop pricer's alt-line
+// ladders). Event-odds calls bill per market, so an open-ended override lets
+// anyone spend arbitrary credits per request AND bust the shared cache by
+// varying the string.
+const validateOverride = (sport: string, markets: string[]): boolean => {
+  const base = marketsForSport(sport);
+  if (!base) return false;
+  const allowed = new Set(base);
+  return markets.every((m) => allowed.has(m.replace(/_alternate$/, '')));
+};
+
 export async function GET(request: Request) {
   console.log('Props API route called');
   
@@ -99,15 +121,22 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Missing sport parameter' }, { status: 400 });
   }
 
+  if (!marketsForSport(sport)) {
+    return NextResponse.json({ error: 'Invalid sport key' }, { status: 400 });
+  }
+
   const apiKey = process.env.ODDS_API_KEY;
 
   // If eventId is provided, fetch props for that specific event
   if (eventId) {
     const markets = marketsOverride
       ? marketsOverride.split(',').map((m) => m.trim()).filter(Boolean)
-      : PROP_MARKETS[sport];
+      : marketsForSport(sport);
     if (!markets || markets.length === 0) {
       return NextResponse.json({ error: 'No prop markets available for this sport' }, { status: 400 });
+    }
+    if (marketsOverride && !validateOverride(sport, markets)) {
+      return NextResponse.json({ error: 'Invalid market key' }, { status: 400 });
     }
     
     try {
