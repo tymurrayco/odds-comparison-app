@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import OddsTable from './OddsTable';
 import AnalysisTabs from './AnalysisTabs';
+import InjuryReport from './InjuryReport';
 import { Game, ESPNGameScore } from '@/lib/api';
 import { GameRestData } from '@/lib/nhlRest';
 import { Bet } from '@/lib/betService';
@@ -24,6 +25,10 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
   
   // Check if this is NCAAF
   const isNCAAF = game.sport_key === 'americanfootball_ncaaf';
+
+  // NFL (incl. preseason) gets the injury-report toggle
+  const isNFL = game.sport_key === 'americanfootball_nfl'
+    || game.sport_key === 'americanfootball_nfl_preseason';
   
   // Default to moneyline for soccer, spread for everything else
   const [expandedMarket, setExpandedMarket] = useState<'moneyline' | 'spread' | 'totals' | 'analysis'>(
@@ -507,12 +512,29 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                 📊
               </button>
             )}
+            {/* Injury report button - only for NFL */}
+            {isNFL && (
+              <button
+                className={`px-2 md:px-3 py-1 text-xs md:text-sm rounded-md ${
+                  expandedMarket === 'analysis'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-purple-50 text-purple-700 hover:bg-purple-100'
+                }`}
+                onClick={() => setExpandedMarket('analysis')}
+                title="Injury report"
+              >
+                🏥
+              </button>
+            )}
           </div>
         </div>
       </div>
-      
-      {/* Show TeamAnalysis if analysis is selected */}
-      {expandedMarket === 'analysis' && isNCAAF ? (
+
+      {/* Show injury report (NFL) if selected */}
+      {expandedMarket === 'analysis' && isNFL ? (
+        <InjuryReport awayTeam={game.away_team} homeTeam={game.home_team} />
+      ) : /* Show TeamAnalysis if analysis is selected */
+      expandedMarket === 'analysis' && isNCAAF ? (
         <div className="p-2">
           <AnalysisTabs
             awayTeam={game.away_team}
