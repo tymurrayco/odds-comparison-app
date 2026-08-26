@@ -9,6 +9,7 @@ interface InjuryEntry {
   status: string;
   comment: string | null;
   date: string | null;
+  depthRank: number | null; // 1 = starter, 2 = backup, null = off depth chart
 }
 
 interface InjuryReportProps {
@@ -58,9 +59,20 @@ function statusLabel(s: string): string {
   return s;
 }
 
+// Importance from the current depth chart: starters and 2nd string are the
+// names that move a line; rank >= 3 / off-chart players are noise.
+function importanceRank(e: InjuryEntry): number {
+  if (e.depthRank === 1) return 0;
+  if (e.depthRank === 2) return 1;
+  return 2;
+}
+
 function TeamColumn({ team, entries }: { team: string; entries: InjuryEntry[] | undefined }) {
   const [expanded, setExpanded] = useState(false);
-  const sorted = (entries ?? []).slice().sort((a, b) => statusRank(a.status) - statusRank(b.status));
+  // Starters first, then by severity within each importance tier
+  const sorted = (entries ?? []).slice().sort(
+    (a, b) => importanceRank(a) - importanceRank(b) || statusRank(a.status) - statusRank(b.status)
+  );
   const shown = expanded ? sorted : sorted.slice(0, 6);
   return (
     <div className="min-w-0">
@@ -72,20 +84,31 @@ function TeamColumn({ team, entries }: { team: string; entries: InjuryEntry[] | 
       ) : (
         <>
           <ul className="space-y-1">
-            {shown.map((e, i) => (
-              <li key={i} className="flex items-baseline gap-1.5 text-[11px] leading-tight">
-                <span
-                  className={`shrink-0 px-1 py-px rounded font-semibold ${statusChip(e.status)}`}
-                  title={e.status}
-                >
-                  {statusLabel(e.status)}
-                </span>
-                <span className="font-medium text-gray-800 truncate" title={e.comment ?? undefined}>
-                  {e.name}
-                </span>
-                {e.position && <span className="text-gray-400 shrink-0">{e.position}</span>}
-              </li>
-            ))}
+            {shown.map((e, i) => {
+              const dim = importanceRank(e) === 2;
+              return (
+                <li key={i} className={`flex items-baseline gap-1.5 text-[11px] leading-tight ${dim ? 'opacity-50' : ''}`}>
+                  <span
+                    className={`shrink-0 px-1 py-px rounded font-semibold ${statusChip(e.status)}`}
+                    title={e.status}
+                  >
+                    {statusLabel(e.status)}
+                  </span>
+                  <span className="font-medium text-gray-800 truncate" title={e.comment ?? undefined}>
+                    {e.name}
+                  </span>
+                  {e.position && <span className="text-gray-400 shrink-0">{e.position}</span>}
+                  {e.depthRank === 1 && (
+                    <span
+                      className="shrink-0 px-1 py-px rounded bg-purple-100 text-purple-700 font-semibold"
+                      title="Projected starter on the current depth chart"
+                    >
+                      ★
+                    </span>
+                  )}
+                </li>
+              );
+            })}
           </ul>
           {sorted.length > 6 && (
             <button
@@ -139,7 +162,9 @@ export default function InjuryReport({ awayTeam, homeTeam }: InjuryReportProps) 
         <TeamColumn team={awayTeam} entries={find(awayTeam)} />
         <TeamColumn team={homeTeam} entries={find(homeTeam)} />
       </div>
-      <p className="mt-2 text-[10px] text-gray-400">Source: ESPN · updated ~30 min</p>
+      <p className="mt-2 text-[10px] text-gray-400">
+        Source: ESPN · updated ~30 min · ★ projected starter, dimmed = off the 2-deep
+      </p>
     </div>
   );
 }
