@@ -44,13 +44,17 @@ export default function CreditGauge() {
       .catch(() => setError(true));
   }, []);
 
+  // Re-run when `data` resolves: the chart wrapper doesn't exist until then,
+  // so an on-mount-only observer never attaches and width stays at the 600px
+  // default — off the edge on phones.
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
+    setWidth(el.getBoundingClientRect().width);
     const ro = new ResizeObserver((es) => setWidth(es[0].contentRect.width));
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [data]);
 
   const points = useMemo(() => {
     if (!data || data.history.length < 2) return null;
@@ -138,7 +142,7 @@ export default function CreditGauge() {
           </div>
 
           {/* Remaining-over-time area chart */}
-          <div ref={wrapRef} className="relative mt-4 select-none">
+          <div ref={wrapRef} className="relative mt-4 select-none overflow-hidden">
             {points ? (
               <>
                 <svg
