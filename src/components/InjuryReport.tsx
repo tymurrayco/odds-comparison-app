@@ -59,66 +59,74 @@ function statusLabel(s: string): string {
   return s;
 }
 
-// Importance from the current depth chart: starters and 2nd string are the
-// names that move a line; rank >= 3 / off-chart players are noise.
-function importanceRank(e: InjuryEntry): number {
-  if (e.depthRank === 1) return 0;
-  if (e.depthRank === 2) return 1;
-  return 2;
+// Relevance from the current depth chart. Starters always matter; backups
+// matter at rotation positions (RB committees, WR/DL rotations, backup QB)
+// but not for specialists; rank >= 3 and off-chart players are roster noise
+// and are hidden entirely.
+const SPECIALIST_POS = new Set(['PK', 'K', 'P', 'LS']);
+function isRelevant(e: InjuryEntry): boolean {
+  if (e.depthRank === 1) return true;
+  if (e.depthRank === 2) return !SPECIALIST_POS.has(e.position);
+  return false;
 }
 
 function TeamColumn({ team, entries }: { team: string; entries: InjuryEntry[] | undefined }) {
-  const [expanded, setExpanded] = useState(false);
-  // Starters first, then by severity within each importance tier
-  const sorted = (entries ?? []).slice().sort(
-    (a, b) => importanceRank(a) - importanceRank(b) || statusRank(a.status) - statusRank(b.status)
+  const [showAll, setShowAll] = useState(false);
+  const all = (entries ?? []).slice().sort(
+    (a, b) =>
+      (a.depthRank ?? 99) - (b.depthRank ?? 99) ||
+      statusRank(a.status) - statusRank(b.status)
   );
-  const shown = expanded ? sorted : sorted.slice(0, 6);
+  const relevant = all.filter(isRelevant);
+  const hidden = all.length - relevant.length;
+  const shown = showAll ? all : relevant;
   return (
     <div className="min-w-0">
       <div className="text-xs font-semibold text-gray-700 border-b border-gray-200 pb-1 mb-1.5">
         {team}
       </div>
-      {sorted.length === 0 ? (
+      {all.length === 0 ? (
         <p className="text-[11px] text-gray-400">No players with an injury designation.</p>
+      ) : shown.length === 0 ? (
+        <p className="text-[11px] text-gray-400">No injuries of consequence.</p>
       ) : (
-        <>
-          <ul className="space-y-1">
-            {shown.map((e, i) => {
-              const dim = importanceRank(e) === 2;
-              return (
-                <li key={i} className={`flex items-baseline gap-1.5 text-[11px] leading-tight ${dim ? 'opacity-50' : ''}`}>
-                  <span
-                    className={`shrink-0 px-1 py-px rounded font-semibold ${statusChip(e.status)}`}
-                    title={e.status}
-                  >
-                    {statusLabel(e.status)}
-                  </span>
-                  <span className="font-medium text-gray-800 truncate" title={e.comment ?? undefined}>
-                    {e.name}
-                  </span>
-                  {e.position && <span className="text-gray-400 shrink-0">{e.position}</span>}
-                  {e.depthRank === 1 && (
-                    <span
-                      className="shrink-0 px-1 py-px rounded bg-purple-100 text-purple-700 font-semibold"
-                      title="Projected starter on the current depth chart"
-                    >
-                      ★
-                    </span>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-          {sorted.length > 6 && (
-            <button
-              className="mt-1 text-[10px] text-blue-600 hover:underline"
-              onClick={() => setExpanded((v) => !v)}
+        <ul className="space-y-1">
+          {shown.map((e, i) => (
+            <li
+              key={i}
+              className={`flex items-baseline gap-1.5 text-[11px] leading-tight ${
+                isRelevant(e) ? '' : 'opacity-50'
+              }`}
             >
-              {expanded ? 'Show less' : `Show all ${sorted.length}`}
-            </button>
-          )}
-        </>
+              <span
+                className={`shrink-0 px-1 py-px rounded font-semibold ${statusChip(e.status)}`}
+                title={e.status}
+              >
+                {statusLabel(e.status)}
+              </span>
+              <span className="font-medium text-gray-800 truncate" title={e.comment ?? undefined}>
+                {e.name}
+              </span>
+              {e.position && <span className="text-gray-400 shrink-0">{e.position}</span>}
+              {e.depthRank === 1 && (
+                <span
+                  className="shrink-0 px-1 py-px rounded bg-purple-100 text-purple-700 font-semibold"
+                  title="Projected starter on the current depth chart"
+                >
+                  ★
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {hidden > 0 && (
+        <button
+          className="mt-1 text-[10px] text-gray-400 hover:text-gray-600 hover:underline"
+          onClick={() => setShowAll((v) => !v)}
+        >
+          {showAll ? 'Hide depth players' : `+ ${hidden} depth player${hidden === 1 ? '' : 's'}`}
+        </button>
       )}
     </div>
   );
@@ -163,7 +171,7 @@ export default function InjuryReport({ awayTeam, homeTeam }: InjuryReportProps) 
         <TeamColumn team={homeTeam} entries={find(homeTeam)} />
       </div>
       <p className="mt-2 text-[10px] text-gray-400">
-        Source: ESPN · updated ~30 min · ★ projected starter, dimmed = off the 2-deep
+        Source: ESPN · updated ~30 min · ★ projected starter · 2-deep only, depth players hidden
       </p>
     </div>
   );
