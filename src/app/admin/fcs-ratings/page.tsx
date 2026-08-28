@@ -63,6 +63,11 @@ const FALLBACK_COLOR = '#64748b';
 
 const normalizeKey = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
 
+const localYmd = (d: Date) => {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
 function TeamChip({
   name,
   visual,
@@ -123,6 +128,7 @@ export default function FcsRatingsAdminPage() {
   const [view, setView] = useState<'ratings' | 'upcoming'>('ratings');
   const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
   const [manualDelta, setManualDelta] = useState('');
+  const [manualDate, setManualDate] = useState(() => localYmd(new Date()));
   const [manualNote, setManualNote] = useState('');
   const [editingManualId, setEditingManualId] = useState<number | null>(null);
   const [manualBusy, setManualBusy] = useState(false);
@@ -308,6 +314,14 @@ export default function FcsRatingsAdminPage() {
       setError('Enter a non-zero rating change, e.g. 2.5 or -1.5');
       return;
     }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(manualDate)) {
+      setMessage(null);
+      setError('Pick an "as of" date');
+      return;
+    }
+    // Local midnight of the chosen day -> the adjustment applies before that
+    // day's games and after everything earlier.
+    const adjustDate = new Date(`${manualDate}T00:00:00`).toISOString();
     setManualBusy(true);
     setError(null);
     try {
@@ -316,8 +330,8 @@ export default function FcsRatingsAdminPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(
           editingManualId === null
-            ? { teamName, delta, note: manualNote.trim() || undefined }
-            : { id: editingManualId, delta, note: manualNote.trim() || null }
+            ? { teamName, delta, adjustDate, note: manualNote.trim() || undefined }
+            : { id: editingManualId, delta, adjustDate, note: manualNote.trim() || null }
         ),
       });
       const json = await res.json();
@@ -332,6 +346,7 @@ export default function FcsRatingsAdminPage() {
       }
       setManualDelta('');
       setManualNote('');
+      setManualDate(localYmd(new Date()));
       setEditingManualId(null);
       setUpcoming(null);
       setUpcomingAttempted(false);
@@ -767,6 +782,7 @@ export default function FcsRatingsAdminPage() {
                         setEditingManualId(null);
                         setManualDelta('');
                         setManualNote('');
+                        setManualDate(localYmd(new Date()));
                       }}
                       className="grid grid-cols-[1.75rem_1fr_auto] sm:grid-cols-[2.5rem_1fr_5.5rem_5rem_5rem_3.5rem_3rem] items-center px-2 sm:px-3 py-2 cursor-pointer"
                       style={{
@@ -823,6 +839,13 @@ export default function FcsRatingsAdminPage() {
                             onChange={(e) => setManualDelta(e.target.value)}
                           />
                           <input
+                            type="date"
+                            className="px-2 py-1.5 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0052ff]/25"
+                            title="As of — applies from this date forward"
+                            value={manualDate}
+                            onChange={(e) => setManualDate(e.target.value)}
+                          />
+                          <input
                             type="text"
                             autoComplete="off"
                             className="flex-1 min-w-0 px-2 py-1.5 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0052ff]/25"
@@ -844,6 +867,7 @@ export default function FcsRatingsAdminPage() {
                                 setEditingManualId(null);
                                 setManualDelta('');
                                 setManualNote('');
+                                setManualDate(localYmd(new Date()));
                               }}
                             >
                               Cancel
@@ -896,6 +920,7 @@ export default function FcsRatingsAdminPage() {
                                         )}
                                       </div>
                                       <div className="text-[11px] text-slate-400">
+                                        as of{' '}
                                         {new Date(ma.adjustDate).toLocaleDateString(undefined, {
                                           month: 'short',
                                           day: 'numeric',
@@ -907,6 +932,7 @@ export default function FcsRatingsAdminPage() {
                                             setEditingManualId(ma.id);
                                             setManualDelta(String(ma.delta));
                                             setManualNote(ma.note ?? '');
+                                            setManualDate(localYmd(new Date(ma.adjustDate)));
                                           }}
                                         >
                                           edit
@@ -1009,6 +1035,7 @@ export default function FcsRatingsAdminPage() {
                         </div>
                         <div className="text-right shrink-0">
                           <div className="text-[11px] text-slate-400">
+                            as of{' '}
                             {new Date(ma.adjustDate).toLocaleDateString(undefined, {
                               month: 'short',
                               day: 'numeric',
