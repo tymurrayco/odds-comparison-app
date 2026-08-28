@@ -467,6 +467,8 @@ export default function FcsRatingsAdminPage() {
                                     minute: '2-digit',
                                   })}
                                   {g.isNeutralSite ? ' · N' : ''}
+                                  {' · HFA '}
+                                  {g.hfaApplied.toFixed(2)}
                                   {g.state === 'in' ? ' · LIVE' : ''}
                                 </div>
                                 <div className="text-sm font-semibold text-slate-800 tabular-nums whitespace-nowrap">
