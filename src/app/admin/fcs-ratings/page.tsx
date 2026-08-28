@@ -40,6 +40,7 @@ export default function FcsRatingsAdminPage() {
   const [sortKey, setSortKey] = useState<SortKey>('rating');
   const [sortDesc, setSortDesc] = useState(true);
   const [manualSpreads, setManualSpreads] = useState<Record<string, string>>({});
+  const [manualFav, setManualFav] = useState<Record<string, 'home' | 'away'>>({});
   const [savingLine, setSavingLine] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -148,11 +149,13 @@ export default function FcsRatingsAdminPage() {
 
   const saveManualLine = async (gameId: string) => {
     const raw = manualSpreads[gameId];
-    const spread = parseFloat(raw ?? '');
-    if (!Number.isFinite(spread)) {
-      setError('Enter a numeric home spread (negative = home favored)');
+    const magnitude = Math.abs(parseFloat(raw ?? ''));
+    if (!Number.isFinite(magnitude)) {
+      setError('Enter the closing spread as a number, e.g. 6.5');
       return;
     }
+    // Sign from the fav toggle: home favored => negative home spread
+    const spread = (manualFav[gameId] ?? 'home') === 'home' ? -magnitude : magnitude;
     setSavingLine(gameId);
     setError(null);
     try {
@@ -325,8 +328,8 @@ export default function FcsRatingsAdminPage() {
                 Games missing a closing line ({data!.unlinedGames.length})
               </div>
               <div className="text-xs text-slate-500 mt-0.5">
-                The Odds API had no line for these. Enter the closing spread from the home
-                team&apos;s perspective (negative = home favored), then Sync Games to apply.
+                The Odds API had no line for these. Enter the closing spread (points only),
+                tap the toggle to say who was favored, then Sync Games to apply.
               </div>
             </div>
             <div className="overflow-x-auto max-h-[40vh] overflow-y-auto">
@@ -344,15 +347,29 @@ export default function FcsRatingsAdminPage() {
                         )}
                       </td>
                       <td className={tdCls}>
-                        <input
-                          className="w-24 px-2 py-1 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0052ff]/25"
-                          placeholder="-6.5"
-                          inputMode="decimal"
-                          value={manualSpreads[g.gameId] ?? ''}
-                          onChange={(e) =>
-                            setManualSpreads((m) => ({ ...m, [g.gameId]: e.target.value }))
-                          }
-                        />
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            className="px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700 hover:bg-slate-200 whitespace-nowrap"
+                            onClick={() =>
+                              setManualFav((m) => ({
+                                ...m,
+                                [g.gameId]: (m[g.gameId] ?? 'home') === 'home' ? 'away' : 'home',
+                              }))
+                            }
+                          >
+                            {(manualFav[g.gameId] ?? 'home') === 'home' ? 'Home fav' : 'Away fav'}
+                          </button>
+                          <span className="text-xs text-slate-400">−</span>
+                          <input
+                            className="w-16 px-2 py-1 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0052ff]/25"
+                            placeholder="6.5"
+                            inputMode="decimal"
+                            value={manualSpreads[g.gameId] ?? ''}
+                            onChange={(e) =>
+                              setManualSpreads((m) => ({ ...m, [g.gameId]: e.target.value }))
+                            }
+                          />
+                        </div>
                       </td>
                       <td className={tdCls}>
                         <button
