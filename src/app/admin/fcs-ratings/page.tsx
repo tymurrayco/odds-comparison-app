@@ -3,21 +3,19 @@
 // src/app/admin/fcs-ratings/page.tsx
 // Admin: FCS market-driven power ratings.
 // Seeded from Massey FCS Pwr, adjusted by closing lines (half-the-difference,
-// zero-sum). Massey seed + game sync are run from here (locally — the Massey
-// scrape needs puppeteer, same as KenPom).
+// zero-sum). Massey seed runs locally (puppeteer, same as KenPom); Sync Games
+// and manual closing lines work on Vercel too.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FcsClosingLine, FcsGameAdjustment, FcsTeamRating } from '@/lib/fcs/types';
+import { useTeamColorMap } from '@/lib/myGameBets';
 
-const thCls =
-  'sticky top-0 z-10 bg-white px-3 py-2.5 cursor-pointer select-none text-left text-xs font-semibold text-slate-500 shadow-[inset_0_-1px_0_#e2e8f0]';
-const tdCls = 'px-3 py-2 text-sm text-slate-700 whitespace-nowrap';
 const btnCls =
-  'px-4 py-2 text-sm font-medium rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed';
+  'px-3 py-2 text-sm font-medium rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed';
 const primaryBtnCls =
-  'px-4 py-2 text-sm font-medium rounded-lg bg-[#0052ff] text-white hover:bg-[#0043d1] disabled:opacity-50 disabled:cursor-not-allowed';
+  'px-3 py-2 text-sm font-medium rounded-lg bg-[#0052ff] text-white hover:bg-[#0043d1] disabled:opacity-50 disabled:cursor-not-allowed';
 
-type SortKey = 'rating' | 'team' | 'conference' | 'delta' | 'games';
+type SortKey = 'rating' | 'team' | 'delta' | 'games';
 
 interface RatingsResponse {
   success: boolean;
@@ -27,6 +25,60 @@ interface RatingsResponse {
   totalAdjustments: number;
   unlinedGames: FcsClosingLine[];
   error?: string;
+}
+
+interface TeamVisual {
+  logo: string | null;
+  color: string; // css hex with #
+}
+
+const FALLBACK_COLOR = '#64748b';
+
+const normalizeKey = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+function TeamChip({
+  name,
+  visual,
+  sub,
+  warn,
+}: {
+  name: string;
+  visual: TeamVisual;
+  sub?: string | null;
+  warn?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-2 min-w-0">
+      {visual.logo ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={visual.logo}
+          alt=""
+          className="w-6 h-6 object-contain shrink-0"
+          loading="lazy"
+        />
+      ) : (
+        <span
+          className="w-6 h-6 rounded-full shrink-0"
+          style={{ backgroundColor: `${visual.color}33` }}
+        />
+      )}
+      <div className="min-w-0">
+        <div className="text-sm font-medium text-slate-800 truncate">
+          {name}
+          {warn && (
+            <span
+              className="ml-1.5 text-amber-500"
+              title="No ESPN link — games for this team will be skipped. Add an override in src/lib/fcs/teamNames.ts and re-seed."
+            >
+              ⚠
+            </span>
+          )}
+        </div>
+        {sub ? <div className="text-[11px] text-slate-400 truncate">{sub}</div> : null}
+      </div>
+    </div>
+  );
 }
 
 export default function FcsRatingsAdminPage() {
@@ -41,6 +93,8 @@ export default function FcsRatingsAdminPage() {
   const [sortDesc, setSortDesc] = useState(true);
   const [manualSpreads, setManualSpreads] = useState<Record<string, string>>({});
   const [savingLine, setSavingLine] = useState<string | null>(null);
+
+  const colorMap = useTeamColorMap('americanfootball_ncaaf');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -60,6 +114,26 @@ export default function FcsRatingsAdminPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // canonical team name -> rating row (for espn linkage from adjustments/lines)
+  const byTeamName = useMemo(() => {
+    const m = new Map<string, FcsTeamRating>();
+    for (const r of data?.ratings ?? []) m.set(r.teamName, r);
+    return m;
+  }, [data]);
+
+  const visualFor = useCallback(
+    (teamName: string): TeamVisual => {
+      const r = byTeamName.get(teamName);
+      const info = r?.espnName ? colorMap?.[normalizeKey(r.espnName)] : undefined;
+      const logo =
+        info?.logo ??
+        (r?.espnId ? `https://a.espncdn.com/i/teamlogos/ncaa/500/${r.espnId}.png` : null);
+      const color = info?.color ? `#${info.color}` : FALLBACK_COLOR;
+      return { logo, color };
+    },
+    [byTeamName, colorMap]
+  );
 
   const runAction = async (
     label: string,
@@ -106,46 +180,6 @@ export default function FcsRatingsAdminPage() {
     }
   };
 
-  const conferences = useMemo(() => {
-    const set = new Set((data?.ratings ?? []).map((r) => r.conference || 'Unknown'));
-    return [...set].sort();
-  }, [data]);
-
-  const rows = useMemo(() => {
-    let list = data?.ratings ?? [];
-    if (confFilter !== 'all') list = list.filter((r) => (r.conference || 'Unknown') === confFilter);
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      list = list.filter(
-        (r) =>
-          r.teamName.toLowerCase().includes(q) || r.masseyName.toLowerCase().includes(q)
-      );
-    }
-    const dir = sortDesc ? -1 : 1;
-    return [...list].sort((a, b) => {
-      switch (sortKey) {
-        case 'team':
-          return dir * a.teamName.localeCompare(b.teamName);
-        case 'conference':
-          return dir * (a.conference ?? '').localeCompare(b.conference ?? '');
-        case 'delta':
-          return dir * (a.rating - a.initialRating - (b.rating - b.initialRating));
-        case 'games':
-          return dir * (a.gamesProcessed - b.gamesProcessed);
-        default:
-          return dir * (a.rating - b.rating);
-      }
-    });
-  }, [data, search, confFilter, sortKey, sortDesc]);
-
-  const setSort = (key: SortKey) => {
-    if (sortKey === key) setSortDesc((d) => !d);
-    else {
-      setSortKey(key);
-      setSortDesc(key !== 'team' && key !== 'conference');
-    }
-  };
-
   const saveManualLine = async (gameId: string) => {
     // Normalize unicode minus/dash variants the iOS keyboard can produce
     const raw = (manualSpreads[gameId] ?? '').replace(/[−–—]/g, '-').trim();
@@ -173,31 +207,91 @@ export default function FcsRatingsAdminPage() {
     }
   };
 
-  const fmtDelta = (r: FcsTeamRating) => {
-    const d = Math.round((r.rating - r.initialRating) * 100) / 100;
-    if (d === 0) return <span className="text-slate-400">0.00</span>;
+  const conferences = useMemo(() => {
+    const set = new Set((data?.ratings ?? []).map((r) => r.conference || 'Unknown'));
+    return [...set].sort();
+  }, [data]);
+
+  const rows = useMemo(() => {
+    let list = data?.ratings ?? [];
+    if (confFilter !== 'all') list = list.filter((r) => (r.conference || 'Unknown') === confFilter);
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter(
+        (r) =>
+          r.teamName.toLowerCase().includes(q) || r.masseyName.toLowerCase().includes(q)
+      );
+    }
+    const dir = sortDesc ? -1 : 1;
+    return [...list].sort((a, b) => {
+      switch (sortKey) {
+        case 'team':
+          return dir * a.teamName.localeCompare(b.teamName);
+        case 'delta':
+          return dir * (a.rating - a.initialRating - (b.rating - b.initialRating));
+        case 'games':
+          return dir * (a.gamesProcessed - b.gamesProcessed);
+        default:
+          return dir * (a.rating - b.rating);
+      }
+    });
+  }, [data, search, confFilter, sortKey, sortDesc]);
+
+  const setSort = (key: SortKey) => {
+    if (sortKey === key) setSortDesc((d) => !d);
+    else {
+      setSortKey(key);
+      setSortDesc(key !== 'team');
+    }
+  };
+
+  const sortChip = (key: SortKey, label: string) => (
+    <button
+      key={key}
+      onClick={() => setSort(key)}
+      className={`px-2.5 py-1 rounded-full text-xs font-medium transition whitespace-nowrap ${
+        sortKey === key
+          ? 'bg-slate-800 text-white'
+          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+      }`}
+    >
+      {label}
+      {sortKey === key ? (sortDesc ? ' ↓' : ' ↑') : ''}
+    </button>
+  );
+
+  const fmtDelta = (d: number, small = false) => {
+    const v = Math.round(d * 100) / 100;
+    if (v === 0) return <span className="text-slate-400">0.00</span>;
     return (
-      <span className={d > 0 ? 'text-emerald-600' : 'text-red-600'}>
-        {d > 0 ? '+' : ''}
-        {d.toFixed(2)}
+      <span className={v > 0 ? 'text-emerald-600' : small ? 'text-red-500' : 'text-red-600'}>
+        {v > 0 ? '+' : ''}
+        {v.toFixed(2)}
       </span>
     );
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
-      <div className="max-w-6xl mx-auto space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="min-h-screen bg-slate-50 p-3 sm:p-6">
+      <div className="max-w-4xl mx-auto space-y-4 sm:space-y-6">
+        <div className="space-y-3">
           <div>
-            <h1 className="text-xl font-bold text-slate-800">FCS Power Ratings</h1>
-            <p className="text-sm text-slate-500">
+            <h1 className="text-lg sm:text-xl font-bold text-slate-800">FCS Power Ratings</h1>
+            <p className="text-xs sm:text-sm text-slate-500">
               Massey seed → market-adjusted by closing lines · {data?.totalAdjustments ?? 0}{' '}
-              games processed · season {data?.season ?? ''}
+              games · season {data?.season ?? ''}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <button
-              className={btnCls}
+              className={`${primaryBtnCls} flex-1 sm:flex-none`}
+              disabled={busy !== null || (data?.ratings.length ?? 0) === 0}
+              onClick={() => runAction('sync', '/api/fcs/calculate', { action: 'sync' })}
+            >
+              {busy === 'sync' ? 'Syncing…' : 'Sync Games'}
+            </button>
+            <button
+              className={`${btnCls} flex-1 sm:flex-none`}
               disabled={busy !== null}
               onClick={() =>
                 runAction('seed', '/api/fcs/massey-sync', {},
@@ -207,17 +301,10 @@ export default function FcsRatingsAdminPage() {
                 )
               }
             >
-              {busy === 'seed' ? 'Scraping Massey…' : 'Seed from Massey'}
+              {busy === 'seed' ? 'Scraping…' : 'Seed Massey'}
             </button>
             <button
-              className={primaryBtnCls}
-              disabled={busy !== null || (data?.ratings.length ?? 0) === 0}
-              onClick={() => runAction('sync', '/api/fcs/calculate', { action: 'sync' })}
-            >
-              {busy === 'sync' ? 'Syncing…' : 'Sync Games'}
-            </button>
-            <button
-              className={btnCls}
+              className={`${btnCls} flex-1 sm:flex-none`}
               disabled={busy !== null || (data?.totalAdjustments ?? 0) === 0}
               onClick={() =>
                 runAction(
@@ -228,7 +315,7 @@ export default function FcsRatingsAdminPage() {
                 )
               }
             >
-              {busy === 'recalc' ? 'Recalculating…' : 'Recalculate All'}
+              {busy === 'recalc' ? 'Recalculating…' : 'Recalculate'}
             </button>
           </div>
         </div>
@@ -244,190 +331,196 @@ export default function FcsRatingsAdminPage() {
           </div>
         )}
 
-        <div className="flex flex-wrap gap-2">
-          <input
-            className="px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0052ff]/25"
-            placeholder="Search team…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          <select
-            className="px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg"
-            value={confFilter}
-            onChange={(e) => setConfFilter(e.target.value)}
-          >
-            <option value="all">All conferences</option>
-            {conferences.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <div className="overflow-x-auto max-h-[60vh] overflow-y-auto">
-            <table className="w-full">
-              <thead>
-                <tr>
-                  <th className={thCls}>#</th>
-                  <th className={thCls} onClick={() => setSort('team')}>Team</th>
-                  <th className={thCls} onClick={() => setSort('conference')}>Conf</th>
-                  <th className={thCls} onClick={() => setSort('rating')}>Rating</th>
-                  <th className={thCls}>Seed (Massey)</th>
-                  <th className={thCls} onClick={() => setSort('delta')}>Δ Market</th>
-                  <th className={thCls}>HFA</th>
-                  <th className={thCls} onClick={() => setSort('games')}>Games</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <tr><td className={tdCls} colSpan={8}>Loading…</td></tr>
-                ) : rows.length === 0 ? (
-                  <tr>
-                    <td className={tdCls} colSpan={8}>
-                      No ratings yet — run &quot;Seed from Massey&quot; (requires the SQL in
-                      sql/fcs_ratings.sql to be applied, and a local dev server for puppeteer).
-                    </td>
-                  </tr>
-                ) : (
-                  rows.map((r, i) => (
-                    <tr key={r.teamName} className="border-t border-slate-100 hover:bg-slate-50">
-                      <td className={`${tdCls} text-slate-400`}>{i + 1}</td>
-                      <td className={`${tdCls} font-medium text-slate-800`}>
-                        {r.teamName}
-                        {!r.espnName && (
-                          <span
-                            className="ml-1.5 text-amber-500"
-                            title="No ESPN link — games for this team will be skipped. Add an override in src/lib/fcs/teamNames.ts and re-seed."
-                          >
-                            ⚠
-                          </span>
-                        )}
-                      </td>
-                      <td className={`${tdCls} text-slate-500`}>{r.conference}</td>
-                      <td className={`${tdCls} font-semibold`}>{r.rating.toFixed(2)}</td>
-                      <td className={`${tdCls} text-slate-500`}>{r.initialRating.toFixed(2)}</td>
-                      <td className={tdCls}>{fmtDelta(r)}</td>
-                      <td className={`${tdCls} text-slate-500`}>{r.hfa?.toFixed(2) ?? '—'}</td>
-                      <td className={`${tdCls} text-slate-500`}>{r.gamesProcessed}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
         {(data?.unlinedGames ?? []).length > 0 && (
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-100">
+            <div className="px-3 sm:px-4 py-3 border-b border-slate-100">
               <div className="text-sm font-semibold text-slate-700">
                 Games missing a closing line ({data!.unlinedGames.length})
               </div>
               <div className="text-xs text-slate-500 mt-0.5">
-                The Odds API had no line for these. Enter the closing spread from the home
-                team&apos;s perspective (negative = home favored), then Sync Games to apply.
+                Enter the closing spread from the home team&apos;s perspective (negative =
+                home favored), then Sync Games to apply.
               </div>
             </div>
-            <div className="overflow-x-auto max-h-[40vh] overflow-y-auto">
-              <table className="w-full">
-                <tbody>
-                  {data!.unlinedGames.map((g) => (
-                    <tr key={g.gameId} className="border-t border-slate-100">
-                      <td className={`${tdCls} text-slate-500`}>
-                        {g.gameDate?.substring(0, 10)}
-                      </td>
-                      <td className={tdCls}>
-                        {g.awayTeam} @ {g.homeTeam}
-                        {g.isNeutralSite && (
-                          <span className="ml-1.5 text-xs text-slate-400">(N)</span>
-                        )}
-                      </td>
-                      <td className={tdCls}>
+            <div className="max-h-[45vh] overflow-y-auto divide-y divide-slate-100">
+              {data!.unlinedGames.map((g) => {
+                const away = g.awayTeam ?? '';
+                const home = g.homeTeam ?? '';
+                return (
+                  <div key={g.gameId} className="px-3 sm:px-4 py-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0 space-y-1">
+                        <TeamChip name={away} visual={visualFor(away)} />
+                        <div className="flex items-center gap-2">
+                          <TeamChip name={home} visual={visualFor(home)} />
+                          <span className="text-[11px] text-slate-400 shrink-0">
+                            {g.isNeutralSite ? 'vs (N)' : 'home'} ·{' '}
+                            {g.gameDate?.substring(5, 10)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
                         <input
                           type="text"
                           autoComplete="off"
                           autoCorrect="off"
-                          className="w-24 px-2 py-1 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0052ff]/25"
+                          className="w-20 px-2 py-1.5 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0052ff]/25"
                           placeholder="-6.5"
                           value={manualSpreads[g.gameId] ?? ''}
                           onChange={(e) =>
                             setManualSpreads((m) => ({ ...m, [g.gameId]: e.target.value }))
                           }
                         />
-                      </td>
-                      <td className={tdCls}>
                         <button
                           className={btnCls}
                           disabled={savingLine !== null || !(manualSpreads[g.gameId] ?? '').trim()}
                           onClick={() => saveManualLine(g.gameId)}
                         >
-                          {savingLine === g.gameId ? 'Saving…' : 'Save'}
+                          {savingLine === g.gameId ? '…' : 'Save'}
                         </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
 
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            <input
+              className="flex-1 min-w-0 px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0052ff]/25"
+              placeholder="Search team…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            <select
+              className="px-2 py-2 text-sm bg-white border border-slate-200 rounded-lg max-w-[45%]"
+              value={confFilter}
+              onChange={(e) => setConfFilter(e.target.value)}
+            >
+              <option value="all">All conferences</option>
+              {conferences.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+            {sortChip('rating', 'Rating')}
+            {sortChip('delta', 'Δ Market')}
+            {sortChip('games', 'Games')}
+            {sortChip('team', 'A–Z')}
+          </div>
+        </div>
+
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <div className="px-4 py-3 border-b border-slate-100 text-sm font-semibold text-slate-700">
+          <div className="hidden sm:grid grid-cols-[2.5rem_1fr_5.5rem_5rem_5rem_3.5rem_3rem] items-center px-3 py-2 text-[11px] font-semibold text-slate-400 uppercase tracking-wide border-b border-slate-100">
+            <div>#</div>
+            <div>Team</div>
+            <div className="text-right">Rating</div>
+            <div className="text-right">Δ Market</div>
+            <div className="text-right">Seed</div>
+            <div className="text-right">HFA</div>
+            <div className="text-right">G</div>
+          </div>
+          {loading ? (
+            <div className="px-4 py-6 text-sm text-slate-500">Loading…</div>
+          ) : rows.length === 0 ? (
+            <div className="px-4 py-6 text-sm text-slate-500">
+              No ratings yet — run &quot;Seed Massey&quot; (local dev server; puppeteer).
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {rows.map((r, i) => {
+                const v = visualFor(r.teamName);
+                const delta = r.rating - r.initialRating;
+                return (
+                  <div
+                    key={r.teamName}
+                    className="grid grid-cols-[1.75rem_1fr_auto] sm:grid-cols-[2.5rem_1fr_5.5rem_5rem_5rem_3.5rem_3rem] items-center px-2 sm:px-3 py-2"
+                    style={{
+                      boxShadow: `inset 3px 0 0 ${v.color}`,
+                      background: `linear-gradient(90deg, ${v.color}0d, transparent 55%)`,
+                    }}
+                  >
+                    <div className="text-xs text-slate-400 tabular-nums">{i + 1}</div>
+                    <TeamChip
+                      name={r.teamName}
+                      visual={v}
+                      sub={r.conference}
+                      warn={!r.espnName}
+                    />
+                    <div className="text-right">
+                      <div className="text-sm font-semibold text-slate-800 tabular-nums">
+                        {r.rating.toFixed(2)}
+                      </div>
+                      <div className="text-[11px] tabular-nums sm:hidden">
+                        {fmtDelta(delta, true)}
+                      </div>
+                    </div>
+                    <div className="hidden sm:block text-right text-sm tabular-nums">
+                      {fmtDelta(delta)}
+                    </div>
+                    <div className="hidden sm:block text-right text-sm text-slate-500 tabular-nums">
+                      {r.initialRating.toFixed(2)}
+                    </div>
+                    <div className="hidden sm:block text-right text-sm text-slate-500 tabular-nums">
+                      {r.hfa?.toFixed(2) ?? '—'}
+                    </div>
+                    <div className="hidden sm:block text-right text-sm text-slate-500 tabular-nums">
+                      {r.gamesProcessed}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div className="px-3 sm:px-4 py-3 border-b border-slate-100 text-sm font-semibold text-slate-700">
             Recent adjustments
           </div>
-          <div className="overflow-x-auto max-h-[50vh] overflow-y-auto">
-            <table className="w-full">
-              <thead>
-                <tr>
-                  <th className={thCls}>Date</th>
-                  <th className={thCls}>Matchup</th>
-                  <th className={thCls}>Projected</th>
-                  <th className={thCls}>Closing</th>
-                  <th className={thCls}>Diff</th>
-                  <th className={thCls}>Adj (away / home)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(data?.adjustments ?? []).map((a) => (
-                  <tr key={a.gameId} className="border-t border-slate-100">
-                    <td className={`${tdCls} text-slate-500`}>
-                      {a.gameDate.substring(0, 10)}
-                    </td>
-                    <td className={tdCls}>
-                      {a.awayTeam} @ {a.homeTeam}
-                      {a.isNeutralSite && (
-                        <span className="ml-1.5 text-xs text-slate-400">(N)</span>
-                      )}
-                    </td>
-                    <td className={tdCls}>{a.projectedSpread.toFixed(1)}</td>
-                    <td className={tdCls}>{a.closingSpread.toFixed(1)}</td>
-                    <td className={tdCls}>{a.difference.toFixed(2)}</td>
-                    <td className={tdCls}>
-                      <span className={a.adjustment >= 0 ? 'text-emerald-600' : 'text-red-600'}>
-                        {a.adjustment >= 0 ? '+' : ''}
-                        {a.adjustment.toFixed(2)}
-                      </span>
-                      {' / '}
-                      <span className={-a.adjustment >= 0 ? 'text-emerald-600' : 'text-red-600'}>
-                        {-a.adjustment >= 0 ? '+' : ''}
-                        {(-a.adjustment).toFixed(2)}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-                {(data?.adjustments ?? []).length === 0 && !loading && (
-                  <tr>
-                    <td className={tdCls} colSpan={6}>
-                      No games processed yet.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+          {(data?.adjustments ?? []).length === 0 && !loading ? (
+            <div className="px-4 py-5 text-sm text-slate-500">No games processed yet.</div>
+          ) : (
+            <div className="max-h-[55vh] overflow-y-auto divide-y divide-slate-100">
+              {(data?.adjustments ?? []).map((a) => (
+                <div key={a.gameId} className="px-3 sm:px-4 py-2.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <TeamChip name={a.awayTeam} visual={visualFor(a.awayTeam)} />
+                        <span className="text-[11px] tabular-nums shrink-0">
+                          {fmtDelta(a.adjustment, true)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <TeamChip name={a.homeTeam} visual={visualFor(a.homeTeam)} />
+                        <span className="text-[11px] tabular-nums shrink-0">
+                          {fmtDelta(-a.adjustment, true)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="text-[11px] text-slate-400">
+                        {a.gameDate.substring(5, 10)}
+                        {a.isNeutralSite ? ' · N' : ''}
+                      </div>
+                      <div className="text-xs text-slate-600 tabular-nums whitespace-nowrap">
+                        proj {a.projectedSpread.toFixed(1)} → close{' '}
+                        {a.closingSpread.toFixed(1)}
+                      </div>
+                      <div className="text-[11px] text-slate-400">{a.closingSource}</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
