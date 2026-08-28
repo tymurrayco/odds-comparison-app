@@ -7,7 +7,12 @@
 // and manual closing lines work on Vercel too.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { FcsClosingLine, FcsGameAdjustment, FcsTeamRating } from '@/lib/fcs/types';
+import {
+  FcsClosingLine,
+  FcsGameAdjustment,
+  FcsManualAdjustment,
+  FcsTeamRating,
+} from '@/lib/fcs/types';
 import { useTeamColorMap } from '@/lib/myGameBets';
 
 const btnCls =
@@ -24,8 +29,14 @@ interface RatingsResponse {
   adjustments: FcsGameAdjustment[];
   totalAdjustments: number;
   unlinedGames: FcsClosingLine[];
+  manualAdjustments: FcsManualAdjustment[];
+  pendingManualCount: number;
   error?: string;
 }
+
+type HistoryEntry =
+  | { kind: 'game'; date: string; adj: FcsGameAdjustment; isHome: boolean }
+  | { kind: 'manual'; date: string; m: FcsManualAdjustment };
 
 interface UpcomingGame {
   gameId: string;
@@ -111,6 +122,10 @@ export default function FcsRatingsAdminPage() {
   const [savingLine, setSavingLine] = useState<string | null>(null);
   const [view, setView] = useState<'ratings' | 'upcoming'>('ratings');
   const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
+  const [manualDelta, setManualDelta] = useState('');
+  const [manualNote, setManualNote] = useState('');
+  const [editingManualId, setEditingManualId] = useState<number | null>(null);
+  const [manualBusy, setManualBusy] = useState(false);
   const [upcoming, setUpcoming] = useState<UpcomingGame[] | null>(null);
   const [upcomingAttempted, setUpcomingAttempted] = useState(false);
   const [upcomingLoading, setUpcomingLoading] = useState(false);
@@ -158,20 +173,36 @@ export default function FcsRatingsAdminPage() {
     if (view === 'upcoming' && !upcomingAttempted) loadUpcoming();
   }, [view, upcomingAttempted, loadUpcoming]);
 
-  // team -> its adjustment history (newest first), with each game seen from
-  // that team's side of the zero-sum split
+  // team -> its history (newest first): game adjustments seen from that
+  // team's side of the zero-sum split, merged with manual rating adjustments
   const teamHistory = useMemo(() => {
-    const m = new Map<
-      string,
-      Array<{ adj: FcsGameAdjustment; isHome: boolean }>
-    >();
+    const m = new Map<string, HistoryEntry[]>();
+    const push = (t: string, e: HistoryEntry) => {
+      if (!m.has(t)) m.set(t, []);
+      m.get(t)!.push(e);
+    };
     for (const a of data?.adjustments ?? []) {
-      if (!m.has(a.homeTeam)) m.set(a.homeTeam, []);
-      m.get(a.homeTeam)!.push({ adj: a, isHome: true });
-      if (!m.has(a.awayTeam)) m.set(a.awayTeam, []);
-      m.get(a.awayTeam)!.push({ adj: a, isHome: false });
+      push(a.homeTeam, { kind: 'game', date: a.gameDate, adj: a, isHome: true });
+      push(a.awayTeam, { kind: 'game', date: a.gameDate, adj: a, isHome: false });
     }
+    for (const ma of data?.manualAdjustments ?? []) {
+      push(ma.teamName, { kind: 'manual', date: ma.adjustDate, m: ma });
+    }
+    for (const list of m.values()) list.sort((x, y) => y.date.localeCompare(x.date));
     return m;
+  }, [data]);
+
+  // merged feed for the Recent adjustments panel (newest first)
+  const feedEntries = useMemo(() => {
+    const out: HistoryEntry[] = [
+      ...(data?.adjustments ?? []).map(
+        (a): HistoryEntry => ({ kind: 'game', date: a.gameDate, adj: a, isHome: true })
+      ),
+      ...(data?.manualAdjustments ?? []).map(
+        (ma): HistoryEntry => ({ kind: 'manual', date: ma.adjustDate, m: ma })
+      ),
+    ];
+    return out.sort((x, y) => y.date.localeCompare(x.date));
   }, [data]);
 
   // canonical team name -> rating row (for espn linkage from adjustments/lines)
@@ -266,6 +297,89 @@ export default function FcsRatingsAdminPage() {
       setError(e instanceof Error ? e.message : 'Failed to save line');
     } finally {
       setSavingLine(null);
+    }
+  };
+
+  const submitManualRating = async (teamName: string) => {
+    const raw = manualDelta.replace(/[\u2212\u2013\u2014]/g, '-').trim();
+    const delta = parseFloat(raw);
+    if (!Number.isFinite(delta) || delta === 0) {
+      setMessage(null);
+      setError('Enter a non-zero rating change, e.g. 2.5 or -1.5');
+      return;
+    }
+    setManualBusy(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/fcs/manual-adjustment', {
+        method: editingManualId === null ? 'POST' : 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(
+          editingManualId === null
+            ? { teamName, delta, note: manualNote.trim() || undefined }
+            : { id: editingManualId, delta, note: manualNote.trim() || null }
+        ),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.error || `HTTP ${res.status}`);
+      if (json.replay?.success) {
+        setMessage(
+          `Manual adjustment ${editingManualId === null ? 'added' : 'updated'} and applied — ledger replayed (${json.replay.gamesReplayed} games, ${json.replay.manualApplied} manual).`
+        );
+      } else {
+        setMessage(null);
+        setError(json.replay?.error || 'Saved but not applied — run Recalculate.');
+      }
+      setManualDelta('');
+      setManualNote('');
+      setEditingManualId(null);
+      setUpcoming(null);
+      setUpcomingAttempted(false);
+      await load();
+    } catch (e) {
+      setMessage(null);
+      setError(e instanceof Error ? e.message : 'Failed to save adjustment');
+    } finally {
+      setManualBusy(false);
+    }
+  };
+
+  const removeManualRating = async (id: number) => {
+    if (
+      !window.confirm(
+        'Remove this manual rating adjustment? The ledger will be replayed without it.'
+      )
+    )
+      return;
+    setManualBusy(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/fcs/manual-adjustment', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.error || `HTTP ${res.status}`);
+      if (json.replay?.success) {
+        setMessage('Manual adjustment removed — ledger replayed.');
+      } else {
+        setMessage(null);
+        setError(json.replay?.error || 'Removed, but replay failed — run Recalculate.');
+      }
+      if (editingManualId === id) {
+        setEditingManualId(null);
+        setManualDelta('');
+        setManualNote('');
+      }
+      setUpcoming(null);
+      setUpcomingAttempted(false);
+      await load();
+    } catch (e) {
+      setMessage(null);
+      setError(e instanceof Error ? e.message : 'Failed to remove adjustment');
+    } finally {
+      setManualBusy(false);
     }
   };
 
@@ -390,6 +504,13 @@ export default function FcsRatingsAdminPage() {
         {message && (
           <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-sm text-emerald-700">
             {message}
+          </div>
+        )}
+        {(data?.pendingManualCount ?? 0) > 0 && (
+          <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-700">
+            {data!.pendingManualCount} manual rating{' '}
+            {data!.pendingManualCount === 1 ? 'adjustment has' : 'adjustments have'} not
+            been applied yet — hit Recalculate to sync the ratings.
           </div>
         )}
 
@@ -641,9 +762,12 @@ export default function FcsRatingsAdminPage() {
                     <div
                       role="button"
                       tabIndex={0}
-                      onClick={() =>
-                        setExpandedTeam(isOpen ? null : r.teamName)
-                      }
+                      onClick={() => {
+                        setExpandedTeam(isOpen ? null : r.teamName);
+                        setEditingManualId(null);
+                        setManualDelta('');
+                        setManualNote('');
+                      }}
                       className="grid grid-cols-[1.75rem_1fr_auto] sm:grid-cols-[2.5rem_1fr_5.5rem_5rem_5rem_3.5rem_3rem] items-center px-2 sm:px-3 py-2 cursor-pointer"
                       style={{
                         boxShadow: `inset 3px 0 0 ${v.color}`,
@@ -675,7 +799,7 @@ export default function FcsRatingsAdminPage() {
                         {r.initialRating.toFixed(2)}
                       </div>
                       <div className="hidden sm:block text-right text-sm text-slate-500 tabular-nums">
-                        {r.hfa?.toFixed(2) ?? '—'}
+                        {r.hfa?.toFixed(2) ?? '\u2014'}
                       </div>
                       <div className="hidden sm:block text-right text-sm text-slate-500 tabular-nums">
                         {r.gamesProcessed}
@@ -685,16 +809,122 @@ export default function FcsRatingsAdminPage() {
                       <div className="px-3 sm:px-4 py-2 bg-slate-50/70 border-t border-slate-100">
                         <div className="text-[11px] text-slate-400 mb-1.5">
                           Massey seed {r.initialRating.toFixed(2)} {'\u2192'} now{' '}
-                          {r.rating.toFixed(2)} ({history.length} market-lined{' '}
-                          {history.length === 1 ? 'game' : 'games'})
+                          {r.rating.toFixed(2)} ({r.gamesProcessed} market-lined{' '}
+                          {r.gamesProcessed === 1 ? 'game' : 'games'})
+                        </div>
+                        <div className="flex items-center gap-1.5 mb-2">
+                          <input
+                            type="text"
+                            autoComplete="off"
+                            autoCorrect="off"
+                            className="w-16 px-2 py-1.5 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0052ff]/25"
+                            placeholder="+2.5"
+                            value={manualDelta}
+                            onChange={(e) => setManualDelta(e.target.value)}
+                          />
+                          <input
+                            type="text"
+                            autoComplete="off"
+                            className="flex-1 min-w-0 px-2 py-1.5 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0052ff]/25"
+                            placeholder="note (optional)"
+                            value={manualNote}
+                            onChange={(e) => setManualNote(e.target.value)}
+                          />
+                          <button
+                            className={btnCls}
+                            disabled={manualBusy || !manualDelta.trim()}
+                            onClick={() => submitManualRating(r.teamName)}
+                          >
+                            {manualBusy ? '\u2026' : editingManualId === null ? 'Adjust' : 'Update'}
+                          </button>
+                          {editingManualId !== null && (
+                            <button
+                              className={btnCls}
+                              onClick={() => {
+                                setEditingManualId(null);
+                                setManualDelta('');
+                                setManualNote('');
+                              }}
+                            >
+                              Cancel
+                            </button>
+                          )}
                         </div>
                         {history.length === 0 ? (
                           <div className="text-xs text-slate-500 pb-1">
-                            No market-lined games yet.
+                            No adjustments yet \u2014 market-lined games and manual tweaks
+                            will appear here.
                           </div>
                         ) : (
                           <div className="space-y-1.5 pb-1">
-                            {history.map(({ adj: a, isHome }) => {
+                            {history.map((e) => {
+                              if (e.kind === 'manual') {
+                                const ma = e.m;
+                                return (
+                                  <div
+                                    key={`m${ma.id}`}
+                                    className="flex items-center justify-between gap-2"
+                                  >
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                      <span className="text-[11px] text-violet-500 w-7 shrink-0">
+                                        man
+                                      </span>
+                                      <div className="min-w-0">
+                                        <div className="text-sm font-medium text-violet-700">
+                                          Manual adjustment
+                                          {ma.pending && (
+                                            <span className="ml-1.5 text-[10px] text-amber-600 font-semibold">
+                                              NOT APPLIED
+                                            </span>
+                                          )}
+                                        </div>
+                                        {ma.note && (
+                                          <div className="text-[11px] text-slate-400 truncate">
+                                            {ma.note}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <div className="text-right shrink-0">
+                                      <div className="text-xs tabular-nums">
+                                        {fmtDelta(ma.delta, true)}{' '}
+                                        {ma.ratingBefore !== null && ma.ratingAfter !== null && (
+                                          <span className="text-slate-500">
+                                            ({ma.ratingBefore.toFixed(2)} {'\u2192'}{' '}
+                                            {ma.ratingAfter.toFixed(2)})
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="text-[11px] text-slate-400">
+                                        {new Date(ma.adjustDate).toLocaleDateString(undefined, {
+                                          month: 'short',
+                                          day: 'numeric',
+                                        })}
+                                        {' \u00b7 '}
+                                        <button
+                                          className="underline"
+                                          onClick={() => {
+                                            setEditingManualId(ma.id);
+                                            setManualDelta(String(ma.delta));
+                                            setManualNote(ma.note ?? '');
+                                          }}
+                                        >
+                                          edit
+                                        </button>
+                                        {' \u00b7 '}
+                                        <button
+                                          className="underline"
+                                          onClick={() => removeManualRating(ma.id)}
+                                        >
+                                          remove
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              }
+                              const a = e.adj;
+                              const isHome = e.isHome;
                               const opp = isHome ? a.awayTeam : a.homeTeam;
                               const myDelta = isHome ? -a.adjustment : a.adjustment;
                               const before = isHome
@@ -748,44 +978,89 @@ export default function FcsRatingsAdminPage() {
           <div className="px-3 sm:px-4 py-3 border-b border-slate-100 text-sm font-semibold text-slate-700">
             Recent adjustments
           </div>
-          {(data?.adjustments ?? []).length === 0 && !loading ? (
-            <div className="px-4 py-5 text-sm text-slate-500">No games processed yet.</div>
+          {feedEntries.length === 0 && !loading ? (
+            <div className="px-4 py-5 text-sm text-slate-500">No adjustments yet.</div>
           ) : (
             <div className="max-h-[55vh] overflow-y-auto divide-y divide-slate-100">
-              {(data?.adjustments ?? []).slice(0, 200).map((a) => (
-                <div key={a.gameId} className="px-3 sm:px-4 py-2.5">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0 space-y-1">
-                      <div className="flex items-center gap-2">
-                        <TeamChip name={a.awayTeam} visual={visualFor(a.awayTeam)} />
-                        <span className="text-[11px] tabular-nums shrink-0">
-                          {fmtDelta(a.adjustment, true)}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <TeamChip name={a.homeTeam} visual={visualFor(a.homeTeam)} />
-                        <span className="text-[11px] tabular-nums shrink-0">
-                          {fmtDelta(-a.adjustment, true)}
-                        </span>
+              {feedEntries.slice(0, 200).map((e) => {
+                if (e.kind === 'manual') {
+                  const ma = e.m;
+                  return (
+                    <div key={`m${ma.id}`} className="px-3 sm:px-4 py-2.5">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <TeamChip name={ma.teamName} visual={visualFor(ma.teamName)} />
+                            <span className="text-[11px] tabular-nums shrink-0">
+                              {fmtDelta(ma.delta, true)}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-violet-600">
+                            Manual adjustment
+                            {ma.pending && (
+                              <span className="ml-1.5 text-amber-600 font-semibold">
+                                NOT APPLIED
+                              </span>
+                            )}
+                            {ma.note ? (
+                              <span className="text-slate-400"> {'\u00b7'} {ma.note}</span>
+                            ) : null}
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <div className="text-[11px] text-slate-400">
+                            {new Date(ma.adjustDate).toLocaleDateString(undefined, {
+                              month: 'short',
+                              day: 'numeric',
+                            })}
+                          </div>
+                          {ma.ratingBefore !== null && ma.ratingAfter !== null && (
+                            <div className="text-xs text-slate-600 tabular-nums whitespace-nowrap">
+                              {ma.ratingBefore.toFixed(2)} {'\u2192'} {ma.ratingAfter.toFixed(2)}
+                            </div>
+                          )}
+                          <div className="text-[11px] text-slate-400">Manual</div>
+                        </div>
                       </div>
                     </div>
-                    <div className="text-right shrink-0">
-                      <div className="text-[11px] text-slate-400">
-                        {new Date(a.gameDate).toLocaleDateString(undefined, {
-                          month: 'short',
-                          day: 'numeric',
-                        })}
-                        {a.isNeutralSite ? ' · N' : ''}
+                  );
+                }
+                const a = e.adj;
+                return (
+                  <div key={a.gameId} className="px-3 sm:px-4 py-2.5">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <TeamChip name={a.awayTeam} visual={visualFor(a.awayTeam)} />
+                          <span className="text-[11px] tabular-nums shrink-0">
+                            {fmtDelta(a.adjustment, true)}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <TeamChip name={a.homeTeam} visual={visualFor(a.homeTeam)} />
+                          <span className="text-[11px] tabular-nums shrink-0">
+                            {fmtDelta(-a.adjustment, true)}
+                          </span>
+                        </div>
                       </div>
-                      <div className="text-xs text-slate-600 tabular-nums whitespace-nowrap">
-                        proj {a.projectedSpread.toFixed(1)} → close{' '}
-                        {a.closingSpread.toFixed(1)}
+                      <div className="text-right shrink-0">
+                        <div className="text-[11px] text-slate-400">
+                          {new Date(a.gameDate).toLocaleDateString(undefined, {
+                            month: 'short',
+                            day: 'numeric',
+                          })}
+                          {a.isNeutralSite ? ' \u00b7 N' : ''}
+                        </div>
+                        <div className="text-xs text-slate-600 tabular-nums whitespace-nowrap">
+                          proj {a.projectedSpread.toFixed(1)} {'\u2192'} close{' '}
+                          {a.closingSpread.toFixed(1)}
+                        </div>
+                        <div className="text-[11px] text-slate-400">{a.closingSource}</div>
                       </div>
-                      <div className="text-[11px] text-slate-400">{a.closingSource}</div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

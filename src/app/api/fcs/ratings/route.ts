@@ -10,6 +10,7 @@ import { FCS_SEASON } from '@/lib/fcs/constants';
 import {
   loadFcsAdjustments,
   loadFcsConfig,
+  loadFcsManualAdjustments,
   loadFcsRatings,
   loadUnlinedFcsGames,
 } from '@/lib/fcs/supabase';
@@ -21,12 +22,14 @@ export async function GET(request: NextRequest) {
     const seasonParam = request.nextUrl.searchParams.get('season');
     const season = seasonParam ? parseInt(seasonParam, 10) : FCS_SEASON;
 
-    const [ratings, config, adjustments, unlinedGames] = await Promise.all([
-      loadFcsRatings(season),
-      loadFcsConfig(),
-      loadFcsAdjustments(season),
-      loadUnlinedFcsGames(),
-    ]);
+    const [ratings, config, adjustments, unlinedGames, manualAdjustments] =
+      await Promise.all([
+        loadFcsRatings(season),
+        loadFcsConfig(),
+        loadFcsAdjustments(season),
+        loadUnlinedFcsGames(),
+        loadFcsManualAdjustments(season),
+      ]);
 
     const sorted = [...ratings.values()].sort((a, b) => b.rating - a.rating);
     return NextResponse.json({
@@ -37,6 +40,8 @@ export async function GET(request: NextRequest) {
       adjustments: [...adjustments].reverse(), // newest first, full season ledger
       totalAdjustments: adjustments.length,
       unlinedGames,
+      manualAdjustments: [...manualAdjustments].reverse(), // newest first
+      pendingManualCount: manualAdjustments.filter((m) => m.pending).length,
     });
   } catch (e) {
     return NextResponse.json(

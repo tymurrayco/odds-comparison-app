@@ -28,17 +28,11 @@ import {
   NCAAF_SPORT_KEY,
   ODDS_API_BASE_URL,
 } from '@/lib/fcs/constants';
-import {
-  extractConsensusSpread,
-  processFcsGame,
-  projectFcsSpread,
-  roundToDecimal,
-} from '@/lib/fcs/engine';
+import { extractConsensusSpread, processFcsGame } from '@/lib/fcs/engine';
 import {
   getCachedFcsClosingLine,
   getMaxFcsAdjustmentDate,
   getProcessedFcsGameIds,
-  loadFcsAdjustments,
   loadFcsConfig,
   loadFcsRatings,
   loadLinedFcsClosingLines,
@@ -47,6 +41,7 @@ import {
   saveFcsConfig,
   upsertFcsRatings,
 } from '@/lib/fcs/supabase';
+import { replayLedger } from '@/lib/fcs/replay';
 import { matchOddsEvent } from '@/lib/fcs/teamNames';
 import { EspnFcsGame, FcsTeamRating } from '@/lib/fcs/types';
 
@@ -362,65 +357,6 @@ async function handleSync(body: {
     replayed: needsReplay,
     processed,
     skipped,
-  };
-}
-
-async function replayLedger(season: number, saveFromDate?: string) {
-  const ratings = await loadFcsRatings(season);
-  const adjustments = await loadFcsAdjustments(season);
-
-  for (const r of ratings.values()) {
-    r.rating = r.initialRating;
-    r.gamesProcessed = 0;
-  }
-
-  let rewritten = 0;
-  const missingTeams: string[] = [];
-  for (const adj of adjustments) {
-    const home = ratings.get(adj.homeTeam);
-    const away = ratings.get(adj.awayTeam);
-    if (!home || !away) {
-      missingTeams.push(`${adj.awayTeam} @ ${adj.homeTeam}`);
-      continue;
-    }
-    // Keep the hfa that was applied when the game was processed live — the
-    // line closed under that condition, and replays must be deterministic
-    // (a Massey metadata refresh must not silently shift the whole ledger).
-    const hfaApplied = adj.hfaApplied;
-    const projected = projectFcsSpread(home.rating, away.rating, hfaApplied);
-    const difference = roundToDecimal(adj.closingSpread - projected, 2);
-    const adjustment = roundToDecimal(difference / 2, 2);
-
-    adj.hfaApplied = hfaApplied;
-    adj.projectedSpread = projected;
-    adj.difference = difference;
-    adj.adjustment = adjustment;
-    adj.homeRatingBefore = home.rating;
-    adj.awayRatingBefore = away.rating;
-    away.rating = roundToDecimal(away.rating + adjustment, 2);
-    home.rating = roundToDecimal(home.rating - adjustment, 2);
-    away.gamesProcessed += 1;
-    home.gamesProcessed += 1;
-    adj.homeRatingAfter = home.rating;
-    adj.awayRatingAfter = away.rating;
-
-    if (!saveFromDate || adj.gameDate.substring(0, 10) >= saveFromDate) {
-      await saveFcsAdjustment(adj);
-      rewritten++;
-    }
-  }
-
-  const now = new Date().toISOString();
-  for (const r of ratings.values()) r.updatedAt = now;
-  await upsertFcsRatings([...ratings.values()]);
-
-  return {
-    success: true,
-    action: saveFromDate ? 'recalculate-from' : 'recalculate',
-    season,
-    gamesReplayed: adjustments.length,
-    adjustmentRowsRewritten: rewritten,
-    missingTeams,
   };
 }
 

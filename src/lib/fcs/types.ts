@@ -57,6 +57,20 @@ export interface FcsClosingLine {
   bookmakers: string[] | null;
 }
 
+export interface FcsManualAdjustment {
+  id: number;
+  teamName: string;
+  season: number;
+  adjustDate: string;   // position in the replay timeline
+  delta: number;        // points added to this team (not zero-sum)
+  note: string | null;
+  ratingBefore: number | null; // stamped by replay
+  ratingAfter: number | null;
+  appliedAt: string | null;
+  updatedAt: string;
+  pending: boolean;     // updated since last replay (or never applied)
+}
+
 export interface EspnFcsGame {
   id: string;
   date: string;

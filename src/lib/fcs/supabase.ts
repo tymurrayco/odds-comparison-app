@@ -12,6 +12,7 @@ import {
   FcsClosingLine,
   FcsConfig,
   FcsGameAdjustment,
+  FcsManualAdjustment,
   FcsTeamRating,
 } from './types';
 
@@ -330,6 +331,107 @@ export async function saveFcsClosingLine(line: FcsClosingLine): Promise<void> {
       { onConflict: 'game_id' }
     );
   if (error) throw new Error(`saveFcsClosingLine(${line.gameId}): ${error.message}`);
+}
+
+// ---------- manual rating adjustments ----------
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toManual(row: any): FcsManualAdjustment {
+  return {
+    id: row.id,
+    teamName: row.team_name,
+    season: row.season,
+    adjustDate: row.adjust_date,
+    delta: Number(row.delta),
+    note: row.note,
+    ratingBefore: row.rating_before === null ? null : Number(row.rating_before),
+    ratingAfter: row.rating_after === null ? null : Number(row.rating_after),
+    appliedAt: row.applied_at,
+    updatedAt: row.updated_at,
+    pending: row.applied_at === null || row.updated_at > row.applied_at,
+  };
+}
+
+export async function loadFcsManualAdjustments(
+  season: number = FCS_SEASON
+): Promise<FcsManualAdjustment[]> {
+  const { data, error } = await getClient()
+    .from('fcs_manual_adjustments')
+    .select('*')
+    .eq('season', season)
+    .order('adjust_date', { ascending: true })
+    .order('id', { ascending: true })
+    .range(0, PAGE - 1);
+  if (error) {
+    // Table not created yet (DDL pending) — treat as no manual adjustments so
+    // the ratings page keeps working during the deploy window.
+    if (/does not exist|schema cache/i.test(error.message)) return [];
+    throw new Error(`loadFcsManualAdjustments: ${error.message}`);
+  }
+  return (data ?? []).map(toManual);
+}
+
+export async function insertFcsManualAdjustment(m: {
+  teamName: string;
+  season: number;
+  adjustDate: string;
+  delta: number;
+  note: string | null;
+}): Promise<FcsManualAdjustment> {
+  const { data, error } = await getClient()
+    .from('fcs_manual_adjustments')
+    .insert({
+      team_name: m.teamName,
+      season: m.season,
+      adjust_date: m.adjustDate,
+      delta: m.delta,
+      note: m.note,
+    })
+    .select();
+  if (error) throw new Error(`insertFcsManualAdjustment: ${error.message}`);
+  return toManual(data![0]);
+}
+
+export async function updateFcsManualAdjustment(
+  id: number,
+  fields: { delta?: number; note?: string | null; adjustDate?: string }
+): Promise<void> {
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (fields.delta !== undefined) patch.delta = fields.delta;
+  if (fields.note !== undefined) patch.note = fields.note;
+  if (fields.adjustDate !== undefined) patch.adjust_date = fields.adjustDate;
+  const { data, error } = await getClient()
+    .from('fcs_manual_adjustments')
+    .update(patch)
+    .eq('id', id)
+    .select();
+  if (error) throw new Error(`updateFcsManualAdjustment: ${error.message}`);
+  if (!data || data.length === 0) throw new Error(`Manual adjustment ${id} not found`);
+}
+
+export async function deleteFcsManualAdjustment(id: number): Promise<void> {
+  const { error } = await getClient()
+    .from('fcs_manual_adjustments')
+    .delete()
+    .eq('id', id);
+  if (error) throw new Error(`deleteFcsManualAdjustment: ${error.message}`);
+}
+
+/** Stamp replay results onto a manual adjustment row. */
+export async function stampFcsManualAdjustment(
+  id: number,
+  ratingBefore: number,
+  ratingAfter: number
+): Promise<void> {
+  const { error } = await getClient()
+    .from('fcs_manual_adjustments')
+    .update({
+      rating_before: ratingBefore,
+      rating_after: ratingAfter,
+      applied_at: new Date().toISOString(),
+    })
+    .eq('id', id);
+  if (error) throw new Error(`stampFcsManualAdjustment: ${error.message}`);
 }
 
 // ---------- config ----------
