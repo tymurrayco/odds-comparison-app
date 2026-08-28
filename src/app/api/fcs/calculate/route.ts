@@ -41,6 +41,7 @@ import {
   loadFcsAdjustments,
   loadFcsConfig,
   loadFcsRatings,
+  loadLinedFcsClosingLines,
   saveFcsAdjustment,
   saveFcsClosingLine,
   saveFcsConfig,
@@ -194,6 +195,52 @@ async function handleSync(body: {
   let oddsApiCalls = 0;
   let lastGameDate: string | null = config.lastProcessedDate;
 
+  // First: cached lines that gained a spread after their game was scanned
+  // (manual entries, or backfills). These can predate the sync window, so
+  // process them here and replay the ledger afterwards if order was broken.
+  let needsReplay = false;
+  const pendingLined = (await loadLinedFcsClosingLines()).filter(
+    (l) => !processedIds.has(l.gameId) && l.homeTeam && l.awayTeam && l.gameDate
+  );
+  for (const line of pendingLined) {
+    const day = line.gameDate!.substring(0, 10);
+    const home = ratings.get(line.homeTeam!);
+    const away = ratings.get(line.awayTeam!);
+    const label = `${line.awayTeam} @ ${line.homeTeam}`;
+    if (!home || !away) {
+      skipped.push({ game: label, date: day, reason: 'manual_line_team_missing' });
+      continue;
+    }
+    const adj = processFcsGame(
+      {
+        gameId: line.gameId,
+        oddsApiId: line.oddsApiId,
+        date: line.gameDate!,
+        homeTeam: home.teamName,
+        awayTeam: away.teamName,
+        closingSpread: line.closingSpread!,
+        closingSource: line.closingSource ?? 'Manual',
+        isNeutralSite: line.isNeutralSite,
+      },
+      ratings,
+      config.hfaDefault,
+      season
+    );
+    if (!adj) continue;
+    await saveFcsAdjustment(adj);
+    await upsertFcsRatings([ratings.get(home.teamName)!, ratings.get(away.teamName)!]);
+    processedIds.add(line.gameId);
+    processed.push({
+      game: label,
+      date: day,
+      projected: adj.projectedSpread,
+      closing: adj.closingSpread,
+      adjustment: adj.adjustment,
+    });
+    if (config.lastProcessedDate && day < config.lastProcessedDate) needsReplay = true;
+    if (!lastGameDate || day > lastGameDate) lastGameDate = day;
+  }
+
   outer: for (const day of dateRange(startDate, endDate)) {
     const games = await fetchFcsGamesForDate(day.replace(/-/g, ''));
     for (const game of games) {
@@ -247,6 +294,7 @@ async function handleSync(body: {
           gameDate: game.date,
           homeTeam: home.teamName,
           awayTeam: away.teamName,
+          isNeutralSite: game.isNeutralSite,
           closingSpread,
           closingSource: closingSpread === null ? 'none' : closingSource,
           bookmakers: null,
@@ -295,6 +343,9 @@ async function handleSync(body: {
 
   await saveFcsConfig({ ...config, season, lastProcessedDate: lastGameDate });
 
+  // A late line landed before already-processed games — restore chronology
+  if (needsReplay) await replayLedger(season);
+
   return {
     success: true,
     action: 'sync',
@@ -303,6 +354,7 @@ async function handleSync(body: {
     processedCount: processed.length,
     skippedCount: skipped.length,
     oddsApiCalls,
+    replayed: needsReplay,
     processed,
     skipped,
   };

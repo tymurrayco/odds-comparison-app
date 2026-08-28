@@ -69,3 +69,7 @@ create table if not exists fcs_ratings_config (
 
 insert into fcs_ratings_config (id, season) values (1, 2026)
 on conflict (id) do nothing;
+
+-- 2026-08-27: neutral-site flag on the line cache so manually-lined games
+-- processed after the fact still apply the right HFA.
+alter table fcs_closing_lines add column if not exists is_neutral_site boolean not null default false;

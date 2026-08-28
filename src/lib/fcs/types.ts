@@ -51,6 +51,7 @@ export interface FcsClosingLine {
   gameDate: string | null;
   homeTeam: string | null;
   awayTeam: string | null;
+  isNeutralSite: boolean;
   closingSpread: number | null; // null = checked, no line available
   closingSource: string | null;
   bookmakers: string[] | null;

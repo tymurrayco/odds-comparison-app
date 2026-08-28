@@ -227,16 +227,73 @@ export async function getCachedFcsClosingLine(
   if (error) throw new Error(`getCachedFcsClosingLine: ${error.message}`);
   const row = data?.[0];
   if (!row) return null;
+  return toClosingLine(row);
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toClosingLine(row: any): FcsClosingLine {
   return {
     gameId: row.game_id,
     oddsApiId: row.odds_api_id,
     gameDate: row.game_date,
     homeTeam: row.home_team,
     awayTeam: row.away_team,
+    isNeutralSite: row.is_neutral_site === true,
     closingSpread: row.closing_spread === null ? null : Number(row.closing_spread),
     closingSource: row.closing_source,
     bookmakers: row.bookmakers,
   };
+}
+
+/** Cached lines still waiting on a spread (candidates for manual entry). */
+export async function loadUnlinedFcsGames(limit = 100): Promise<FcsClosingLine[]> {
+  const { data, error } = await getClient()
+    .from('fcs_closing_lines')
+    .select('*')
+    .is('closing_spread', null)
+    .order('game_date', { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(`loadUnlinedFcsGames: ${error.message}`);
+  return (data ?? []).map(toClosingLine);
+}
+
+/** Cached lines that HAVE a spread (manual or fetched) — sync processes any
+ *  of these whose game_id is not yet in the adjustments ledger. */
+export async function loadLinedFcsClosingLines(): Promise<FcsClosingLine[]> {
+  const out: FcsClosingLine[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await getClient()
+      .from('fcs_closing_lines')
+      .select('*')
+      .not('closing_spread', 'is', null)
+      .order('game_date', { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error) throw new Error(`loadLinedFcsClosingLines: ${error.message}`);
+    out.push(...(data ?? []).map(toClosingLine));
+    if (!data || data.length < PAGE) break;
+  }
+  return out;
+}
+
+/** Set a manual closing spread on an existing cache row. */
+export async function setManualFcsClosingLine(
+  gameId: string,
+  closingSpread: number
+): Promise<FcsClosingLine> {
+  const { data, error } = await getClient()
+    .from('fcs_closing_lines')
+    .update({
+      closing_spread: closingSpread,
+      closing_source: 'Manual',
+      fetched_at: new Date().toISOString(),
+    })
+    .eq('game_id', gameId)
+    .select();
+  if (error) throw new Error(`setManualFcsClosingLine: ${error.message}`);
+  if (!data || data.length === 0) {
+    throw new Error(`No cached game with id ${gameId} — run a sync first so the game is registered`);
+  }
+  return toClosingLine(data[0]);
 }
 
 export async function saveFcsClosingLine(line: FcsClosingLine): Promise<void> {
@@ -249,6 +306,7 @@ export async function saveFcsClosingLine(line: FcsClosingLine): Promise<void> {
         game_date: line.gameDate,
         home_team: line.homeTeam,
         away_team: line.awayTeam,
+        is_neutral_site: line.isNeutralSite,
         closing_spread: line.closingSpread,
         closing_source: line.closingSource,
         bookmakers: line.bookmakers,

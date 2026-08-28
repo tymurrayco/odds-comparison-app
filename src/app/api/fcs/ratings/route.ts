@@ -11,6 +11,7 @@ import {
   loadFcsAdjustments,
   loadFcsConfig,
   loadFcsRatings,
+  loadUnlinedFcsGames,
 } from '@/lib/fcs/supabase';
 
 export const dynamic = 'force-dynamic';
@@ -20,10 +21,11 @@ export async function GET(request: NextRequest) {
     const seasonParam = request.nextUrl.searchParams.get('season');
     const season = seasonParam ? parseInt(seasonParam, 10) : FCS_SEASON;
 
-    const [ratings, config, adjustments] = await Promise.all([
+    const [ratings, config, adjustments, unlinedGames] = await Promise.all([
       loadFcsRatings(season),
       loadFcsConfig(),
       loadFcsAdjustments(season),
+      loadUnlinedFcsGames(),
     ]);
 
     const sorted = [...ratings.values()].sort((a, b) => b.rating - a.rating);
@@ -34,6 +36,7 @@ export async function GET(request: NextRequest) {
       ratings: sorted,
       adjustments: adjustments.slice(-200).reverse(),
       totalAdjustments: adjustments.length,
+      unlinedGames,
     });
   } catch (e) {
     return NextResponse.json(

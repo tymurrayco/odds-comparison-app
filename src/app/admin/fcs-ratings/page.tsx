@@ -7,7 +7,7 @@
 // scrape needs puppeteer, same as KenPom).
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { FcsGameAdjustment, FcsTeamRating } from '@/lib/fcs/types';
+import { FcsClosingLine, FcsGameAdjustment, FcsTeamRating } from '@/lib/fcs/types';
 
 const thCls =
   'sticky top-0 z-10 bg-white px-3 py-2.5 cursor-pointer select-none text-left text-xs font-semibold text-slate-500 shadow-[inset_0_-1px_0_#e2e8f0]';
@@ -25,6 +25,7 @@ interface RatingsResponse {
   ratings: FcsTeamRating[];
   adjustments: FcsGameAdjustment[];
   totalAdjustments: number;
+  unlinedGames: FcsClosingLine[];
   error?: string;
 }
 
@@ -38,6 +39,8 @@ export default function FcsRatingsAdminPage() {
   const [confFilter, setConfFilter] = useState('all');
   const [sortKey, setSortKey] = useState<SortKey>('rating');
   const [sortDesc, setSortDesc] = useState(true);
+  const [manualSpreads, setManualSpreads] = useState<Record<string, string>>({});
+  const [savingLine, setSavingLine] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -140,6 +143,32 @@ export default function FcsRatingsAdminPage() {
     else {
       setSortKey(key);
       setSortDesc(key !== 'team' && key !== 'conference');
+    }
+  };
+
+  const saveManualLine = async (gameId: string) => {
+    const raw = manualSpreads[gameId];
+    const spread = parseFloat(raw ?? '');
+    if (!Number.isFinite(spread)) {
+      setError('Enter a numeric home spread (negative = home favored)');
+      return;
+    }
+    setSavingLine(gameId);
+    setError(null);
+    try {
+      const res = await fetch('/api/fcs/closing-line', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gameId, closingSpread: spread }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.error || `HTTP ${res.status}`);
+      setMessage(`Saved ${spread} — hit Sync Games to apply it.`);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to save line');
+    } finally {
+      setSavingLine(null);
     }
   };
 
@@ -288,6 +317,59 @@ export default function FcsRatingsAdminPage() {
             </table>
           </div>
         </div>
+
+        {(data?.unlinedGames ?? []).length > 0 && (
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-100">
+              <div className="text-sm font-semibold text-slate-700">
+                Games missing a closing line ({data!.unlinedGames.length})
+              </div>
+              <div className="text-xs text-slate-500 mt-0.5">
+                The Odds API had no line for these. Enter the closing spread from the home
+                team&apos;s perspective (negative = home favored), then Sync Games to apply.
+              </div>
+            </div>
+            <div className="overflow-x-auto max-h-[40vh] overflow-y-auto">
+              <table className="w-full">
+                <tbody>
+                  {data!.unlinedGames.map((g) => (
+                    <tr key={g.gameId} className="border-t border-slate-100">
+                      <td className={`${tdCls} text-slate-500`}>
+                        {g.gameDate?.substring(0, 10)}
+                      </td>
+                      <td className={tdCls}>
+                        {g.awayTeam} @ {g.homeTeam}
+                        {g.isNeutralSite && (
+                          <span className="ml-1.5 text-xs text-slate-400">(N)</span>
+                        )}
+                      </td>
+                      <td className={tdCls}>
+                        <input
+                          className="w-24 px-2 py-1 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0052ff]/25"
+                          placeholder="-6.5"
+                          inputMode="decimal"
+                          value={manualSpreads[g.gameId] ?? ''}
+                          onChange={(e) =>
+                            setManualSpreads((m) => ({ ...m, [g.gameId]: e.target.value }))
+                          }
+                        />
+                      </td>
+                      <td className={tdCls}>
+                        <button
+                          className={btnCls}
+                          disabled={savingLine !== null || !(manualSpreads[g.gameId] ?? '').trim()}
+                          onClick={() => saveManualLine(g.gameId)}
+                        >
+                          {savingLine === g.gameId ? 'Saving…' : 'Save'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
           <div className="px-4 py-3 border-b border-slate-100 text-sm font-semibold text-slate-700">
