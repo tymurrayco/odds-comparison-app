@@ -207,6 +207,7 @@ export function matchOddsEvent<
   const h = compact(espnHome);
   const a = compact(espnAway);
 
+  const exact = (espn: string, odds: string): boolean => espn === compact(odds);
   const sameTeam = (espn: string, odds: string): boolean => {
     const o = compact(odds);
     if (espn === o) return true;
@@ -217,6 +218,18 @@ export function matchOddsEvent<
     );
   };
 
+  // Exact matches win before any containment match ("Montana" must never
+  // grab a "Montana State" event just because it appears earlier in the feed)
+  for (const ev of events) {
+    if (exact(h, ev.home_team) && exact(a, ev.away_team)) {
+      return { event: ev, swapped: false };
+    }
+  }
+  for (const ev of events) {
+    if (exact(h, ev.away_team) && exact(a, ev.home_team)) {
+      return { event: ev, swapped: true };
+    }
+  }
   for (const ev of events) {
     if (sameTeam(h, ev.home_team) && sameTeam(a, ev.away_team)) {
       return { event: ev, swapped: false };

@@ -30,13 +30,13 @@ import {
 } from '@/lib/fcs/constants';
 import {
   extractConsensusSpread,
-  hfaForGame,
   processFcsGame,
   projectFcsSpread,
   roundToDecimal,
 } from '@/lib/fcs/engine';
 import {
   getCachedFcsClosingLine,
+  getMaxFcsAdjustmentDate,
   getProcessedFcsGameIds,
   loadFcsAdjustments,
   loadFcsConfig,
@@ -112,7 +112,9 @@ async function fetchHistoricalSnapshot(
   freezeIso: string,
   hourCache: Map<string, OddsEvent[]>
 ): Promise<OddsEvent[]> {
-  const hourKey = freezeIso.substring(0, 13); // one API call per clock hour
+  // One call per distinct freeze minute — same-kickoff games share a snapshot,
+  // but a 22:59 kick never reuses a 22:05 snapshot (that line isn't "closing").
+  const hourKey = freezeIso.substring(0, 16);
   const cached = hourCache.get(hourKey);
   if (cached) return cached;
 
@@ -166,18 +168,11 @@ async function handleSync(body: {
   const { byEspnId, byEspnName } = buildLookups(ratings);
   const processedIds = await getProcessedFcsGameIds(season);
 
-  // Smart start: 3 days before the last processed date
-  let startDate = body.startDate;
-  if (!startDate) {
-    if (config.lastProcessedDate) {
-      const d = new Date(`${config.lastProcessedDate}T00:00:00Z`);
-      d.setUTCDate(d.getUTCDate() - 3);
-      startDate = d.toISOString().substring(0, 10);
-      if (startDate < seasonDates.start) startDate = seasonDates.start;
-    } else {
-      startDate = seasonDates.start;
-    }
-  }
+  // Scan the whole season by default: processed games skip via the ledger and
+  // unlined games skip via the closing-line cache, so re-scanned days cost only
+  // one ESPN fetch each — and postponed / late-completing games are never lost
+  // to a moving window. Pass body.startDate to narrow.
+  const startDate = body.startDate ?? seasonDates.start;
   const today = new Date().toISOString().substring(0, 10);
   let endDate = body.endDate ?? (today < seasonDates.end ? today : seasonDates.end);
   if (endDate > today) endDate = today;
@@ -197,10 +192,19 @@ async function handleSync(body: {
 
   // First: cached lines that gained a spread after their game was scanned
   // (manual entries, or backfills). These can predate the sync window, so
-  // process them here and replay the ledger afterwards if order was broken.
+  // process them here and replay the ledger if order was broken. Season-window
+  // filter is load-bearing: the cache table has no season column, and without
+  // it the first sync of a new season would replay every prior-season line.
   let needsReplay = false;
+  const maxLedgerDate = await getMaxFcsAdjustmentDate(season);
   const pendingLined = (await loadLinedFcsClosingLines()).filter(
-    (l) => !processedIds.has(l.gameId) && l.homeTeam && l.awayTeam && l.gameDate
+    (l) =>
+      !processedIds.has(l.gameId) &&
+      l.homeTeam &&
+      l.awayTeam &&
+      l.gameDate &&
+      l.gameDate.substring(0, 10) >= seasonDates.start &&
+      l.gameDate.substring(0, 10) <= seasonDates.end
   );
   for (const line of pendingLined) {
     const day = line.gameDate!.substring(0, 10);
@@ -237,9 +241,13 @@ async function handleSync(body: {
       closing: adj.closingSpread,
       adjustment: adj.adjustment,
     });
-    if (config.lastProcessedDate && day < config.lastProcessedDate) needsReplay = true;
+    if (maxLedgerDate && day < maxLedgerDate) needsReplay = true;
     if (!lastGameDate || day > lastGameDate) lastGameDate = day;
   }
+
+  // Replay right away (not at end of sync) so a crash later in the date scan
+  // can't strand an out-of-order row in the ledger.
+  if (needsReplay) await replayLedger(season);
 
   outer: for (const day of dateRange(startDate, endDate)) {
     const games = await fetchFcsGamesForDate(day.replace(/-/g, ''));
@@ -343,9 +351,6 @@ async function handleSync(body: {
 
   await saveFcsConfig({ ...config, season, lastProcessedDate: lastGameDate });
 
-  // A late line landed before already-processed games — restore chronology
-  if (needsReplay) await replayLedger(season);
-
   return {
     success: true,
     action: 'sync',
@@ -361,7 +366,6 @@ async function handleSync(body: {
 }
 
 async function replayLedger(season: number, saveFromDate?: string) {
-  const config = await loadFcsConfig();
   const ratings = await loadFcsRatings(season);
   const adjustments = await loadFcsAdjustments(season);
 
@@ -379,7 +383,10 @@ async function replayLedger(season: number, saveFromDate?: string) {
       missingTeams.push(`${adj.awayTeam} @ ${adj.homeTeam}`);
       continue;
     }
-    const hfaApplied = hfaForGame(home, adj.isNeutralSite, config.hfaDefault);
+    // Keep the hfa that was applied when the game was processed live — the
+    // line closed under that condition, and replays must be deterministic
+    // (a Massey metadata refresh must not silently shift the whole ledger).
+    const hfaApplied = adj.hfaApplied;
     const projected = projectFcsSpread(home.rating, away.rating, hfaApplied);
     const difference = roundToDecimal(adj.closingSpread - projected, 2);
     const adjustment = roundToDecimal(difference / 2, 2);

@@ -27,6 +27,22 @@ interface RatingsResponse {
   error?: string;
 }
 
+interface UpcomingGame {
+  gameId: string;
+  date: string;
+  homeTeam: string;
+  awayTeam: string;
+  homeRating: number;
+  awayRating: number;
+  isNeutralSite: boolean;
+  hfaApplied: number;
+  projectedSpread: number;
+  marketSpread: number | null;
+  marketBooks: number;
+  edge: number | null;
+  state: string;
+}
+
 interface TeamVisual {
   logo: string | null;
   color: string; // css hex with #
@@ -93,6 +109,11 @@ export default function FcsRatingsAdminPage() {
   const [sortDesc, setSortDesc] = useState(true);
   const [manualSpreads, setManualSpreads] = useState<Record<string, string>>({});
   const [savingLine, setSavingLine] = useState<string | null>(null);
+  const [view, setView] = useState<'ratings' | 'upcoming'>('ratings');
+  const [upcoming, setUpcoming] = useState<UpcomingGame[] | null>(null);
+  const [upcomingAttempted, setUpcomingAttempted] = useState(false);
+  const [upcomingLoading, setUpcomingLoading] = useState(false);
+  const [upcomingNote, setUpcomingNote] = useState<string | null>(null);
 
   const colorMap = useTeamColorMap('americanfootball_ncaaf');
 
@@ -114,6 +135,27 @@ export default function FcsRatingsAdminPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const loadUpcoming = useCallback(async () => {
+    setUpcomingAttempted(true);
+    setUpcomingLoading(true);
+    setUpcomingNote(null);
+    try {
+      const res = await fetch('/api/fcs/upcoming?days=7');
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.error || `HTTP ${res.status}`);
+      setUpcoming(json.games);
+      if (json.oddsError) setUpcomingNote(`Book lines unavailable: ${json.oddsError}`);
+    } catch (e) {
+      setUpcomingNote(e instanceof Error ? e.message : 'Failed to load upcoming games');
+    } finally {
+      setUpcomingLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (view === 'upcoming' && !upcomingAttempted) loadUpcoming();
+  }, [view, upcomingAttempted, loadUpcoming]);
 
   // canonical team name -> rating row (for espn linkage from adjustments/lines)
   const byTeamName = useMemo(() => {
@@ -172,6 +214,8 @@ export default function FcsRatingsAdminPage() {
           `${json.action}: replayed ${json.gamesReplayed} games, rewrote ${json.adjustmentRowsRewritten} rows.`
         );
       }
+      setUpcoming(null);
+      setUpcomingAttempted(false); // projections depend on ratings — refetch
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : `${label} failed`);
@@ -201,6 +245,7 @@ export default function FcsRatingsAdminPage() {
       setMessage(`Saved ${spread} — hit Sync Games to apply it.`);
       await load();
     } catch (e) {
+      setMessage(null);
       setError(e instanceof Error ? e.message : 'Failed to save line');
     } finally {
       setSavingLine(null);
@@ -331,7 +376,134 @@ export default function FcsRatingsAdminPage() {
           </div>
         )}
 
-        {(data?.unlinedGames ?? []).length > 0 && (
+        <div className="grid grid-cols-2 bg-slate-200/70 rounded-full p-0.5">
+          {(['ratings', 'upcoming'] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              className={`py-1.5 rounded-full text-sm font-medium transition ${
+                view === v ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'
+              }`}
+            >
+              {v === 'ratings' ? 'Ratings' : 'Upcoming'}
+            </button>
+          ))}
+        </div>
+
+        {view === 'upcoming' && (
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <div className="px-3 sm:px-4 py-3 border-b border-slate-100 flex items-center justify-between gap-2">
+              <div>
+                <div className="text-sm font-semibold text-slate-700">
+                  Projected spreads — next 7 days
+                </div>
+                <div className="text-xs text-slate-500 mt-0.5">
+                  Model = rating gap + home HFA. Edge = model vs current book consensus.
+                </div>
+              </div>
+              <button className={btnCls} disabled={upcomingLoading} onClick={loadUpcoming}>
+                {upcomingLoading ? '…' : 'Refresh'}
+              </button>
+            </div>
+            {upcomingNote && (
+              <div className="px-3 sm:px-4 py-2 text-xs text-amber-600 border-b border-slate-100">
+                {upcomingNote}
+              </div>
+            )}
+            {upcomingLoading && upcoming === null ? (
+              <div className="px-4 py-6 text-sm text-slate-500">Loading…</div>
+            ) : (upcoming ?? []).length === 0 ? (
+              <div className="px-4 py-6 text-sm text-slate-500">
+                No upcoming FCS-vs-FCS games in the next 7 days.
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {(() => {
+                  const groups: Array<{ label: string; games: UpcomingGame[] }> = [];
+                  for (const g of upcoming ?? []) {
+                    const label = new Date(g.date).toLocaleDateString(undefined, {
+                      weekday: 'long',
+                      month: 'short',
+                      day: 'numeric',
+                    });
+                    const last = groups[groups.length - 1];
+                    if (last && last.label === label) last.games.push(g);
+                    else groups.push({ label, games: [g] });
+                  }
+                  return groups.map((grp) => (
+                    <div key={grp.label}>
+                      <div className="px-3 sm:px-4 py-1.5 bg-slate-50 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
+                        {grp.label}
+                      </div>
+                      {grp.games.map((g) => {
+                        const fav = g.projectedSpread <= 0 ? g.homeTeam : g.awayTeam;
+                        const favSpread = -Math.abs(g.projectedSpread);
+                        const edgeSide =
+                          g.edge === null || g.edge === 0
+                            ? null
+                            : g.edge > 0
+                              ? g.homeTeam
+                              : g.awayTeam;
+                        const bigEdge = g.edge !== null && Math.abs(g.edge) >= 2;
+                        return (
+                          <div key={g.gameId} className="px-3 sm:px-4 py-2.5 border-t border-slate-100">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="min-w-0 space-y-1">
+                                <TeamChip
+                                  name={g.awayTeam}
+                                  visual={visualFor(g.awayTeam)}
+                                  sub={g.awayRating.toFixed(1)}
+                                />
+                                <TeamChip
+                                  name={g.homeTeam}
+                                  visual={visualFor(g.homeTeam)}
+                                  sub={g.homeRating.toFixed(1)}
+                                />
+                              </div>
+                              <div className="text-right shrink-0 space-y-0.5">
+                                <div className="text-[11px] text-slate-400">
+                                  {new Date(g.date).toLocaleTimeString(undefined, {
+                                    hour: 'numeric',
+                                    minute: '2-digit',
+                                  })}
+                                  {g.isNeutralSite ? ' · N' : ''}
+                                  {g.state === 'in' ? ' · LIVE' : ''}
+                                </div>
+                                <div className="text-sm font-semibold text-slate-800 tabular-nums whitespace-nowrap">
+                                  {fav.length > 14 ? `${fav.slice(0, 13)}…` : fav}{' '}
+                                  {favSpread.toFixed(1)}
+                                </div>
+                                <div className="text-xs text-slate-500 tabular-nums whitespace-nowrap">
+                                  {g.marketSpread === null
+                                    ? 'no book line'
+                                    : `book ${g.marketSpread.toFixed(1)} (${g.marketBooks})`}
+                                </div>
+                                {edgeSide && (
+                                  <div
+                                    className={`inline-block px-1.5 py-0.5 rounded text-[11px] font-medium tabular-nums ${
+                                      bigEdge
+                                        ? 'bg-emerald-100 text-emerald-700'
+                                        : 'bg-slate-100 text-slate-500'
+                                    }`}
+                                  >
+                                    edge: {edgeSide.length > 12 ? `${edgeSide.slice(0, 11)}…` : edgeSide}{' '}
+                                    {Math.abs(g.edge!).toFixed(1)}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ));
+                })()}
+              </div>
+            )}
+          </div>
+        )}
+
+        {view === 'ratings' && (data?.unlinedGames ?? []).length > 0 && (
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
             <div className="px-3 sm:px-4 py-3 border-b border-slate-100">
               <div className="text-sm font-semibold text-slate-700">
@@ -355,7 +527,12 @@ export default function FcsRatingsAdminPage() {
                           <TeamChip name={home} visual={visualFor(home)} />
                           <span className="text-[11px] text-slate-400 shrink-0">
                             {g.isNeutralSite ? 'vs (N)' : 'home'} ·{' '}
-                            {g.gameDate?.substring(5, 10)}
+                            {g.gameDate
+                              ? new Date(g.gameDate).toLocaleDateString(undefined, {
+                                  month: 'short',
+                                  day: 'numeric',
+                                })
+                              : ''}
                           </span>
                         </div>
                       </div>
@@ -387,6 +564,7 @@ export default function FcsRatingsAdminPage() {
           </div>
         )}
 
+        {view === 'ratings' && (<>
         <div className="space-y-2">
           <div className="flex gap-2">
             <input
@@ -507,7 +685,10 @@ export default function FcsRatingsAdminPage() {
                     </div>
                     <div className="text-right shrink-0">
                       <div className="text-[11px] text-slate-400">
-                        {a.gameDate.substring(5, 10)}
+                        {new Date(a.gameDate).toLocaleDateString(undefined, {
+                          month: 'short',
+                          day: 'numeric',
+                        })}
                         {a.isNeutralSite ? ' · N' : ''}
                       </div>
                       <div className="text-xs text-slate-600 tabular-nums whitespace-nowrap">
@@ -522,6 +703,7 @@ export default function FcsRatingsAdminPage() {
             </div>
           )}
         </div>
+        </>)}
       </div>
     </div>
   );

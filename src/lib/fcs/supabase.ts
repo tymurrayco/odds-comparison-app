@@ -185,6 +185,21 @@ export async function loadFcsAdjustments(
   return out;
 }
 
+/** Latest game_date in the ledger — the durable out-of-order reference
+ *  (config.last_processed_date can go stale if a sync crashes mid-run). */
+export async function getMaxFcsAdjustmentDate(
+  season: number = FCS_SEASON
+): Promise<string | null> {
+  const { data, error } = await getClient()
+    .from('fcs_game_adjustments')
+    .select('game_date')
+    .eq('season', season)
+    .order('game_date', { ascending: false })
+    .limit(1);
+  if (error) throw new Error(`getMaxFcsAdjustmentDate: ${error.message}`);
+  return data?.[0]?.game_date?.substring(0, 10) ?? null;
+}
+
 export async function saveFcsAdjustment(adj: FcsGameAdjustment): Promise<void> {
   const { error } = await getClient()
     .from('fcs_game_adjustments')

@@ -95,7 +95,7 @@ export async function scrapeMasseyFcs(): Promise<MasseyFcsRow[]> {
       const pwr = parseRankValue(row[iPwr]);
       const off = parseRankValue(row[iOff]);
       const def = parseRankValue(row[iDef]);
-      const hfa = parseFloat(row[iHfa]);
+      const hfa = parseRankValue(row[iHfa]); // rank-prefix safe if Massey adds one
       if (!pwr || !rat) continue;
 
       out.push({
@@ -106,7 +106,7 @@ export async function scrapeMasseyFcs(): Promise<MasseyFcsRow[]> {
         pwr: pwr.value,
         off: off?.value ?? 0,
         def: def?.value ?? 0,
-        hfa: isNaN(hfa) ? 2.5 : hfa,
+        hfa: hfa?.value ?? 2.5,
       });
     }
 

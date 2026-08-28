@@ -58,6 +58,9 @@ export async function POST(request: NextRequest) {
     const existingByMassey = new Map(
       [...existing.values()].map((r) => [r.masseyName, r])
     );
+    const existingByEspnId = new Map(
+      [...existing.values()].filter((r) => r.espnId).map((r) => [r.espnId as string, r])
+    );
 
     const now = new Date().toISOString();
     const upserts: FcsTeamRating[] = [];
@@ -69,10 +72,15 @@ export async function POST(request: NextRequest) {
     let reseeded = 0;
 
     for (const row of masseyRows) {
-      const prior = existingByMassey.get(row.masseyName);
-      const match = prior?.espnName
+      const priorByMassey = existingByMassey.get(row.masseyName);
+      const match = priorByMassey?.espnName
         ? null // already linked; keep the stored linkage
         : matchMasseyToEspn(row.masseyName, espnTeams);
+      // A Massey rename must land on the existing row (found via its ESPN id),
+      // not create a "new team" whose canonical-name upsert would wipe the
+      // market-adjusted rating back to the seed.
+      const prior =
+        priorByMassey ?? (match ? existingByEspnId.get(match.team.id) : undefined);
 
       let teamName: string;
       let espnName: string | null;
@@ -119,6 +127,7 @@ export async function POST(request: NextRequest) {
         reseeded++;
         upserts.push({
           ...prior,
+          masseyName: row.masseyName,
           espnName,
           espnId,
           conference: row.conference,
@@ -132,6 +141,7 @@ export async function POST(request: NextRequest) {
         refreshed++;
         upserts.push({
           ...prior,
+          masseyName: row.masseyName,
           espnName,
           espnId,
           conference: row.conference,
