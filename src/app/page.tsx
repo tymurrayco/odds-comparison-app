@@ -1026,7 +1026,9 @@ function HomeContent() {
                     {supportsProps && (
                       <button
                         type="button"
-                        className={`px-4 py-2 text-sm font-medium rounded-r-lg ${
+                        className={`px-4 py-2 text-sm font-medium ${
+                          activeLeague === 'americanfootball_ncaaf' ? '' : 'rounded-r-lg '
+                        }${
                           activeView === 'props' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
                         } border border-gray-200 border-l-0`}
                         onClick={() => {
@@ -1037,6 +1039,15 @@ function HomeContent() {
                         }}
                       >
                         Props
+                      </button>
+                    )}
+                    {activeLeague === 'americanfootball_ncaaf' && (
+                      <button
+                        type="button"
+                        className="px-4 py-2 text-sm font-medium rounded-r-lg bg-white text-gray-700 hover:bg-gray-50 border border-gray-200 border-l-0"
+                        onClick={() => router.push('/fcs')}
+                      >
+                        FCS
                       </button>
                     )}
                   </div>
