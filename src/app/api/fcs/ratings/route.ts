@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
       season,
       config,
       ratings: sorted,
-      adjustments: adjustments.slice(-200).reverse(),
+      adjustments: [...adjustments].reverse(), // newest first, full season ledger
       totalAdjustments: adjustments.length,
       unlinedGames,
     });

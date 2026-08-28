@@ -110,6 +110,7 @@ export default function FcsRatingsAdminPage() {
   const [manualSpreads, setManualSpreads] = useState<Record<string, string>>({});
   const [savingLine, setSavingLine] = useState<string | null>(null);
   const [view, setView] = useState<'ratings' | 'upcoming'>('ratings');
+  const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
   const [upcoming, setUpcoming] = useState<UpcomingGame[] | null>(null);
   const [upcomingAttempted, setUpcomingAttempted] = useState(false);
   const [upcomingLoading, setUpcomingLoading] = useState(false);
@@ -156,6 +157,22 @@ export default function FcsRatingsAdminPage() {
   useEffect(() => {
     if (view === 'upcoming' && !upcomingAttempted) loadUpcoming();
   }, [view, upcomingAttempted, loadUpcoming]);
+
+  // team -> its adjustment history (newest first), with each game seen from
+  // that team's side of the zero-sum split
+  const teamHistory = useMemo(() => {
+    const m = new Map<
+      string,
+      Array<{ adj: FcsGameAdjustment; isHome: boolean }>
+    >();
+    for (const a of data?.adjustments ?? []) {
+      if (!m.has(a.homeTeam)) m.set(a.homeTeam, []);
+      m.get(a.homeTeam)!.push({ adj: a, isHome: true });
+      if (!m.has(a.awayTeam)) m.set(a.awayTeam, []);
+      m.get(a.awayTeam)!.push({ adj: a, isHome: false });
+    }
+    return m;
+  }, [data]);
 
   // canonical team name -> rating row (for espn linkage from adjustments/lines)
   const byTeamName = useMemo(() => {
@@ -617,42 +634,109 @@ export default function FcsRatingsAdminPage() {
               {rows.map((r, i) => {
                 const v = visualFor(r.teamName);
                 const delta = r.rating - r.initialRating;
+                const isOpen = expandedTeam === r.teamName;
+                const history = teamHistory.get(r.teamName) ?? [];
                 return (
-                  <div
-                    key={r.teamName}
-                    className="grid grid-cols-[1.75rem_1fr_auto] sm:grid-cols-[2.5rem_1fr_5.5rem_5rem_5rem_3.5rem_3rem] items-center px-2 sm:px-3 py-2"
-                    style={{
-                      boxShadow: `inset 3px 0 0 ${v.color}`,
-                      background: `linear-gradient(90deg, ${v.color}0d, transparent 55%)`,
-                    }}
-                  >
-                    <div className="text-xs text-slate-400 tabular-nums">{i + 1}</div>
-                    <TeamChip
-                      name={r.teamName}
-                      visual={v}
-                      sub={r.conference}
-                      warn={!r.espnName}
-                    />
-                    <div className="text-right">
-                      <div className="text-sm font-semibold text-slate-800 tabular-nums">
-                        {r.rating.toFixed(2)}
+                  <div key={r.teamName}>
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() =>
+                        setExpandedTeam(isOpen ? null : r.teamName)
+                      }
+                      className="grid grid-cols-[1.75rem_1fr_auto] sm:grid-cols-[2.5rem_1fr_5.5rem_5rem_5rem_3.5rem_3rem] items-center px-2 sm:px-3 py-2 cursor-pointer"
+                      style={{
+                        boxShadow: `inset 3px 0 0 ${v.color}`,
+                        background: `linear-gradient(90deg, ${v.color}0d, transparent 55%)`,
+                      }}
+                    >
+                      <div className="text-xs text-slate-400 tabular-nums">{i + 1}</div>
+                      <TeamChip
+                        name={r.teamName}
+                        visual={v}
+                        sub={r.conference}
+                        warn={!r.espnName}
+                      />
+                      <div className="text-right">
+                        <div className="text-sm font-semibold text-slate-800 tabular-nums">
+                          {r.rating.toFixed(2)}
+                          <span className="ml-1 text-[10px] text-slate-400">
+                            {isOpen ? '\u25be' : '\u25b8'}
+                          </span>
+                        </div>
+                        <div className="text-[11px] tabular-nums sm:hidden">
+                          {fmtDelta(delta, true)}
+                        </div>
                       </div>
-                      <div className="text-[11px] tabular-nums sm:hidden">
-                        {fmtDelta(delta, true)}
+                      <div className="hidden sm:block text-right text-sm tabular-nums">
+                        {fmtDelta(delta)}
+                      </div>
+                      <div className="hidden sm:block text-right text-sm text-slate-500 tabular-nums">
+                        {r.initialRating.toFixed(2)}
+                      </div>
+                      <div className="hidden sm:block text-right text-sm text-slate-500 tabular-nums">
+                        {r.hfa?.toFixed(2) ?? '—'}
+                      </div>
+                      <div className="hidden sm:block text-right text-sm text-slate-500 tabular-nums">
+                        {r.gamesProcessed}
                       </div>
                     </div>
-                    <div className="hidden sm:block text-right text-sm tabular-nums">
-                      {fmtDelta(delta)}
-                    </div>
-                    <div className="hidden sm:block text-right text-sm text-slate-500 tabular-nums">
-                      {r.initialRating.toFixed(2)}
-                    </div>
-                    <div className="hidden sm:block text-right text-sm text-slate-500 tabular-nums">
-                      {r.hfa?.toFixed(2) ?? '—'}
-                    </div>
-                    <div className="hidden sm:block text-right text-sm text-slate-500 tabular-nums">
-                      {r.gamesProcessed}
-                    </div>
+                    {isOpen && (
+                      <div className="px-3 sm:px-4 py-2 bg-slate-50/70 border-t border-slate-100">
+                        <div className="text-[11px] text-slate-400 mb-1.5">
+                          Massey seed {r.initialRating.toFixed(2)} {'\u2192'} now{' '}
+                          {r.rating.toFixed(2)} ({history.length} market-lined{' '}
+                          {history.length === 1 ? 'game' : 'games'})
+                        </div>
+                        {history.length === 0 ? (
+                          <div className="text-xs text-slate-500 pb-1">
+                            No market-lined games yet.
+                          </div>
+                        ) : (
+                          <div className="space-y-1.5 pb-1">
+                            {history.map(({ adj: a, isHome }) => {
+                              const opp = isHome ? a.awayTeam : a.homeTeam;
+                              const myDelta = isHome ? -a.adjustment : a.adjustment;
+                              const before = isHome
+                                ? a.homeRatingBefore
+                                : a.awayRatingBefore;
+                              const after = isHome
+                                ? a.homeRatingAfter
+                                : a.awayRatingAfter;
+                              return (
+                                <div
+                                  key={a.gameId}
+                                  className="flex items-center justify-between gap-2"
+                                >
+                                  <div className="flex items-center gap-1.5 min-w-0">
+                                    <span className="text-[11px] text-slate-400 w-7 shrink-0">
+                                      {a.isNeutralSite ? 'N' : isHome ? 'vs' : '@'}
+                                    </span>
+                                    <TeamChip name={opp} visual={visualFor(opp)} />
+                                  </div>
+                                  <div className="text-right shrink-0">
+                                    <div className="text-xs tabular-nums">
+                                      {fmtDelta(myDelta, true)}{' '}
+                                      <span className="text-slate-500">
+                                        ({before.toFixed(2)} {'\u2192'} {after.toFixed(2)})
+                                      </span>
+                                    </div>
+                                    <div className="text-[11px] text-slate-400 tabular-nums">
+                                      {new Date(a.gameDate).toLocaleDateString(undefined, {
+                                        month: 'short',
+                                        day: 'numeric',
+                                      })}{' '}
+                                      {'\u00b7'} proj {a.projectedSpread.toFixed(1)}{' '}
+                                      {'\u2192'} close {a.closingSpread.toFixed(1)}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -668,7 +752,7 @@ export default function FcsRatingsAdminPage() {
             <div className="px-4 py-5 text-sm text-slate-500">No games processed yet.</div>
           ) : (
             <div className="max-h-[55vh] overflow-y-auto divide-y divide-slate-100">
-              {(data?.adjustments ?? []).map((a) => (
+              {(data?.adjustments ?? []).slice(0, 200).map((a) => (
                 <div key={a.gameId} className="px-3 sm:px-4 py-2.5">
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0 space-y-1">
