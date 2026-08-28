@@ -223,9 +223,12 @@ async function handleSync(body: {
         closingSource = cached.closingSource ?? '';
         oddsApiId = cached.oddsApiId;
       } else {
+        // Odds API historical rejects millisecond precision in the date param
         const freeze = new Date(
           new Date(game.date).getTime() - FCS_CLOSING_TIME_MINUTES * 60 * 1000
-        ).toISOString();
+        )
+          .toISOString()
+          .replace(/\.\d{3}Z$/, 'Z');
         const hadHour = hourCache.has(freeze.substring(0, 13));
         const events = await fetchHistoricalSnapshot(freeze, hourCache);
         if (!hadHour) oddsApiCalls++;
