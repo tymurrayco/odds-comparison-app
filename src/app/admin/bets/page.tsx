@@ -541,6 +541,12 @@ export default function BetAdminPage() {
                 Power Ratings
               </button>
               <button
+                onClick={() => router.push('/admin/fcs-ratings')}
+                className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 transition"
+              >
+                FCS
+              </button>
+              <button
                 onClick={() => {
                   if (isDesktop) setShowForm(!showForm);
                   else { setView('form'); setShowForm(true); }
