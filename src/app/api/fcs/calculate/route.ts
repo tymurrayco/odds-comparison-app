@@ -25,6 +25,7 @@ import {
   FCS_CONSENSUS_BOOKS,
   FCS_SEASON,
   FCS_SEASON_DATES,
+  FCS_SYNC_LOOKBACK_DAYS,
   NCAAF_SPORT_KEY,
   ODDS_API_BASE_URL,
 } from '@/lib/fcs/constants';
@@ -92,6 +93,12 @@ async function fetchFcsGamesForDate(dateYmd: string): Promise<EspnFcsGame[]> {
   return out;
 }
 
+function shiftYmd(ymd: string, days: number): string {
+  const d = new Date(`${ymd}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().substring(0, 10);
+}
+
 function* dateRange(startYmd: string, endYmd: string): Generator<string> {
   const d = new Date(`${startYmd}T00:00:00Z`);
   const end = new Date(`${endYmd}T00:00:00Z`);
@@ -150,6 +157,7 @@ async function handleSync(body: {
   endDate?: string;
   maxGames?: number;
   retryMissing?: boolean;
+  fullScan?: boolean;
 }) {
   const config = await loadFcsConfig();
   const season = body.season ?? config.season ?? FCS_SEASON;
@@ -163,11 +171,20 @@ async function handleSync(body: {
   const { byEspnId, byEspnName } = buildLookups(ratings);
   const processedIds = await getProcessedFcsGameIds(season);
 
-  // Scan the whole season by default: processed games skip via the ledger and
-  // unlined games skip via the closing-line cache, so re-scanned days cost only
-  // one ESPN fetch each — and postponed / late-completing games are never lost
-  // to a moving window. Pass body.startDate to narrow.
-  const startDate = body.startDate ?? seasonDates.start;
+  // Scan back FCS_SYNC_LOOKBACK_DAYS from the last processed game. Processed
+  // games skip via the ledger and unlined games skip via the closing-line
+  // cache, so re-scanned days cost only one ESPN fetch each — but that fetch
+  // per day added up across a full-season sweep until the request outlived a
+  // phone browser's patience. The lookback still re-covers recent days, so a
+  // game that completes late is picked up on a later sync; body.fullScan
+  // sweeps from the opener, and body.startDate overrides both.
+  const windowStart =
+    body.fullScan || !config.lastProcessedDate
+      ? seasonDates.start
+      : [shiftYmd(config.lastProcessedDate, -FCS_SYNC_LOOKBACK_DAYS), seasonDates.start]
+          .sort()
+          .pop()!;
+  const startDate = body.startDate ?? windowStart;
   const today = new Date().toISOString().substring(0, 10);
   let endDate = body.endDate ?? (today < seasonDates.end ? today : seasonDates.end);
   if (endDate > today) endDate = today;

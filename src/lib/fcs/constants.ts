@@ -30,6 +30,13 @@ export const FCS_CLOSING_TIME_MINUTES = 5;
 // Fallback HFA when a team has no per-team Massey HFA
 export const FCS_DEFAULT_HFA = 2.5;
 
+// How far back of the last processed game a routine sync rescans. The scan
+// costs one ESPN fetch per day, so sweeping the whole season grew the request
+// longer every week until phone browsers dropped it mid-run. Two weeks covers
+// anything that completes late (suspended, rescheduled inside the window);
+// pass fullScan to /api/fcs/calculate to sweep from the opener anyway.
+export const FCS_SYNC_LOOKBACK_DAYS = 14;
+
 export const FCS_SEASON_DATES: { [season: number]: { start: string; end: string } } = {
   2026: {
     start: '2026-08-22', // week 0

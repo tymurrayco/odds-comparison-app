@@ -450,6 +450,7 @@ export async function loadFcsConfig(): Promise<FcsConfig> {
       closingSource: 'us_average',
       season: FCS_SEASON,
       lastProcessedDate: null,
+      updatedAt: null,
     };
   }
   return {
@@ -457,6 +458,7 @@ export async function loadFcsConfig(): Promise<FcsConfig> {
     closingSource: row.closing_source,
     season: row.season,
     lastProcessedDate: row.last_processed_date,
+    updatedAt: row.updated_at ?? null,
   };
 }
 

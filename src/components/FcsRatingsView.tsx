@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   FcsClosingLine,
+  FcsConfig,
   FcsGameAdjustment,
   FcsManualAdjustment,
   FcsTeamRating,
@@ -62,6 +63,7 @@ const roundToHalf = (n: number): number => Math.round(n * 2) / 2;
 interface RatingsResponse {
   success: boolean;
   season: number;
+  config?: FcsConfig;
   ratings: FcsTeamRating[];
   adjustments: FcsGameAdjustment[];
   totalAdjustments: number;
@@ -405,6 +407,35 @@ export default function FcsRatingsView({ admin = false }: { admin?: boolean }) {
     [byTeamName, colorMap]
   );
 
+  /**
+   * A sync's first run on a new slate pulls historical odds snapshots and can
+   * outlive a phone browser's patience — the request gets dropped while the
+   * server keeps working, which surfaced as a bare "Load failed" for a run
+   * that actually landed. Every completed sync stamps the config row, so on a
+   * transport-level failure we watch that stamp instead of guessing.
+   */
+  const syncLanded = async (since: string | null): Promise<boolean> => {
+    for (let i = 0; i < 18; i++) {
+      await new Promise((r) => setTimeout(r, 5000)); // ~90s of patience
+      try {
+        const res = await fetch('/api/fcs/ratings');
+        if (!res.ok) continue;
+        const json: RatingsResponse = await res.json();
+        const stamp = json.config?.updatedAt ?? null;
+        if (!stamp) continue;
+        // With no baseline (the page never loaded a config), only a stamp from
+        // the last few minutes can be this run's.
+        const isThisRun = since
+          ? stamp !== since
+          : Date.now() - new Date(stamp).getTime() < 10 * 60 * 1000;
+        if (isThisRun) return true;
+      } catch {
+        /* still flaky — keep watching */
+      }
+    }
+    return false;
+  };
+
   const runAction = async (
     label: string,
     url: string,
@@ -412,6 +443,7 @@ export default function FcsRatingsView({ admin = false }: { admin?: boolean }) {
     confirmText?: string
   ) => {
     if (confirmText && !window.confirm(confirmText)) return;
+    const configStampBefore = data?.config?.updatedAt ?? null;
     setBusy(label);
     setError(null);
     setMessage(null);
@@ -446,6 +478,24 @@ export default function FcsRatingsView({ admin = false }: { admin?: boolean }) {
       setUpcomingAttempted(false); // projections depend on ratings — refetch
       await load();
     } catch (e) {
+      // TypeError = the fetch never completed; SyntaxError = a gateway error
+      // page came back instead of JSON. Either way the server's outcome is
+      // unknown, so go look rather than calling it a failure.
+      const outcomeUnknown = e instanceof TypeError || e instanceof SyntaxError;
+      if (outcomeUnknown && (label === 'sync' || label === 'fullScan')) {
+        setMessage('Connection dropped — checking whether the sync finished…');
+        if (await syncLanded(configStampBefore)) {
+          setMessage(
+            'Connection dropped before the summary came back, but the sync finished on the server.'
+          );
+          setUpcoming(null);
+          setUpcomingAttempted(false);
+          await load();
+          return;
+        }
+        setError('Sync did not complete (connection dropped). Try again.');
+        return;
+      }
       setError(e instanceof Error ? e.message : `${label} failed`);
     } finally {
       setBusy(null);
@@ -660,6 +710,23 @@ export default function FcsRatingsView({ admin = false }: { admin?: boolean }) {
               onClick={() => runAction('sync', '/api/fcs/calculate', { action: 'sync' })}
             >
               {busy === 'sync' ? 'Syncing…' : 'Sync Games'}
+            </button>
+            {/* Escape hatch for the routine sync's lookback window: sweeps from
+                the season opener, for a game that finished more than two weeks
+                after the last one processed. */}
+            <button
+              className={`${btnCls} flex-1 sm:flex-none`}
+              disabled={busy !== null || (data?.ratings.length ?? 0) === 0}
+              onClick={() =>
+                runAction(
+                  'fullScan',
+                  '/api/fcs/calculate',
+                  { action: 'sync', fullScan: true },
+                  'Rescan every day since the season opener? Slower than a normal sync.'
+                )
+              }
+            >
+              {busy === 'fullScan' ? 'Scanning…' : 'Full Scan'}
             </button>
             <button
               className={`${btnCls} flex-1 sm:flex-none`}

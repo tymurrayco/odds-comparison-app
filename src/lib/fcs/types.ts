@@ -87,4 +87,7 @@ export interface FcsConfig {
   closingSource: string;
   season: number;
   lastProcessedDate: string | null;
+  /** Stamped at the end of every completed sync — the admin UI reads it to
+   *  tell a dropped connection apart from a sync that never ran. */
+  updatedAt: string | null;
 }
