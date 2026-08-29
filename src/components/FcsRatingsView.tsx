@@ -14,6 +14,7 @@ import {
   FcsTeamRating,
 } from '@/lib/fcs/types';
 import { useTeamColorMap } from '@/lib/myGameBets';
+import { createBet, fetchBets } from '@/lib/betService';
 
 const btnCls =
   'px-3 py-2 text-sm font-medium rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed';
@@ -21,6 +22,42 @@ const primaryBtnCls =
   'px-3 py-2 text-sm font-medium rounded-lg bg-[#0052ff] text-white hover:bg-[#0043d1] disabled:opacity-50 disabled:cursor-not-allowed';
 
 type SortKey = 'rating' | 'team' | 'delta' | 'games';
+
+// Books offered on the bet form, matching the Bet Admin dropdown values so
+// rows written from here group with the rest of the history.
+const BET_BOOKS: Array<{ value: string; label: string }> = [
+  { value: 'FanDuel', label: 'FD' },
+  { value: 'DraftKings', label: 'DK' },
+  { value: 'BetMGM', label: 'MGM' },
+  { value: 'BetRivers', label: 'BR' },
+  { value: 'Caesars', label: 'CZR' },
+];
+
+const smallBtnCls =
+  'px-2 py-1 text-xs font-medium rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed';
+const smallPrimaryBtnCls =
+  'px-2.5 py-1.5 text-xs font-medium rounded-lg bg-[#0052ff] text-white hover:bg-[#0043d1] disabled:opacity-50 disabled:cursor-not-allowed';
+const betFieldCls =
+  'px-2 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0052ff]/25';
+const betLabelCls = 'block text-[10px] uppercase tracking-wide text-slate-400 mb-0.5';
+
+const parseNum = (raw: string): number =>
+  Number(raw.replace(/[−–—]/g, '-').replace(/[+\s]/g, ''));
+
+/** Bet-text convention from the rest of the history: "Team +6.5", "Team -3". */
+const formatLine = (n: number): string => {
+  if (n === 0) return 'PK';
+  const s = String(Number(n.toFixed(1)));
+  return n > 0 ? `+${s}` : s;
+};
+
+const formatOdds = (n: number): string => (n > 0 ? `+${n}` : String(n));
+
+/** Risk-to-win-one-unit, the sizing every existing spread bet uses (-110 -> 1.1). */
+const defaultStakeFor = (odds: number): number =>
+  odds < 0 ? Math.round(Math.abs(odds)) / 100 : 1;
+
+const roundToHalf = (n: number): number => Math.round(n * 2) / 2;
 
 interface RatingsResponse {
   success: boolean;
@@ -43,6 +80,8 @@ interface UpcomingGame {
   date: string;
   homeTeam: string;
   awayTeam: string;
+  homeEspnName: string;
+  awayEspnName: string;
   homeRating: number;
   awayRating: number;
   isNeutralSite: boolean;
@@ -52,6 +91,16 @@ interface UpcomingGame {
   marketBooks: number;
   edge: number | null;
   state: string;
+}
+
+interface BetFormState {
+  gameId: string;
+  side: 'home' | 'away';
+  line: string;   // from the selected side's perspective, e.g. "+6.5"
+  book: string;
+  odds: string;   // American
+  stake: string;  // units
+  stakeTouched: boolean;
 }
 
 interface TeamVisual {
@@ -136,6 +185,11 @@ export default function FcsRatingsView({ admin = false }: { admin?: boolean }) {
   const [upcomingAttempted, setUpcomingAttempted] = useState(false);
   const [upcomingLoading, setUpcomingLoading] = useState(false);
   const [upcomingNote, setUpcomingNote] = useState<string | null>(null);
+  const [betForm, setBetForm] = useState<BetFormState | null>(null);
+  const [betSaving, setBetSaving] = useState(false);
+  const [betError, setBetError] = useState<string | null>(null);
+  // "Away @ Home" (ESPN names) -> short labels of pending bets already logged
+  const [pendingBets, setPendingBets] = useState<Record<string, string[]>>({});
 
   const colorMap = useTeamColorMap('americanfootball_ncaaf');
 
@@ -178,6 +232,126 @@ export default function FcsRatingsView({ admin = false }: { admin?: boolean }) {
   useEffect(() => {
     if (view === 'upcoming' && !upcomingAttempted) loadUpcoming();
   }, [view, upcomingAttempted, loadUpcoming]);
+
+  // Pending NCAAF bets, so a game already wagered shows its ticket instead of
+  // inviting a duplicate. Best-effort — the bet form works without it.
+  const loadPendingBets = useCallback(async () => {
+    try {
+      const all = await fetchBets();
+      const map: Record<string, string[]> = {};
+      for (const b of all) {
+        if (b.league !== 'NCAAF' || b.status !== 'pending') continue;
+        if (!b.awayTeam || !b.homeTeam) continue;
+        const key = `${b.awayTeam} @ ${b.homeTeam}`;
+        (map[key] ??= []).push(`${b.bet} ${formatOdds(b.odds)}${b.book ? ` · ${b.book}` : ''}`);
+      }
+      setPendingBets(map);
+    } catch {
+      /* bet history unavailable — badges just don't render */
+    }
+  }, []);
+
+  useEffect(() => {
+    if (admin && view === 'upcoming') loadPendingBets();
+  }, [admin, view, loadPendingBets]);
+
+  const openBetForm = (g: UpcomingGame) => {
+    setBetError(null);
+    // Default to the side the model likes, or home when there's no edge to
+    // read. Line prefills from the market when we have one, else from the
+    // projection rounded to a bettable half-point.
+    const side: 'home' | 'away' =
+      g.edge !== null && g.edge !== 0 ? (g.edge > 0 ? 'home' : 'away') : 'home';
+    const homeLine = g.marketSpread ?? roundToHalf(g.projectedSpread);
+    setBetForm({
+      gameId: g.gameId,
+      side,
+      line: formatLine(side === 'home' ? homeLine : -homeLine),
+      book: 'DraftKings',
+      odds: '-110',
+      stake: String(defaultStakeFor(-110)),
+      stakeTouched: false,
+    });
+  };
+
+  const setBetSide = (side: 'home' | 'away') => {
+    setBetForm((f) => {
+      if (!f || f.side === side) return f;
+      const n = parseNum(f.line);
+      return { ...f, side, line: Number.isFinite(n) ? formatLine(-n) : f.line };
+    });
+  };
+
+  const setBetOdds = (raw: string) => {
+    setBetForm((f) => {
+      if (!f) return f;
+      const n = parseNum(raw);
+      const stake =
+        f.stakeTouched || !Number.isFinite(n) || Math.abs(n) < 100
+          ? f.stake
+          : String(defaultStakeFor(n));
+      return { ...f, odds: raw, stake };
+    });
+  };
+
+  const submitBet = async (g: UpcomingGame) => {
+    if (!betForm) return;
+    const line = parseNum(betForm.line);
+    const odds = parseNum(betForm.odds);
+    const stake = parseNum(betForm.stake);
+    if (betForm.line.trim() === '' || !Number.isFinite(line) || Math.abs(line) > 70) {
+      setBetError('Enter the line you got, e.g. +6.5');
+      return;
+    }
+    if (!Number.isFinite(odds) || Math.abs(odds) < 100) {
+      setBetError('Price must be American odds, e.g. -110 or +145');
+      return;
+    }
+    if (!Number.isFinite(stake) || stake <= 0) {
+      setBetError('Stake must be a positive number of units');
+      return;
+    }
+    const team = betForm.side === 'home' ? g.homeEspnName : g.awayEspnName;
+    const key = `${g.awayEspnName} @ ${g.homeEspnName}`;
+    setBetSaving(true);
+    setBetError(null);
+    try {
+      await createBet({
+        date: localYmd(new Date()),
+        eventDate: localYmd(new Date(g.date)),
+        sport: 'Football',
+        league: 'NCAAF',
+        description: key,
+        awayTeam: g.awayEspnName,
+        homeTeam: g.homeEspnName,
+        team,
+        betType: 'spread',
+        bet: `${team} ${formatLine(line)}`,
+        odds,
+        stake,
+        status: 'pending',
+        book: betForm.book,
+        notes:
+          `FCS model ${g.projectedSpread.toFixed(1)}` +
+          (g.marketSpread === null
+            ? ' · no book line'
+            : ` · book ${g.marketSpread.toFixed(1)} · edge ${g.edge!.toFixed(1)}`),
+      });
+      setPendingBets((m) => ({
+        ...m,
+        [key]: [
+          ...(m[key] ?? []),
+          `${team} ${formatLine(line)} ${formatOdds(odds)} · ${betForm.book}`,
+        ],
+      }));
+      setBetForm(null);
+      setMessage(`Bet logged: ${team} ${formatLine(line)} ${formatOdds(odds)} (${betForm.book})`);
+    } catch (e) {
+      setBetError(e instanceof Error ? e.message : 'Failed to save bet');
+    } finally {
+      setBetSaving(false);
+    }
+  };
 
   // team -> its history (newest first): game adjustments seen from that
   // team's side of the zero-sum split, merged with manual rating adjustments
@@ -605,6 +779,8 @@ export default function FcsRatingsView({ admin = false }: { admin?: boolean }) {
                               ? g.homeTeam
                               : g.awayTeam;
                         const bigEdge = g.edge !== null && Math.abs(g.edge) >= 2;
+                        const betKey = `${g.awayEspnName} @ ${g.homeEspnName}`;
+                        const betOpen = betForm?.gameId === g.gameId;
                         return (
                           <div key={g.gameId} className="px-3 sm:px-4 py-2.5 border-t border-slate-100">
                             <div className="flex items-center justify-between gap-3">
@@ -654,6 +830,124 @@ export default function FcsRatingsView({ admin = false }: { admin?: boolean }) {
                                 )}
                               </div>
                             </div>
+
+                            {admin && (
+                              <div className="mt-2 pt-2 border-t border-slate-100 space-y-2">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <button
+                                    className={smallBtnCls}
+                                    onClick={() => (betOpen ? setBetForm(null) : openBetForm(g))}
+                                  >
+                                    {betOpen ? 'Cancel' : '+ Bet'}
+                                  </button>
+                                  {(pendingBets[betKey] ?? []).map((label, i) => (
+                                    <span
+                                      key={i}
+                                      className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[11px] font-medium tabular-nums"
+                                    >
+                                      ✓ {label}
+                                    </span>
+                                  ))}
+                                </div>
+
+                                {betOpen && betForm && (
+                                  <div className="space-y-1.5">
+                                    <div className="flex flex-wrap items-end gap-2">
+                                      <div>
+                                        <label className={betLabelCls}>Side</label>
+                                        <select
+                                          className={betFieldCls}
+                                          value={betForm.side}
+                                          onChange={(e) =>
+                                            setBetSide(e.target.value as 'home' | 'away')
+                                          }
+                                        >
+                                          <option value="away">{g.awayTeam}</option>
+                                          <option value="home">{g.homeTeam}</option>
+                                        </select>
+                                      </div>
+                                      <div>
+                                        <label className={betLabelCls}>Line</label>
+                                        <input
+                                          type="text"
+                                          inputMode="decimal"
+                                          autoComplete="off"
+                                          className={`${betFieldCls} w-16`}
+                                          value={betForm.line}
+                                          onChange={(e) =>
+                                            setBetForm((f) => (f ? { ...f, line: e.target.value } : f))
+                                          }
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className={betLabelCls}>Book</label>
+                                        <select
+                                          className={betFieldCls}
+                                          value={betForm.book}
+                                          onChange={(e) =>
+                                            setBetForm((f) => (f ? { ...f, book: e.target.value } : f))
+                                          }
+                                        >
+                                          {BET_BOOKS.map((b) => (
+                                            <option key={b.value} value={b.value}>
+                                              {b.label}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </div>
+                                      <div>
+                                        <label className={betLabelCls}>Price</label>
+                                        <input
+                                          type="text"
+                                          inputMode="numeric"
+                                          autoComplete="off"
+                                          className={`${betFieldCls} w-16`}
+                                          value={betForm.odds}
+                                          onChange={(e) => setBetOdds(e.target.value)}
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className={betLabelCls}>Stake (u)</label>
+                                        <input
+                                          type="text"
+                                          inputMode="decimal"
+                                          autoComplete="off"
+                                          className={`${betFieldCls} w-16`}
+                                          value={betForm.stake}
+                                          onChange={(e) =>
+                                            setBetForm((f) =>
+                                              f ? { ...f, stake: e.target.value, stakeTouched: true } : f
+                                            )
+                                          }
+                                        />
+                                      </div>
+                                      <button
+                                        className={smallPrimaryBtnCls}
+                                        disabled={betSaving}
+                                        onClick={() => submitBet(g)}
+                                      >
+                                        {betSaving ? '…' : 'Log bet'}
+                                      </button>
+                                    </div>
+                                    <div className="text-[11px] text-slate-400">
+                                      Saves to bet history as a pending NCAAF spread:{' '}
+                                      <span className="tabular-nums">
+                                        {betForm.side === 'home' ? g.homeEspnName : g.awayEspnName}{' '}
+                                        {betForm.line}
+                                      </span>
+                                      {' · '}
+                                      {new Date(g.date).toLocaleDateString(undefined, {
+                                        month: 'short',
+                                        day: 'numeric',
+                                      })}
+                                    </div>
+                                    {betError && (
+                                      <div className="text-[11px] text-red-600">{betError}</div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
                         );
                       })}

@@ -90,6 +90,8 @@ export async function GET(request: NextRequest) {
       date: string;
       homeTeam: string;
       awayTeam: string;
+      homeEspnName: string;
+      awayEspnName: string;
       homeRating: number;
       awayRating: number;
       isNeutralSite: boolean;
@@ -160,6 +162,11 @@ export async function GET(request: NextRequest) {
           date: comp.date ?? event.date,
           homeTeam: home.teamName,
           awayTeam: away.teamName,
+          // ESPN display names ("Weber State Wildcats") — the bet-history rows
+          // written from the Upcoming tab key their logos off these, not the
+          // short rating-table names.
+          homeEspnName: home.espnName ?? homeC.team?.displayName ?? home.teamName,
+          awayEspnName: away.espnName ?? awayC.team?.displayName ?? away.teamName,
           homeRating: home.rating,
           awayRating: away.rating,
           isNeutralSite,
