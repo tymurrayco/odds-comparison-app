@@ -14,6 +14,7 @@ import {
   FcsManualAdjustment,
   FcsTeamRating,
 } from '@/lib/fcs/types';
+import { hfaForGame, projectFcsSpread } from '@/lib/fcs/engine';
 import { useTeamColorMap } from '@/lib/myGameBets';
 import { createBet, fetchBets } from '@/lib/betService';
 
@@ -194,6 +195,13 @@ export default function FcsRatingsView({ admin = false }: { admin?: boolean }) {
   const [pendingBets, setPendingBets] = useState<Record<string, string[]>>({});
 
   const colorMap = useTeamColorMap('americanfootball_ncaaf');
+
+  // Canonical teamName -> rating, so the manual-entry rows can show the model's
+  // number beside the box you're typing the close into.
+  const ratingByName = useMemo(
+    () => new Map((data?.ratings ?? []).map((r) => [r.teamName, r])),
+    [data]
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1041,6 +1049,28 @@ export default function FcsRatingsView({ admin = false }: { admin?: boolean }) {
               {data!.unlinedGames.map((g) => {
                 const away = g.awayTeam ?? '';
                 const home = g.homeTeam ?? '';
+                // Same projection the sync will use when it processes this game
+                // (home perspective, negative = home favored).
+                const homeRating = ratingByName.get(home);
+                const awayRating = ratingByName.get(away);
+                const projected =
+                  homeRating && awayRating
+                    ? projectFcsSpread(
+                        homeRating.rating,
+                        awayRating.rating,
+                        // undefined falls through to the engine's own default
+                        hfaForGame(homeRating, g.isNeutralSite, data?.config?.hfaDefault)
+                      )
+                    : null;
+                // Preview of what the entered close would do to the two
+                // ratings: adjustment = (close - projected) / 2, away up when
+                // positive. Mirrors processFcsGame's zero-sum split.
+                const typed = parseNum(manualSpreads[g.gameId] ?? '');
+                const showAdj =
+                  projected !== null &&
+                  (manualSpreads[g.gameId] ?? '').trim() !== '' &&
+                  Number.isFinite(typed);
+                const adjustment = showAdj ? (typed - projected!) / 2 : null;
                 return (
                   <div key={g.gameId} className="px-3 sm:px-4 py-2.5">
                     <div className="flex items-center justify-between gap-2">
@@ -1060,6 +1090,16 @@ export default function FcsRatingsView({ admin = false }: { admin?: boolean }) {
                         </div>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
+                        {projected !== null && (
+                          <div className="text-right mr-1">
+                            <div className="text-[10px] uppercase tracking-wide text-slate-400">
+                              model
+                            </div>
+                            <div className="text-sm font-medium text-slate-600 tabular-nums">
+                              {projected.toFixed(1)}
+                            </div>
+                          </div>
+                        )}
                         <input
                           type="text"
                           autoComplete="off"
@@ -1080,6 +1120,26 @@ export default function FcsRatingsView({ admin = false }: { admin?: boolean }) {
                         </button>
                       </div>
                     </div>
+
+                    {adjustment !== null && (
+                      <div className="mt-1.5 text-[11px] text-slate-500 tabular-nums">
+                        market {typed > 0 ? '+' : ''}
+                        {Number(typed.toFixed(1))} vs model {projected!.toFixed(1)} ·{' '}
+                        {Math.abs(adjustment) < 0.05 ? (
+                          <span className="text-slate-400">no rating move</span>
+                        ) : (
+                          <span
+                            className={
+                              Math.abs(adjustment) >= 2
+                                ? 'text-emerald-600 font-medium'
+                                : 'text-slate-500'
+                            }
+                          >
+                            {adjustment > 0 ? away : home} +{Math.abs(adjustment).toFixed(2)}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
