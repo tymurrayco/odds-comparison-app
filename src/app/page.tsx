@@ -1042,13 +1042,22 @@ function HomeContent() {
                       </button>
                     )}
                     {activeLeague === 'americanfootball_ncaaf' && (
-                      <button
-                        type="button"
-                        className="px-4 py-2 text-sm font-medium rounded-r-lg bg-white text-gray-700 hover:bg-gray-50 border border-gray-200 border-l-0"
-                        onClick={() => router.push('/fcs')}
-                      >
-                        FCS
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          className="px-4 py-2 text-sm font-medium bg-white text-gray-700 hover:bg-gray-50 border border-gray-200 border-l-0"
+                          onClick={() => router.push('/fbs')}
+                        >
+                          FBS
+                        </button>
+                        <button
+                          type="button"
+                          className="px-4 py-2 text-sm font-medium rounded-r-lg bg-white text-gray-700 hover:bg-gray-50 border border-gray-200 border-l-0"
+                          onClick={() => router.push('/fcs')}
+                        >
+                          FCS
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
