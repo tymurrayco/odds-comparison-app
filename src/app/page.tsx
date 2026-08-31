@@ -171,15 +171,48 @@ function HomeContent() {
       setActiveLeague(leagueId);
       setActiveView('games');
       setHighlightedGameId(gameId);
-    } else if (view === 'futures' && leagueId) {
-      // Shared futures link
-      setActiveLeague(leagueId);
-      setActiveView('futures');
     } else if (view === 'mybets') {
       // Shared bet link (/bet/[id] redirects here)
       setActiveView('mybets');
+    } else if (leagueId || view) {
+      // Any shared tab: /?league=<id>&view=<games|futures|props>[&event=<id>]
+      if (leagueId) setActiveLeague(leagueId);
+      if (view === 'games' || view === 'futures' || view === 'props') {
+        setActiveView(view);
+      }
+      const eventId = searchParams.get('event');
+      if (view === 'props' && eventId) pendingPropsEventRef.current = eventId;
     }
   }, [searchParams]);
+
+  // Deferred props-event deep link: the event list has to load before the
+  // shared event can be selected.
+  const pendingPropsEventRef = useRef<string | null>(null);
+  useEffect(() => {
+    const id = pendingPropsEventRef.current;
+    if (!id || propsEvents.length === 0) return;
+    const event = propsEvents.find((e) => e.id === id);
+    pendingPropsEventRef.current = null;
+    if (event) loadPropsForEvent(event);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [propsEvents]);
+
+  // Mirror the active tab into the URL (replaceState — no history spam, no
+  // Next re-render) so every view is shareable. `game` is inbound-only: it
+  // highlights once and should not stick to copied links.
+  useEffect(() => {
+    if (!isClient) return;
+    const params = new URLSearchParams(window.location.search);
+    params.set('league', activeLeague);
+    params.set('view', activeView);
+    if (activeView === 'props' && selectedPropsEvent) {
+      params.set('event', selectedPropsEvent.id);
+    } else {
+      params.delete('event');
+    }
+    params.delete('game');
+    window.history.replaceState(null, '', `/?${params.toString()}`);
+  }, [isClient, activeLeague, activeView, selectedPropsEvent]);
 
   // Scroll to highlighted game once games are loaded
   useEffect(() => {

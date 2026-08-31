@@ -36,7 +36,19 @@ export default function RatingsPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('admin') === 'true') setAdminMode(true);
+    // Shared tab link: /ratings?tab=<key>
+    const tab = params.get('tab');
+    const valid = ['ratings', 'schedule', 'history', 'hypotheticals', 'tournaments',
+      'sbr-openers', 'matching', 'overrides', 'barttorvik'];
+    if (tab && valid.includes(tab)) setActiveTab(tab as TabType | 'sbr-openers');
   }, []);
+
+  // Mirror the active tab into the URL so every tab is shareable
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    params.set('tab', activeTab);
+    window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
+  }, [activeTab]);
   const showAdmin = data.isLocalhost || adminMode;
 
   // Initial Configuration collapse state

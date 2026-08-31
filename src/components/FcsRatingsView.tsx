@@ -194,6 +194,17 @@ export default function FcsRatingsView({ admin = false }: { admin?: boolean }) {
   // "Away @ Home" (ESPN names) -> short labels of pending bets already logged
   const [pendingBets, setPendingBets] = useState<Record<string, string[]>>({});
 
+  // Shared tab link: ?view=ratings|upcoming (read once; mirrored below)
+  useEffect(() => {
+    const v = new URLSearchParams(window.location.search).get('view');
+    if (v === 'ratings' || v === 'upcoming') setView(v);
+  }, []);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    params.set('view', view);
+    window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
+  }, [view]);
+
   const colorMap = useTeamColorMap('americanfootball_ncaaf');
 
   // Canonical teamName -> rating, so the manual-entry rows can show the model's
