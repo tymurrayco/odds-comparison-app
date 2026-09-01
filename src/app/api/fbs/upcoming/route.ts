@@ -25,8 +25,11 @@ import {
   roundToDecimal,
 } from '@/lib/fbs/engine';
 import { loadFbsConfig, loadFbsRatings } from '@/lib/fbs/supabase';
+import { loadFcsRatings } from '@/lib/fcs/supabase';
 import { matchOddsEvent } from '@/lib/fbs/teamNames';
 import { FbsTeamRating } from '@/lib/fbs/types';
+import { FcsTeamRating } from '@/lib/fcs/types';
+import { calibrateScaleOffset, impliedScaleOffset } from '@/lib/crossDivision';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -71,10 +74,18 @@ export async function GET(request: NextRequest) {
     const daysParam = parseInt(request.nextUrl.searchParams.get('days') ?? '7', 10);
     const days = Math.min(Math.max(Number.isFinite(daysParam) ? daysParam : 7, 1), 14);
 
-    const [config, ratings] = await Promise.all([loadFbsConfig(), loadFbsRatings()]);
+    const [config, ratings, fcsRatings] = await Promise.all([
+      loadFbsConfig(),
+      loadFbsRatings(),
+      loadFcsRatings(),
+    ]);
     const byEspnId = new Map<string, FbsTeamRating>();
     for (const r of ratings.values()) {
       if (r.espnId) byEspnId.set(r.espnId, r);
+    }
+    const fcsByEspnId = new Map<string, FcsTeamRating>();
+    for (const r of fcsRatings.values()) {
+      if (r.espnId) fcsByEspnId.set(r.espnId, r);
     }
 
     // Start yesterday (UTC) so late US-evening games aren't dropped near midnight UTC
@@ -100,6 +111,25 @@ export async function GET(request: NextRequest) {
       marketSpread: number | null;
       marketBooks: number;
       edge: number | null; // market - projected; positive = model likes HOME vs market
+      state: string;
+      crossDivision?: boolean; // FBS-vs-FCS; foreign rating shown scale-converted
+    }> = [];
+
+    // Cross-division candidates: projections need the market-calibrated FCS
+    // scale offset, which needs every lined cross game first — so collect
+    // during the scan, project after it (see src/lib/crossDivision.ts).
+    const crossRaw: Array<{
+      gameId: string;
+      date: string;
+      fbs: FbsTeamRating;
+      fcs: FcsTeamRating;
+      fbsIsHome: boolean;
+      homeEspnName: string;
+      awayEspnName: string;
+      isNeutralSite: boolean;
+      hfaApplied: number;
+      marketSpread: number | null;
+      marketBooks: number;
       state: string;
     }> = [];
 
@@ -130,8 +160,64 @@ export async function GET(request: NextRequest) {
         if (!homeC || !awayC) continue;
         const home = byEspnId.get(String(homeC.team?.id ?? ''));
         const away = byEspnId.get(String(awayC.team?.id ?? ''));
-        if (!home || !away) continue; // both-FBS only
+        const homeFcs = fcsByEspnId.get(String(homeC.team?.id ?? ''));
+        const awayFcs = fcsByEspnId.get(String(awayC.team?.id ?? ''));
         if (games.some((g) => g.gameId === String(event.id))) continue;
+        if (crossRaw.some((g) => g.gameId === String(event.id))) continue;
+
+        // Cross-division game: exactly one side FBS-rated, the other
+        // FCS-rated. Market line fetched now, projection deferred until the
+        // scale offset is calibrated from the whole window.
+        const crossFbs = home && !away && awayFcs ? home : away && !home && homeFcs ? away : null;
+        if (crossFbs) {
+          const fcsSide = (home ? awayFcs : homeFcs)!;
+          const fbsIsHome = !!home;
+          const xNeutral = comp.neutralSite === true || comp.venue?.neutral === true;
+          const homeHfa = fbsIsHome
+            ? hfaForGame(crossFbs, xNeutral, config.hfaDefault)
+            : xNeutral
+              ? 0
+              : (fcsSide.hfa ?? config.hfaDefault);
+          let xMarket: number | null = null;
+          let xBooks = 0;
+          try {
+            if (!events) events = await fetchCurrentOdds();
+            const match = matchOddsEvent(
+              homeC.team?.displayName ?? '',
+              awayC.team?.displayName ?? '',
+              events
+            );
+            if (match) {
+              const consensus = extractConsensusSpread(match.event, FBS_CONSENSUS_BOOKS);
+              if (consensus) {
+                xMarket = match.swapped ? -consensus.spread : consensus.spread;
+                xBooks = consensus.books.length;
+              }
+            }
+          } catch (e) {
+            oddsError = e instanceof Error ? e.message : String(e);
+          }
+          crossRaw.push({
+            gameId: String(event.id),
+            date: comp.date ?? event.date,
+            fbs: crossFbs,
+            fcs: fcsSide,
+            fbsIsHome,
+            homeEspnName:
+              (fbsIsHome ? crossFbs.espnName : fcsSide.espnName) ??
+              homeC.team?.displayName ?? '',
+            awayEspnName:
+              (fbsIsHome ? fcsSide.espnName : crossFbs.espnName) ??
+              awayC.team?.displayName ?? '',
+            isNeutralSite: xNeutral,
+            hfaApplied: homeHfa,
+            marketSpread: xMarket,
+            marketBooks: xBooks,
+            state: comp.status?.type?.state ?? 'pre',
+          });
+          continue;
+        }
+        if (!home || !away) continue; // both-FBS only from here
 
         const isNeutralSite = comp.neutralSite === true || comp.venue?.neutral === true;
         const hfaApplied = hfaForGame(home, isNeutralSite, config.hfaDefault);
@@ -183,6 +269,48 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Calibrate the FCS->FBS scale offset from the window's lined cross games,
+    // then project each one on the FBS scale (FCS rating shown converted).
+    const implied = crossRaw
+      .filter((g) => g.marketSpread !== null)
+      .map((g) =>
+        impliedScaleOffset(
+          g.marketSpread!,
+          g.fbs.rating,
+          g.fcs.rating,
+          g.hfaApplied,
+          g.fbsIsHome
+        )
+      );
+    const calibration = calibrateScaleOffset(implied);
+    for (const g of crossRaw) {
+      const fcsAdj = roundToDecimal(g.fcs.rating + calibration.offset, 2);
+      const homeRating = g.fbsIsHome ? g.fbs.rating : fcsAdj;
+      const awayRating = g.fbsIsHome ? fcsAdj : g.fbs.rating;
+      const projectedSpread = projectFbsSpread(homeRating, awayRating, g.hfaApplied);
+      games.push({
+        gameId: g.gameId,
+        date: g.date,
+        homeTeam: g.fbsIsHome ? g.fbs.teamName : g.fcs.teamName,
+        awayTeam: g.fbsIsHome ? g.fcs.teamName : g.fbs.teamName,
+        homeEspnName: g.homeEspnName,
+        awayEspnName: g.awayEspnName,
+        homeRating,
+        awayRating,
+        isNeutralSite: g.isNeutralSite,
+        hfaApplied: g.hfaApplied,
+        projectedSpread,
+        marketSpread: g.marketSpread,
+        marketBooks: g.marketBooks,
+        edge:
+          g.marketSpread === null
+            ? null
+            : roundToDecimal(g.marketSpread - projectedSpread, 1),
+        state: g.state,
+        crossDivision: true,
+      });
+    }
+
     games.sort((a, b) => a.date.localeCompare(b.date) || a.gameId.localeCompare(b.gameId));
 
     return NextResponse.json({
@@ -191,6 +319,12 @@ export async function GET(request: NextRequest) {
       count: games.length,
       games,
       oddsError,
+      crossDivision: {
+        count: crossRaw.length,
+        scaleOffset: calibration.offset,
+        offsetSource: calibration.source,
+        offsetSampleCount: calibration.sampleCount,
+      },
     });
   } catch (e) {
     return NextResponse.json(

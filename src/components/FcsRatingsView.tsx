@@ -94,6 +94,7 @@ interface UpcomingGame {
   marketBooks: number;
   edge: number | null;
   state: string;
+  crossDivision?: boolean;
 }
 
 interface BetFormState {
@@ -188,6 +189,12 @@ export default function FcsRatingsView({ admin = false }: { admin?: boolean }) {
   const [upcomingAttempted, setUpcomingAttempted] = useState(false);
   const [upcomingLoading, setUpcomingLoading] = useState(false);
   const [upcomingNote, setUpcomingNote] = useState<string | null>(null);
+  const [crossInfo, setCrossInfo] = useState<{
+    count: number;
+    scaleOffset: number;
+    offsetSource: 'market' | 'fallback';
+    offsetSampleCount: number;
+  } | null>(null);
   const [betForm, setBetForm] = useState<BetFormState | null>(null);
   const [betSaving, setBetSaving] = useState(false);
   const [betError, setBetError] = useState<string | null>(null);
@@ -238,10 +245,11 @@ export default function FcsRatingsView({ admin = false }: { admin?: boolean }) {
     setUpcomingLoading(true);
     setUpcomingNote(null);
     try {
-      const res = await fetch('/api/fcs/upcoming?days=7');
+      const res = await fetch('/api/fcs/upcoming?days=14');
       const json = await res.json();
       if (!res.ok || !json.success) throw new Error(json.error || `HTTP ${res.status}`);
       setUpcoming(json.games);
+      setCrossInfo(json.crossDivision ?? null);
       if (json.oddsError) setUpcomingNote(`Book lines unavailable: ${json.oddsError}`);
     } catch (e) {
       setUpcomingNote(e instanceof Error ? e.message : 'Failed to load upcoming games');
@@ -815,10 +823,20 @@ export default function FcsRatingsView({ admin = false }: { admin?: boolean }) {
             <div className="px-3 sm:px-4 py-3 border-b border-slate-100 flex items-center justify-between gap-2">
               <div>
                 <div className="text-sm font-semibold text-slate-700">
-                  Projected spreads — next 7 days
+                  Projected spreads — next 14 days
                 </div>
                 <div className="text-xs text-slate-500 mt-0.5">
                   Model = rating gap + home HFA. Edge = model vs current book consensus.
+                  {crossInfo && crossInfo.count > 0 && (
+                    <>
+                      {' '}vs-FBS games use a {crossInfo.scaleOffset > 0 ? '+' : ''}
+                      {crossInfo.scaleOffset.toFixed(1)} scale bridge (
+                      {crossInfo.offsetSource === 'market'
+                        ? `market-implied, ${crossInfo.offsetSampleCount} lined games`
+                        : 'fallback — too few lined games'}
+                      ).
+                    </>
+                  )}
                 </div>
               </div>
               <button className={btnCls} disabled={upcomingLoading} onClick={loadUpcoming}>
@@ -888,6 +906,7 @@ export default function FcsRatingsView({ admin = false }: { admin?: boolean }) {
                                     hour: 'numeric',
                                     minute: '2-digit',
                                   })}
+                                  {g.crossDivision ? ' · vs FBS' : ''}
                                   {g.isNeutralSite ? ' · N' : ''}
                                   {' · HFA '}
                                   {g.hfaApplied.toFixed(2)}
