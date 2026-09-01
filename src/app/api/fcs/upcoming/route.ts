@@ -103,6 +103,8 @@ export async function GET(request: NextRequest) {
       awayTeam: string;
       homeEspnName: string;
       awayEspnName: string;
+      homeEspnId: string | null;
+      awayEspnId: string | null;
       homeRating: number;
       awayRating: number;
       isNeutralSite: boolean;
@@ -253,6 +255,8 @@ export async function GET(request: NextRequest) {
           // short rating-table names.
           homeEspnName: home.espnName ?? homeC.team?.displayName ?? home.teamName,
           awayEspnName: away.espnName ?? awayC.team?.displayName ?? away.teamName,
+          homeEspnId: home.espnId,
+          awayEspnId: away.espnId,
           homeRating: home.rating,
           awayRating: away.rating,
           isNeutralSite,
@@ -296,6 +300,8 @@ export async function GET(request: NextRequest) {
         awayTeam: g.fbsIsHome ? g.fcs.teamName : g.fbs.teamName,
         homeEspnName: g.homeEspnName,
         awayEspnName: g.awayEspnName,
+        homeEspnId: g.fbsIsHome ? g.fbs.espnId : g.fcs.espnId,
+        awayEspnId: g.fbsIsHome ? g.fcs.espnId : g.fbs.espnId,
         homeRating,
         awayRating,
         isNeutralSite: g.isNeutralSite,

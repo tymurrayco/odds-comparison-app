@@ -85,6 +85,8 @@ interface UpcomingGame {
   awayTeam: string;
   homeEspnName: string;
   awayEspnName: string;
+  homeEspnId: string | null;
+  awayEspnId: string | null;
   homeRating: number;
   awayRating: number;
   isNeutralSite: boolean;
@@ -428,6 +430,25 @@ export default function FcsRatingsView({ admin = false }: { admin?: boolean }) {
       const logo =
         info?.logo ??
         (r?.espnId ? `https://a.espncdn.com/i/teamlogos/ncaa/500/${r.espnId}.png` : null);
+      const color = info?.color ? `#${info.color}` : FALLBACK_COLOR;
+      return { logo, color };
+    },
+    [byTeamName, colorMap]
+  );
+
+  // Upcoming rows carry their own ESPN identity, so cross-division teams
+  // (absent from this view's ratings table) still resolve a logo — the
+  // NCAAF logo map serves every college team, both divisions.
+  const visualForUpcoming = useCallback(
+    (g: UpcomingGame, side: 'home' | 'away'): TeamVisual => {
+      const name = side === 'home' ? g.homeTeam : g.awayTeam;
+      const r = byTeamName.get(name);
+      const espnName = r?.espnName ?? (side === 'home' ? g.homeEspnName : g.awayEspnName);
+      const espnId = r?.espnId ?? (side === 'home' ? g.homeEspnId : g.awayEspnId);
+      const info = espnName ? colorMap?.[normalizeKey(espnName)] : undefined;
+      const logo =
+        info?.logo ??
+        (espnId ? `https://a.espncdn.com/i/teamlogos/ncaa/500/${espnId}.png` : null);
       const color = info?.color ? `#${info.color}` : FALLBACK_COLOR;
       return { logo, color };
     },
@@ -891,12 +912,12 @@ export default function FcsRatingsView({ admin = false }: { admin?: boolean }) {
                               <div className="min-w-0 space-y-1">
                                 <TeamChip
                                   name={g.awayTeam}
-                                  visual={visualFor(g.awayTeam)}
+                                  visual={visualForUpcoming(g, 'away')}
                                   sub={g.awayRating.toFixed(1)}
                                 />
                                 <TeamChip
                                   name={g.homeTeam}
-                                  visual={visualFor(g.homeTeam)}
+                                  visual={visualForUpcoming(g, 'home')}
                                   sub={g.homeRating.toFixed(1)}
                                 />
                               </div>
