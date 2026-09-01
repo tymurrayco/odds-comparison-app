@@ -88,7 +88,8 @@ const fmtPct = (p: number | null | undefined, dp = 1): string =>
   p === null || p === undefined || Number.isNaN(p) ? '—' : `${(p * 100).toFixed(dp)}%`;
 
 // ---- team theming (page tints to the selected player's team) ----
-const normalizeTeamKey = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+const normalizeTeamKey = (s: string): string =>
+  s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
 // nflverse team codes that differ from ESPN abbreviations
 const TEAM_CODE_ALIASES: Record<string, string> = { LA: 'LAR', WAS: 'WSH', JAC: 'JAX' };
 const hexToRgba = (hex: string, alpha: number): string => {

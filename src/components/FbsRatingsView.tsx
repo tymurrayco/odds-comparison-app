@@ -116,7 +116,8 @@ interface TeamVisual {
 
 const FALLBACK_COLOR = '#64748b';
 
-const normalizeKey = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+const normalizeKey = (s: string) =>
+  s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
 const localYmd = (d: Date) => {
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -273,7 +274,7 @@ export default function FbsRatingsView({ admin = false }: { admin?: boolean }) {
       for (const b of all) {
         if (b.league !== 'NCAAF' || b.status !== 'pending') continue;
         if (!b.awayTeam || !b.homeTeam) continue;
-        const key = `${b.awayTeam} @ ${b.homeTeam}`;
+        const key = `${normalizeKey(b.awayTeam)}@${normalizeKey(b.homeTeam)}`;
         (map[key] ??= []).push(`${b.bet} ${formatOdds(b.odds)}${b.book ? ` · ${b.book}` : ''}`);
       }
       setPendingBets(map);
@@ -343,7 +344,7 @@ export default function FbsRatingsView({ admin = false }: { admin?: boolean }) {
       return;
     }
     const team = betForm.side === 'home' ? g.homeEspnName : g.awayEspnName;
-    const key = `${g.awayEspnName} @ ${g.homeEspnName}`;
+    const key = `${normalizeKey(g.awayEspnName)}@${normalizeKey(g.homeEspnName)}`;
     setBetSaving(true);
     setBetError(null);
     try {
@@ -904,7 +905,7 @@ export default function FbsRatingsView({ admin = false }: { admin?: boolean }) {
                               ? g.homeTeam
                               : g.awayTeam;
                         const bigEdge = g.edge !== null && Math.abs(g.edge) >= 2;
-                        const betKey = `${g.awayEspnName} @ ${g.homeEspnName}`;
+                        const betKey = `${normalizeKey(g.awayEspnName)}@${normalizeKey(g.homeEspnName)}`;
                         const betOpen = betForm?.gameId === g.gameId;
                         return (
                           <div key={g.gameId} className="px-3 sm:px-4 py-2.5 border-t border-slate-100">

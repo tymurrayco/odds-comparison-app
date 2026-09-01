@@ -29,7 +29,8 @@ interface BetTeamInfo {
 
 // Keep in sync with src/app/api/bet-team-logos/route.ts (duplicated to avoid
 // importing server code from a client component).
-const normalizeTeamKey = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+const normalizeTeamKey = (s: string): string =>
+  s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
 // Leagues with ESPN team data (excluded: UFC, PGA, Tennis, MMA, Golf, Soccer).
 const SUPPORTED_LEAGUES = new Set(['NFL', 'NCAAF', 'NBA', 'NCAAB', 'MLB', 'NHL']);
@@ -391,7 +392,7 @@ export default function MyBets() {
     if (bet.betType === 'total') {
       candidates.push(bet.homeTeam, teams?.home);
     } else {
-      const betLead = bet.bet?.match(/^([A-Za-z .'-]+?)(?:\s+[-+0-9]|,|$)/)?.[1]?.trim();
+      const betLead = bet.bet?.match(/^([A-Za-z\u00c0-\u017f .'-]+?)(?:\s+[-+0-9]|,|$)/)?.[1]?.trim();
       const betLeadNoMl = betLead?.replace(/\s+(ml|moneyline)$/i, '').trim();
       candidates.push(
         bet.team,

@@ -7,7 +7,8 @@
 import { useEffect, useState } from 'react';
 import { fetchBets, Bet } from './betService';
 
-export const normalizeTeamKey = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+export const normalizeTeamKey = (s: string) =>
+  s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
 const norm = normalizeTeamKey;
 
 let pendingBetsPromise: Promise<Bet[]> | null = null;
@@ -107,7 +108,7 @@ export function wageredTeamColor(
   if (bet.betType === 'total') {
     candidates.push(homeTeam);
   } else {
-    const lead = bet.bet?.match(/^([A-Za-z .'-]+?)(?:\s+[-+0-9]|,|$)/)?.[1]?.trim();
+    const lead = bet.bet?.match(/^([A-Za-z\u00c0-\u017f .'-]+?)(?:\s+[-+0-9]|,|$)/)?.[1]?.trim();
     const leadNoMl = lead?.replace(/\s+(ml|moneyline)$/i, '').trim();
     candidates.push(bet.team, leadNoMl !== lead ? leadNoMl : undefined, lead, bet.parlayTeams?.[0], homeTeam, awayTeam);
   }

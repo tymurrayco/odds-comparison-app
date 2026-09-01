@@ -35,7 +35,9 @@ export interface BetTeamInfo {
 }
 
 function normalize(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  // Accent-fold first (Jos\u00e9 -> Jose) so accented ESPN names and
+  // unaccented typed names land on the same key.
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
 interface ESPNTeam {
