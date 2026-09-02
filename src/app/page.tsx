@@ -443,8 +443,16 @@ function HomeContent() {
     }
   }, [activeLeague]);
 
+  // Monotonic id per loadData run: a response that comes back after a newer
+  // run started must not touch state — on cold load the default-league (NBA)
+  // fetch used to race the restored league's fetch and paint NBA cards under
+  // the NCAAF tab; fast tab-switching had the same flash.
+  const loadSeqRef = useRef(0);
+
   // Load data from cache or API
   const loadData = useCallback(async function() {
+    const seq = ++loadSeqRef.current;
+    const stale = () => loadSeqRef.current !== seq;
     if (activeView === 'mybets') {
       setLoading(false);
       return;
@@ -481,12 +489,14 @@ function HomeContent() {
           gamesLoaded = true;
         } else {
           const response = await fetchOdds(activeLeague);
-          setGames(response.data);
-          setApiRequestsRemaining(response.requestsRemaining);
+          // cache regardless (keyed by league), but only render if current
           setGamesCache(prev => ({
             ...prev,
             [activeLeague]: { data: response.data, timestamp: now, league: activeLeague }
           }));
+          if (stale()) return;
+          setGames(response.data);
+          setApiRequestsRemaining(response.requestsRemaining);
           gamesLoaded = true;
         }
       }
@@ -497,12 +507,13 @@ function HomeContent() {
           futuresLoaded = true;
         } else {
           const response = await fetchFutures(activeLeague);
-          setFutures(response.data);
-          setApiRequestsRemaining(response.requestsRemaining);
           setFuturesCache(prev => ({
             ...prev,
             [activeLeague]: { data: response.data, timestamp: now, league: activeLeague }
           }));
+          if (stale()) return;
+          setFutures(response.data);
+          setApiRequestsRemaining(response.requestsRemaining);
           futuresLoaded = true;
         }
       }
@@ -515,7 +526,7 @@ function HomeContent() {
       if (needsGames) {
         try {
           const scores = await fetchESPNScores(activeLeague);
-          setEspnScores(scores);
+          if (!stale()) setEspnScores(scores);
         } catch (error) {
           console.error('Error fetching ESPN scores:', error);
         }
@@ -535,7 +546,9 @@ function HomeContent() {
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
-      setLoading(false);
+      // a newer run owns the spinner now — clearing it here would reveal
+      // the previous league's board mid-load
+      if (!stale()) setLoading(false);
     }
   }, [activeLeague, activeView, gamesCache, futuresCache, loadPropsEvents]);
 
@@ -663,14 +676,19 @@ function HomeContent() {
     }
   }, [activeLeague, activeView, selectedPropsEvent]);
   
-  // Load data when league or view changes
+  // Load data when league or view changes. Gated on isClient so the mount
+  // pass never fetches the DEFAULT league — the saved league from
+  // localStorage (and any URL params) land in the same batch that sets
+  // isClient, so the first real fetch is for the league actually shown
+  // (the old phantom NBA fetch also burned an Odds API call per cold load).
   useEffect(() => {
+    if (!isClient) return;
     if (activeView !== 'mybets' && activeLeague !== 'favorites') {
       loadData();
     } else if (activeLeague === 'favorites') {
       setLoading(false);
     }
-  }, [loadData, activeView, activeLeague]);
+  }, [isClient, loadData, activeView, activeLeague]);
 
   // Force the effective view for rendering
   const effectiveView: 'games' | 'futures' | 'props' | 'mybets' = isFuturesOnly(activeLeague) ? 'futures' : activeView;
