@@ -37,11 +37,14 @@ const ESPN_LEAGUE_MAP: { [key: string]: { sport: string; league: string } } = {
   CFL: { sport: 'football', league: 'cfl' },
 };
 
-const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+const norm = (s: string) =>
+  s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
 function matchScore(a: string, b: string): number {
-  const x = a.toLowerCase();
-  const y = b.toLowerCase();
+  // Accent-fold so "San José State" (ESPN) matches "San Jose State" (stored)
+  const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const x = fold(a);
+  const y = fold(b);
   if (x === y) return 4;
   if (x.includes(y) || y.includes(x)) return 3;
   if (x.split(' ')[0] === y.split(' ')[0]) return 2;
@@ -57,7 +60,7 @@ export function wageredTeam(bet: ShareBet): string | null {
   const home = f(bet.home_team, bet.homeTeam);
   const away = f(bet.away_team, bet.awayTeam);
   if (type === 'total') return home;
-  const lead = bet.bet?.match(/^([A-Za-z .'-]+?)(?:\s+[-+0-9]|,|$)/)?.[1]?.trim();
+  const lead = bet.bet?.match(/^([A-Za-zÀ-ſ .'-]+?)(?:\s+[-+0-9]|,|$)/)?.[1]?.trim();
   const leadNoMl = lead?.replace(/\s+(ml|moneyline)$/i, '').trim();
   const parlay = f(bet.parlay_teams, bet.parlayTeams);
   return bet.team || leadNoMl || lead || parlay?.[0] || home || away || null;

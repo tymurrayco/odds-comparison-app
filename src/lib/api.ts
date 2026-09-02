@@ -742,8 +742,11 @@ const TEAM_ALIASES: Record<string, string[]> = {
 
 // Check if two team names likely refer to the same team
 const teamsMatch = (name1: string, name2: string): boolean => {
-  const n1 = name1.toLowerCase();
-  const n2 = name2.toLowerCase();
+  // Accent-fold so "San José State" (ESPN) hits the strong tiers against
+  // the unaccented odds-api spelling instead of falling to first-word
+  const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const n1 = fold(name1);
+  const n2 = fold(name2);
 
   // Exact match
   if (n1 === n2) return true;

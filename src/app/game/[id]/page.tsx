@@ -216,8 +216,13 @@ function getMascot(teamName: string): string {
 // elsewhere in the list — "California Golden Bears" was picking up the Baylor
 // Bears logo because a first-weak-match-wins loop hit Baylor alphabetically.
 function matchScore(name1: string, name2: string): number {
-  const n1 = name1.toLowerCase();
-  const n2 = name2.toLowerCase();
+  // Accent-fold (San José -> san jose): without it the strong equality tier
+  // can't fire against the unaccented odds-api name, and every "San ..."
+  // school ties at the weak first-word tier — first-alphabetical (San Diego
+  // State) then wins the logo.
+  const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const n1 = fold(name1);
+  const n2 = fold(name2);
   if (n1 === n2) return 4;
   if (n1.includes(n2) || n2.includes(n1)) return 3;
   if (n1.split(' ')[0] === n2.split(' ')[0]) return 2;

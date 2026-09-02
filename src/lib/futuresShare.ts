@@ -57,8 +57,10 @@ interface FutureEntry {
 }
 
 function matchScore(name1: string, name2: string): number {
-  const n1 = name1.toLowerCase();
-  const n2 = name2.toLowerCase();
+  // Accent-fold so accented ESPN names match unaccented odds-api names
+  const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const n1 = fold(name1);
+  const n2 = fold(name2);
   if (n1 === n2) return 4;
   if (n1.includes(n2) || n2.includes(n1)) return 3;
   if (n1.split(' ')[0] === n2.split(' ')[0]) return 2;
