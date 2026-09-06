@@ -455,6 +455,15 @@ export default function MyBets({ yearFilter = 'all', onYearsLoaded }: MyBetsProp
           return rest ? `${abbr} ${rest}` : abbr;
         }
       }
+      // No abbreviation (unsupported league such as CFL): keep the LINE visible
+      // by dropping the nickname — "Calgary Stampeders +1.5" -> "Calgary +1.5".
+      // The mobile card truncates at 20 chars, which used to eat the spread.
+      const m = segment.trim().match(/^(.+?)\s+((?:[-+]\d[\d.]*|(?:over|under).*|ml.*|moneyline.*)\S*.*)$/i);
+      if (m) {
+        const nameWords = m[1].split(/\s+/);
+        const city = nameWords.length > 1 ? nameWords.slice(0, -1).join(' ') : nameWords[0];
+        return `${city} ${m[2]}`;
+      }
       return segment.trim();
     };
     return bet.bet.split(/\s*&\s*/).map(shorten).join(' & ');
