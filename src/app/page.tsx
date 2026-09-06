@@ -57,7 +57,7 @@ function HomeContent() {
   const [activeLeague, setActiveLeague] = useState('basketball_nba');
   const [activeView, setActiveView] = useState<'games' | 'futures' | 'props' | 'mybets'>('games');
   // My Bets year filter (header dropdown next to "Back to Odds"); years come from the loaded bets
-  const [betYear, setBetYear] = useState<BetYearFilter>('all');
+  const [betYear, setBetYear] = useState<BetYearFilter>(new Date().getFullYear());
   const [betYears, setBetYears] = useState<number[]>([]);
   const [games, setGames] = useState<Game[]>([]);
   const [futures, setFutures] = useState<FuturesMarket[]>([]);
