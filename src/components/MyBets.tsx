@@ -55,14 +55,24 @@ function TeamLogoImg({ srcs, className }: { srcs: string[]; className: string })
   );
 }
 
-export default function MyBets() {
+export type BetYearFilter = number | 'all';
+
+interface MyBetsProps {
+  /** Year of the bet's event date to show, or 'all' for all-time (default). */
+  yearFilter?: BetYearFilter;
+  /** Reports the distinct event years present in the loaded bets (newest first). */
+  onYearsLoaded?: (years: number[]) => void;
+}
+
+export default function MyBets({ yearFilter = 'all', onYearsLoaded }: MyBetsProps = {}) {
   // NEW: State for Supabase data
   const [myBets, setMyBets] = useState<Bet[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
   // KEPT: All your existing state
-  const [statusFilter, setStatusFilter] = useState<BetStatus | 'all'>('pending');
+  // 'settled' = won + lost + push (anything that is no longer pending)
+  const [statusFilter, setStatusFilter] = useState<BetStatus | 'all' | 'settled'>('pending');
   const [expandedBetId, setExpandedBetId] = useState<string | null>(null);
   const [copiedBetId, setCopiedBetId] = useState<string | null>(null);
   const [viewType, setViewType] = useState<'games' | 'futures'>('games');
@@ -114,9 +124,22 @@ export default function MyBets() {
     }
   };
 
+  // Year filter (event-date year, string compare so UTC offsets can't shift the year)
+  const betYear = (bet: Bet): number => parseInt(String(bet.eventDate).substring(0, 4), 10);
+  const yearBets = useMemo(() => {
+    if (yearFilter === 'all') return myBets;
+    return myBets.filter(bet => betYear(bet) === yearFilter);
+  }, [myBets, yearFilter]);
+  useEffect(() => {
+    if (!onYearsLoaded) return;
+    const years = Array.from(new Set(myBets.map(betYear).filter(y => !Number.isNaN(y)))).sort((a, b) => b - a);
+    onYearsLoaded(years);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myBets]);
+
   // KEPT: Separate bets into games and futures (updated to include teasers with games)
   const gameBets = useMemo(() => {
-    return myBets.filter(bet => 
+    return yearBets.filter(bet => 
       bet.betType === 'spread' || 
       bet.betType === 'moneyline' || 
       bet.betType === 'total' || 
@@ -124,13 +147,13 @@ export default function MyBets() {
       bet.betType === 'parlay' ||
       bet.betType === 'teaser'  // Added teasers to games
     );
-  }, [myBets]); // Changed dependency from [] to [myBets]
+  }, [yearBets]);
 
   const futureBets = useMemo(() => {
-    return myBets.filter(bet => 
+    return yearBets.filter(bet => 
       bet.betType === 'future'  // Only futures here now
     );
-  }, [myBets]); // Changed dependency from [] to [myBets]
+  }, [yearBets]);
 
   // KEPT: Get the right set of bets based on view
   const currentBets = viewType === 'games' ? gameBets : futureBets;
@@ -169,7 +192,9 @@ export default function MyBets() {
     let filtered = [...currentBets];
     
     // Apply status filter
-    if (statusFilter !== 'all') {
+    if (statusFilter === 'settled') {
+      filtered = filtered.filter(bet => bet.status !== 'pending');
+    } else if (statusFilter !== 'all') {
       filtered = filtered.filter(bet => bet.status === statusFilter);
     }
 
@@ -574,7 +599,7 @@ export default function MyBets() {
       {/* Status Filter Tabs - KEPT EXACTLY AS IS */}
       <div className="bg-white rounded-lg shadow p-2">
         <div className="flex gap-1 justify-center flex-wrap">
-          {(['all', 'pending', 'won', 'lost', 'push'] as const).map(status => (
+          {(['all', 'pending', 'settled', 'won', 'lost', 'push'] as const).map(status => (
             <button
               key={status}
               onClick={() => setStatusFilter(status)}
@@ -584,15 +609,18 @@ export default function MyBets() {
                     : status === 'won' ? 'bg-green-600 text-white'
                     : status === 'lost' ? 'bg-red-600 text-white'
                     : status === 'push' ? 'bg-gray-500 text-white'
+                    : status === 'settled' ? 'bg-indigo-600 text-white'
                     : 'bg-blue-600 text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
               <span className="capitalize">{status}</span>
               <span className="ml-1 opacity-75">
-                ({status === 'all' ? 
-                  currentBets.length :
-                  currentBets.filter(b => b.status === status).length})
+                ({status === 'all'
+                  ? currentBets.length
+                  : status === 'settled'
+                    ? currentBets.filter(b => b.status !== 'pending').length
+                    : currentBets.filter(b => b.status === status).length})
               </span>
             </button>
           ))}

@@ -27,7 +27,7 @@ import { BoardLoading, OddsLoader } from '@/components/Loading';
 import PropsTable from '@/components/PropsTable';
 import ConferenceFilter from '@/components/ConferenceFilter';
 import BookmakerSelector from '@/components/BookmakerSelector';
-import MyBets from '@/components/MyBets';
+import MyBets, { BetYearFilter } from '@/components/MyBets';
 import { getTeamConference } from '@/lib/conferences';
 
 interface CacheItem<T> {
@@ -56,6 +56,9 @@ function HomeContent() {
   
   const [activeLeague, setActiveLeague] = useState('basketball_nba');
   const [activeView, setActiveView] = useState<'games' | 'futures' | 'props' | 'mybets'>('games');
+  // My Bets year filter (header dropdown next to "Back to Odds"); years come from the loaded bets
+  const [betYear, setBetYear] = useState<BetYearFilter>('all');
+  const [betYears, setBetYears] = useState<number[]>([]);
   const [games, setGames] = useState<Game[]>([]);
   const [futures, setFutures] = useState<FuturesMarket[]>([]);
   const [loading, setLoading] = useState(true);
@@ -883,13 +886,27 @@ function HomeContent() {
 
       <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
         {activeView === 'mybets' ? (
-          <div className="mb-6">
+          <div className="mb-6 flex items-center justify-between gap-3">
             <button
               onClick={() => setActiveView('games')}
               className="text-sm text-blue-600 hover:text-blue-800 font-medium"
             >
               ← Back to Odds
             </button>
+            <label className="flex items-center gap-2 text-sm text-gray-600">
+              <span className="hidden sm:inline">Year</span>
+              <select
+                value={betYear === 'all' ? 'all' : String(betYear)}
+                onChange={(e) => setBetYear(e.target.value === 'all' ? 'all' : parseInt(e.target.value, 10))}
+                className="px-2 py-1.5 rounded-md border border-gray-200 bg-white text-sm font-medium text-gray-700 shadow-sm"
+                aria-label="Filter bets by year"
+              >
+                <option value="all">All-Time</option>
+                {betYears.map(y => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </label>
           </div>
         ) : (
           <>
@@ -1162,7 +1179,7 @@ function HomeContent() {
 
         {/* Main Content */}
         {activeView === 'mybets' ? (
-          <MyBets />
+          <MyBets yearFilter={betYear} onYearsLoaded={setBetYears} />
         ) : loading || (activeLeague === 'favorites' && favoritesLoading) ? (
           <BoardLoading variant={effectiveView === 'futures' ? 'futures' : 'games'} />
         ) : (
