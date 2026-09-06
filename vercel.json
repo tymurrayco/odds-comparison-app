@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/eckel/cron",
-      "schedule": "0 10 * * 0"
+      "schedule": "0 12 * * 1"
     }
   ]
 }
