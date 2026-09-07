@@ -9,6 +9,7 @@
 // id lookup table. ?season= optional override; defaults to the current season.
 
 import { NextResponse } from 'next/server';
+import { matchEspnTeam } from '@/lib/espnTeamMatch';
 
 const DAY = 60 * 60 * 24;
 const HOUR = 60 * 60;
@@ -35,7 +36,6 @@ const LEAGUES: Record<string, LeagueConfig> = {
   },
 };
 
-const normalize = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, '');
 
 async function getJson(url: string, revalidate: number): Promise<Record<string, unknown> | null> {
   try {
@@ -124,15 +124,12 @@ async function resolveTeamId(cfg: LeagueConfig, team: string): Promise<string | 
   if (/^\d+$/.test(team)) return team;
   const data: any = await getJson(`${cfg.site}/teams?limit=1000`, DAY);
   const entries: any[] = data?.sports?.[0]?.leagues?.[0]?.teams ?? [];
-  const want = normalize(team);
-  for (const entry of entries) {
-    const t = entry?.team;
-    if (!t) continue;
-    const variants = [t.displayName, t.shortDisplayName, t.nickname, t.abbreviation, t.location,
-      t.location && t.nickname ? `${t.location} ${t.nickname}` : null];
-    if (variants.some((v) => v && normalize(v) === want)) return String(t.id);
-  }
-  return null;
+  // Odds-API vs ESPN naming drift ("Sam Houston State" vs "Sam Houston",
+  // "UMass" vs "Massachusetts", "San Jose" vs "San José"...) is handled in
+  // matchEspnTeam — exact first, then alias / State-strip / mascot+city.
+  const teams = entries.map((e) => e?.team).filter(Boolean);
+  const hit = matchEspnTeam(team, teams);
+  return hit ? String(hit.id) : null;
 }
 
 function parseSchedule(data: any, teamId: string, seasonType: SeasonType): ScheduleGame[] {
