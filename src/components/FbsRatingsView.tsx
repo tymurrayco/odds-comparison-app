@@ -1,7 +1,7 @@
 'use client';
 
 // src/components/FbsRatingsView.tsx
-// FBS market-driven power ratings — shared by the admin page
+// FBS Ledger ratings (odds.day's market-driven power ratings) — shared by the admin page
 // (/admin/fbs-ratings, admin=true: sync/seed/recalculate, manual lines,
 // manual rating adjustments) and the public read-only page (/fbs).
 
@@ -756,7 +756,7 @@ export default function FbsRatingsView({ admin = false }: { admin?: boolean }) {
                 {'\u2190'} Odds
               </Link>
             )}
-            <h1 className="text-[22px] font-bold tracking-[-0.7px] text-slate-800">FBS Power Ratings</h1>
+            <h1 className="text-[22px] font-bold tracking-[-0.7px] text-slate-800">FBS Ledger Ratings</h1>
             <p className="text-xs sm:text-sm text-slate-500">
               Brad Powers seed → market-adjusted by closing lines · {data?.totalAdjustments ?? 0}{' '}
               games · season {data?.season ?? ''}

@@ -1,7 +1,7 @@
 'use client';
 
 // src/components/FcsRatingsView.tsx
-// FCS market-driven power ratings — shared by the admin page
+// FCS Ledger ratings (odds.day's market-driven power ratings) — shared by the admin page
 // (/admin/fcs-ratings, admin=true: sync/seed/recalculate, manual lines,
 // manual rating adjustments) and the public read-only page (/fcs).
 
@@ -756,7 +756,7 @@ export default function FcsRatingsView({ admin = false }: { admin?: boolean }) {
                 {'\u2190'} Odds
               </Link>
             )}
-            <h1 className="text-[22px] font-bold tracking-[-0.7px] text-slate-800">FCS Power Ratings</h1>
+            <h1 className="text-[22px] font-bold tracking-[-0.7px] text-slate-800">FCS Ledger Ratings</h1>
             <p className="text-xs sm:text-sm text-slate-500">
               Massey seed → market-adjusted by closing lines · {data?.totalAdjustments ?? 0}{' '}
               games · season {data?.season ?? ''}

@@ -1,6 +1,6 @@
 // src/components/SummaryMatchup.tsx
 //
-// At-a-glance comparison: FEI, Eckel, Powers, and Market (Powers seed +
+// At-a-glance comparison: FEI, Eckel, Powers, and Ledger (Powers seed +
 // closing-line adjustments) projected lines for one game in a single table,
 // plus the average across available systems.
 
@@ -9,7 +9,7 @@ import { fetchFEIData, getTeamFEIData, calculateExpectedScore } from '@/lib/feiD
 import { TeamSeasonMetrics } from '@/lib/eckel/types';
 import { PowerRatingRow } from '@/lib/powerRatings';
 import { cachedJson } from '@/lib/matchupCache';
-import { marketMatchupUrl } from './MarketMatchup';
+import { ledgerMatchupUrl } from './LedgerMatchup';
 
 interface SummaryMatchupProps {
   awayTeam: string; // odds-api names
@@ -112,19 +112,19 @@ export default function SummaryMatchup({ awayTeam, homeTeam, isNeutralSite = fal
         } as SystemRow;
       });
 
-    const marketPromise = cachedJson<{
+    const ledgerPromise = cachedJson<{
       system?: 'fbs' | 'fcs' | 'cross' | null;
       away?: { matched: boolean; ratingOnScale: number | null; rank: number | null };
       home?: { matched: boolean; ratingOnScale: number | null; rank: number | null };
       homeSpread?: number | null;
       neutralSpread?: number | null;
-    }>(marketMatchupUrl(awayTeam, homeTeam, isNeutralSite))
+    }>(ledgerMatchupUrl(awayTeam, homeTeam, isNeutralSite))
       .then((d) => {
         const a = d.away?.matched ? d.away : null;
         const h = d.home?.matched ? d.home : null;
         const line = isNeutralSite ? d.neutralSpread : d.homeSpread;
         return {
-          system: 'Market',
+          system: 'Ledger',
           awayLabel: a && a.ratingOnScale !== null ? `${a.ratingOnScale.toFixed(1)} (#${a.rank})` : null,
           homeLabel: h && h.ratingOnScale !== null ? `${h.ratingOnScale.toFixed(1)} (#${h.rank})` : null,
           homeLine: typeof line === 'number' ? round1(line) : null,
@@ -134,13 +134,13 @@ export default function SummaryMatchup({ awayTeam, homeTeam, isNeutralSite = fal
         } as SystemRow;
       });
 
-    Promise.allSettled([feiPromise, eckelPromise, powersPromise, marketPromise]).then((results) => {
+    Promise.allSettled([feiPromise, eckelPromise, powersPromise, ledgerPromise]).then((results) => {
       if (!alive) return;
       setRows(
         results.map((r, i) =>
           r.status === 'fulfilled'
             ? r.value
-            : { system: ['FEI', 'Eckel', 'Powers', 'Market'][i], awayLabel: null, homeLabel: null, homeLine: null }
+            : { system: ['FEI', 'Eckel', 'Powers', 'Ledger'][i], awayLabel: null, homeLabel: null, homeLine: null }
         )
       );
       setLoading(false);
@@ -223,7 +223,7 @@ export default function SummaryMatchup({ awayTeam, homeTeam, isNeutralSite = fal
         </tbody>
       </table>
       <p className="mt-3 text-[10px] text-gray-400 text-center">
-        Line shown for the favorite (logo) · FEI = expected-score projection · Eckel, Powers & Market =
+        Line shown for the favorite (logo) · FEI = expected-score projection · Eckel, Powers & Ledger =
         rating difference{isNeutralSite
           ? ' · neutral site, no home-field edge applied'
           : ' + Brad Powers’ per-team home HFA'} · ratings shown as value (#rank)

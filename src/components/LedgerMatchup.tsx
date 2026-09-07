@@ -1,6 +1,6 @@
-// src/components/MarketMatchup.tsx
+// src/components/LedgerMatchup.tsx
 //
-// "Market" tab: the market-driven power ratings (Brad Powers preseason seed,
+// "Ledger" tab (odds.day's own system): the market-driven power ratings (Brad Powers preseason seed,
 // then moved only by closing lines — the /fbs and /fcs systems) projecting a
 // spread for this game. Same numbers as the Upcoming tab on the ratings pages.
 
@@ -8,13 +8,13 @@ import { useEffect, useState } from 'react';
 import { cachedJson } from '@/lib/matchupCache';
 import type { MatchupSide } from '@/lib/fbs/matchupTypes';
 
-interface MarketMatchupProps {
+interface LedgerMatchupProps {
   awayTeam: string; // odds-api names
   homeTeam: string;
   isNeutralSite?: boolean;
 }
 
-interface MarketResponse {
+interface LedgerResponse {
   success?: boolean;
   error?: string;
   system?: 'fbs' | 'fcs' | 'cross' | null;
@@ -29,7 +29,7 @@ interface MarketResponse {
   updatedAt?: string | null;
 }
 
-export const marketMatchupUrl = (awayTeam: string, homeTeam: string, isNeutralSite: boolean) =>
+export const ledgerMatchupUrl = (awayTeam: string, homeTeam: string, isNeutralSite: boolean) =>
   `/api/fbs/matchup?teams=${encodeURIComponent(awayTeam)},${encodeURIComponent(homeTeam)}` +
   (isNeutralSite ? '&neutral=1' : '');
 
@@ -88,26 +88,26 @@ function StatRow({
   );
 }
 
-export default function MarketMatchup({ awayTeam, homeTeam, isNeutralSite = false }: MarketMatchupProps) {
-  const [data, setData] = useState<MarketResponse | null>(null);
+export default function LedgerMatchup({ awayTeam, homeTeam, isNeutralSite = false }: LedgerMatchupProps) {
+  const [data, setData] = useState<LedgerResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    cachedJson<MarketResponse>(marketMatchupUrl(awayTeam, homeTeam, isNeutralSite))
+    cachedJson<LedgerResponse>(ledgerMatchupUrl(awayTeam, homeTeam, isNeutralSite))
       .then((d) => { if (alive) { setData(d); setLoading(false); } })
-      .catch(() => { if (alive) { setData({ error: 'Failed to load market ratings' }); setLoading(false); } });
+      .catch(() => { if (alive) { setData({ error: 'Failed to load Ledger ratings' }); setLoading(false); } });
     return () => { alive = false; };
   }, [awayTeam, homeTeam, isNeutralSite]);
 
   if (loading) {
-    return <div className="p-6 text-center text-sm text-gray-500">Loading market ratings…</div>;
+    return <div className="p-6 text-center text-sm text-gray-500">Loading Ledger ratings…</div>;
   }
   if (!data || data.error || !data.away || !data.home) {
     return (
       <div className="p-6 text-center text-sm text-gray-500">
-        {data?.error || 'Market ratings unavailable.'}
+        {data?.error || 'Ledger ratings unavailable.'}
       </div>
     );
   }
@@ -163,7 +163,7 @@ export default function MarketMatchup({ awayTeam, homeTeam, isNeutralSite = fals
             better={betterHigh(a.seedRating, h.seedRating)}
           />
           <StatRow
-            label="Market adjustment"
+            label="Closing-line adjustment"
             away={a.delta === null ? '—' : signed(a.delta)}
             home={h.delta === null ? '—' : signed(h.delta)}
             better={betterHigh(a.delta, h.delta)}
