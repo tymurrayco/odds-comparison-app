@@ -219,7 +219,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
             {/* Team names row — nowrap: names truncate instead of pushing the
                 icons onto their own line; icons right edge on mobile, inline on sm+ */}
             <div className="flex items-center">
-              <h3 className="text-sm md:text-lg font-semibold text-gray-900 truncate min-w-0">
+              <h3 className="text-[15px] md:text-[18px] font-semibold tracking-[-0.3px] md:tracking-[-0.45px] text-gray-900 truncate min-w-0">
                 {game.away_team} @ {game.home_team}
               </h3>
               <span className="ml-auto pl-2 sm:ml-2 sm:pl-0 flex items-center flex-shrink-0">

@@ -756,7 +756,7 @@ export default function FcsRatingsView({ admin = false }: { admin?: boolean }) {
                 {'\u2190'} Odds
               </Link>
             )}
-            <h1 className="text-lg sm:text-xl font-bold text-slate-800">FCS Power Ratings</h1>
+            <h1 className="text-[22px] font-bold tracking-[-0.7px] text-slate-800">FCS Power Ratings</h1>
             <p className="text-xs sm:text-sm text-slate-500">
               Massey seed → market-adjusted by closing lines · {data?.totalAdjustments ?? 0}{' '}
               games · season {data?.season ?? ''}
@@ -855,7 +855,7 @@ export default function FcsRatingsView({ admin = false }: { admin?: boolean }) {
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
             <div className="px-3 sm:px-4 py-3 border-b border-slate-100 flex items-center justify-between gap-2">
               <div>
-                <div className="text-sm font-semibold text-slate-700">
+                <div className="text-[16px] font-semibold tracking-[-0.3px] text-slate-700">
                   Projected spreads — next 14 days
                 </div>
                 <div className="text-xs text-slate-500 mt-0.5">
@@ -1114,7 +1114,7 @@ export default function FcsRatingsView({ admin = false }: { admin?: boolean }) {
         {admin && view === 'ratings' && (data?.unlinedGames ?? []).length > 0 && (
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
             <div className="px-3 sm:px-4 py-3 border-b border-slate-100">
-              <div className="text-sm font-semibold text-slate-700">
+              <div className="text-[16px] font-semibold tracking-[-0.3px] text-slate-700">
                 Games missing a closing line ({data!.unlinedGames.length})
               </div>
               <div className="text-xs text-slate-500 mt-0.5">
@@ -1512,7 +1512,7 @@ export default function FcsRatingsView({ admin = false }: { admin?: boolean }) {
         </div>
 
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <div className="px-3 sm:px-4 py-3 border-b border-slate-100 text-sm font-semibold text-slate-700">
+          <div className="px-3 sm:px-4 py-3 border-b border-slate-100 text-[16px] font-semibold tracking-[-0.3px] text-slate-700">
             Recent adjustments
           </div>
           {feedEntries.length === 0 && !loading ? (

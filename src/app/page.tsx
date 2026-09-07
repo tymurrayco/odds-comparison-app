@@ -761,7 +761,7 @@ function HomeContent() {
       <header className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
-            <h1 className="text-base sm:text-xl font-bold shrink-0"><span className="text-blue-600">odds</span><span className="text-gray-900">.day</span></h1>
+            <h1 className="text-xl sm:text-[26px] font-bold tracking-[-0.8px] shrink-0"><span className="text-blue-600">odds</span><span className="text-gray-900">.day</span></h1>
 
             <div className="flex items-center gap-1.5 sm:gap-3">
               {activeView !== 'mybets' && (
