@@ -752,11 +752,23 @@ export default function FbsRatingsView({ admin = false }: { admin?: boolean }) {
       <div className="max-w-4xl mx-auto space-y-4 sm:space-y-6">
         <div className="space-y-3">
           <div>
-            {!admin && (
-              <Link href="/" className="text-xs text-slate-400 hover:text-slate-600">
-                {'\u2190'} Odds
+            {/* Same back control as the other admin pages \u2014 previously the public
+                page had only a faint text link and admin mode had none at all. */}
+            <div className="flex items-center gap-2 mb-1">
+              <Link
+                href="/"
+                aria-label="Back to odds"
+                className="inline-flex items-center justify-center w-7 h-7 -ml-1.5 rounded-full text-slate-500 hover:bg-slate-200 hover:text-slate-900 transition"
+              >
+                <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
               </Link>
-            )}
+              <Link href="/" className="text-xs text-slate-500 hover:text-slate-800">Odds</Link>
+              {admin && (
+                <Link href="/admin/bets" className="ml-auto inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 transition">
+                  Bet Admin
+                </Link>
+              )}
+            </div>
             <h1 className="text-[22px] font-bold tracking-[-0.7px] text-slate-800">FBS Ledger Ratings</h1>
             <p className="text-xs sm:text-sm text-slate-500">
               Brad Powers seed → market-adjusted by closing lines · {data?.totalAdjustments ?? 0}{' '}
