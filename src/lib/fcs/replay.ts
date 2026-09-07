@@ -21,6 +21,7 @@ import {
   upsertFcsRatings,
 } from './supabase';
 import { FcsGameAdjustment, FcsManualAdjustment } from './types';
+import { exceedsRatedSpreadCap } from '@/lib/ratedSpreadCap';
 
 type ReplayEvent =
   | { kind: 'game'; date: string; order: number; adj: FcsGameAdjustment }
@@ -96,7 +97,9 @@ export async function replayLedger(
     const hfaApplied = adj.hfaApplied;
     const projected = projectFcsSpread(home.rating, away.rating, hfaApplied);
     const difference = roundToDecimal(adj.closingSpread - projected, 2);
-    const adjustment = roundToDecimal(difference / 2, 2);
+    // Same cap as the live engine so a replay strips earlier over-cap re-ratings
+    const capped = exceedsRatedSpreadCap(adj.closingSpread);
+    const adjustment = capped ? 0 : roundToDecimal(difference / 2, 2);
 
     adj.hfaApplied = hfaApplied;
     adj.projectedSpread = projected;
@@ -104,10 +107,12 @@ export async function replayLedger(
     adj.adjustment = adjustment;
     adj.homeRatingBefore = home.rating;
     adj.awayRatingBefore = away.rating;
-    away.rating = roundToDecimal(away.rating + adjustment, 2);
-    home.rating = roundToDecimal(home.rating - adjustment, 2);
-    away.gamesProcessed += 1;
-    home.gamesProcessed += 1;
+    if (!capped) {
+      away.rating = roundToDecimal(away.rating + adjustment, 2);
+      home.rating = roundToDecimal(home.rating - adjustment, 2);
+      away.gamesProcessed += 1;
+      home.gamesProcessed += 1;
+    }
     adj.homeRatingAfter = home.rating;
     adj.awayRatingAfter = away.rating;
 

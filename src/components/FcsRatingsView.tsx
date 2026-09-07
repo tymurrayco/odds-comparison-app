@@ -7,6 +7,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { MAX_RATED_SPREAD } from '@/lib/ratedSpreadCap';
 import {
   FcsClosingLine,
   FcsConfig,
@@ -1593,7 +1594,12 @@ export default function FcsRatingsView({ admin = false }: { admin?: boolean }) {
                           proj {a.projectedSpread.toFixed(1)} {'\u2192'} close{' '}
                           {a.closingSpread.toFixed(1)}
                         </div>
-                        <div className="text-[11px] text-slate-400">{a.closingSource}</div>
+                        <div className="text-[11px] text-slate-400">
+                          {a.closingSource}
+                          {Math.abs(a.closingSpread) > MAX_RATED_SPREAD && (
+                            <span className="ml-1 text-amber-600">· not rated (line beyond ±{MAX_RATED_SPREAD})</span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>

@@ -43,6 +43,8 @@ export function hfaForGame(
  * Process one game against a mutable ratings map (keyed by canonical teamName).
  * Mutates the two team ratings and returns the adjustment record.
  */
+import { exceedsRatedSpreadCap } from '@/lib/ratedSpreadCap';
+
 export function processFbsGame(
   game: {
     gameId: string;
@@ -68,18 +70,22 @@ export function processFbsGame(
     game.closingSpread - projectedSpread,
     FBS_RATINGS_DECIMAL_PLACES
   );
-  const adjustment = roundToDecimal(difference / 2, FBS_RATINGS_DECIMAL_PLACES);
+  // Lines beyond the cap are logged but never re-rate (see ratedSpreadCap.ts)
+  const capped = exceedsRatedSpreadCap(game.closingSpread);
+  const adjustment = capped ? 0 : roundToDecimal(difference / 2, FBS_RATINGS_DECIMAL_PLACES);
 
   const homeRatingBefore = home.rating;
   const awayRatingBefore = away.rating;
 
-  const now = new Date().toISOString();
-  away.rating = roundToDecimal(away.rating + adjustment, FBS_RATINGS_DECIMAL_PLACES);
-  away.gamesProcessed += 1;
-  away.updatedAt = now;
-  home.rating = roundToDecimal(home.rating - adjustment, FBS_RATINGS_DECIMAL_PLACES);
-  home.gamesProcessed += 1;
-  home.updatedAt = now;
+  if (!capped) {
+    const now = new Date().toISOString();
+    away.rating = roundToDecimal(away.rating + adjustment, FBS_RATINGS_DECIMAL_PLACES);
+    away.gamesProcessed += 1;
+    away.updatedAt = now;
+    home.rating = roundToDecimal(home.rating - adjustment, FBS_RATINGS_DECIMAL_PLACES);
+    home.gamesProcessed += 1;
+    home.updatedAt = now;
+  }
 
   return {
     gameId: game.gameId,
