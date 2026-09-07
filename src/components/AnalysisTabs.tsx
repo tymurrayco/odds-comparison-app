@@ -2,13 +2,16 @@
 //
 // Methodology tabs for the NCAAF Analysis section: FEI (efficiency ratings
 // from bcftoys), Eckel (quality-drive metrics from CFBD drive data), and
-// Powers (Brad Powers' Vegas power ratings + per-team HFA spread projection).
+// Powers (Brad Powers' Vegas power ratings + per-team HFA spread projection),
+// and Market (the Powers seed moved by closing lines — the /fbs and /fcs
+// market-driven ratings, same numbers as their Upcoming tabs).
 
 import { useState } from 'react';
 import TeamAnalysis from './TeamAnalysis';
 import EckelMatchup from './EckelMatchup';
 import PowersMatchup from './PowersMatchup';
 import SummaryMatchup from './SummaryMatchup';
+import MarketMatchup from './MarketMatchup';
 
 interface AnalysisTabsProps {
   awayTeam: string;
@@ -17,7 +20,7 @@ interface AnalysisTabsProps {
   venue?: string | null;
 }
 
-const TABS = ['Summary', 'FEI', 'Eckel', 'Powers'] as const;
+const TABS = ['Summary', 'FEI', 'Eckel', 'Powers', 'Market'] as const;
 type Tab = (typeof TABS)[number];
 
 export default function AnalysisTabs({
@@ -53,8 +56,10 @@ export default function AnalysisTabs({
         <TeamAnalysis awayTeam={awayTeam} homeTeam={homeTeam} />
       ) : tab === 'Eckel' ? (
         <EckelMatchup awayTeam={awayTeam} homeTeam={homeTeam} isNeutralSite={isNeutralSite} />
-      ) : (
+      ) : tab === 'Powers' ? (
         <PowersMatchup awayTeam={awayTeam} homeTeam={homeTeam} isNeutralSite={isNeutralSite} />
+      ) : (
+        <MarketMatchup awayTeam={awayTeam} homeTeam={homeTeam} isNeutralSite={isNeutralSite} />
       )}
     </div>
   );
