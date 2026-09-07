@@ -192,6 +192,7 @@ export default function FbsRatingsView({ admin = false }: { admin?: boolean }) {
   const [upcomingAttempted, setUpcomingAttempted] = useState(false);
   const [upcomingLoading, setUpcomingLoading] = useState(false);
   const [upcomingNote, setUpcomingNote] = useState<string | null>(null);
+  const [upcomingSearch, setUpcomingSearch] = useState('');
   const [crossInfo, setCrossInfo] = useState<{
     count: number;
     scaleOffset: number;
@@ -242,6 +243,16 @@ export default function FbsRatingsView({ admin = false }: { admin?: boolean }) {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Upcoming tab search: matches either team by display or ESPN name, accent-folded.
+  const upcomingFiltered = useMemo(() => {
+    const fold = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    const q = fold(upcomingSearch.trim());
+    if (!q) return upcoming ?? [];
+    return (upcoming ?? []).filter((g) =>
+      [g.homeTeam, g.awayTeam, g.homeEspnName, g.awayEspnName].some((n) => n && fold(n).includes(q))
+    );
+  }, [upcoming, upcomingSearch]);
 
   const loadUpcoming = useCallback(async () => {
     setUpcomingAttempted(true);
@@ -865,6 +876,16 @@ export default function FbsRatingsView({ admin = false }: { admin?: boolean }) {
                 {upcomingLoading ? '…' : 'Refresh'}
               </button>
             </div>
+            <div className="px-3 sm:px-4 py-2 border-b border-slate-100">
+              <input
+                type="search"
+                className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0052ff]/25"
+                placeholder="Search team…"
+                value={upcomingSearch}
+                onChange={(e) => setUpcomingSearch(e.target.value)}
+                aria-label="Search upcoming games by team"
+              />
+            </div>
             {upcomingNote && (
               <div className="px-3 sm:px-4 py-2 text-xs text-amber-600 border-b border-slate-100">
                 {upcomingNote}
@@ -872,6 +893,10 @@ export default function FbsRatingsView({ admin = false }: { admin?: boolean }) {
             )}
             {upcomingLoading && upcoming === null ? (
               <div className="px-4 py-6 text-sm text-slate-500">Loading…</div>
+            ) : upcomingFiltered.length === 0 && upcomingSearch.trim() ? (
+              <div className="px-4 py-6 text-sm text-slate-500">
+                No upcoming games match &ldquo;{upcomingSearch.trim()}&rdquo;.
+              </div>
             ) : (upcoming ?? []).length === 0 ? (
               <div className="px-4 py-6 text-sm text-slate-500">
                 No upcoming FBS-vs-FBS games in the next 7 days.
@@ -880,7 +905,7 @@ export default function FbsRatingsView({ admin = false }: { admin?: boolean }) {
               <div className="divide-y divide-slate-100">
                 {(() => {
                   const groups: Array<{ label: string; games: UpcomingGame[] }> = [];
-                  for (const g of upcoming ?? []) {
+                  for (const g of upcomingFiltered) {
                     const label = new Date(g.date).toLocaleDateString(undefined, {
                       weekday: 'long',
                       month: 'short',
