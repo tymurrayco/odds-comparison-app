@@ -24,6 +24,8 @@ body {
   color: var(--foreground);
   /* Inter Tight (loaded in layout.tsx); previous stack kept as fallback */
   font-family: var(--font-inter-tight), Arial, Helvetica, sans-serif;
+  /* Odds, spreads and ratings line up in columns */
+  font-variant-numeric: tabular-nums;
 }
 
 /* --- Branded loading states --- */
