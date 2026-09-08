@@ -19,7 +19,7 @@ const normalizeTeamKey = (s: string): string =>
   s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
 // Leagues with ESPN team data (excluded: UFC, PGA, Tennis, MMA, Golf, Soccer).
-const SUPPORTED_LEAGUES = new Set(['NFL', 'NCAAF', 'NBA', 'NCAAB', 'MLB', 'NHL']);
+const SUPPORTED_LEAGUES = new Set(['NFL', 'NCAAF', 'NBA', 'NCAAB', 'MLB', 'NHL', 'CFL']);
 
 const hexToRgba = (hex: string, alpha: number): string => {
   const h = hex.replace('#', '').trim();

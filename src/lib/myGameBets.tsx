@@ -34,6 +34,7 @@ export interface BetTeamInfo {
 const SPORT_KEY_TO_LEAGUE: Record<string, string> = {
   americanfootball_nfl: 'NFL',
   americanfootball_ncaaf: 'NCAAF',
+  americanfootball_cfl: 'CFL',
   basketball_nba: 'NBA',
   basketball_ncaab: 'NCAAB',
   baseball_mlb: 'MLB',

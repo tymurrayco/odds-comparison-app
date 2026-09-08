@@ -51,11 +51,64 @@ interface ESPNTeam {
   logos?: { href?: string }[];
 }
 
+// Leagues ESPN lists but ships without colors or logos (CFL returns 9 teams
+// with no `color` and an empty `logos` array). Served from a static table
+// instead: official primary/alternate colors, logos from /public/team-logos,
+// and the common broadcast abbreviations (ESPN's CSP/EES/TAT are unfamiliar).
+// Variants mirror the ESPN path: displayName, nickname (city), abbreviation.
+interface StaticTeam {
+  displayName: string;
+  city: string;
+  abbreviation: string;
+  color: string;
+  alternateColor: string;
+  extraNames?: string[];
+}
+
+const STATIC_LEAGUES: Record<string, StaticTeam[]> = {
+  CFL: [
+    { displayName: 'BC Lions',                 city: 'BC',           abbreviation: 'BC',  color: 'f26522', alternateColor: '000000', extraNames: ['British Columbia Lions', 'Lions'] },
+    { displayName: 'Calgary Stampeders',       city: 'Calgary',      abbreviation: 'CGY', color: 'd50032', alternateColor: '000000', extraNames: ['Stampeders', 'Stamps'] },
+    { displayName: 'Edmonton Elks',            city: 'Edmonton',     abbreviation: 'EDM', color: '005a2b', alternateColor: 'ffb81c', extraNames: ['Elks'] },
+    { displayName: 'Hamilton Tiger-Cats',      city: 'Hamilton',     abbreviation: 'HAM', color: 'ffb81c', alternateColor: '000000', extraNames: ['Tiger-Cats', 'Tiger Cats', 'Ticats'] },
+    { displayName: 'Montreal Alouettes',       city: 'Montreal',     abbreviation: 'MTL', color: 'b71234', alternateColor: '003087', extraNames: ['Alouettes'] },
+    { displayName: 'Ottawa Redblacks',         city: 'Ottawa',       abbreviation: 'OTT', color: 'c8102e', alternateColor: '000000', extraNames: ['Ottawa Red Blacks', 'Redblacks', 'Red Blacks'] },
+    { displayName: 'Saskatchewan Roughriders', city: 'Saskatchewan', abbreviation: 'SSK', color: '006341', alternateColor: 'a2aaad', extraNames: ['Roughriders', 'Riders'] },
+    { displayName: 'Toronto Argonauts',        city: 'Toronto',      abbreviation: 'TOR', color: '003f87', alternateColor: '5cb8e6', extraNames: ['Argonauts', 'Argos'] },
+    { displayName: 'Winnipeg Blue Bombers',    city: 'Winnipeg',     abbreviation: 'WPG', color: '1b3e83', alternateColor: 'ffb81c', extraNames: ['Blue Bombers', 'Bombers'] },
+  ],
+};
+
+function staticLeagueTeams(list: StaticTeam[]): Record<string, BetTeamInfo> {
+  const teams: Record<string, BetTeamInfo> = {};
+  for (const t of list) {
+    const info: BetTeamInfo = {
+      displayName: t.displayName,
+      // Same file the legacy getTeamLogo() path resolves: lowercase, spaces stripped.
+      logo: `/team-logos/${t.displayName.toLowerCase().replace(/\s+/g, '')}.png`,
+      color: t.color,
+      alternateColor: t.alternateColor,
+      abbreviation: t.abbreviation,
+    };
+    const variants = [t.displayName, t.city, t.abbreviation, ...(t.extraNames ?? [])];
+    for (const v of variants) {
+      const key = normalize(v);
+      if (key && !teams[key]) teams[key] = info;
+    }
+  }
+  return teams;
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const league = searchParams.get('league')?.toUpperCase();
   if (!league) {
     return NextResponse.json({ error: 'Missing league parameter' }, { status: 400 });
+  }
+
+  const staticList = STATIC_LEAGUES[league];
+  if (staticList) {
+    return NextResponse.json({ teams: staticLeagueTeams(staticList) });
   }
 
   const config = LEAGUE_MAP[league];

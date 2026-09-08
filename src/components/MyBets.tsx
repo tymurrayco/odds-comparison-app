@@ -32,8 +32,9 @@ interface BetTeamInfo {
 const normalizeTeamKey = (s: string): string =>
   s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
-// Leagues with ESPN team data (excluded: UFC, PGA, Tennis, MMA, Golf, Soccer).
-const SUPPORTED_LEAGUES = new Set(['NFL', 'NCAAF', 'NBA', 'NCAAB', 'MLB', 'NHL']);
+// Leagues with team color/logo data (ESPN, plus a static CFL table in the route).
+// Excluded: UFC, PGA, Tennis, MMA, Golf, Soccer.
+const SUPPORTED_LEAGUES = new Set(['NFL', 'NCAAF', 'NBA', 'NCAAB', 'MLB', 'NHL', 'CFL']);
 
 const hexToRgba = (hex: string, alpha: number): string => {
   const h = hex.replace('#', '').trim();
@@ -455,7 +456,7 @@ export default function MyBets({ yearFilter = 'all', onYearsLoaded }: MyBetsProp
           return rest ? `${abbr} ${rest}` : abbr;
         }
       }
-      // No abbreviation (unsupported league such as CFL): keep the LINE visible
+      // No abbreviation (unsupported league such as Soccer): keep the LINE visible
       // by dropping the nickname — "Calgary Stampeders +1.5" -> "Calgary +1.5".
       // The mobile card truncates at 20 chars, which used to eat the spread.
       const m = segment.trim().match(/^(.+?)\s+((?:[-+]\d[\d.]*|(?:over|under).*|ml.*|moneyline.*)\S*.*)$/i);
