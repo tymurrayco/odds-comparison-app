@@ -565,8 +565,8 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
               <button
                 className={`inline-flex items-center gap-1 px-1.5 md:px-2 py-1 text-xs md:text-sm font-semibold rounded-md tabular-nums ${
                   expandedMarket === 'analysis' && analysisTabRequest.tab === 'Ledger'
-                    ? 'bg-purple-600 text-white'
-                    : 'bg-purple-50 text-purple-700 hover:bg-purple-100'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
                 }`}
                 onClick={() => openAnalysis('Ledger')}
                 title={`Ledger projection: ${ledgerChip.teamName} ${ledgerChip.text}`}
