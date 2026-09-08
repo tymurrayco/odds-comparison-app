@@ -42,6 +42,36 @@ async function fetchEspnTeams(): Promise<EspnTeamLike[]> {
   return entries.map((e) => e.team).filter((t): t is EspnTeamLike => !!t);
 }
 
+// Every NCAAF game card requests its own matchup on mount (the Ledger chip in
+// the card header), so a page load is a burst of ~70 calls. Share one ratings
+// snapshot per lambda instance for a minute rather than re-querying Supabase
+// four times per call. The in-flight promise is cached so the burst coalesces;
+// a failed load is dropped so the next call retries.
+type Snapshot = Awaited<ReturnType<typeof loadSnapshot>>;
+const SNAPSHOT_TTL_MS = 60 * 1000;
+let snapshotCache: { at: number; promise: Promise<Snapshot> } | null = null;
+
+async function loadSnapshot() {
+  const [fbsConfig, fbsRatings, fcsConfig, fcsRatings, espnTeams] = await Promise.all([
+    loadFbsConfig(),
+    loadFbsRatings(),
+    loadFcsConfig(),
+    loadFcsRatings(),
+    fetchEspnTeams(),
+  ]);
+  return { fbsConfig, fbsRatings, fcsConfig, fcsRatings, espnTeams };
+}
+
+function cachedSnapshot(): Promise<Snapshot> {
+  if (snapshotCache && Date.now() - snapshotCache.at < SNAPSHOT_TTL_MS) return snapshotCache.promise;
+  const promise = loadSnapshot().catch((err) => {
+    snapshotCache = null;
+    throw err;
+  });
+  snapshotCache = { at: Date.now(), promise };
+  return promise;
+}
+
 function side(
   requested: string,
   hit: AnyRating | null,
@@ -84,13 +114,7 @@ export async function GET(request: NextRequest) {
     }
     const neutral = request.nextUrl.searchParams.get('neutral') === '1';
 
-    const [fbsConfig, fbsRatings, fcsConfig, fcsRatings, espnTeams] = await Promise.all([
-      loadFbsConfig(),
-      loadFbsRatings(),
-      loadFcsConfig(),
-      loadFcsRatings(),
-      fetchEspnTeams(),
-    ]);
+    const { fbsConfig, fbsRatings, fcsConfig, fcsRatings, espnTeams } = await cachedSnapshot();
 
     const fbsSorted = Array.from(fbsRatings.values()).sort((a, b) => b.rating - a.rating);
     const fcsSorted = Array.from(fcsRatings.values()).sort((a, b) => b.rating - a.rating);

@@ -1,7 +1,9 @@
 // src/components/GameCard.tsx
 import { useEffect, useState } from 'react';
 import OddsTable from './OddsTable';
-import AnalysisTabs from './AnalysisTabs';
+import AnalysisTabs, { AnalysisTabRequest } from './AnalysisTabs';
+import { ledgerMatchupUrl } from './LedgerMatchup';
+import { cachedJson } from '@/lib/matchupCache';
 import InjuryReport from './InjuryReport';
 import { Game, ESPNGameScore } from '@/lib/api';
 import { GameRestData } from '@/lib/nhlRest';
@@ -103,6 +105,51 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
     });
     return () => { alive = false; };
   }, [isNCAAF, game.away_team, game.home_team, game.commence_time]);
+
+  // Which analysis tab to open (the Ledger chip jumps straight to Ledger).
+  const [analysisTabRequest, setAnalysisTabRequest] = useState<AnalysisTabRequest>({ tab: 'Summary', seq: 0 });
+  const openAnalysis = (tab: AnalysisTabRequest['tab']) => {
+    setAnalysisTabRequest((prev) => ({ tab, seq: prev.seq + 1 }));
+    setExpandedMarket('analysis');
+  };
+
+  // Ledger projection for the header chip (NCAAF only). Fetched WITHOUT the
+  // neutral flag so the response (which carries both homeSpread and
+  // neutralSpread) is requested once, before the neutral-site lookup resolves;
+  // the chip then picks whichever spread fits the venue.
+  interface LedgerChipData {
+    away?: { matched: boolean; espnId: string | null } | null;
+    home?: { matched: boolean; espnId: string | null } | null;
+    homeSpread?: number | null;
+    neutralSpread?: number | null;
+  }
+  const [ledger, setLedger] = useState<LedgerChipData | null>(null);
+  useEffect(() => {
+    if (!isNCAAF) return;
+    let alive = true;
+    cachedJson<LedgerChipData>(ledgerMatchupUrl(game.away_team, game.home_team, false))
+      .then((d) => { if (alive) setLedger(d); })
+      .catch(() => { if (alive) setLedger(null); });
+    return () => { alive = false; };
+  }, [isNCAAF, game.away_team, game.home_team]);
+
+  // Favorite + spread from the favorite's perspective ("-10.4"); null when
+  // either team is outside the FBS/FCS ratings.
+  const ledgerChip = (() => {
+    if (!ledger?.away?.matched || !ledger?.home?.matched) return null;
+    const homeSpread = neutralGame ? ledger.neutralSpread : ledger.homeSpread;
+    if (homeSpread === null || homeSpread === undefined) return null;
+    const homeFavored = homeSpread <= 0;
+    const teamName = homeFavored ? game.home_team : game.away_team;
+    const espnId = homeFavored ? ledger.home.espnId : ledger.away.espnId;
+    const espnLogo = espnId ? `https://a.espncdn.com/i/teamlogos/ncaa/500/${espnId}.png` : null;
+    const favSpread = -Math.abs(homeSpread);
+    return {
+      teamName,
+      logos: [espnLogo, getTeamLogo(teamName)].filter((s): s is string => !!s),
+      text: favSpread === 0 ? 'PK' : favSpread.toFixed(1),
+    };
+  })();
 
   const favoriteShareButtons = (
     <>
@@ -507,9 +554,37 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                     ? 'bg-purple-600 text-white' 
                     : 'bg-purple-50 text-purple-700 hover:bg-purple-100'
                 }`}
-                onClick={() => setExpandedMarket('analysis')}
+                onClick={() => openAnalysis('Summary')}
               >
                 📊
+              </button>
+            )}
+            {/* Ledger chip - favorite's logo + projected spread from its
+                perspective ("-10.4"); opens the Ledger tab */}
+            {isNCAAF && ledgerChip && (
+              <button
+                className={`inline-flex items-center gap-1 px-1.5 md:px-2 py-1 text-xs md:text-sm font-semibold rounded-md tabular-nums ${
+                  expandedMarket === 'analysis' && analysisTabRequest.tab === 'Ledger'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-purple-50 text-purple-700 hover:bg-purple-100'
+                }`}
+                onClick={() => openAnalysis('Ledger')}
+                title={`Ledger projection: ${ledgerChip.teamName} ${ledgerChip.text}`}
+                aria-label={`Ledger projection: ${ledgerChip.teamName} ${ledgerChip.text}`}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={ledgerChip.logos[0]}
+                  alt=""
+                  className="h-4 w-4 object-contain"
+                  onError={(e) => {
+                    const img = e.currentTarget;
+                    const next = ledgerChip.logos[ledgerChip.logos.indexOf(img.getAttribute('src') ?? '') + 1];
+                    if (next) img.src = next;
+                    else img.style.visibility = 'hidden';
+                  }}
+                />
+                <span>{ledgerChip.text}</span>
               </button>
             )}
             {/* Injury report button - only for NFL */}
@@ -540,6 +615,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
             awayTeam={game.away_team}
             homeTeam={game.home_team}
             isNeutralSite={!!neutralGame}
+            tabRequest={analysisTabRequest}
             venue={
               neutralGame
                 ? [neutralGame.venue, venueLocation(neutralGame)].filter(Boolean).join(', ')

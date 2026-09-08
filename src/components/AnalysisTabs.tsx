@@ -6,27 +6,39 @@
 // and Ledger (odds.day's own system: the Powers seed moved by closing lines —
 // the /fbs and /fcs ratings, same numbers as their Upcoming tabs).
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import TeamAnalysis from './TeamAnalysis';
 import EckelMatchup from './EckelMatchup';
 import PowersMatchup from './PowersMatchup';
 import SummaryMatchup from './SummaryMatchup';
 import LedgerMatchup from './LedgerMatchup';
 
+const TABS = ['Summary', 'FEI', 'Eckel', 'Powers', 'Ledger'] as const;
+export type AnalysisTab = (typeof TABS)[number];
+
+/** A parent's request to show a tab. `seq` bumps on every request so the same
+ *  tab can be re-requested after the user has clicked elsewhere. */
+export interface AnalysisTabRequest {
+  tab: AnalysisTab;
+  seq: number;
+}
+
 interface AnalysisTabsProps {
   awayTeam: string;
   homeTeam: string;
   isNeutralSite?: boolean;
   venue?: string | null;
+  tabRequest?: AnalysisTabRequest;
 }
 
-const TABS = ['Summary', 'FEI', 'Eckel', 'Powers', 'Ledger'] as const;
-type Tab = (typeof TABS)[number];
-
 export default function AnalysisTabs({
-  awayTeam, homeTeam, isNeutralSite = false, venue = null,
+  awayTeam, homeTeam, isNeutralSite = false, venue = null, tabRequest,
 }: AnalysisTabsProps) {
-  const [tab, setTab] = useState<Tab>('Summary');
+  const [tab, setTab] = useState<AnalysisTab>(tabRequest?.tab ?? 'Summary');
+
+  useEffect(() => {
+    if (tabRequest) setTab(tabRequest.tab);
+  }, [tabRequest]);
 
   return (
     <div>
