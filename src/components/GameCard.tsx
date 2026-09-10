@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import OddsTable from './OddsTable';
 import AnalysisTabs, { AnalysisTabRequest } from './AnalysisTabs';
-import { ledgerMatchupUrl } from './LedgerMatchup';
+import LedgerMatchup, { ledgerMatchupUrl } from './LedgerMatchup';
 import { cachedJson } from '@/lib/matchupCache';
 import InjuryReport from './InjuryReport';
 import { Game, ESPNGameScore } from '@/lib/api';
@@ -33,6 +33,8 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
     || game.sport_key === 'americanfootball_nfl_preseason';
   
   // Default to moneyline for soccer, spread for everything else
+  // NFL analysis panel: injury report or the Ledger projection
+  const [nflPanel, setNflPanel] = useState<'injuries' | 'ledger'>('injuries');
   const [expandedMarket, setExpandedMarket] = useState<'moneyline' | 'spread' | 'totals' | 'analysis'>(
     isSoccer ? 'moneyline' : 'spread'
   );
@@ -113,36 +115,40 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
     setExpandedMarket('analysis');
   };
 
-  // Ledger projection for the header chip (NCAAF only). Fetched WITHOUT the
+  // Ledger projection for the header chip (NCAAF + NFL). Fetched WITHOUT the
   // neutral flag so the response (which carries both homeSpread and
   // neutralSpread) is requested once, before the neutral-site lookup resolves;
   // the chip then picks whichever spread fits the venue.
   interface LedgerChipData {
-    away?: { matched: boolean; espnId: string | null } | null;
-    home?: { matched: boolean; espnId: string | null } | null;
+    away?: { matched: boolean; espnId: string | null; logo?: string | null } | null;
+    home?: { matched: boolean; espnId: string | null; logo?: string | null } | null;
+    isNeutralSite?: boolean;
     homeSpread?: number | null;
     neutralSpread?: number | null;
   }
   const [ledger, setLedger] = useState<LedgerChipData | null>(null);
   useEffect(() => {
-    if (!isNCAAF) return;
+    if (!isNCAAF && !isNFL) return;
     let alive = true;
-    cachedJson<LedgerChipData>(ledgerMatchupUrl(game.away_team, game.home_team, false))
+    cachedJson<LedgerChipData>(ledgerMatchupUrl(game.away_team, game.home_team, false, isNFL ? 'nfl' : 'ncaaf'))
       .then((d) => { if (alive) setLedger(d); })
       .catch(() => { if (alive) setLedger(null); });
     return () => { alive = false; };
-  }, [isNCAAF, game.away_team, game.home_team]);
+  }, [isNCAAF, isNFL, game.away_team, game.home_team]);
 
   // Favorite + spread from the favorite's perspective ("-10.4"); null when
   // either team is outside the FBS/FCS ratings.
   const ledgerChip = (() => {
     if (!ledger?.away?.matched || !ledger?.home?.matched) return null;
-    const homeSpread = neutralGame ? ledger.neutralSpread : ledger.homeSpread;
+    // NFL: the matchup route flags the season's neutral games itself
+    const homeSpread = neutralGame || ledger.isNeutralSite ? ledger.neutralSpread : ledger.homeSpread;
     if (homeSpread === null || homeSpread === undefined) return null;
     const homeFavored = homeSpread <= 0;
     const teamName = homeFavored ? game.home_team : game.away_team;
-    const espnId = homeFavored ? ledger.home.espnId : ledger.away.espnId;
-    const espnLogo = espnId ? `https://a.espncdn.com/i/teamlogos/ncaa/500/${espnId}.png` : null;
+    const favSide = homeFavored ? ledger.home : ledger.away;
+    const espnLogo =
+      favSide.logo ??
+      (favSide.espnId && !isNFL ? `https://a.espncdn.com/i/teamlogos/ncaa/500/${favSide.espnId}.png` : null);
     const favSpread = -Math.abs(homeSpread);
     return {
       teamName,
@@ -561,14 +567,22 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
             )}
             {/* Ledger chip - favorite's logo + projected spread from its
                 perspective ("-10.4"); opens the Ledger tab */}
-            {isNCAAF && ledgerChip && (
+            {(isNCAAF || isNFL) && ledgerChip && (
               <button
                 className={`inline-flex items-center gap-1 px-1.5 md:px-2 py-1 text-xs md:text-sm font-semibold rounded-md tabular-nums ${
-                  expandedMarket === 'analysis' && analysisTabRequest.tab === 'Ledger'
+                  expandedMarket === 'analysis' &&
+                  (isNFL ? nflPanel === 'ledger' : analysisTabRequest.tab === 'Ledger')
                     ? 'bg-blue-600 text-white'
                     : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
                 }`}
-                onClick={() => openAnalysis('Ledger')}
+                onClick={() => {
+                  if (isNFL) {
+                    setNflPanel('ledger');
+                    setExpandedMarket('analysis');
+                  } else {
+                    openAnalysis('Ledger');
+                  }
+                }}
                 title={`Ledger projection: ${ledgerChip.teamName} ${ledgerChip.text}`}
                 aria-label={`Ledger projection: ${ledgerChip.teamName} ${ledgerChip.text}`}
               >
@@ -591,11 +605,14 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
             {isNFL && (
               <button
                 className={`px-2 md:px-3 py-1 text-xs md:text-sm rounded-md ${
-                  expandedMarket === 'analysis'
+                  expandedMarket === 'analysis' && nflPanel === 'injuries'
                     ? 'bg-purple-600 text-white'
                     : 'bg-purple-50 text-purple-700 hover:bg-purple-100'
                 }`}
-                onClick={() => setExpandedMarket('analysis')}
+                onClick={() => {
+                  setNflPanel('injuries');
+                  setExpandedMarket('analysis');
+                }}
                 title="Injury report"
               >
                 🏥
@@ -605,9 +622,30 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
         </div>
       </div>
 
-      {/* Show injury report (NFL) if selected */}
+      {/* NFL analysis: injury report or the Ledger projection */}
       {expandedMarket === 'analysis' && isNFL ? (
-        <InjuryReport awayTeam={game.away_team} homeTeam={game.home_team} />
+        <div>
+          <div className="flex gap-1 border-b border-gray-200 px-3 pt-1">
+            {(['injuries', 'ledger'] as const).map((p) => (
+              <button
+                key={p}
+                onClick={() => setNflPanel(p)}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-t-md transition-colors ${
+                  nflPanel === p
+                    ? 'bg-purple-100 text-purple-800 border border-b-0 border-gray-200'
+                    : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50'
+                }`}
+              >
+                {p === 'injuries' ? 'Injuries' : 'Ledger'}
+              </button>
+            ))}
+          </div>
+          {nflPanel === 'ledger' ? (
+            <LedgerMatchup awayTeam={game.away_team} homeTeam={game.home_team} league="nfl" />
+          ) : (
+            <InjuryReport awayTeam={game.away_team} homeTeam={game.home_team} />
+          )}
+        </div>
       ) : /* Show TeamAnalysis if analysis is selected */
       expandedMarket === 'analysis' && isNCAAF ? (
         <div className="p-2">

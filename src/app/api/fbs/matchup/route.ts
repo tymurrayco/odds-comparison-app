@@ -82,7 +82,7 @@ function side(
   if (!hit) {
     return {
       requested, matched: false, division: null, teamName: null, espnName: null, espnId: null,
-      rating: null, ratingOnScale: null, seedRating: null, delta: null, rank: null, of: null,
+      logo: null, rating: null, ratingOnScale: null, seedRating: null, delta: null, rank: null, of: null,
       gamesProcessed: null, hfa: null, conference: null,
     };
   }
@@ -93,6 +93,7 @@ function side(
     teamName: hit.teamName,
     espnName: hit.espnName,
     espnId: hit.espnId,
+    logo: hit.espnId ? `https://a.espncdn.com/i/teamlogos/ncaa/500/${hit.espnId}.png` : null,
     rating: hit.rating,
     ratingOnScale,
     seedRating: hit.initialRating,
@@ -184,6 +185,12 @@ export async function GET(request: NextRequest) {
         neutralSpread,
         scaleOffset,
         scaleOffsetSource: scaleOffset === null ? null : 'fallback',
+        seedLabel:
+          system === 'fcs'
+            ? `Massey ${fcsConfig.season} preseason seed`
+            : system === 'cross'
+              ? `Brad Powers / Massey ${fbsConfig.season} preseason seeds`
+              : `Brad Powers ${fbsConfig.season} preseason seed`,
         updatedAt,
       },
       { headers: { 'Cache-Control': 's-maxage=300, stale-while-revalidate=600' } }

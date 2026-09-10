@@ -548,6 +548,12 @@ export default function BetAdminPage() {
                 FBS
               </button>
               <button
+                onClick={() => router.push('/admin/nfl-ratings')}
+                className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 transition"
+              >
+                NFL
+              </button>
+              <button
                 onClick={() => router.push('/admin/fcs-ratings')}
                 className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 transition"
               >

@@ -1,24 +1,29 @@
 // src/components/LedgerMatchup.tsx
 //
-// "Ledger" tab (odds.day's own system): the market-driven power ratings (Brad Powers preseason seed,
-// then moved only by closing lines — the /fbs and /fcs systems) projecting a
-// spread for this game. Same numbers as the Upcoming tab on the ratings pages.
+// "Ledger" tab (odds.day's own system): the market-driven power ratings (a
+// preseason seed — Brad Powers for FBS, Massey for FCS, the market-implied
+// fit for the NFL — then moved only by closing lines) projecting a spread
+// for this game. Same numbers as the Upcoming tab on the ratings pages.
 
 import { useEffect, useState } from 'react';
 import { cachedJson } from '@/lib/matchupCache';
 import type { MatchupSide } from '@/lib/fbs/matchupTypes';
 
+export type LedgerLeague = 'ncaaf' | 'nfl';
+
 interface LedgerMatchupProps {
   awayTeam: string; // odds-api names
   homeTeam: string;
   isNeutralSite?: boolean;
+  league?: LedgerLeague;
 }
 
 interface LedgerResponse {
   success?: boolean;
   error?: string;
-  system?: 'fbs' | 'fcs' | 'cross' | null;
+  system?: 'fbs' | 'fcs' | 'cross' | 'nfl' | null;
   season?: number;
+  isNeutralSite?: boolean;
   away?: MatchupSide;
   home?: MatchupSide;
   hfaApplied?: number | null;
@@ -26,11 +31,17 @@ interface LedgerResponse {
   neutralSpread?: number | null;
   scaleOffset?: number | null;
   scaleOffsetSource?: string | null;
+  seedLabel?: string | null;
   updatedAt?: string | null;
 }
 
-export const ledgerMatchupUrl = (awayTeam: string, homeTeam: string, isNeutralSite: boolean) =>
-  `/api/fbs/matchup?teams=${encodeURIComponent(awayTeam)},${encodeURIComponent(homeTeam)}` +
+export const ledgerMatchupUrl = (
+  awayTeam: string,
+  homeTeam: string,
+  isNeutralSite: boolean,
+  league: LedgerLeague = 'ncaaf'
+) =>
+  `/api/${league === 'nfl' ? 'nfl' : 'fbs'}/matchup?teams=${encodeURIComponent(awayTeam)},${encodeURIComponent(homeTeam)}` +
   (isNeutralSite ? '&neutral=1' : '');
 
 const localLogo = (oddsName: string) =>
@@ -44,11 +55,15 @@ function SideColumn({ side, cross }: { side: MatchupSide; cross: boolean }) {
     return (
       <div className="text-center text-sm text-gray-500">
         <p className="font-semibold">{side.requested}</p>
-        <p className="mt-2 italic">Not in the FBS or FCS ratings</p>
+        <p className="mt-2 italic">Not in the Ledger ratings</p>
       </div>
     );
   }
-  const espnLogo = side.espnId ? `https://a.espncdn.com/i/teamlogos/ncaa/500/${side.espnId}.png` : null;
+  const espnLogo =
+    side.logo ??
+    (side.espnId && side.division !== 'nfl'
+      ? `https://a.espncdn.com/i/teamlogos/ncaa/500/${side.espnId}.png`
+      : null);
   return (
     <div className="text-center">
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -88,18 +103,20 @@ function StatRow({
   );
 }
 
-export default function LedgerMatchup({ awayTeam, homeTeam, isNeutralSite = false }: LedgerMatchupProps) {
+export default function LedgerMatchup({
+  awayTeam, homeTeam, isNeutralSite = false, league = 'ncaaf',
+}: LedgerMatchupProps) {
   const [data, setData] = useState<LedgerResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    cachedJson<LedgerResponse>(ledgerMatchupUrl(awayTeam, homeTeam, isNeutralSite))
+    cachedJson<LedgerResponse>(ledgerMatchupUrl(awayTeam, homeTeam, isNeutralSite, league))
       .then((d) => { if (alive) { setData(d); setLoading(false); } })
       .catch(() => { if (alive) { setData({ error: 'Failed to load Ledger ratings' }); setLoading(false); } });
     return () => { alive = false; };
-  }, [awayTeam, homeTeam, isNeutralSite]);
+  }, [awayTeam, homeTeam, isNeutralSite, league]);
 
   if (loading) {
     return <div className="p-6 text-center text-sm text-gray-500">Loading Ledger ratings…</div>;
@@ -116,7 +133,10 @@ export default function LedgerMatchup({ awayTeam, homeTeam, isNeutralSite = fals
   const h = data.home;
   const both = a.matched && h.matched;
   const cross = data.system === 'cross';
-  const homeSpread = isNeutralSite ? data.neutralSpread : data.homeSpread;
+  // The NFL route knows the season's neutral games itself (international
+  // slate, Super Bowl); the NCAAF card passes its own neutral-site lookup.
+  const neutral = data.isNeutralSite ?? isNeutralSite;
+  const homeSpread = neutral ? data.neutralSpread : data.homeSpread;
   const betterHigh = (av: number | null, hv: number | null): 'away' | 'home' | null =>
     av === null || hv === null || av === hv ? null : av > hv ? 'away' : 'home';
 
@@ -132,7 +152,7 @@ export default function LedgerMatchup({ awayTeam, homeTeam, isNeutralSite = fals
                 {homeSpread <= 0 ? h.teamName : a.teamName} {spread(homeSpread <= 0 ? homeSpread : -homeSpread)}
               </p>
               <p className="text-[10px] text-gray-400">
-                {isNeutralSite ? (
+                {neutral ? (
                   'neutral site · no home edge'
                 ) : (
                   <>
@@ -176,14 +196,14 @@ export default function LedgerMatchup({ awayTeam, homeTeam, isNeutralSite = fals
           />
           <StatRow
             label="Homefield edge"
-            away={typeof a.hfa === 'number' ? a.hfa.toFixed(2) : '—'}
-            home={typeof h.hfa === 'number' ? h.hfa.toFixed(2) : '—'}
+            away={typeof a.hfa === 'number' ? a.hfa.toFixed(2) : data.system === 'nfl' && typeof data.hfaApplied === 'number' && !neutral ? data.hfaApplied.toFixed(2) : '—'}
+            home={typeof h.hfa === 'number' ? h.hfa.toFixed(2) : data.system === 'nfl' && typeof data.hfaApplied === 'number' && !neutral ? data.hfaApplied.toFixed(2) : '—'}
             better={null}
           />
           <p className="mt-3 text-[10px] text-gray-400 text-center">
-            Brad Powers {data.season} preseason seed, moved only by closing lines (half the
+            {data.seedLabel ?? `Brad Powers ${data.season} preseason seed`}, moved only by closing lines (half the
             model-vs-close miss per game) · line = rating difference
-            {isNeutralSite ? ' only (neutral field)' : " + home team's HFA"} (negative = home favored)
+            {neutral ? ' only (neutral field)' : " + home team's HFA"} (negative = home favored)
             {cross && data.scaleOffset !== null && data.scaleOffset !== undefined &&
               ` · FCS rating bridged +${data.scaleOffset.toFixed(1)} to the FBS scale (fallback bridge — the /fbs Upcoming tab calibrates it from the week's lined cross games)`}
             {data.updatedAt ? ` · ratings as of ${data.updatedAt.substring(0, 10)}` : ''}
