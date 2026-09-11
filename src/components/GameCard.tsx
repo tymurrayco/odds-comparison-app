@@ -130,9 +130,19 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
   useEffect(() => {
     if (!isNCAAF && !isNFL) return;
     let alive = true;
-    cachedJson<LedgerChipData>(ledgerMatchupUrl(game.away_team, game.home_team, false, isNFL ? 'nfl' : 'ncaaf'))
-      .then((d) => { if (alive) setLedger(d); })
-      .catch(() => { if (alive) setLedger(null); });
+    const url = ledgerMatchupUrl(game.away_team, game.home_team, false, isNFL ? 'nfl' : 'ncaaf');
+    // A whole board mounts at once, so one upstream hiccup (ESPN 403, cold
+    // lambda) used to blank the chip for good — cachedJson drops failures, so
+    // a delayed retry re-requests instead of replaying the error.
+    const load = (attempt: number) =>
+      cachedJson<LedgerChipData>(url)
+        .then((d) => { if (alive) setLedger(d); })
+        .catch(() => {
+          if (!alive) return;
+          if (attempt < 2) setTimeout(() => { if (alive) load(attempt + 1); }, 1500 * (attempt + 1));
+          else setLedger(null);
+        });
+    load(0);
     return () => { alive = false; };
   }, [isNCAAF, isNFL, game.away_team, game.home_team]);
 

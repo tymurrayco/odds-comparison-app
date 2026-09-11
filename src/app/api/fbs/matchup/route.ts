@@ -34,12 +34,32 @@ const ESPN_ALL_CFB_TEAMS =
 
 type AnyRating = (FbsTeamRating & { division: 'fbs' }) | (FcsTeamRating & { division: 'fcs' });
 
+// ESPN's full team list (2.4MB — too big for Next's data cache, so every
+// cold instance used to refetch it, and under a page-load burst of ~100 card
+// requests ESPN answers some with 403, which blanked every Ledger chip on
+// that instance). It is now off the hot path: names resolve against the
+// ratings tables' own ESPN names first, and the list is fetched lazily only
+// for the handful of Odds-API names that differ, cached for a day per
+// instance, and reused stale if a refresh fails.
+let espnTeamsCache: { at: number; teams: EspnTeamLike[] } | null = null;
+const ESPN_TEAMS_TTL_MS = 24 * 60 * 60 * 1000;
+
 async function fetchEspnTeams(): Promise<EspnTeamLike[]> {
-  const res = await fetch(ESPN_ALL_CFB_TEAMS, { next: { revalidate: 86400 } });
-  if (!res.ok) throw new Error(`ESPN teams HTTP ${res.status}`);
-  const json = await res.json();
-  const entries: Array<{ team?: EspnTeamLike }> = json?.sports?.[0]?.leagues?.[0]?.teams ?? [];
-  return entries.map((e) => e.team).filter((t): t is EspnTeamLike => !!t);
+  if (espnTeamsCache && Date.now() - espnTeamsCache.at < ESPN_TEAMS_TTL_MS) {
+    return espnTeamsCache.teams;
+  }
+  try {
+    const res = await fetch(ESPN_ALL_CFB_TEAMS, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`ESPN teams HTTP ${res.status}`);
+    const json = await res.json();
+    const entries: Array<{ team?: EspnTeamLike }> = json?.sports?.[0]?.leagues?.[0]?.teams ?? [];
+    const teams = entries.map((e) => e.team).filter((t): t is EspnTeamLike => !!t);
+    espnTeamsCache = { at: Date.now(), teams };
+    return teams;
+  } catch (e) {
+    if (espnTeamsCache) return espnTeamsCache.teams; // stale beats blank
+    throw e;
+  }
 }
 
 // Every NCAAF game card requests its own matchup on mount (the Ledger chip in
@@ -52,14 +72,18 @@ const SNAPSHOT_TTL_MS = 60 * 1000;
 let snapshotCache: { at: number; promise: Promise<Snapshot> } | null = null;
 
 async function loadSnapshot() {
-  const [fbsConfig, fbsRatings, fcsConfig, fcsRatings, espnTeams] = await Promise.all([
+  const [fbsConfig, fbsRatings, fcsConfig, fcsRatings] = await Promise.all([
     loadFbsConfig(),
     loadFbsRatings(),
     loadFcsConfig(),
     loadFcsRatings(),
-    fetchEspnTeams(),
   ]);
-  return { fbsConfig, fbsRatings, fcsConfig, fcsRatings, espnTeams };
+  // The rated teams as matcher input: their stored ESPN displayNames resolve
+  // the Odds-API name for all but a few schools without touching ESPN.
+  const ratedLike: EspnTeamLike[] = [...fbsRatings.values(), ...fcsRatings.values()]
+    .filter((r) => r.espnId && r.espnName)
+    .map((r) => ({ id: r.espnId as string, displayName: r.espnName }));
+  return { fbsConfig, fbsRatings, fcsConfig, fcsRatings, ratedLike };
 }
 
 function cachedSnapshot(): Promise<Snapshot> {
@@ -115,7 +139,7 @@ export async function GET(request: NextRequest) {
     }
     const neutral = request.nextUrl.searchParams.get('neutral') === '1';
 
-    const { fbsConfig, fbsRatings, fcsConfig, fcsRatings, espnTeams } = await cachedSnapshot();
+    const { fbsConfig, fbsRatings, fcsConfig, fcsRatings, ratedLike } = await cachedSnapshot();
 
     const fbsSorted = Array.from(fbsRatings.values()).sort((a, b) => b.rating - a.rating);
     const fcsSorted = Array.from(fcsRatings.values()).sort((a, b) => b.rating - a.rating);
@@ -124,8 +148,18 @@ export async function GET(request: NextRequest) {
     const fcsByEspn = new Map<string, FcsTeamRating>();
     for (const r of fcsSorted) if (r.espnId) fcsByEspn.set(r.espnId, r);
 
-    const resolve = (oddsName: string): { hit: AnyRating | null; rank: number | null; of: number | null } => {
-      const espn = matchEspnTeam(oddsName, espnTeams);
+    const resolve = async (oddsName: string): Promise<{ hit: AnyRating | null; rank: number | null; of: number | null }> => {
+      let espn = matchEspnTeam(oddsName, ratedLike);
+      if (!espn) {
+        // Name differs from the stored ESPN displayName ("Sam Houston State
+        // Bearkats" etc.) — the full list carries location/mascot for the
+        // fuzzier passes. A miss here is a real miss, not a blank chip.
+        try {
+          espn = matchEspnTeam(oddsName, await fetchEspnTeams());
+        } catch {
+          espn = null;
+        }
+      }
       const id = espn ? String(espn.id) : null;
       if (!id) return { hit: null, rank: null, of: null };
       const fbs = fbsByEspn.get(id);
@@ -135,8 +169,8 @@ export async function GET(request: NextRequest) {
       return { hit: null, rank: null, of: null };
     };
 
-    const a = resolve(awayName);
-    const h = resolve(homeName);
+    const a = await resolve(awayName);
+    const h = await resolve(homeName);
 
     let system: 'fbs' | 'fcs' | 'cross' | null = null;
     let scaleOffset: number | null = null;
