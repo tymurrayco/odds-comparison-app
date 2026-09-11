@@ -49,6 +49,11 @@ export const NFL_SEASON_DATES: { [season: number]: { start: string; end: string 
     start: '2026-09-09', // Wed opener (Patriots at Seahawks)
     end: '2027-02-15',   // Super Bowl LXI (Feb 14, 2027) + a day of UTC slack
   },
+  // Prior season: box-score backfill for the totals model's fundamentals prior
+  2025: {
+    start: '2025-09-04',
+    end: '2026-02-09',   // Super Bowl LX (Feb 8, 2026)
+  },
 };
 
 export const NFL_RATINGS_DECIMAL_PLACES = 2;

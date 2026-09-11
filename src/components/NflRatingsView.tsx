@@ -521,6 +521,14 @@ export default function NflRatingsView({ admin = false }: { admin?: boolean }) {
         setMessage(
           `Market seed: ${json.seedTeams} teams — ${json.inserted} inserted, ${json.refreshed} refreshed, ${json.reseeded} reseeded.${fit}${filled}${unmatched}`
         );
+      } else if (url.includes('/box-scores')) {
+        const failed = json.failed?.length
+          ? ` ${json.failed.length} failed (${json.failed[0].game}: ${json.failed[0].error}).`
+          : '';
+        setMessage(
+          `Box scores ${json.range.startDate} → ${json.range.endDate}: ${json.stored} games stored, ${json.alreadyStored} already had, ${json.remaining} remaining.${failed}` +
+            (json.remaining > 0 ? ' Run again for the next batch.' : '')
+        );
       } else if (json.action === 'sync') {
         const noLine = (json.skipped ?? []).filter(
           (s: { reason: string }) => s.reason === 'no_line'
@@ -848,6 +856,15 @@ export default function NflRatingsView({ admin = false }: { admin?: boolean }) {
               }
             >
               {busy === 'refit' ? 'Refitting…' : 'Refit Market'}
+            </button>
+            {/* Totals model input: per-team box scores for completed games.
+                Skips games already stored; batches of 40 per call. */}
+            <button
+              className={`${btnCls} flex-1 sm:flex-none`}
+              disabled={busy !== null}
+              onClick={() => runAction('boxScores', '/api/box-scores', { league: 'nfl' })}
+            >
+              {busy === 'boxScores' ? 'Fetching…' : 'Sync Box Scores'}
             </button>
             <button
               className={`${btnCls} flex-1 sm:flex-none`}
