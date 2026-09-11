@@ -32,6 +32,11 @@ interface LedgerResponse {
   scaleOffset?: number | null;
   scaleOffsetSource?: string | null;
   seedLabel?: string | null;
+  totals?: {
+    projected: number; fundTotal: number; plays: number;
+    homePts: number; awayPts: number; homeTerm: number; awayTerm: number;
+    homePace: number; awayPace: number;
+  } | null;
   updatedAt?: string | null;
 }
 
@@ -163,6 +168,16 @@ export default function LedgerMatchup({
                 )}
               </p>
             </>
+          )}
+          {both && data.totals && (
+            <div className="mt-2">
+              <p className="text-[10px] uppercase tracking-wide text-gray-500">Projected total</p>
+              <p className="text-base font-bold tabular-nums">{data.totals.projected.toFixed(1)}</p>
+              <p className="text-[10px] text-gray-400 tabular-nums">
+                {data.totals.plays.toFixed(0)} plays · {a.teamName?.split(' ').pop()} {data.totals.awayPts.toFixed(1)} · {h.teamName?.split(' ').pop()} {data.totals.homePts.toFixed(1)}
+                {' · market '}{(data.totals.homeTerm + data.totals.awayTerm) >= 0 ? '+' : ''}{(data.totals.homeTerm + data.totals.awayTerm).toFixed(1)}
+              </p>
+            </div>
           )}
         </div>
         <SideColumn side={h} cross={cross} />

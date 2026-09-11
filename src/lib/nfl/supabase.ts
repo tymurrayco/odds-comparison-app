@@ -260,6 +260,7 @@ function toClosingLine(row: any): NflClosingLine {
     isNeutralSite: row.is_neutral_site === true,
     closingSpread: row.closing_spread === null ? null : Number(row.closing_spread),
     closingSource: row.closing_source,
+    closingTotal: row.closing_total === null || row.closing_total === undefined ? null : Number(row.closing_total),
     bookmakers: row.bookmakers,
   };
 }
@@ -328,6 +329,7 @@ export async function saveNflClosingLine(line: NflClosingLine): Promise<void> {
         is_neutral_site: line.isNeutralSite,
         closing_spread: line.closingSpread,
         closing_source: line.closingSource,
+        closing_total: line.closingTotal ?? null,
         bookmakers: line.bookmakers,
         fetched_at: new Date().toISOString(),
       },

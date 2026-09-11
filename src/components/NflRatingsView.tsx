@@ -18,6 +18,7 @@ import {
 } from '@/lib/nfl/types';
 import { hfaForGame, impliedHfaForGame, projectNflSpread } from '@/lib/nfl/engine';
 import { NFL_HFA_NUDGE_RATE, nflLogoUrl } from '@/lib/nfl/constants';
+import NflTotalsPanel from './NflTotalsPanel';
 import { useTeamColorMap } from '@/lib/myGameBets';
 import { createBet, fetchBets } from '@/lib/betService';
 
@@ -101,6 +102,9 @@ interface UpcomingGame {
   state: string;
   homeAbbr: string | null;
   awayAbbr: string | null;
+  projectedTotal: number | null;
+  marketTotal: number | null;
+  totalEdge: number | null;
 }
 
 interface BetFormState {
@@ -185,7 +189,7 @@ export default function NflRatingsView({ admin = false }: { admin?: boolean }) {
   const [sortDesc, setSortDesc] = useState(true);
   const [manualSpreads, setManualSpreads] = useState<Record<string, string>>({});
   const [savingLine, setSavingLine] = useState<string | null>(null);
-  const [view, setView] = useState<'ratings' | 'upcoming'>(admin ? 'ratings' : 'upcoming');
+  const [view, setView] = useState<'ratings' | 'upcoming' | 'totals'>(admin ? 'ratings' : 'upcoming');
   const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
   const [manualDelta, setManualDelta] = useState('');
   const [manualDate, setManualDate] = useState(() => localYmd(new Date()));
@@ -206,7 +210,7 @@ export default function NflRatingsView({ admin = false }: { admin?: boolean }) {
   // Shared tab link: ?view=ratings|upcoming (read once; mirrored below)
   useEffect(() => {
     const v = new URLSearchParams(window.location.search).get('view');
-    if (v === 'ratings' || v === 'upcoming') setView(v);
+    if (v === 'ratings' || v === 'upcoming' || v === 'totals') setView(v);
   }, []);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -902,8 +906,8 @@ export default function NflRatingsView({ admin = false }: { admin?: boolean }) {
           </div>
         )}
 
-        <div className="grid grid-cols-2 bg-slate-200/70 rounded-full p-0.5">
-          {(['ratings', 'upcoming'] as const).map((v) => (
+        <div className="grid grid-cols-3 bg-slate-200/70 rounded-full p-0.5">
+          {(['ratings', 'upcoming', 'totals'] as const).map((v) => (
             <button
               key={v}
               onClick={() => setView(v)}
@@ -911,7 +915,7 @@ export default function NflRatingsView({ admin = false }: { admin?: boolean }) {
                 view === v ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'
               }`}
             >
-              {v === 'ratings' ? 'Ratings' : 'Upcoming'}
+              {v === 'ratings' ? 'Ratings' : v === 'upcoming' ? 'Upcoming' : 'Totals'}
             </button>
           ))}
         </div>
@@ -1022,6 +1026,17 @@ export default function NflRatingsView({ admin = false }: { admin?: boolean }) {
                                     ? 'no book line'
                                     : `book ${g.marketSpread.toFixed(1)} (${g.marketBooks})`}
                                 </div>
+                                {g.projectedTotal !== null && (
+                                  <div className="text-[11px] text-slate-500 tabular-nums whitespace-nowrap">
+                                    total {g.projectedTotal.toFixed(1)}
+                                    {g.marketTotal !== null && ` · book ${g.marketTotal.toFixed(1)}`}
+                                    {g.totalEdge !== null && g.totalEdge !== 0 && (
+                                      <span className={`ml-1 ${Math.abs(g.totalEdge) >= 2 ? 'font-medium text-emerald-600' : ''}`}>
+                                        {g.totalEdge > 0 ? 'under' : 'over'} {Math.abs(g.totalEdge).toFixed(1)}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
                                 {edgeSide && (
                                   <div
                                     className={`inline-block px-1.5 py-0.5 rounded text-[11px] font-medium tabular-nums ${
@@ -1164,6 +1179,8 @@ export default function NflRatingsView({ admin = false }: { admin?: boolean }) {
             )}
           </div>
         )}
+
+        {view === 'totals' && <NflTotalsPanel admin={admin} visualFor={visualFor} />}
 
         {admin && view === 'ratings' && (data?.unlinedGames ?? []).length > 0 && (
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">

@@ -17,6 +17,7 @@ import { NflTeamRating } from '@/lib/nfl/types';
 import { matchNflTeam } from '@/lib/nfl/teamNames';
 import { nflLogoUrl } from '@/lib/nfl/constants';
 import type { MatchupSide } from '@/lib/fbs/matchupTypes';
+import { loadTotalsSnapshot, projectGame } from '@/lib/nfl/totals/service';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,7 +29,8 @@ let snapshotCache: { at: number; promise: Promise<Snapshot> } | null = null;
 
 async function loadSnapshot() {
   const [config, ratings] = await Promise.all([loadNflConfig(), loadNflRatings()]);
-  return { config, ratings };
+  const totals = await loadTotalsSnapshot().catch(() => null);
+  return { config, ratings, totals };
 }
 
 function cachedSnapshot(): Promise<Snapshot> {
@@ -78,7 +80,7 @@ export async function GET(request: NextRequest) {
     }
     const neutral = request.nextUrl.searchParams.get('neutral') === '1';
 
-    const { config, ratings } = await cachedSnapshot();
+    const { config, ratings, totals } = await cachedSnapshot();
     const sorted = [...ratings.values()].sort((a, b) => b.rating - a.rating);
     // Odds API names are ESPN displayNames for the NFL; matchNflTeam adds the
     // alias table on top for anything that drifts.
@@ -99,6 +101,7 @@ export async function GET(request: NextRequest) {
     };
     const a = resolve(awayName);
     const h = resolve(homeName);
+    const tot = a.hit && h.hit && totals && totals.teams.size > 0 ? projectGame(h.hit.teamName, a.hit.teamName, totals) : null;
 
     let hfaApplied: number | null = null;
     let homeSpread: number | null = null;
@@ -124,6 +127,13 @@ export async function GET(request: NextRequest) {
         neutralSpread,
         scaleOffset: null,
         scaleOffsetSource: null,
+        totals: tot
+          ? {
+              projected: tot.projected, fundTotal: tot.fundTotal, plays: tot.plays,
+              homePts: tot.homePts, awayPts: tot.awayPts, homeTerm: tot.homeTerm, awayTerm: tot.awayTerm,
+              homePace: tot.home.pace, awayPace: tot.away.pace,
+            }
+          : null,
         seedLabel: `Market-implied ${config.season} preseason seed (season lines)`,
         updatedAt,
       },

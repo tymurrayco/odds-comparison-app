@@ -25,6 +25,7 @@ import {
 import { loadNflConfig, loadNflRatings } from '@/lib/nfl/supabase';
 import { matchOddsEvent } from '@/lib/nfl/teamNames';
 import { NflTeamRating } from '@/lib/nfl/types';
+import { extractConsensusTotal, loadTotalsSnapshot, projectGame } from '@/lib/nfl/totals/service';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -49,7 +50,7 @@ async function fetchCurrentOdds(): Promise<OddsEvent[]> {
   if (!apiKey) throw new Error('ODDS_API_KEY missing');
   const url =
     `${ODDS_API_BASE_URL}/sports/${NFL_SPORT_KEY}/odds` +
-    `?apiKey=${apiKey}&regions=us&markets=spreads&oddsFormat=american` +
+    `?apiKey=${apiKey}&regions=us&markets=spreads,totals&oddsFormat=american` +
     `&bookmakers=${NFL_CONSENSUS_BOOKS.join(',')}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Odds API HTTP ${res.status}: ${(await res.text()).slice(0, 150)}`);
@@ -64,6 +65,8 @@ export async function GET(request: NextRequest) {
     const days = Math.min(Math.max(Number.isFinite(daysParam) ? daysParam : 7, 1), 14);
 
     const [config, ratings] = await Promise.all([loadNflConfig(), loadNflRatings()]);
+    // Totals Ledger is optional (tables may not exist yet) — rows carry nulls
+    const totals = await loadTotalsSnapshot().catch(() => null);
     const byEspnId = new Map<string, NflTeamRating>();
     for (const r of ratings.values()) if (r.espnId) byEspnId.set(r.espnId, r);
 
@@ -93,6 +96,9 @@ export async function GET(request: NextRequest) {
       marketBooks: number;
       edge: number | null;
       state: string;
+      projectedTotal: number | null;
+      marketTotal: number | null;
+      totalEdge: number | null; // market - projected; positive = we lean under
     }> = [];
 
     // One scoreboard call for the whole window (ESPN's NFL feed takes a range)
@@ -122,6 +128,7 @@ export async function GET(request: NextRequest) {
       const projectedSpread = projectNflSpread(home.rating, away.rating, hfaApplied);
 
       let marketSpread: number | null = null;
+      let marketTotal: number | null = null;
       let marketBooks = 0;
       try {
         if (!events) events = await fetchCurrentOdds();
@@ -136,11 +143,14 @@ export async function GET(request: NextRequest) {
             marketSpread = match.swapped ? -consensus.spread : consensus.spread;
             marketBooks = consensus.books.length;
           }
+          const tot = extractConsensusTotal(match.event, NFL_CONSENSUS_BOOKS);
+          if (tot) marketTotal = tot.total;
         }
       } catch (e) {
         oddsError = e instanceof Error ? e.message : String(e);
       }
 
+      const t = totals && totals.teams.size > 0 ? projectGame(home.teamName, away.teamName, totals) : null;
       games.push({
         gameId: String(event.id),
         date: comp.date ?? event.date,
@@ -161,6 +171,9 @@ export async function GET(request: NextRequest) {
         marketBooks,
         edge: marketSpread === null ? null : roundToDecimal(marketSpread - projectedSpread, 1),
         state: comp.status?.type?.state ?? 'pre',
+        projectedTotal: t ? t.projected : null,
+        marketTotal,
+        totalEdge: t && marketTotal !== null ? roundToDecimal(marketTotal - t.projected, 1) : null,
       });
     }
 

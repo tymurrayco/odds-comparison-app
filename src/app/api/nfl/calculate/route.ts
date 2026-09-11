@@ -31,6 +31,7 @@ import {
 } from '@/lib/nfl/constants';
 import { extractConsensusSpread, nudgeHfa, processNflGame } from '@/lib/nfl/engine';
 import { exceedsRatedSpreadCap } from '@/lib/ratedSpreadCap';
+import { extractConsensusTotal } from '@/lib/nfl/totals/service';
 import {
   getCachedNflClosingLine,
   getMaxNflAdjustmentDate,
@@ -125,7 +126,7 @@ async function fetchHistoricalSnapshot(
   if (!apiKey) throw new Error('ODDS_API_KEY missing');
   const url =
     `${ODDS_API_BASE_URL}/historical/sports/${NFL_SPORT_KEY}/odds` +
-    `?apiKey=${apiKey}&regions=us&markets=spreads&oddsFormat=american` +
+    `?apiKey=${apiKey}&regions=us&markets=spreads,totals&oddsFormat=american` +
     `&date=${encodeURIComponent(freezeIso)}` +
     `&bookmakers=${NFL_CONSENSUS_BOOKS.join(',')}`;
   const res = await fetch(url);
@@ -292,6 +293,7 @@ async function handleSync(body: {
 
       // Closing line: cache first, then one historical snapshot per clock hour
       let closingSpread: number | null = null;
+      let closingTotal: number | null = null; // rides along for the totals Ledger
       let closingSource = '';
       let oddsApiId: string | null = null;
       const cached = await getCachedNflClosingLine(game.id);
@@ -317,6 +319,8 @@ async function handleSync(body: {
             closingSpread = match.swapped ? -consensus.spread : consensus.spread;
             closingSource = `US Avg (${consensus.books.length})`;
           }
+          const tot = extractConsensusTotal(match.event, NFL_CONSENSUS_BOOKS);
+          closingTotal = tot ? tot.total : null;
         }
         await saveNflClosingLine({
           gameId: game.id,
@@ -327,6 +331,7 @@ async function handleSync(body: {
           isNeutralSite: game.isNeutralSite,
           closingSpread,
           closingSource: closingSpread === null ? 'none' : closingSource,
+          closingTotal,
           bookmakers: null,
         });
       }

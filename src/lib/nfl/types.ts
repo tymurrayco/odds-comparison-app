@@ -44,6 +44,7 @@ export interface NflClosingLine {
   isNeutralSite: boolean;
   closingSpread: number | null; // null = checked, no line available
   closingSource: string | null;
+  closingTotal?: number | null; // consensus total at close (totals Ledger)
   bookmakers: string[] | null;
 }
 
