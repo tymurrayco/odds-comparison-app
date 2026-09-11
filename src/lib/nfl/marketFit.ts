@@ -122,7 +122,11 @@ export async function fetchSeasonLines(
 
   const games: LinedGame[] = [];
   const unknown = new Set<string>();
+  const nowIso = new Date().toISOString();
   for (const ev of events) {
+    // A game that has kicked off carries a LIVE in-game spread, not a market
+    // price of the teams — skip it.
+    if (ev.commence_time <= nowIso) continue;
     const home = matchNflTeam(ev.home_team, espnTeams);
     const away = matchNflTeam(ev.away_team, espnTeams);
     if (!home) unknown.add(ev.home_team);
@@ -147,6 +151,47 @@ export async function fetchSeasonLines(
     });
   }
   return { games, unknownTeams: [...unknown] };
+}
+
+/**
+ * Sagarin 2026 STARTING RATINGS (overall RATING column, HFA 2.03), captured
+ * 2026-09-10 from sagarin.com/sports/nflsend.htm. sagarin.com drops offline
+ * for stretches (connect timeouts the evening of the opener), and the fill
+ * only needs the preseason numbers, so the live fetch falls back to this.
+ */
+const SAGARIN_NFL_STARTING: Record<number, { hfa: number; ratings: Record<string, number> }> = {
+  2026: {
+    hfa: 2.03,
+    ratings: {
+      'Los Angeles Rams': 27.13, 'Seattle Seahawks': 24.67, 'Buffalo Bills': 24.65,
+      'Baltimore Ravens': 24.17, 'Los Angeles Chargers': 23.46, 'Kansas City Chiefs': 23.31,
+      'San Francisco 49ers': 23.04, 'Philadelphia Eagles': 22.95, 'New England Patriots': 22.76,
+      'Detroit Lions': 22.61, 'Houston Texans': 22.58, 'Denver Broncos': 22.53,
+      'Green Bay Packers': 22.46, 'Dallas Cowboys': 22.33, 'Cincinnati Bengals': 21.59,
+      'Jacksonville Jaguars': 21.58, 'Chicago Bears': 21.43, 'Minnesota Vikings': 19.91,
+      'Tampa Bay Buccaneers': 19.41, 'Pittsburgh Steelers': 19.35, 'Indianapolis Colts': 18.94,
+      'Washington Commanders': 18.66, 'New York Giants': 18.07, 'Carolina Panthers': 17.32,
+      'Atlanta Falcons': 17.32, 'New Orleans Saints': 16.94, 'Tennessee Titans': 15.74,
+      'Las Vegas Raiders': 14.95, 'Cleveland Browns': 14.01, 'New York Jets': 13.37,
+      'Arizona Cardinals': 11.53, 'Miami Dolphins': 11.25,
+    },
+  },
+};
+
+function sagarinFallback(
+  season: number,
+  espnTeams: EspnTeam[]
+): { ratings: Map<string, number>; hfa: number | null; unmatched: string[] } {
+  const snap = SAGARIN_NFL_STARTING[season];
+  const ratings = new Map<string, number>();
+  const unmatched: string[] = ['(Sagarin fetch failed — using the stored starting ratings)'];
+  if (!snap) return { ratings, hfa: null, unmatched: ['(Sagarin fetch failed — no stored ratings for this season)'] };
+  for (const [name, value] of Object.entries(snap.ratings)) {
+    const team = matchNflTeam(name, espnTeams);
+    if (team) ratings.set(team.displayName, value);
+    else unmatched.push(name);
+  }
+  return { ratings, hfa: snap.hfa, unmatched };
 }
 
 /**
@@ -207,8 +252,45 @@ function solveLinear(A: number[][], b: number[]): number[] {
  * Weighted least squares over the lined games. Unknowns: one rating per lined
  * team plus a league HFA; ratings constrained to sum to zero.
  */
-export function solveMarketFit(games: LinedGame[]): MarketFitResult {
-  const teams = [...new Set(games.flatMap((g) => [g.home, g.away]))].sort();
+/**
+ * Teams reachable from each other through lined games. A team whose only
+ * lines are against one other team (e.g. a neutral game between two clubs
+ * the book has otherwise pulled) floats free of the league and makes the
+ * system singular — the fit keeps the largest connected group and the
+ * caller fills the rest from Sagarin.
+ */
+function largestConnectedGroup(games: LinedGame[]): Set<string> {
+  const adj = new Map<string, Set<string>>();
+  const link = (a: string, b: string) => {
+    if (!adj.has(a)) adj.set(a, new Set());
+    adj.get(a)!.add(b);
+  };
+  for (const g of games) {
+    link(g.home, g.away);
+    link(g.away, g.home);
+  }
+  const seen = new Set<string>();
+  let best = new Set<string>();
+  for (const start of adj.keys()) {
+    if (seen.has(start)) continue;
+    const group = new Set<string>();
+    const stack = [start];
+    while (stack.length) {
+      const t = stack.pop()!;
+      if (group.has(t)) continue;
+      group.add(t);
+      seen.add(t);
+      for (const n of adj.get(t) ?? []) if (!group.has(n)) stack.push(n);
+    }
+    if (group.size > best.size) best = group;
+  }
+  return best;
+}
+
+export function solveMarketFit(allGames: LinedGame[]): MarketFitResult {
+  const connected = largestConnectedGroup(allGames);
+  const games = allGames.filter((g) => connected.has(g.home) && connected.has(g.away));
+  const teams = [...connected].sort();
   const idx = new Map(teams.map((t, i) => [t, i]));
   const n = teams.length;
   if (n < 2 || games.length < n) {
@@ -291,11 +373,9 @@ export async function buildMarketSeed(season: number): Promise<SeedBuild> {
   if (espnTeams.length < 30) throw new Error(`ESPN returned ${espnTeams.length} NFL teams`);
   const [neutralKeys, sagarin] = await Promise.all([
     fetchNeutralGameKeys(season),
-    fetchSagarinNfl(espnTeams).catch(() => ({
-      ratings: new Map<string, number>(),
-      hfa: null,
-      unmatched: ['(Sagarin fetch failed)'],
-    })),
+    fetchSagarinNfl(espnTeams)
+      .then((s) => (s.ratings.size >= 30 ? s : sagarinFallback(season, espnTeams)))
+      .catch(() => sagarinFallback(season, espnTeams)),
   ]);
   const { games, unknownTeams } = await fetchSeasonLines(espnTeams, neutralKeys);
   const fit = solveMarketFit(games);
