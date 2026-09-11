@@ -33,6 +33,14 @@ export const NFL_CLOSING_TIME_MINUTES = 5;
 // ratings row is null unless someone sets one by hand.
 export const NFL_DEFAULT_HFA = 1.5;
 
+// HFA nudge (Tyler, 2026-09-11): after every non-neutral priced game the
+// config HFA moves by this fraction of the game's miss (closing − projected,
+// home perspective) in the direction that would have shrunk it. Team errors
+// average out across home/away assignments; a wrong HFA doesn't. At 2% the
+// half-life is ~35 games (two NFL weeks) and the noise floor ~0.15 points.
+// Set to 0 to freeze HFA at the config value.
+export const NFL_HFA_NUDGE_RATE = 0.02;
+
 // Routine sync rescans this far back of the last processed game (see FBS twin)
 export const NFL_SYNC_LOOKBACK_DAYS = 14;
 

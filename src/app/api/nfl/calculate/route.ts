@@ -21,6 +21,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   ESPN_NFL_SCOREBOARD_URL,
   NFL_CLOSING_TIME_MINUTES,
+  NFL_HFA_NUDGE_RATE,
   NFL_CONSENSUS_BOOKS,
   NFL_SEASON,
   NFL_SEASON_DATES,
@@ -28,7 +29,8 @@ import {
   NFL_SPORT_KEY,
   ODDS_API_BASE_URL,
 } from '@/lib/nfl/constants';
-import { extractConsensusSpread, processNflGame } from '@/lib/nfl/engine';
+import { extractConsensusSpread, nudgeHfa, processNflGame } from '@/lib/nfl/engine';
+import { exceedsRatedSpreadCap } from '@/lib/ratedSpreadCap';
 import {
   getCachedNflClosingLine,
   getMaxNflAdjustmentDate,
@@ -199,6 +201,14 @@ async function handleSync(body: {
     adjustment: number;
   }> = [];
   let oddsApiCalls = 0;
+  // Running HFA: every non-neutral priced game nudges it toward the HFA the
+  // close implied (see NFL_HFA_NUDGE_RATE). Games project with the value
+  // current at their turn; the end-of-sync config save persists it.
+  const hfaBefore = config.hfaDefault;
+  const applyHfaNudge = (adj: { isNeutralSite: boolean; closingSpread: number; hfaApplied: number; difference: number }) => {
+    if (adj.isNeutralSite || exceedsRatedSpreadCap(adj.closingSpread)) return;
+    config.hfaDefault = nudgeHfa(config.hfaDefault, adj.hfaApplied, adj.difference, NFL_HFA_NUDGE_RATE);
+  };
   let lastGameDate: string | null = config.lastProcessedDate;
 
   // First: cached lines that gained a spread after their game was scanned
@@ -244,6 +254,7 @@ async function handleSync(body: {
     if (!adj) continue;
     await saveNflAdjustment(adj);
     await upsertNflRatings([ratings.get(home.teamName)!, ratings.get(away.teamName)!]);
+    applyHfaNudge(adj);
     processedIds.add(line.gameId);
     processed.push({
       game: label,
@@ -347,6 +358,7 @@ async function handleSync(body: {
 
       await saveNflAdjustment(adj);
       await upsertNflRatings([ratings.get(home.teamName)!, ratings.get(away.teamName)!]);
+      applyHfaNudge(adj);
       processedIds.add(game.id);
       processed.push({
         game: label,
@@ -371,6 +383,7 @@ async function handleSync(body: {
     skippedCount: skipped.length,
     oddsApiCalls,
     replayed: needsReplay,
+    hfa: { before: hfaBefore, after: config.hfaDefault, nudgeRate: NFL_HFA_NUDGE_RATE },
     processed,
     skipped,
   };

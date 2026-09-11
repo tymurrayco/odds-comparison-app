@@ -16,8 +16,8 @@ import {
   NflManualAdjustment,
   NflTeamRating,
 } from '@/lib/nfl/types';
-import { hfaForGame, projectNflSpread } from '@/lib/nfl/engine';
-import { nflLogoUrl } from '@/lib/nfl/constants';
+import { hfaForGame, impliedHfaForGame, projectNflSpread } from '@/lib/nfl/engine';
+import { NFL_HFA_NUDGE_RATE, nflLogoUrl } from '@/lib/nfl/constants';
 import { useTeamColorMap } from '@/lib/myGameBets';
 import { createBet, fetchBets } from '@/lib/betService';
 
@@ -526,7 +526,10 @@ export default function NflRatingsView({ admin = false }: { admin?: boolean }) {
           (s: { reason: string }) => s.reason === 'no_line'
         ).length;
         setMessage(
-          `Synced ${json.range.startDate} → ${json.range.endDate}: ${json.processedCount} games processed, ${json.skippedCount} skipped (${noLine} no line), ${json.oddsApiCalls} Odds API calls.`
+          `Synced ${json.range.startDate} → ${json.range.endDate}: ${json.processedCount} games processed, ${json.skippedCount} skipped (${noLine} no line), ${json.oddsApiCalls} Odds API calls.` +
+            (json.hfa && json.hfa.before !== json.hfa.after
+              ? ` HFA ${json.hfa.before.toFixed(2)} → ${json.hfa.after.toFixed(2)}.`
+              : '')
         );
       } else {
         setMessage(
@@ -734,6 +737,19 @@ export default function NflRatingsView({ admin = false }: { admin?: boolean }) {
     </button>
   );
 
+  // Season-to-date market-implied HFA: each non-neutral priced game says what
+  // HFA would have matched its close; team errors cancel across home/away
+  // assignments, so the average isolates the home edge the market is paying.
+  const impliedHfa = useMemo(() => {
+    const vals = (data?.adjustments ?? [])
+      .filter((a) => !a.isNeutralSite && Math.abs(a.closingSpread) <= MAX_RATED_SPREAD)
+      .map((a) => impliedHfaForGame(a.hfaApplied, a.difference));
+    if (vals.length === 0) return null;
+    const mean = vals.reduce((s, v) => s + v, 0) / vals.length;
+    const sd = Math.sqrt(vals.reduce((s, v) => s + (v - mean) ** 2, 0) / vals.length);
+    return { mean, n: vals.length, se: vals.length > 1 ? sd / Math.sqrt(vals.length) : null };
+  }, [data]);
+
   const fmtDelta = (d: number, small = false) => {
     const v = Math.round(d * 100) / 100;
     if (v === 0) return <span className="text-slate-400">0.00</span>;
@@ -771,6 +787,13 @@ export default function NflRatingsView({ admin = false }: { admin?: boolean }) {
             <p className="text-xs sm:text-sm text-slate-500">
               Market-implied seed (season lines) → adjusted by closing lines · {data?.totalAdjustments ?? 0}{' '}
               games · season {data?.season ?? ''}
+            </p>
+            <p className="text-xs text-slate-500 tabular-nums mt-0.5">
+              HFA {data?.config?.hfaDefault?.toFixed(2) ?? '—'}
+              {NFL_HFA_NUDGE_RATE > 0 ? ` (nudges ${Math.round(NFL_HFA_NUDGE_RATE * 100)}% per home game)` : ' (fixed)'}
+              {impliedHfa
+                ? ` · market-implied ${impliedHfa.mean.toFixed(2)}${impliedHfa.se !== null ? ` ± ${impliedHfa.se.toFixed(2)}` : ''} over ${impliedHfa.n} home ${impliedHfa.n === 1 ? 'game' : 'games'}`
+                : ' · market-implied — (no home games priced yet)'}
             </p>
           </div>
           {admin && (

@@ -30,6 +30,22 @@ export function projectNflSpread(
   return roundToDecimal(-((homeRating - awayRating) + hfaApplied), NFL_SPREAD_DECIMAL_PLACES);
 }
 
+/**
+ * Market-implied HFA from one processed game: the HFA that would have made
+ * the projection equal the close (difference = closing − projected, home
+ * perspective; a more-favored home close is a negative difference).
+ */
+export function impliedHfaForGame(hfaApplied: number, difference: number): number {
+  return hfaApplied - difference;
+}
+
+/** Move the running HFA a fraction of the way toward this game's implied HFA. */
+export function nudgeHfa(hfa: number, hfaApplied: number, difference: number, rate: number): number {
+  if (rate <= 0) return hfa;
+  const implied = impliedHfaForGame(hfaApplied, difference);
+  return roundToDecimal(hfa + rate * (implied - hfa), 3);
+}
+
 export function hfaForGame(
   home: NflTeamRating,
   isNeutralSite: boolean,
