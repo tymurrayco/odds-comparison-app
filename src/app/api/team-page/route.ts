@@ -74,6 +74,17 @@ interface ScheduleGame {
     total: number | null;
     ouRes: 'O' | 'U' | 'P' | null;
   } | null;
+  // Box-score yardage for completed games (fetchYards): ours, theirs, and
+  // the differential. perPlay is ESPN's own for the NFL; college box scores
+  // don't carry it, so it's total / (pass + rush attempts) — NCAA counts
+  // sacks as rushes, so that IS the official plays count.
+  yards: {
+    total: number;
+    perPlay: number | null;
+    oppTotal: number;
+    oppPerPlay: number | null;
+    diff: number;
+  } | null;
 }
 
 export interface TeamPayload {
@@ -170,6 +181,7 @@ function parseSchedule(data: any, teamId: string, seasonType: SeasonType): Sched
       oppScore: themScore,
       detail: status.shortDetail ?? null,
       closing: null,
+      yards: null,
     });
   }
   return out;
@@ -239,6 +251,59 @@ async function computeAts(
     ats: { season: atsSeason, spreadRecord: rec(w, l, p), ouRecord: rec(over, under, ouPush), games },
     perGame,
   };
+}
+
+// Per-game yardage from the event summary's box score (one ~550KB fetch per
+// completed game, cached a week — finals never change). Both sides come from
+// the same payload, so the differential is free.
+type YardsLite = NonNullable<ScheduleGame['yards']>;
+
+function boxSide(teams: any[], teamId: string): Record<string, string> {
+  const side = teams.find((t) => String(t?.team?.id) === teamId);
+  const out: Record<string, string> = {};
+  for (const s of side?.statistics ?? []) if (s?.name) out[s.name] = String(s.displayValue ?? '');
+  return out;
+}
+
+function yardsFrom(stats: Record<string, string>): { total: number; perPlay: number | null } | null {
+  const total = Number(stats.totalYards);
+  if (!Number.isFinite(total)) return null;
+  let perPlay: number | null = Number(stats.yardsPerPlay);
+  if (!Number.isFinite(perPlay)) {
+    const plays = Number(stats.totalOffensivePlays);
+    let n = Number.isFinite(plays) && plays > 0 ? plays : NaN;
+    if (!Number.isFinite(n)) {
+      // "20/37" = completions/attempts
+      const att = Number(String(stats.completionAttempts ?? '').split('/')[1]);
+      const rush = Number(stats.rushingAttempts);
+      if (Number.isFinite(att) && Number.isFinite(rush) && att + rush > 0) n = att + rush;
+    }
+    perPlay = Number.isFinite(n) ? Math.round((total / n) * 10) / 10 : null;
+  }
+  return { total, perPlay };
+}
+
+async function fetchYards(
+  cfg: LeagueConfig, teamId: string, schedule: ScheduleGame[]
+): Promise<Map<string, YardsLite>> {
+  const out = new Map<string, YardsLite>();
+  const completed = schedule.filter((g) => g.completed && g.teamScore !== null).slice(0, 30);
+  await Promise.all(completed.map(async (g) => {
+    const sum: any = await getJson(`${cfg.site}/summary?event=${g.id}`, 7 * DAY);
+    const teams: any[] = sum?.boxscore?.teams ?? [];
+    if (teams.length < 2) return;
+    const us = yardsFrom(boxSide(teams, teamId));
+    const them = yardsFrom(boxSide(teams, g.opponent.id));
+    if (!us || !them) return;
+    out.set(g.id, {
+      total: us.total,
+      perPlay: us.perPlay,
+      oppTotal: them.total,
+      oppPerPlay: them.perPlay,
+      diff: us.total - them.total,
+    });
+  }));
+  return out;
 }
 
 // Season stat leaders (passing / rushing / receiving yards) — athlete names
@@ -357,8 +422,9 @@ export async function GET(request: Request) {
     .flatMap(([label], i) => parseSchedule(scheds[i], teamId, label))
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  const [{ ats, perGame }, injuries, news] = await Promise.all([
+  const [{ ats, perGame }, yards, injuries, news] = await Promise.all([
     computeAts(cfg, teamId, schedule, season),
+    fetchYards(cfg, teamId, schedule),
     fetchInjuries(cfg, teamId),
     fetchNews(cfg, teamId),
   ]);
@@ -367,6 +433,7 @@ export async function GET(request: Request) {
   const leaders = await fetchLeaders(cfg, teamId, ats?.season ?? season);
   for (const g of schedule) {
     g.closing = perGame.get(g.id) ?? null;
+    g.yards = yards.get(g.id) ?? null;
   }
 
   const payload: TeamPayload = {

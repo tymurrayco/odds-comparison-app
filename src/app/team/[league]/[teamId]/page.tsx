@@ -45,6 +45,7 @@ interface ScheduleGame {
   state: 'pre' | 'in' | 'post'; completed: boolean; result: 'W' | 'L' | 'T' | null;
   teamScore: string | null; oppScore: string | null; detail: string | null;
   closing: { spread: number | null; atsRes: 'W' | 'L' | 'P' | null; total: number | null; ouRes: 'O' | 'U' | 'P' | null } | null;
+  yards: { total: number; perPlay: number | null; oppTotal: number; oppPerPlay: number | null; diff: number } | null;
 }
 interface NewsItem { headline: string; url: string | null; published: string | null }
 interface TeamPayload { team: TeamInfo; season: number; schedule: ScheduleGame[]; news: NewsItem[] }
@@ -592,6 +593,20 @@ export default function TeamPage() {
                               {g.closing.total !== null && g.closing.ouRes && (
                                 <span>{g.closing.ouRes === 'P' ? 'Push' : g.closing.ouRes} {g.closing.total}</span>
                               )}
+                            </div>
+                          )}
+                          {/* Box-score yardage: ours, per play, and the differential vs the opponent */}
+                          {g.yards && (
+                            <div
+                              className="text-[10px] tabular-nums text-slate-500 whitespace-nowrap"
+                              title={`${g.opponent.name}: ${g.yards.oppTotal} yds${g.yards.oppPerPlay !== null ? `, ${g.yards.oppPerPlay.toFixed(1)}/play` : ''}`}
+                            >
+                              {g.yards.total} yds
+                              {g.yards.perPlay !== null && ` · ${g.yards.perPlay.toFixed(1)}/play`}
+                              {' · '}
+                              <span className={g.yards.diff > 0 ? 'text-emerald-600' : g.yards.diff < 0 ? 'text-red-500' : ''}>
+                                {g.yards.diff > 0 ? '+' : ''}{g.yards.diff}
+                              </span>
                             </div>
                           )}
                         </div>
