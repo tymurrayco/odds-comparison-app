@@ -6,6 +6,7 @@
 // closing totals, plus the totals ledger. Self-contained: loads
 // /api/nfl/totals and runs its own seed / sync / recalculate actions.
 
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const btnCls =
@@ -67,6 +68,7 @@ interface TotalsResponse {
 export interface TeamVisual {
   logo: string | null;
   color: string;
+  href?: string | null; // team page
 }
 
 const fmtSigned = (v: number, places = 2) => {
@@ -270,7 +272,11 @@ export default function NflTotalsPanel({
                   }}
                 >
                   <div className="text-xs text-slate-400 tabular-nums">{i + 1}</div>
-                  <div className="flex items-center gap-2 min-w-0">
+                  <Link
+                    href={v.href ?? `/team/nfl/${encodeURIComponent(t.teamName)}`}
+                    className="group/team flex items-center gap-2 min-w-0"
+                    title={`${t.teamName} — team page`}
+                  >
                     {v.logo ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={v.logo} alt="" className="w-6 h-6 object-contain shrink-0" loading="lazy" />
@@ -278,12 +284,12 @@ export default function NflTotalsPanel({
                       <span className="w-6 h-6 rounded-full shrink-0" style={{ backgroundColor: `${v.color}33` }} />
                     )}
                     <div className="min-w-0">
-                      <div className="text-sm font-medium text-slate-800 truncate">{t.teamName}</div>
+                      <div className="text-sm font-medium text-slate-800 truncate group-hover/team:underline">{t.teamName}</div>
                       <div className="text-[11px] text-slate-400 truncate sm:hidden tabular-nums">
                         {t.pace.toFixed(1)} plays · off {t.offRating.toFixed(1)} · def {t.defRating.toFixed(1)}
                       </div>
                     </div>
-                  </div>
+                  </Link>
                   <div className="text-right text-sm tabular-nums sm:hidden">{fmtSigned(t.marketTerm)}</div>
                   <div className="hidden sm:block text-right text-sm text-slate-600 tabular-nums">{t.pace.toFixed(1)}</div>
                   <div className="hidden sm:block text-right text-sm text-slate-800 tabular-nums">{t.offRating.toFixed(1)}</div>

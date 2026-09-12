@@ -120,6 +120,7 @@ interface BetFormState {
 interface TeamVisual {
   logo: string | null;
   color: string; // css hex with #
+  href: string | null; // team page (/team/nfl/<espn id or name>)
 }
 
 const FALLBACK_COLOR = '#64748b';
@@ -143,8 +144,8 @@ function TeamChip({
   sub?: string | null;
   warn?: boolean;
 }) {
-  return (
-    <div className="flex items-center gap-2 min-w-0">
+  const body = (
+    <>
       {visual.logo ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -160,7 +161,7 @@ function TeamChip({
         />
       )}
       <div className="min-w-0">
-        <div className="text-sm font-medium text-slate-800 truncate">
+        <div className="text-sm font-medium text-slate-800 truncate group-hover/team:underline">
           {name}
           {warn && (
             <span
@@ -173,7 +174,21 @@ function TeamChip({
         </div>
         {sub ? <div className="text-[11px] text-slate-400 truncate">{sub}</div> : null}
       </div>
-    </div>
+    </>
+  );
+  // Logo + name open the team page. Rows are click-to-expand, so the link
+  // stops propagation instead of toggling the row.
+  return visual.href ? (
+    <Link
+      href={visual.href}
+      onClick={(e) => e.stopPropagation()}
+      className="group/team flex items-center gap-2 min-w-0"
+      title={`${name} — team page`}
+    >
+      {body}
+    </Link>
+  ) : (
+    <div className="flex items-center gap-2 min-w-0">{body}</div>
   );
 }
 
@@ -439,10 +454,11 @@ export default function NflRatingsView({ admin = false }: { admin?: boolean }) {
   const visualFor = useCallback(
     (teamName: string): TeamVisual => {
       const r = byTeamName.get(teamName);
+      const href = `/team/nfl/${encodeURIComponent(r?.espnId ?? teamName)}`;
       const info = r?.espnName ? colorMap?.[normalizeKey(r.espnName)] : undefined;
       const logo = info?.logo ?? nflLogoUrl(r?.espnAbbr);
       const color = info?.color ? `#${info.color}` : FALLBACK_COLOR;
-      return { logo, color };
+      return { logo, color, href };
     },
     [byTeamName, colorMap]
   );
@@ -454,10 +470,11 @@ export default function NflRatingsView({ admin = false }: { admin?: boolean }) {
       const r = byTeamName.get(name);
       const espnName = r?.espnName ?? (side === 'home' ? g.homeEspnName : g.awayEspnName);
       const abbr = r?.espnAbbr ?? (side === 'home' ? g.homeAbbr : g.awayAbbr);
+      const href = `/team/nfl/${encodeURIComponent(r?.espnId ?? (side === 'home' ? g.homeEspnId : g.awayEspnId) ?? name)}`;
       const info = espnName ? colorMap?.[normalizeKey(espnName)] : undefined;
       const logo = info?.logo ?? nflLogoUrl(abbr);
       const color = info?.color ? `#${info.color}` : FALLBACK_COLOR;
-      return { logo, color };
+      return { logo, color, href };
     },
     [byTeamName, colorMap]
   );
