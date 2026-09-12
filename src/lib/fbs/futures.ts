@@ -140,6 +140,7 @@ export interface FuturesTeam {
   unratedGames: number;   // games vs opponents outside both ratings tables (excluded)
   titleProb: number;
   odds: number | null;    // fair American
+  top2Prob: number;       // finishes in the conference's top two (title-game berth)
 }
 
 export interface FuturesConference {
@@ -147,6 +148,15 @@ export interface FuturesConference {
   teams: FuturesTeam[];   // best title odds first
   gamesPlayed: number;    // conference games completed
   gamesRemaining: number;
+  // Likeliest title game: gold = projected champion, silver = the next most
+  // likely top-two finisher; spread from gold's side on a neutral field.
+  championship: {
+    gold: string;
+    silver: string;
+    goldTop2Prob: number;
+    silverTop2Prob: number;
+    spread: number;       // negative = gold favored
+  } | null;
 }
 
 export interface FuturesResult {
@@ -294,6 +304,7 @@ export function buildFutures(
 
     // Head-to-head lookup for two-way ties: key "i,j" -> winner index per sim
     const titles = new Array<number>(n).fill(0);
+    const top2 = new Array<number>(n).fill(0); // title-game berths (2 per sim)
     const rand = rng(season * 7919 + name.length * 131 + games.length);
     const wins = new Array<number>(n);
     const h2h = new Map<string, number>(); // "lo,hi" -> winner idx (this sim)
@@ -326,6 +337,30 @@ export function buildFutures(
       } else {
         for (const i of leaders) titles[i] += 1 / leaders.length;
       }
+      // Top-two berths: a tie at the top shares both spots; a lone leader
+      // takes one and the runner-up group (head-to-head for a two-way tie)
+      // shares the other.
+      if (leaders.length >= 2) {
+        for (const i of leaders) top2[i] += 2 / leaders.length;
+      } else {
+        top2[leaders[0]] += 1;
+        let second = -1;
+        const runners: number[] = [];
+        for (let i = 0; i < n; i++) {
+          if (i === leaders[0]) continue;
+          if (wins[i] > second) { second = wins[i]; runners.length = 0; runners.push(i); }
+          else if (wins[i] === second) runners.push(i);
+        }
+        if (runners.length === 1) top2[runners[0]] += 1;
+        else if (runners.length === 2) {
+          const [a, b] = runners;
+          const winner = h2h.get(`${Math.min(a, b)},${Math.max(a, b)}`);
+          if (winner !== undefined) top2[winner] += 1;
+          else { top2[a] += 0.5; top2[b] += 0.5; }
+        } else {
+          for (const i of runners) top2[i] += 1 / runners.length;
+        }
+      }
     }
 
     const rows: FuturesTeam[] = teams.map((r, i) => {
@@ -348,14 +383,29 @@ export function buildFutures(
         unratedGames: o.unrated,
         titleProb: Math.round(p * 10000) / 10000,
         odds: fairAmerican(p),
+        top2Prob: Math.round((top2[i] / sims) * 10000) / 10000,
       };
     }).sort((a, b) => b.titleProb - a.titleProb || b.rating - a.rating);
+
+    let championship: FuturesConference['championship'] = null;
+    if (rows.length >= 2) {
+      const gold = rows[0];
+      const silver = rows.slice(1).sort((a, b) => b.top2Prob - a.top2Prob || b.titleProb - a.titleProb)[0];
+      championship = {
+        gold: gold.teamName,
+        silver: silver.teamName,
+        goldTop2Prob: gold.top2Prob,
+        silverTop2Prob: silver.top2Prob,
+        spread: Math.round(-(gold.rating - silver.rating) * 2) / 2,
+      };
+    }
 
     conferences.push({
       name,
       teams: rows,
       gamesPlayed: games.length - remaining.length,
       gamesRemaining: remaining.length,
+      championship,
     });
   }
   conferences.sort((a, b) => a.name.localeCompare(b.name));

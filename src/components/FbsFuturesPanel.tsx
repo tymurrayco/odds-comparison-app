@@ -26,6 +26,7 @@ interface FuturesTeam {
   unratedGames: number;
   titleProb: number;
   odds: number | null;
+  top2Prob: number;
 }
 
 interface FuturesConference {
@@ -33,6 +34,13 @@ interface FuturesConference {
   teams: FuturesTeam[];
   gamesPlayed: number;
   gamesRemaining: number;
+  championship: {
+    gold: string;
+    silver: string;
+    goldTop2Prob: number;
+    silverTop2Prob: number;
+    spread: number;
+  } | null;
 }
 
 interface FuturesResponse {
@@ -175,13 +183,33 @@ export default function FbsFuturesPanel({ visualFor }: { visualFor: (teamName: s
                   <div className="divide-y divide-slate-100">
                     {c.teams.map((t, i) => {
                       const v = visualFor(t.teamName);
-                      return (
+                      const medal =
+                        c.championship?.gold === t.teamName ? '🥇' : c.championship?.silver === t.teamName ? '🥈' : null;
+                      const ch = c.championship;
+                      // Title-game bar sits under the gold row: the likeliest
+                      // matchup and its neutral-field spread from the ratings.
+                      const titleBar = ch && ch.gold === t.teamName && (
                         <div
-                          key={t.teamName}
+                          className="flex items-center justify-center gap-2 px-3 py-1.5 text-[11px] tabular-nums text-amber-900"
+                          style={{ background: 'linear-gradient(90deg, #fef3c7, #fde68a 50%, #fef3c7)' }}
+                          title={`Most likely title game. Top-two chances: ${ch.gold} ${(ch.goldTop2Prob * 100).toFixed(0)}%, ${ch.silver} ${(ch.silverTop2Prob * 100).toFixed(0)}%`}
+                        >
+                          <span className="uppercase tracking-wide text-[10px] font-semibold text-amber-700">Title game</span>
+                          <span className="font-semibold">
+                            {ch.spread <= 0
+                              ? `${ch.gold} ${ch.spread === 0 ? 'PK' : ch.spread.toFixed(1)} vs ${ch.silver}`
+                              : `${ch.silver} ${(-ch.spread).toFixed(1)} vs ${ch.gold}`}
+                          </span>
+                          <span className="text-amber-700">· neutral field</span>
+                        </div>
+                      );
+                      return (
+                        <div key={t.teamName}>
+                        <div
                           className="grid grid-cols-[1.75rem_1fr_auto] sm:grid-cols-[1.75rem_1fr_4rem_5rem_5rem_4.5rem_3.5rem] items-center px-3 py-2"
                           style={{ boxShadow: `inset 3px 0 0 ${v.color}` }}
                         >
-                          <div className="text-xs text-slate-400 tabular-nums">{i + 1}</div>
+                          <div className="text-xs text-slate-400 tabular-nums">{medal ?? i + 1}</div>
                           <Chip
                             name={t.teamName}
                             sub={`${t.rating.toFixed(1)} · ${fmtRec(t.confWins, t.confLosses)} conf · proj ${fmtRec(t.projWins, t.projLosses)}${t.unratedGames ? ` · ${t.unratedGames} unrated` : ''}`}
@@ -195,6 +223,8 @@ export default function FbsFuturesPanel({ visualFor }: { visualFor: (teamName: s
                           <div className="hidden sm:block text-right text-sm text-slate-600 tabular-nums">{fmtRec(t.projWins, t.projLosses)}</div>
                           <div className="hidden sm:block text-right text-sm font-semibold tabular-nums text-slate-800">{fmtOdds(t.odds)}</div>
                           <div className="hidden sm:block text-right text-sm text-slate-500 tabular-nums">{(t.titleProb * 100).toFixed(1)}%</div>
+                        </div>
+                        {titleBar}
                         </div>
                       );
                     })}
