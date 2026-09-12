@@ -410,6 +410,46 @@ export default function MyBets({ yearFilter = 'all', onYearsLoaded }: MyBetsProp
     return map[normalizeTeamKey(name)] ?? null;
   };
 
+  // NCAAF sub-records: FBS-vs-FBS, FBS-vs-FCS and FCS-vs-FCS, classified by
+  // the Ledger ratings' ESPN names (one fetch, cached). Tap the NCAAF row in
+  // the league stats to unfurl them.
+  const [divisions, setDivisions] = useState<{ fbs: Set<string>; fcs: Set<string> } | null>(null);
+  useEffect(() => {
+    if (divisions || !currentBets.some((b) => b.league === 'NCAAF')) return;
+    fetch('/api/fbs/divisions')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (!j?.success) return;
+        setDivisions({
+          fbs: new Set((j.fbs as string[]).map(normalizeTeamKey)),
+          fcs: new Set((j.fcs as string[]).map(normalizeTeamKey)),
+        });
+      })
+      .catch(() => {});
+  }, [divisions, currentBets]);
+  const [expandedLeague, setExpandedLeague] = useState<string | null>(null);
+  const ncaafSplits = useMemo(() => {
+    if (!divisions) return null;
+    const groups: Record<string, Bet[]> = { FBS: [], 'FBS vs FCS': [], FCS: [], Unmatched: [] };
+    const cls = (n?: string) => {
+      if (!n) return null;
+      const k = normalizeTeamKey(n);
+      return divisions.fbs.has(k) ? 'fbs' : divisions.fcs.has(k) ? 'fcs' : null;
+    };
+    for (const bet of currentBets) {
+      if (bet.league !== 'NCAAF') continue;
+      const teams = parseTeams(bet);
+      const a = cls(teams?.away);
+      const h = cls(teams?.home);
+      const key = a && h ? (a === h ? (a === 'fbs' ? 'FBS' : 'FCS') : 'FBS vs FCS') : 'Unmatched';
+      groups[key].push(bet);
+    }
+    return Object.entries(groups)
+      .filter(([, b]) => b.length > 0)
+      .map(([label, b]) => ({ label, stats: getBetStats(b) }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [divisions, currentBets]);
+
   // Accent = the team the wager is on: leading tokens of the bet text (e.g.
   // "Texas -3.5" → Texas), bet.team for futures. Totals use the home team.
   // Home/away fields remain as fallbacks so cards still get a color when the
@@ -585,10 +625,20 @@ export default function MyBets({ yearFilter = 'all', onYearsLoaded }: MyBetsProp
       {viewType === 'games' && Object.keys(statsByLeague).length > 0 && (
         <div className="bg-white rounded-lg shadow p-3">
           <div className="space-y-2">
-            {Object.entries(statsByLeague).map(([league, leagueStats], index) => (
-              <div key={league} className={`flex flex-wrap items-center justify-between gap-2 text-xs ${index > 0 ? 'border-t pt-2' : ''}`}>
+            {Object.entries(statsByLeague).map(([league, leagueStats], index) => {
+              const splits = league === 'NCAAF' ? ncaafSplits : null;
+              const expandable = !!splits && splits.length > 0;
+              const isOpen = expandedLeague === league;
+              return (
+              <div key={league} className={index > 0 ? 'border-t pt-2' : ''}>
+              <div
+                className={`flex flex-wrap items-center justify-between gap-2 text-xs ${expandable ? 'cursor-pointer select-none' : ''}`}
+                role={expandable ? 'button' : undefined}
+                title={expandable ? 'Tap for the FBS / FBS vs FCS split' : undefined}
+                onClick={() => expandable && setExpandedLeague(isOpen ? null : league)}
+              >
                 <div className="flex items-center gap-3">
-                  <span className="font-semibold text-gray-700 min-w-[50px]">{league}</span>
+                  <span className="font-semibold text-gray-700 min-w-[50px]">{league}{expandable ? (isOpen ? ' ▾' : ' ▸') : ''}</span>
                   <span className="font-medium">
                     {leagueStats.wonBets}-{leagueStats.lostBets}-{leagueStats.pushBets}
                   </span>
@@ -603,7 +653,26 @@ export default function MyBets({ yearFilter = 'all', onYearsLoaded }: MyBetsProp
                   {leagueStats.pendingBets} pending
                 </span>
               </div>
-            ))}
+              {expandable && isOpen && (
+                <div className="mt-1.5 ml-3 pl-3 border-l-2 border-gray-100 space-y-1">
+                  {splits!.map(({ label, stats: s }) => (
+                    <div key={label} className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                      <div className="flex items-center gap-3">
+                        <span className="font-medium text-gray-600 min-w-[80px]">{label}</span>
+                        <span className="font-medium">{s.wonBets}-{s.lostBets}-{s.pushBets}</span>
+                        <span className="text-gray-500">{s.winRate.toFixed(0)}% Win</span>
+                        <span className={`font-medium ${s.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {s.profit >= 0 ? '+' : ''}{s.profit.toFixed(2)}u
+                        </span>
+                      </div>
+                      <span className="text-gray-400">{s.pendingBets} pending</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              </div>
+              );
+            })}
           </div>
         </div>
       )}
