@@ -141,6 +141,8 @@ export interface FuturesTeam {
   titleProb: number;
   odds: number | null;    // fair American
   top2Prob: number;       // finishes in the conference's top two (title-game berth)
+  ccgProb: number;        // wins the conference championship game (berth × neutral-field win)
+  ccgOdds: number | null;
 }
 
 export interface FuturesConference {
@@ -305,6 +307,11 @@ export function buildFutures(
     // Head-to-head lookup for two-way ties: key "i,j" -> winner index per sim
     const titles = new Array<number>(n).fill(0);
     const top2 = new Array<number>(n).fill(0); // title-game berths (2 per sim)
+    const ccg = new Array<number>(n).fill(0);  // title-game wins (expected, 1 per sim)
+    // Neutral-field win probability between two conference teams
+    const ratingOf = teams.map((x) => x.rating);
+    const pNeutral = (i: number, j: number) => normalCdf((ratingOf[i] - ratingOf[j]) / sigma);
+    const pick = (arr: number[]) => arr[Math.floor(rand() * arr.length)];
     const rand = rng(season * 7919 + name.length * 131 + games.length);
     const wins = new Array<number>(n);
     const h2h = new Map<string, number>(); // "lo,hi" -> winner idx (this sim)
@@ -340,10 +347,18 @@ export function buildFutures(
       // Top-two berths: a tie at the top shares both spots; a lone leader
       // takes one and the runner-up group (head-to-head for a two-way tie)
       // shares the other.
+      // The title game itself needs an actual pair, so ties are drawn at
+      // random (head-to-head first for two-way ties); the game is then
+      // credited as an expectation rather than sampled.
+      let pairA: number;
+      let pairB: number;
       if (leaders.length >= 2) {
         for (const i of leaders) top2[i] += 2 / leaders.length;
+        pairA = pick(leaders);
+        pairB = pick(leaders.filter((i) => i !== pairA));
       } else {
         top2[leaders[0]] += 1;
+        pairA = leaders[0];
         let second = -1;
         const runners: number[] = [];
         for (let i = 0; i < n; i++) {
@@ -351,15 +366,23 @@ export function buildFutures(
           if (wins[i] > second) { second = wins[i]; runners.length = 0; runners.push(i); }
           else if (wins[i] === second) runners.push(i);
         }
-        if (runners.length === 1) top2[runners[0]] += 1;
-        else if (runners.length === 2) {
+        if (runners.length === 1) {
+          top2[runners[0]] += 1;
+          pairB = runners[0];
+        } else if (runners.length === 2) {
           const [a, b] = runners;
           const winner = h2h.get(`${Math.min(a, b)},${Math.max(a, b)}`);
-          if (winner !== undefined) top2[winner] += 1;
-          else { top2[a] += 0.5; top2[b] += 0.5; }
+          if (winner !== undefined) { top2[winner] += 1; pairB = winner; }
+          else { top2[a] += 0.5; top2[b] += 0.5; pairB = pick(runners); }
         } else {
           for (const i of runners) top2[i] += 1 / runners.length;
+          pairB = runners.length ? pick(runners) : -1;
         }
+      }
+      if (pairB >= 0) {
+        const p = pNeutral(pairA, pairB);
+        ccg[pairA] += p;
+        ccg[pairB] += 1 - p;
       }
     }
 
@@ -384,6 +407,8 @@ export function buildFutures(
         titleProb: Math.round(p * 10000) / 10000,
         odds: fairAmerican(p),
         top2Prob: Math.round((top2[i] / sims) * 10000) / 10000,
+        ccgProb: Math.round((ccg[i] / sims) * 10000) / 10000,
+        ccgOdds: fairAmerican(ccg[i] / sims),
       };
     }).sort((a, b) => b.titleProb - a.titleProb || b.rating - a.rating);
 
