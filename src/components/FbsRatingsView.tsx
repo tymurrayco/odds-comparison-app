@@ -18,6 +18,7 @@ import {
 import { hfaForGame, projectFbsSpread } from '@/lib/fbs/engine';
 import { useTeamColorMap } from '@/lib/myGameBets';
 import { createBet, fetchBets } from '@/lib/betService';
+import FbsFuturesPanel from './FbsFuturesPanel';
 
 const btnCls =
   'px-3 py-2 text-sm font-medium rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed';
@@ -197,7 +198,7 @@ export default function FbsRatingsView({ admin = false }: { admin?: boolean }) {
   const [sortDesc, setSortDesc] = useState(true);
   const [manualSpreads, setManualSpreads] = useState<Record<string, string>>({});
   const [savingLine, setSavingLine] = useState<string | null>(null);
-  const [view, setView] = useState<'ratings' | 'upcoming'>(admin ? 'ratings' : 'upcoming');
+  const [view, setView] = useState<'ratings' | 'upcoming' | 'futures'>(admin ? 'ratings' : 'upcoming');
   const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
   const [manualDelta, setManualDelta] = useState('');
   const [manualDate, setManualDate] = useState(() => localYmd(new Date()));
@@ -224,7 +225,7 @@ export default function FbsRatingsView({ admin = false }: { admin?: boolean }) {
   // Shared tab link: ?view=ratings|upcoming (read once; mirrored below)
   useEffect(() => {
     const v = new URLSearchParams(window.location.search).get('view');
-    if (v === 'ratings' || v === 'upcoming') setView(v);
+    if (v === 'ratings' || v === 'upcoming' || v === 'futures') setView(v);
   }, []);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -869,8 +870,8 @@ export default function FbsRatingsView({ admin = false }: { admin?: boolean }) {
           </div>
         )}
 
-        <div className="grid grid-cols-2 bg-slate-200/70 rounded-full p-0.5">
-          {(['ratings', 'upcoming'] as const).map((v) => (
+        <div className="grid grid-cols-3 bg-slate-200/70 rounded-full p-0.5">
+          {(['ratings', 'upcoming', 'futures'] as const).map((v) => (
             <button
               key={v}
               onClick={() => setView(v)}
@@ -878,7 +879,7 @@ export default function FbsRatingsView({ admin = false }: { admin?: boolean }) {
                 view === v ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'
               }`}
             >
-              {v === 'ratings' ? 'Ratings' : 'Upcoming'}
+              {v === 'ratings' ? 'Ratings' : v === 'upcoming' ? 'Upcoming' : 'Futures'}
             </button>
           ))}
         </div>
@@ -1144,6 +1145,8 @@ export default function FbsRatingsView({ admin = false }: { admin?: boolean }) {
             )}
           </div>
         )}
+
+        {view === 'futures' && <FbsFuturesPanel visualFor={visualFor} />}
 
         {admin && view === 'ratings' && (data?.unlinedGames ?? []).length > 0 && (
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
