@@ -35,6 +35,7 @@ const BET_BOOKS: Array<{ value: string; label: string }> = [
   { value: 'BetMGM', label: 'MGM' },
   { value: 'BetRivers', label: 'BR' },
   { value: 'Caesars', label: 'CZR' },
+  { value: 'Kalshi', label: 'Kalshi' },
 ];
 
 const smallBtnCls =

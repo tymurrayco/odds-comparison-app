@@ -147,6 +147,12 @@ export default function BetAdminPage() {
 
   const [formData, setFormData] = useState(getInitialFormState());
   const [oddsInput, setOddsInput] = useState('-110');
+  // Structured bet builder for the single-game types (spread / ML / total /
+  // team total): pick a side, over/under and a line; the canonical bet text
+  // and `team` are written for you. Only writes once touched, so editing an
+  // existing bet never clobbers its text.
+  const [builder, setBuilder] = useState({ side: 'away' as 'away' | 'home', ou: 'over' as 'over' | 'under', line: '' });
+  const [builderTouched, setBuilderTouched] = useState(false);
 
   useEffect(() => {
     loadBets();
@@ -204,6 +210,45 @@ export default function BetAdminPage() {
     const official = toOfficialName(m[1].trim());
     if (official === m[1].trim()) return text;
     return official + (m[2] ?? '');
+  };
+
+  type FormState = ReturnType<typeof getInitialFormState>;
+  type Builder = typeof builder;
+  const BUILDER_TYPES: BetType[] = ['spread', 'moneyline', 'total', 'team_total'];
+
+  const composeBet = (b: Builder, f: FormState): string => {
+    const team = b.side === 'home' ? f.homeTeam : f.awayTeam;
+    const line = b.line.trim();
+    const ou = b.ou === 'over' ? 'Over' : 'Under';
+    switch (f.betType) {
+      case 'spread':
+        return team ? `${team}${line ? ` ${/^[-+]/.test(line) ? line : `+${line}`}` : ''}` : '';
+      case 'moneyline':
+        return team ? `${team} ML` : '';
+      case 'total':
+        return line ? `${ou} ${line}` : '';
+      case 'team_total':
+        return team && line ? `${team} ${ou} ${line}` : '';
+      default:
+        return f.bet;
+    }
+  };
+
+  // Apply builder and/or form changes together and rewrite the derived fields
+  // (bet text, team, "Away @ Home" description) in one state update.
+  const applyBuilder = (bPatch: Partial<Builder>, fPatch: Partial<FormState> = {}, touched = builderTouched) => {
+    const b = { ...builder, ...bPatch };
+    const f: FormState = { ...formData, ...fPatch };
+    const auto = f.awayTeam && f.homeTeam ? `${f.awayTeam} @ ${f.homeTeam}` : '';
+    if (auto && (!f.description || / @ /.test(f.description))) f.description = auto;
+    if (BUILDER_TYPES.includes(f.betType) && (touched || !f.bet)) {
+      const bet = composeBet(b, f);
+      if (bet) f.bet = bet;
+      if (f.betType !== 'total') f.team = b.side === 'home' ? f.homeTeam : f.awayTeam;
+    }
+    setBuilder(b);
+    setBuilderTouched(touched);
+    setFormData(f);
   };
 
   // Resolve a bet's primary team. The logo should be the team the wager is ON:
@@ -282,6 +327,8 @@ export default function BetAdminPage() {
       }
 
       setFormData(getInitialFormState());
+      setBuilder({ side: 'away', ou: 'over', line: '' });
+      setBuilderTouched(false);
       setOddsInput('-110');
       setParlayTeams(['', '']);
       setEditingBet(null);
@@ -789,12 +836,18 @@ export default function BetAdminPage() {
                   <label className={labelCls}>Bet Type</label>
                   <select
                     value={formData.betType}
-                    onChange={(e) => setFormData({ ...formData, betType: e.target.value as BetType })}
+                    onChange={(e) => {
+                      const betType = e.target.value as BetType;
+                      // Switching type restarts the builder text so "Over 52.5"
+                      // never lingers on a spread.
+                      applyBuilder({}, { betType, bet: BUILDER_TYPES.includes(betType) && !editingBet ? '' : formData.bet }, builderTouched);
+                    }}
                     className={fieldCls}
                   >
                     <option value="spread">Spread</option>
                     <option value="moneyline">Moneyline</option>
-                    <option value="total">Total</option>
+                    <option value="total">Total (game)</option>
+                    <option value="team_total">Team Total</option>
                     <option value="prop">Prop</option>
                     <option value="parlay">Parlay</option>
                     <option value="teaser">Teaser</option>
@@ -886,7 +939,7 @@ export default function BetAdminPage() {
                       onChange={(e) => setFormData({ ...formData, awayTeam: e.target.value })}
                       onBlur={(e) => {
                         const v = toOfficialName(e.target.value.trim());
-                        if (v !== formData.awayTeam) setFormData(prev => ({ ...prev, awayTeam: v }));
+                        applyBuilder({}, { awayTeam: v });
                       }}
                       list={officialTeamNames.length > 0 ? 'official-team-list' : undefined}
                       placeholder="Optional"
@@ -903,7 +956,7 @@ export default function BetAdminPage() {
                       onChange={(e) => setFormData({ ...formData, homeTeam: e.target.value })}
                       onBlur={(e) => {
                         const v = toOfficialName(e.target.value.trim());
-                        if (v !== formData.homeTeam) setFormData(prev => ({ ...prev, homeTeam: v }));
+                        applyBuilder({}, { homeTeam: v });
                       }}
                       list={officialTeamNames.length > 0 ? 'official-team-list' : undefined}
                       placeholder="Optional"
@@ -918,8 +971,74 @@ export default function BetAdminPage() {
                 </div>
               )}
 
+              {BUILDER_TYPES.includes(formData.betType) && (
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2.5">
+                  <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Build the bet</div>
+                  {formData.betType !== 'total' && (
+                    <div className="flex gap-2">
+                      {(['away', 'home'] as const).map((side) => {
+                        const name = side === 'away' ? formData.awayTeam : formData.homeTeam;
+                        const active = builder.side === side;
+                        return (
+                          <button
+                            key={side}
+                            type="button"
+                            disabled={!name}
+                            onClick={() => applyBuilder({ side }, {}, true)}
+                            className={`flex-1 min-w-0 px-3 py-2 rounded-lg text-sm font-medium border truncate transition ${
+                              active && name
+                                ? 'bg-[#0052ff] text-white border-[#0052ff]'
+                                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100 disabled:opacity-40'
+                            }`}
+                            title={name || `Enter the ${side} team above`}
+                          >
+                            {name || (side === 'away' ? 'Away team' : 'Home team')}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    {(formData.betType === 'total' || formData.betType === 'team_total') && (
+                      <div className="flex rounded-lg border border-slate-200 overflow-hidden">
+                        {(['over', 'under'] as const).map((ou) => (
+                          <button
+                            key={ou}
+                            type="button"
+                            onClick={() => applyBuilder({ ou }, {}, true)}
+                            className={`px-3 py-2 text-sm font-medium transition ${
+                              builder.ou === ou ? 'bg-[#0052ff] text-white' : 'bg-white text-slate-700 hover:bg-slate-100'
+                            }`}
+                          >
+                            {ou === 'over' ? 'Over' : 'Under'}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {formData.betType !== 'moneyline' && (
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        autoComplete="off"
+                        value={builder.line}
+                        onChange={(e) => applyBuilder({ line: e.target.value.replace(/[−–—]/g, '-') }, {}, true)}
+                        placeholder={formData.betType === 'spread' ? '-3.5' : formData.betType === 'total' ? '52.5' : '18.5'}
+                        className={`${fieldCls} flex-1`}
+                        aria-label="Line"
+                      />
+                    )}
+                  </div>
+                  <div className="text-xs text-slate-500">
+                    Bet text: <span className="font-medium text-slate-800">{formData.bet || '—'}</span>
+                    {formData.betType === 'team_total' && !formData.awayTeam && !formData.homeTeam && (
+                      <span className="text-amber-600"> · enter the teams above first</span>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div>
-                <label className={labelCls}>Bet</label>
+                <label className={labelCls}>Bet{BUILDER_TYPES.includes(formData.betType) ? ' text (auto-filled — edit if needed)' : ''}</label>
                 <input
                   type="text"
                   value={formData.bet}
@@ -932,6 +1051,7 @@ export default function BetAdminPage() {
                   placeholder={
                     formData.betType === 'spread' ? 'Team -3.5' :
                     formData.betType === 'total' ? 'Over 52.5' :
+                    formData.betType === 'team_total' ? 'Arizona State Sun Devils Over 18.5' :
                     formData.betType === 'teaser' ? 'Team1 +7, Team2 -3' :
                     formData.betType === 'parlay' ? 'Team1 -3, Team2 ML, Team3 +7' :
                     formData.betType === 'future' ? 'To win Championship' :
@@ -995,6 +1115,7 @@ export default function BetAdminPage() {
                     <option value="BetMGM">MGM</option>
                     <option value="BetRivers">BR</option>
                     <option value="Caesars">CZR</option>
+                    <option value="Kalshi">Kalshi</option>
                   </select>
                 </div>
               </div>
@@ -1027,6 +1148,10 @@ export default function BetAdminPage() {
                   onClick={() => {
                     setEditingBet(null);
                     setFormData(getInitialFormState());
+                    setBuilder({ side: 'away', ou: 'over', line: '' });
+                    setBuilderTouched(false);
+      setBuilder({ side: 'away', ou: 'over', line: '' });
+      setBuilderTouched(false);
                     setOddsInput('-110');
                     setParlayTeams(['', '']);
                   }}

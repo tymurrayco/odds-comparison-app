@@ -144,6 +144,7 @@ export default function MyBets({ yearFilter = 'all', onYearsLoaded }: MyBetsProp
       bet.betType === 'spread' || 
       bet.betType === 'moneyline' || 
       bet.betType === 'total' || 
+      bet.betType === 'team_total' ||
       bet.betType === 'prop' ||
       bet.betType === 'parlay' ||
       bet.betType === 'teaser'  // Added teasers to games
@@ -301,6 +302,7 @@ export default function MyBets({ yearFilter = 'all', onYearsLoaded }: MyBetsProp
       case 'spread': return 'Spread';
       case 'moneyline': return 'ML';
       case 'total': return 'Total';
+      case 'team_total': return 'Team Total';
       case 'future': return 'Future';
       case 'prop': return 'Prop';
       case 'parlay': return 'Parlay';
