@@ -32,26 +32,43 @@ export async function GET(request: Request) {
   }
 
   try {
-    // Build the API URL - add groups=50 for college sports to get all games (not just top 25)
-    let apiUrl = `https://site.api.espn.com/apis/site/v2/sports/${espnLeague.sport}/${espnLeague.league}/scoreboard`;
-    
-    // For college sports, add limit parameter to get more games
-    if (espnLeague.league === 'mens-college-basketball' || espnLeague.league === 'college-football') {
-      apiUrl += '?limit=200&groups=50';
+    // Build the API URL(s). College basketball needs groups=50 (all of D-I,
+    // not just the top 25). College football uses different group ids —
+    // 80 = FBS, 81 = FCS — and groups=50 returns ZERO football games, which
+    // left every NCAAF card showing a start time mid-game. Fetch both
+    // divisions and merge (FCS games sit on the odds board too).
+    const base = `https://site.api.espn.com/apis/site/v2/sports/${espnLeague.sport}/${espnLeague.league}/scoreboard`;
+    const apiUrls =
+      espnLeague.league === 'college-football'
+        ? [`${base}?limit=300&groups=80`, `${base}?limit=300&groups=81`]
+        : espnLeague.league === 'mens-college-basketball'
+          ? [`${base}?limit=200&groups=50`]
+          : [base];
+
+    const pages = await Promise.all(
+      apiUrls.map(async (apiUrl) => {
+        const response = await fetch(apiUrl, {
+          next: { revalidate: 30 }, // Cache for 30 seconds
+        });
+        if (!response.ok) {
+          console.error(`ESPN API error: ${response.status} for ${apiUrl}`);
+          return null;
+        }
+        return response.json();
+      })
+    );
+    if (pages.every((p) => p === null)) {
+      return NextResponse.json({ error: 'ESPN API error' }, { status: 502 });
     }
-    
-    console.log('Fetching ESPN scores:', apiUrl);
-
-    const response = await fetch(apiUrl, {
-      next: { revalidate: 30 } // Cache for 30 seconds
-    });
-
-    if (!response.ok) {
-      console.error(`ESPN API error: ${response.status}`);
-      return NextResponse.json({ error: 'ESPN API error' }, { status: response.status });
-    }
-
-    const data = await response.json();
+    const seen = new Set<string>();
+    const data = {
+      events: pages.flatMap((p) => (p?.events ?? []) as Array<{ id?: string }>).filter((e) => {
+        const id = String(e?.id ?? '');
+        if (id && seen.has(id)) return false;
+        if (id) seen.add(id);
+        return true;
+      }),
+    };
     
     // Parse and simplify the ESPN response
     const scores: ESPNGameScore[] = [];
