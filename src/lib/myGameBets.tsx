@@ -15,11 +15,20 @@ let pendingBetsPromise: Promise<Bet[]> | null = null;
 
 function loadPendingBets(): Promise<Bet[]> {
   if (!pendingBetsPromise) {
-    pendingBetsPromise = fetchBets()
-      .then(bets => bets.filter(b => b.status === 'pending'))
-      .catch(() => []);
+    pendingBetsPromise = loadAllBets().then(bets => bets.filter(b => b.status === 'pending'));
   }
   return pendingBetsPromise;
+}
+
+// Every bet, any status. Game cards match on date + teams, so a wager graded
+// while the game is still on stays on its card (it used to vanish the moment
+// it was marked won); finished games leave the board on their own.
+let allBetsPromise: Promise<Bet[]> | null = null;
+function loadAllBets(): Promise<Bet[]> {
+  if (!allBetsPromise) {
+    allBetsPromise = fetchBets().catch(() => []);
+  }
+  return allBetsPromise;
 }
 
 // ---- Team color/logo support for badge styling ----
@@ -127,7 +136,7 @@ export function usePendingBetsForGame(awayTeam: string, homeTeam: string, commen
 
   useEffect(() => {
     let cancelled = false;
-    loadPendingBets().then(bets => {
+    loadAllBets().then(bets => {
       if (cancelled) return;
       const d = new Date(commenceTime);
       const gameDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -188,16 +197,20 @@ export function TicketIcon({ className, color }: { className?: string; color?: s
 
 // Shared my-bet badge: strong team-color border with a light team-color fill;
 // solid indigo fallback when no team color is available.
-export function MyBetBadge({ accent, title, children }: {
+export function MyBetBadge({ accent, title, status, children }: {
   accent: string | null;
   title?: string;
+  status?: Bet['status']; // graded wagers get a ✓ / ✗ / = mark and tint
   children: React.ReactNode;
 }) {
+  const graded = status === 'won' ? '✓' : status === 'lost' ? '✗' : status === 'push' ? '=' : null;
+  const gradedCls =
+    status === 'won' ? 'text-emerald-700' : status === 'lost' ? 'text-rose-700' : status === 'push' ? 'text-gray-500' : '';
   return (
     <span
       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] md:text-xs font-semibold shadow-sm ${
         accent ? 'border-2 text-gray-900' : 'bg-indigo-600 text-white'
-      }`}
+      } ${status === 'lost' ? 'opacity-70' : ''}`}
       style={accent ? {
         borderColor: accent,
         backgroundColor: hexToRgba(accent, 0.12),
@@ -205,6 +218,7 @@ export function MyBetBadge({ accent, title, children }: {
       title={title}
     >
       <TicketIcon color={accent} />
+      {graded && <span className={`font-bold ${accent ? gradedCls : ''}`}>{graded}</span>}
       {children}
     </span>
   );

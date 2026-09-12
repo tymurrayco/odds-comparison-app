@@ -388,7 +388,8 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                     <MyBetBadge
                       key={bet.id}
                       accent={accent}
-                      title={`Your bet: ${bet.bet}${bet.book ? ` (${bet.book})` : ''}`}
+                      status={bet.status}
+                      title={`Your bet: ${bet.bet}${bet.book ? ` (${bet.book})` : ''}${bet.status !== 'pending' ? ` — ${bet.status}` : ''}`}
                     >
                       <span className="hidden md:inline whitespace-nowrap">{bet.bet}</span>
                       <span className="md:hidden whitespace-nowrap">{compactBetText(bet)}</span>
