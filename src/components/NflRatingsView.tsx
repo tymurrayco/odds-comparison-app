@@ -311,7 +311,9 @@ export default function NflRatingsView({ admin = false }: { admin?: boolean }) {
   }, []);
 
   useEffect(() => {
-    if (admin && view === 'upcoming') loadPendingBets();
+    // Badges show on the public page too (they're Tyler's own tickets);
+    // only the bet form is admin.
+    if (view === 'upcoming') loadPendingBets();
   }, [admin, view, loadPendingBets]);
 
   const openBetForm = (g: UpcomingGame) => {
@@ -1069,15 +1071,17 @@ export default function NflRatingsView({ admin = false }: { admin?: boolean }) {
                               </div>
                             </div>
 
-                            {admin && (
+                            {(admin || (pendingBets[betKey] ?? []).length > 0) && (
                               <div className="mt-2 pt-2 border-t border-slate-100 space-y-2">
                                 <div className="flex items-center gap-2 flex-wrap">
-                                  <button
-                                    className={smallBtnCls}
-                                    onClick={() => (betOpen ? setBetForm(null) : openBetForm(g))}
-                                  >
-                                    {betOpen ? 'Cancel' : '+ Bet'}
-                                  </button>
+                                  {admin && (
+                                    <button
+                                      className={smallBtnCls}
+                                      onClick={() => (betOpen ? setBetForm(null) : openBetForm(g))}
+                                    >
+                                      {betOpen ? 'Cancel' : '+ Bet'}
+                                    </button>
+                                  )}
                                   {(pendingBets[betKey] ?? []).map((label, i) => (
                                     <span
                                       key={i}
