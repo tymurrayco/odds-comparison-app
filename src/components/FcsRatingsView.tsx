@@ -132,11 +132,13 @@ function TeamChip({
   visual,
   sub,
   warn,
+  manual,
 }: {
   name: string;
   visual: TeamVisual;
   sub?: string | null;
   warn?: boolean;
+  manual?: string | null; // tooltip: the team carries a manual rating adjustment
 }) {
   const body = (
     <>
@@ -163,6 +165,11 @@ function TeamChip({
               title="No ESPN link — games for this team will be skipped. Add an override in src/lib/fcs/teamNames.ts and re-seed."
             >
               ⚠
+            </span>
+          )}
+          {manual && (
+            <span className="ml-1.5 text-violet-500" title={manual} aria-label="Manual adjustment">
+              ✎
             </span>
           )}
         </div>
@@ -417,6 +424,18 @@ export default function FcsRatingsView({ admin = false }: { admin?: boolean }) {
 
   // team -> its history (newest first): game adjustments seen from that
   // team's side of the zero-sum split, merged with manual rating adjustments
+  // Teams carrying a manual rating adjustment -> tooltip text for the row icon
+  const manualByTeam = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const ma of data?.manualAdjustments ?? []) {
+      const when = new Date(ma.adjustDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      const line = `${ma.delta > 0 ? '+' : ''}${ma.delta.toFixed(2)} as of ${when}${ma.note ? ` — ${ma.note}` : ''}${ma.pending ? ' (not applied yet)' : ''}`;
+      m.set(ma.teamName, m.has(ma.teamName) ? `${m.get(ma.teamName)}
+${line}` : line);
+    }
+    return m;
+  }, [data]);
+
   const teamHistory = useMemo(() => {
     const m = new Map<string, HistoryEntry[]>();
     const push = (t: string, e: HistoryEntry) => {
@@ -1336,6 +1355,8 @@ export default function FcsRatingsView({ admin = false }: { admin?: boolean }) {
                         visual={v}
                         sub={r.conference}
                         warn={!r.espnName}
+                        manual={manualByTeam.has(r.teamName) ? `Manual adjustment
+${manualByTeam.get(r.teamName)}` : null}
                       />
                       <div className="text-right">
                         <div className="text-sm font-semibold text-slate-800 tabular-nums">
