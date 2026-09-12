@@ -698,7 +698,10 @@ function HomeContent() {
 
   // Filter games based on team name AND conferences
   const filteredGames = useMemo(() => {
-    let filtered = games;
+    // A game that has gone final (per the ESPN scores feed) has nothing left
+    // to price — drop its card. Games the feed can't match stay, so an empty
+    // or failed feed never hides anything.
+    let filtered = games.filter((game) => matchGameToScore(game, espnScores)?.state !== 'post');
 
     if (teamFilter.trim()) {
       const searchTerm = teamFilter.toLowerCase().trim();
@@ -719,7 +722,7 @@ function HomeContent() {
     }
 
     return filtered;
-  }, [games, teamFilter, selectedConferences, activeLeague]);
+  }, [games, teamFilter, selectedConferences, activeLeague, espnScores]);
 
   // Filter futures based on team/player name
   const filteredFutures = futures.map(market => ({
