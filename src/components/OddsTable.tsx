@@ -78,18 +78,23 @@ function getLeagueDisplayName(league: string): string {
 // (e.g. CFL has no ESPN logos), show the team name on mobile too instead of
 // leaving the cell blank.
 function TeamLogoOrName({ srcs, name, restBadge }: { srcs: (string | undefined)[]; name: string; restBadge?: React.ReactNode }) {
-  const list = srcs.filter((s): s is string => !!s);
+  const list = Array.from(new Set(srcs.filter((s): s is string => !!s)));
   const key = list.join('|');
   const [idx, setIdx] = useState(0);
-  const [loaded, setLoaded] = useState(false);
-  // New candidate list (market switch, map arrival) restarts the chain
+  // The URL that actually rendered (not a boolean): when the candidate list
+  // changes — the live-score logo arriving, a market switch — an already
+  // shown logo that is still a candidate is kept. Restarting the chain used to
+  // set the same URL again, the browser fires no load event for an unchanged
+  // src, and the name stayed visible on mobile.
+  const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
   const [seenKey, setSeenKey] = useState(key);
   if (seenKey !== key) {
     setSeenKey(key);
-    setIdx(0);
-    setLoaded(false);
+    const keep = loadedSrc ? list.indexOf(loadedSrc) : -1;
+    setIdx(keep >= 0 ? keep : 0);
   }
   const src = list[idx];
+  const loaded = !!src && loadedSrc === src;
   return (
     // Mobile shows the logo alone — center it in the frozen column; on sm+ the
     // name sits beside it, so the group goes back to left-aligned.
@@ -100,7 +105,7 @@ function TeamLogoOrName({ srcs, name, restBadge }: { srcs: (string | undefined)[
           src={src}
           alt=""
           className="h-7 w-7 sm:h-6 sm:w-6 sm:mr-1.5 flex-shrink-0 object-contain"
-          onLoad={() => setLoaded(true)}
+          onLoad={() => setLoadedSrc(src)}
           onError={() => setIdx(i => i + 1)}
         />
       )}
