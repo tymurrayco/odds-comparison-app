@@ -644,9 +644,10 @@ ${line}` : line);
       setError('Pick an "as of" date');
       return;
     }
-    // Local midnight of the chosen day -> the adjustment applies before that
-    // day's games and after everything earlier.
-    const adjustDate = new Date(`${manualDate}T00:00:00`).toISOString();
+    // End of the chosen day (local) -> the adjustment applies AFTER any game
+    // played that day and before the next day's. An adjustment entered on a
+    // game day is a reaction to that game, not a pre-game move (Tyler, 2026-09-12).
+    const adjustDate = new Date(`${manualDate}T23:59:59.999`).toISOString();
     setManualBusy(true);
     setError(null);
     try {
@@ -1406,7 +1407,7 @@ ${manualByTeam.get(r.teamName)}` : null}
                           <input
                             type="date"
                             className="px-2 py-1.5 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0052ff]/25"
-                            title="As of — applies from this date forward"
+                            title="As of — applies after any game played that day"
                             value={manualDate}
                             onChange={(e) => setManualDate(e.target.value)}
                           />
