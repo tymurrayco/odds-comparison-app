@@ -236,6 +236,32 @@ function HomeContent() {
     }
   }, [highlightedGameId, loading, games, router]);
 
+  // Coming back from a team page: the board's games load after mount, so the
+  // browser's scroll restore finds an empty page. OddsTable stashes the card
+  // we left from; once that league's games are rendered, jump back to it.
+  useEffect(() => {
+    if (loading || games.length === 0) return;
+    let marker: { league?: string; gameId?: string; y?: number; at?: number } | null = null;
+    try {
+      const raw = sessionStorage.getItem('oddsday:return');
+      marker = raw ? JSON.parse(raw) : null;
+    } catch {
+      marker = null;
+    }
+    if (!marker || marker.league !== activeLeague) return;
+    if (typeof marker.at === 'number' && Date.now() - marker.at > 60 * 60 * 1000) {
+      sessionStorage.removeItem('oddsday:return');
+      return;
+    }
+    sessionStorage.removeItem('oddsday:return');
+    const { gameId, y } = marker;
+    setTimeout(() => {
+      const el = gameId ? document.getElementById(`game-${gameId}`) : null;
+      if (el) el.scrollIntoView({ behavior: 'auto', block: 'center' });
+      else if (typeof y === 'number') window.scrollTo(0, y);
+    }, 50);
+  }, [loading, games, activeLeague]);
+
   // Force futures view for futures-only leagues, reset props when league changes
   useEffect(() => {
     if (isFuturesOnly(activeLeague)) {

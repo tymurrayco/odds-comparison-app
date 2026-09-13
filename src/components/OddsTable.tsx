@@ -520,6 +520,19 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                         <Link
                           href={`/team/${TEAM_PAGE_LEAGUES[game.sport_key]}/${encodeURIComponent(team)}`}
                           className="block hover:text-blue-700"
+                          onClick={() => {
+                            // Remember where we left the board: the browser's own
+                            // scroll restore fires before the games have loaded,
+                            // so the home page re-scrolls to this card itself.
+                            try {
+                              sessionStorage.setItem(
+                                'oddsday:return',
+                                JSON.stringify({ league: game.sport_key, gameId: game.id, y: window.scrollY, at: Date.now() })
+                              );
+                            } catch {
+                              /* storage unavailable — back just lands at the top */
+                            }
+                          }}
                         >
                           <TeamLogoOrName srcs={logoSrcs} name={team} restBadge={restBadge} />
                         </Link>
