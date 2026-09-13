@@ -160,7 +160,7 @@ export default function FbsFuturesPanel({ visualFor }: { visualFor: (teamName: s
                 </div>
                 {fav && (
                   <div className="flex-1 min-w-0 flex items-center gap-3">
-                    <Chip name={fav.teamName} sub={`${fmtRec(fav.confWins, fav.confLosses)} conf · proj ${fmtRec(fav.projWins, fav.projLosses)}`} />
+                    <Chip name={fav.teamName} sub={`${fmtRec(fav.wins, fav.losses)} · ${fmtRec(fav.confWins, fav.confLosses)} conf · proj ${fmtRec(fav.projWins, fav.projLosses)}`} />
                   </div>
                 )}
                 {fav && (
@@ -177,9 +177,10 @@ export default function FbsFuturesPanel({ visualFor }: { visualFor: (teamName: s
               </button>
               {isOpen && (
                 <div className="border-t border-slate-100">
-                  <div className="hidden sm:grid grid-cols-[1.75rem_1fr_4rem_5rem_5rem_7rem_5.5rem] items-center px-3 py-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wide bg-slate-50">
+                  <div className="hidden sm:grid grid-cols-[1.75rem_1fr_3.5rem_4rem_5rem_5rem_7rem_5.5rem] items-center px-3 py-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wide bg-slate-50">
                     <div>#</div>
                     <div>Team</div>
+                    <div className="text-right" title="Overall record (completed games)">W–L</div>
                     <div className="text-right">Conf</div>
                     <div className="text-right" title="Projected conference record">Proj conf</div>
                     <div className="text-right" title="Projected overall record">Proj W–L</div>
@@ -212,13 +213,13 @@ export default function FbsFuturesPanel({ visualFor }: { visualFor: (teamName: s
                       return (
                         <div key={t.teamName}>
                         <div
-                          className="grid grid-cols-[1.75rem_1fr_auto] sm:grid-cols-[1.75rem_1fr_4rem_5rem_5rem_7rem_5.5rem] items-center px-3 py-2"
+                          className="grid grid-cols-[1.75rem_1fr_auto] sm:grid-cols-[1.75rem_1fr_3.5rem_4rem_5rem_5rem_7rem_5.5rem] items-center px-3 py-2"
                           style={{ boxShadow: `inset 3px 0 0 ${v.color}` }}
                         >
                           <div className="text-xs text-slate-400 tabular-nums">{medal ?? i + 1}</div>
                           <Chip
                             name={t.teamName}
-                            sub={`${t.rating.toFixed(1)} · ${fmtRec(t.confWins, t.confLosses)} conf · proj ${fmtRec(t.projWins, t.projLosses)}${t.unratedGames ? ` · ${t.unratedGames} unrated` : ''}`}
+                            sub={`${t.rating.toFixed(1)} · ${fmtRec(t.wins, t.losses)} · ${fmtRec(t.confWins, t.confLosses)} conf · proj ${fmtRec(t.projWins, t.projLosses)}${t.unratedGames ? ` · ${t.unratedGames} unrated` : ''}`}
                           />
                           <div className="text-right sm:hidden" title="Regular-season title / championship game">
                             <div className="text-sm font-semibold tabular-nums text-slate-800">
@@ -228,6 +229,7 @@ export default function FbsFuturesPanel({ visualFor }: { visualFor: (teamName: s
                               {(t.titleProb * 100).toFixed(1)}% / {(t.ccgProb * 100).toFixed(1)}%
                             </div>
                           </div>
+                          <div className="hidden sm:block text-right text-sm text-slate-800 tabular-nums">{fmtRec(t.wins, t.losses)}</div>
                           <div className="hidden sm:block text-right text-sm text-slate-600 tabular-nums">{fmtRec(t.confWins, t.confLosses)}</div>
                           <div className="hidden sm:block text-right text-sm text-slate-600 tabular-nums">{fmtRec(t.projConfWins, t.projConfLosses)}</div>
                           <div className="hidden sm:block text-right text-sm text-slate-600 tabular-nums">{fmtRec(t.projWins, t.projLosses)}</div>

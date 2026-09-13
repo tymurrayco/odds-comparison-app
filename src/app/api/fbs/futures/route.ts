@@ -17,7 +17,7 @@ import { buildFutures, fetchFbsSeasonSchedule, FuturesResult } from '@/lib/fbs/f
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const TTL_MS = 10 * 60 * 1000;
+const TTL_MS = 3 * 60 * 1000;
 let cache: { season: number; at: number; result: FuturesResult & { generatedAt: string } } | null = null;
 
 export async function GET(request: NextRequest) {
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
     cache = { season, at: Date.now(), result };
     return NextResponse.json(
       { success: true, cached: false, ...result },
-      { headers: { 'Cache-Control': 's-maxage=300, stale-while-revalidate=600' } }
+      { headers: { 'Cache-Control': 's-maxage=120, stale-while-revalidate=180' } }
     );
   } catch (e) {
     return NextResponse.json({ success: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });

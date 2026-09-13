@@ -46,7 +46,7 @@ export interface ScheduleGame {
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 let scheduleCache: { season: number; at: number; games: ScheduleGame[] } | null = null;
-const SCHEDULE_TTL_MS = 30 * 60 * 1000;
+const SCHEDULE_TTL_MS = 5 * 60 * 1000; // finals land within minutes of the whistle
 
 export async function fetchFbsSeasonSchedule(season: number): Promise<ScheduleGame[]> {
   if (scheduleCache && scheduleCache.season === season && Date.now() - scheduleCache.at < SCHEDULE_TTL_MS) {
