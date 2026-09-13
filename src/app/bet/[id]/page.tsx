@@ -6,6 +6,18 @@ import { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { wageredTeam, getTeamAssets, buildBetOgUrl, formatOdds } from '@/lib/betShare';
+import { propPlayerName, resolvePlayerTeam } from '@/lib/playerTeam';
+
+// Props logged before the team lookup existed carry no side — resolve the
+// player against the two rosters so the page still wears their team.
+async function themeTeam(bet: BetRow): Promise<string | null> {
+  const team = wageredTeam(bet);
+  if (bet.bet_type !== 'prop' || bet.team) return team;
+  const player = propPlayerName(bet.bet);
+  const sides = [bet.away_team, bet.home_team].filter((s): s is string => !!s);
+  if (!player || sides.length === 0) return team;
+  return (await resolvePlayerTeam(bet.league, player, sides)) ?? team;
+}
 
 interface BetRow {
   id: string;
@@ -53,7 +65,7 @@ export async function generateMetadata({
     return { title: 'Bet Not Found | odds.day', description: 'This bet could not be found.' };
   }
 
-  const team = wageredTeam(bet);
+  const team = await themeTeam(bet);
   const { logo, color } = await getTeamAssets(bet.league, team);
 
   const oddsStr = formatOdds(bet.odds);

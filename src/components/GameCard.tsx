@@ -197,11 +197,21 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
   );
 
   // Mobile-compact bet text: "TCU Horned Frogs -6.5" → "TCU -6.5", Over/Under → O/U
-  const compactBetText = (bet: Bet): string => bet.bet
-    .replace(game.away_team, getFirstWord(game.away_team))
-    .replace(game.home_team, getFirstWord(game.home_team))
-    .replace(/^Over\s+/i, 'O ')
-    .replace(/^Under\s+/i, 'U ');
+  const compactBetText = (bet: Bet): string => {
+    if (bet.betType === 'prop') {
+      // "Patrick Mahomes Over 275.5 Passing Yards" -> "Mahomes O 275.5"
+      const m = bet.bet.match(/^(.+?)\s+(over|under)\s*([\d.]+)/i);
+      if (m) {
+        const last = m[1].trim().split(/\s+/).pop() ?? m[1];
+        return `${last} ${m[2][0].toUpperCase()} ${m[3]}`;
+      }
+    }
+    return bet.bet
+      .replace(game.away_team, getFirstWord(game.away_team))
+      .replace(game.home_team, getFirstWord(game.home_team))
+      .replace(/^Over\s+/i, 'O ')
+      .replace(/^Under\s+/i, 'U ');
+  };
   
   // Calculate implied scores based on average spread and total
   const calculateImpliedScores = () => {

@@ -105,6 +105,23 @@ export default function PropsTable({
       // Create full description (game matchup)
       const fullDescription = `${event.away_team} @ ${event.home_team}`;
       
+      // The player's team (badge accent on the card, theme on the share page):
+      // one roster lookup, best effort, capped so the hold never feels stuck.
+      let playerTeam: string | undefined;
+      try {
+        const ctrl = new AbortController();
+        const cap = setTimeout(() => ctrl.abort(), 3000);
+        const r = await fetch(
+          `/api/player-team?league=${encodeURIComponent(league)}&player=${encodeURIComponent(prop.playerName)}&teams=${encodeURIComponent(`${event.away_team},${event.home_team}`)}`,
+          { signal: ctrl.signal }
+        );
+        clearTimeout(cap);
+        const j = await r.json();
+        if (j?.team) playerTeam = j.team;
+      } catch {
+        /* unresolved — the bet still saves, just without a side */
+      }
+
       try {
         // Format date in local timezone to avoid UTC conversion issues
         const eventDate = new Date(event.commence_time);
@@ -118,7 +135,7 @@ export default function PropsTable({
           description: fullDescription,
           awayTeam: event.away_team,
           homeTeam: event.home_team,
-          team: undefined, // Props don't have a specific team selection
+          team: playerTeam, // the player's team when the roster lookup finds them
           betType: 'prop',
           bet: betDescription,
           odds: odds,

@@ -310,11 +310,29 @@ export default function BetAdminPage() {
     try {
       const filledParlayTeams = parlayTeams.filter(t => t.trim() !== '');
 
+      // Prop without a team: find the player on one of the two rosters so the
+      // card badge and share page carry the player's team.
+      let propTeam = formData.team;
+      if (formData.betType === 'prop' && !propTeam && formData.awayTeam && formData.homeTeam) {
+        const player = formData.bet.match(/^(.+?)\s+(?:over|under|o|u)\s*\d/i)?.[1]?.trim();
+        if (player) {
+          try {
+            const r = await fetch(
+              `/api/player-team?league=${encodeURIComponent(formData.league)}&player=${encodeURIComponent(player)}&teams=${encodeURIComponent(`${formData.awayTeam},${formData.homeTeam}`)}`
+            );
+            const j = await r.json();
+            if (j?.team) propTeam = j.team;
+          } catch {
+            /* leave blank */
+          }
+        }
+      }
+
       const betData = {
         ...formData,
         awayTeam: formData.betType === 'parlay' ? undefined : (formData.awayTeam || undefined),
         homeTeam: formData.betType === 'parlay' ? undefined : (formData.homeTeam || undefined),
-        team: formData.team || undefined,
+        team: propTeam || undefined,
         result: formData.result || undefined,
         notes: formData.notes || undefined,
         parlayTeams: formData.betType === 'parlay' && filledParlayTeams.length > 0 ? filledParlayTeams : undefined
