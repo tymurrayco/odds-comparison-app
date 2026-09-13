@@ -255,11 +255,35 @@ function HomeContent() {
     }
     sessionStorage.removeItem('oddsday:return');
     const { gameId, y } = marker;
-    setTimeout(() => {
+    // The router's own scroll restore and late layout (logos, live scores,
+    // the tip banner) can land after a single scroll and undo it — that was
+    // the "works half the time". Re-assert over the first two seconds and
+    // stop once the card has sat centred across two consecutive checks.
+    const timers: number[] = [];
+    let settled = 0;
+    const attempt = () => {
       const el = gameId ? document.getElementById(`game-${gameId}`) : null;
-      if (el) el.scrollIntoView({ behavior: 'auto', block: 'center' });
-      else if (typeof y === 'number') window.scrollTo(0, y);
-    }, 50);
+      if (el) {
+        const r = el.getBoundingClientRect();
+        const centred = Math.abs(r.top + r.height / 2 - window.innerHeight / 2) < 48;
+        if (centred) {
+          settled++;
+          if (settled >= 2) return true;
+        } else {
+          settled = 0;
+          el.scrollIntoView({ behavior: 'auto', block: 'center' });
+        }
+      } else if (typeof y === 'number' && Math.abs(window.scrollY - y) > 8) {
+        window.scrollTo(0, y);
+      }
+      return false;
+    };
+    for (const ms of [30, 150, 350, 650, 1000, 1500, 2200]) {
+      timers.push(window.setTimeout(() => {
+        if (attempt()) timers.forEach((t) => window.clearTimeout(t));
+      }, ms));
+    }
+    return () => timers.forEach((t) => window.clearTimeout(t));
   }, [loading, games, activeLeague]);
 
   // Force futures view for futures-only leagues, reset props when league changes
