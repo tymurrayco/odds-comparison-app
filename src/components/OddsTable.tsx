@@ -25,6 +25,7 @@ interface OddsTableProps {
   awayLogo?: string;
   homeLogo?: string;
   restData?: GameRestData | null;
+  isLive?: boolean; // in-progress: drop books whose line has gone stale
 }
 
 interface OddsItem {
@@ -154,7 +155,7 @@ function getTeamRestBadges(teamRest: TeamRestInfo, hasAdvantage: boolean, advant
   return null;
 }
 
-export default function OddsTable({ games, view = 'moneyline', league = 'basketball_nba', selectedBookmakers, awayLogo, homeLogo, restData }: OddsTableProps) {
+export default function OddsTable({ games, view = 'moneyline', league = 'basketball_nba', selectedBookmakers, awayLogo, homeLogo, restData, isLive = false }: OddsTableProps) {
   const pressTimer = useRef<NodeJS.Timeout | null>(null);
   const [isHolding, setIsHolding] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -299,10 +300,23 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
       {games.map(game => {
         // Only show bookmakers that actually price this game's current market —
         // empty columns (squished logo + "-") add no value.
+        // In-play, books re-price at different speeds and some park at the
+        // closing number for minutes at a time — the mix looked like nonsense
+        // (-4.5 next to -7.5) and the "best line" was just the slowest book.
+        // Keep only lines refreshed within 2 minutes of the freshest one.
+        const LIVE_STALE_MS = 2 * 60 * 1000;
+        const newestUpdate = isLive
+          ? Math.max(0, ...game.bookmakers.map(b => new Date(b.last_update).getTime() || 0))
+          : 0;
         const activeBookmakers = displayBookmakers.filter(book => {
           const bookieData = game.bookmakers.find(b => b.title === book);
           const market = bookieData?.markets.find(m => m.key === marketKey);
-          return !!market && market.outcomes.length > 0;
+          if (!market || market.outcomes.length === 0) return false;
+          if (isLive && newestUpdate > 0) {
+            const at = new Date(bookieData!.last_update).getTime() || 0;
+            if (newestUpdate - at > LIVE_STALE_MS) return false;
+          }
+          return true;
         });
 
         // For each team, calculate which bookmakers offer the best odds (only among displayed bookmakers)

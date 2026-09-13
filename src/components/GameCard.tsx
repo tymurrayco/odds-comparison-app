@@ -691,6 +691,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
           awayLogo={liveScore?.awayLogo}
           homeLogo={liveScore?.homeLogo}
           restData={restData}
+          isLive={isLive}
         />
       )}
     </div>
