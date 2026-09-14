@@ -143,6 +143,7 @@ export interface FuturesTeam {
   top2Prob: number;       // finishes in the conference's top two (title-game berth)
   ccgProb: number;        // wins the conference championship game (berth × neutral-field win)
   ccgOdds: number | null;
+  top2Odds: number | null;  // fair price to reach the title game (top-two finish)
 }
 
 export interface FuturesConference {
@@ -409,6 +410,7 @@ export function buildFutures(
         top2Prob: Math.round((top2[i] / sims) * 10000) / 10000,
         ccgProb: Math.round((ccg[i] / sims) * 10000) / 10000,
         ccgOdds: fairAmerican(ccg[i] / sims),
+        top2Odds: fairAmerican(top2[i] / sims),
       };
     }).sort((a, b) => b.titleProb - a.titleProb || b.rating - a.rating);
 

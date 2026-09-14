@@ -29,6 +29,7 @@ interface FuturesTeam {
   top2Prob: number;
   ccgProb: number;
   ccgOdds: number | null;
+  top2Odds: number | null;
 }
 
 interface FuturesConference {
@@ -167,9 +168,10 @@ export default function FbsFuturesPanel({ visualFor }: { visualFor: (teamName: s
                   <div className="text-right shrink-0" title="Regular-season title / conference championship game">
                     <div className="text-base font-bold tabular-nums text-slate-800">
                       {fmtOdds(fav.odds)} <span className="text-slate-300 font-normal">/</span> {fmtOdds(fav.ccgOdds)}
+                      <span className="text-slate-300 font-normal"> /</span> <span className="text-slate-500 font-semibold">{fmtOdds(fav.top2Odds)}</span>
                     </div>
                     <div className="text-[11px] text-slate-400 tabular-nums">
-                      {(fav.titleProb * 100).toFixed(0)}% reg · {(fav.ccgProb * 100).toFixed(0)}% champ
+                      {(fav.titleProb * 100).toFixed(0)}% reg · {(fav.ccgProb * 100).toFixed(0)}% champ · {(fav.top2Prob * 100).toFixed(0)}% berth
                     </div>
                   </div>
                 )}
@@ -177,14 +179,14 @@ export default function FbsFuturesPanel({ visualFor }: { visualFor: (teamName: s
               </button>
               {isOpen && (
                 <div className="border-t border-slate-100">
-                  <div className="hidden sm:grid grid-cols-[1.75rem_1fr_3.5rem_4rem_5rem_5rem_7rem_5.5rem] items-center px-3 py-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wide bg-slate-50">
+                  <div className="hidden sm:grid grid-cols-[1.75rem_1fr_3.5rem_4rem_5rem_5rem_10rem_7rem] items-center px-3 py-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wide bg-slate-50">
                     <div>#</div>
                     <div>Team</div>
                     <div className="text-right" title="Overall record (completed games)">W–L</div>
                     <div className="text-right">Conf</div>
                     <div className="text-right" title="Projected conference record">Proj conf</div>
                     <div className="text-right" title="Projected overall record">Proj W–L</div>
-                    <div className="text-right" title="Regular-season title / championship game">Reg / Champ</div>
+                    <div className="text-right" title="Regular-season title / championship game / reach the title game (top-two finish)">Reg / Champ / Berth</div>
                     <div className="text-right" title="Title probability: regular season / championship game">%</div>
                   </div>
                   <div className="divide-y divide-slate-100">
@@ -213,7 +215,7 @@ export default function FbsFuturesPanel({ visualFor }: { visualFor: (teamName: s
                       return (
                         <div key={t.teamName}>
                         <div
-                          className="grid grid-cols-[1.75rem_1fr_auto] sm:grid-cols-[1.75rem_1fr_3.5rem_4rem_5rem_5rem_7rem_5.5rem] items-center px-3 py-2"
+                          className="grid grid-cols-[1.75rem_1fr_auto] sm:grid-cols-[1.75rem_1fr_3.5rem_4rem_5rem_5rem_10rem_7rem] items-center px-3 py-2"
                           style={{ boxShadow: `inset 3px 0 0 ${v.color}` }}
                         >
                           <div className="text-xs text-slate-400 tabular-nums">{medal ?? i + 1}</div>
@@ -224,9 +226,10 @@ export default function FbsFuturesPanel({ visualFor }: { visualFor: (teamName: s
                           <div className="text-right sm:hidden" title="Regular-season title / championship game">
                             <div className="text-sm font-semibold tabular-nums text-slate-800">
                               {fmtOdds(t.odds)} <span className="text-slate-300 font-normal">/</span> {fmtOdds(t.ccgOdds)}
+                              <span className="text-slate-300 font-normal"> /</span> <span className="text-slate-500">{fmtOdds(t.top2Odds)}</span>
                             </div>
                             <div className="text-[11px] text-slate-400 tabular-nums">
-                              {(t.titleProb * 100).toFixed(1)}% / {(t.ccgProb * 100).toFixed(1)}%
+                              {(t.titleProb * 100).toFixed(1)}% / {(t.ccgProb * 100).toFixed(1)}% / {(t.top2Prob * 100).toFixed(0)}%
                             </div>
                           </div>
                           <div className="hidden sm:block text-right text-sm text-slate-800 tabular-nums">{fmtRec(t.wins, t.losses)}</div>
@@ -235,9 +238,10 @@ export default function FbsFuturesPanel({ visualFor }: { visualFor: (teamName: s
                           <div className="hidden sm:block text-right text-sm text-slate-600 tabular-nums">{fmtRec(t.projWins, t.projLosses)}</div>
                           <div className="hidden sm:block text-right text-sm font-semibold tabular-nums text-slate-800 whitespace-nowrap">
                             {fmtOdds(t.odds)} <span className="text-slate-300 font-normal">/</span> {fmtOdds(t.ccgOdds)}
+                            <span className="text-slate-300 font-normal"> /</span> <span className="text-slate-500">{fmtOdds(t.top2Odds)}</span>
                           </div>
                           <div className="hidden sm:block text-right text-sm text-slate-500 tabular-nums whitespace-nowrap">
-                            {(t.titleProb * 100).toFixed(1)} / {(t.ccgProb * 100).toFixed(1)}
+                            {(t.titleProb * 100).toFixed(1)} / {(t.ccgProb * 100).toFixed(1)} / {(t.top2Prob * 100).toFixed(0)}
                           </div>
                         </div>
                         {titleBar}
