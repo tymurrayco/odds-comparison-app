@@ -73,6 +73,7 @@ export async function GET(request: NextRequest) {
     DraftKings: 'draftkings.png', FanDuel: 'fd.png', BetMGM: 'betmgm.png',
     BetRivers: 'betrivers.png', Caesars: 'caesars.png',
     'BetOnline.ag': 'betonline.png', Kalshi: 'kalshi.png',
+    Novig: 'novig.png', ProphetX: 'prophetx.png',
   };
   // Some assets inset their mark inside heavy padding (BetRivers is a small
   // wordmark on a yellow tile), so a uniform box makes them read tiny. Scale

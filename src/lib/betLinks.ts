@@ -29,18 +29,20 @@ export function linkNeedsState(link: string): boolean {
 }
 
 // Fill the-odds-api link templates: {state} → user's state; coupon params get
-// sensible defaults (single pick, no prefilled stake).
+// sensible defaults (single pick, no prefilled stake). Novig's outcome links
+// end in "/{wager}" (stake) — dropped so the betslip opens with no amount.
 export function fillLinkTemplate(link: string, state: string): string {
   return link
     .replaceAll('{state}', state.toLowerCase())
     .replaceAll('{pickType}', 'single')
-    .replaceAll('{wagerAmount}', '');
+    .replaceAll('{wagerAmount}', '')
+    .replaceAll('{wager}', '');
 }
 
 // Resolve a clickable URL. Returns null when the template needs a state and
 // none is stored yet — caller should prompt.
 export function resolveDeepLink(link: string): string | null {
-  if (!linkNeedsState(link)) return link;
+  if (!linkNeedsState(link)) return fillLinkTemplate(link, '');
   const state = getBetState();
   return state ? fillLinkTemplate(link, state) : null;
 }

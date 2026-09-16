@@ -66,6 +66,8 @@ const BOOK_LOGOS: Record<string, string> = {
   'Caesars': 'caesars.png',
   'BetOnline.ag': 'betonline.png',
   'Kalshi': 'kalshi.png',
+  'Novig': 'novig.png',
+  'ProphetX': 'prophetx.png',
 };
 
 export async function GET(request: NextRequest) {

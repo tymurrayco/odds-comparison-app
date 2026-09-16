@@ -1,6 +1,7 @@
 // src/app/api/odds/route.ts
 import { NextResponse } from 'next/server';
 import { recordCreditSnapshot } from '@/lib/creditUsage';
+import { ODDS_API_BOOKMAKERS } from '@/lib/api';
 
 // Whitelist of sport keys we proxy to the Odds API. Anything else is rejected
 // before it hits the paid API to prevent quota abuse via arbitrary sport keys.
@@ -37,8 +38,10 @@ export async function GET(request: Request) {
   const apiKey = process.env.ODDS_API_KEY;
 
   try {
-    // Added includeLinks=true to get deep links to sportsbook betslips
-    const apiUrl = `https://api.the-odds-api.com/v4/sports/${sport}/odds/?apiKey=${apiKey}&regions=us&markets=h2h,spreads,totals&oddsFormat=american&includeLinks=true`;
+    // Explicit bookmaker list (not regions=us): Novig + ProphetX sit in the
+    // "us_ex" exchange region, and a ≤10-book list bills as ONE region — same
+    // 3 credits/call as before. includeLinks=true → deep links to betslips.
+    const apiUrl = `https://api.the-odds-api.com/v4/sports/${sport}/odds/?apiKey=${apiKey}&bookmakers=${ODDS_API_BOOKMAKERS.join(',')}&markets=h2h,spreads,totals&oddsFormat=american&includeLinks=true`;
 
     // Shared server-side cache: visitors within 60s reuse one paid API call
     const response = await fetch(apiUrl, { next: { revalidate: 60 } });

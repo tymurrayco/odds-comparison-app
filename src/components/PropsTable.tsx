@@ -64,10 +64,17 @@ export default function PropsTable({
   const [holdingKey, setHoldingKey] = useState<string | null>(null); // Track which cell is being held
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   
-  // Use selected bookmakers or default to all
-  const displayBookmakers = selectedBookmakers && selectedBookmakers.length > 0 
+  // Use selected bookmakers or default to all. Books with no prop prices for
+  // this event (e.g. Novig / ProphetX — the props feed is regions=us) would
+  // only add empty columns, so drop them.
+  const pricesSomething = (book: string) =>
+    markets.some(m => m.props.some(p => {
+      const o = p.odds[book];
+      return !!o && (o.over !== null || o.under !== null);
+    }));
+  const displayBookmakers = (selectedBookmakers && selectedBookmakers.length > 0
     ? BOOKMAKERS.filter(b => selectedBookmakers.includes(b))
-    : BOOKMAKERS;
+    : BOOKMAKERS).filter(pricesSomething);
 
   const formatOdds = (odds: number | null): string => {
     if (odds === null) return '-';
@@ -169,7 +176,9 @@ export default function PropsTable({
     'BetRivers': '/bookmaker-logos/betrivers.png',
     'Caesars': '/bookmaker-logos/caesars.png',
     'BetOnline.ag': '/bookmaker-logos/betonline.png',
-    'Kalshi': '/bookmaker-logos/kalshi.png'
+    'Kalshi': '/bookmaker-logos/kalshi.png',
+    'Novig': '/bookmaker-logos/novig.png',
+    'ProphetX': '/bookmaker-logos/prophetx.png'
   };
 
   // Toggle market expansion

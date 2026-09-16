@@ -197,7 +197,7 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
   };
 
   // Bookmakers that support deep linking
-  const deepLinkBookmakers = ['FanDuel', 'DraftKings', 'Caesars', 'Kalshi', 'BetMGM', 'BetRivers'];
+  const deepLinkBookmakers = ['FanDuel', 'DraftKings', 'Caesars', 'Kalshi', 'BetMGM', 'BetRivers', 'Novig', 'ProphetX'];
 
   // Handle press-and-hold to create bet
   const handlePressStart = (
@@ -276,7 +276,9 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
   'BetRivers': '/bookmaker-logos/betrivers.png',
   'Caesars': '/bookmaker-logos/caesars.png',
   'BetOnline.ag': '/bookmaker-logos/betonline.png',
-  'Kalshi': '/bookmaker-logos/kalshi.png'
+  'Kalshi': '/bookmaker-logos/kalshi.png',
+  'Novig': '/bookmaker-logos/novig.png',
+  'ProphetX': '/bookmaker-logos/prophetx.png'
   };
   
   // Map market keys

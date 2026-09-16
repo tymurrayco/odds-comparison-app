@@ -124,7 +124,14 @@ export interface ApiResponse<T> {
 }
 
 // List of supported bookmakers
-export const BOOKMAKERS = ['DraftKings', 'FanDuel', 'Kalshi', 'BetMGM', 'BetRivers', 'Caesars', 'BetOnline.ag'];
+export const BOOKMAKERS = ['DraftKings', 'FanDuel', 'Kalshi', 'BetMGM', 'BetRivers', 'Caesars', 'BetOnline.ag', 'Novig', 'ProphetX'];
+
+// Odds API keys behind the board (Kalshi is fetched separately, see /api/kalshi-odds).
+// Novig + ProphetX live in the API's "us_ex" exchange region; asking for an explicit
+// bookmaker list costs the same as one region (≤10 books) instead of two.
+export const ODDS_API_BOOKMAKERS = [
+  'draftkings', 'fanduel', 'betmgm', 'betrivers', 'williamhill_us', 'betonlineag', 'novig', 'prophetx',
+];
 
 // List of leagues with isActive flag
 export const LEAGUES = [
