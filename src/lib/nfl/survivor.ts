@@ -17,7 +17,7 @@
  * constraints; a team used once is unavailable everywhere else.
  */
 
-import { ESPN_NFL_SCOREBOARD_URL, NFL_SEASON_DATES } from './constants';
+import { fetchNflSeasonEvents } from './espnSchedule';
 import { hfaForGame, projectNflSpread } from './engine';
 import { NflTeamRating } from './types';
 import { normalCdf } from '@/lib/fbs/futures';
@@ -90,14 +90,10 @@ export async function fetchNflSeasonGames(season: number): Promise<SurvivorGame[
   if (scheduleCache && scheduleCache.season === season && Date.now() - scheduleCache.at < SCHEDULE_TTL_MS) {
     return scheduleCache.games;
   }
-  const dates = NFL_SEASON_DATES[season];
-  if (!dates) throw new Error(`No season dates for ${season}`);
-  const range = `${dates.start.replace(/-/g, '')}-${dates.end.replace(/-/g, '')}`;
-  const res = await fetch(`${ESPN_NFL_SCOREBOARD_URL}?dates=${range}&limit=1000`);
-  if (!res.ok) throw new Error(`ESPN scoreboard HTTP ${res.status}`);
-  const json = await res.json();
+  // Regular season only, fetched week by week (ESPN no longer accepts date ranges)
+  const events = await fetchNflSeasonEvents(season, [2]);
   const games: SurvivorGame[] = [];
-  for (const event of json.events ?? []) {
+  for (const event of events) {
     if (Number(event.season?.type) !== 2) continue; // regular season only
     const comp = event.competitions?.[0];
     const home = comp?.competitors?.find((c: any) => c.homeAway === 'home');

@@ -25,16 +25,15 @@
  */
 
 import {
-  ESPN_NFL_SCOREBOARD_URL,
   ESPN_NFL_TEAMS_URL,
   NFL_CONSENSUS_BOOKS,
   NFL_DIVISIONS,
-  NFL_SEASON_DATES,
   NFL_SPORT_KEY,
   ODDS_API_BASE_URL,
   SAGARIN_NFL_URL,
 } from './constants';
 import { roundToDecimal } from './engine';
+import { fetchNflSeasonEvents } from './espnSchedule';
 import { EspnTeam, matchNflTeam, normalizeName } from './teamNames';
 import { PowerRatingRow } from '@/lib/powerRatings';
 
@@ -85,14 +84,10 @@ export async function fetchEspnNflTeams(): Promise<EspnTeam[]> {
 
 /** Season-long neutral-site games keyed "away|home" (ESPN displayNames). */
 export async function fetchNeutralGameKeys(season: number): Promise<Set<string>> {
-  const dates = NFL_SEASON_DATES[season];
-  if (!dates) return new Set();
-  const range = `${dates.start.replace(/-/g, '')}-${dates.end.replace(/-/g, '')}`;
-  const res = await fetch(`${ESPN_NFL_SCOREBOARD_URL}?dates=${range}&limit=1000`);
-  if (!res.ok) throw new Error(`ESPN NFL scoreboard HTTP ${res.status}`);
-  const json = await res.json();
+  // Regular season + postseason (Super Bowl is neutral), week by week — ESPN dropped date ranges
+  const events = await fetchNflSeasonEvents(season, [2, 3]);
   const keys = new Set<string>();
-  for (const event of json.events ?? []) {
+  for (const event of events) {
     const comp = event.competitions?.[0];
     if (!comp) continue;
     const neutral = comp.neutralSite === true || comp.venue?.neutral === true;

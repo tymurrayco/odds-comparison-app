@@ -11,8 +11,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  ESPN_NFL_SCOREBOARD_URL,
   NFL_CONSENSUS_BOOKS,
+  NFL_SEASON,
   NFL_SPORT_KEY,
   ODDS_API_BASE_URL,
 } from '@/lib/nfl/constants';
@@ -22,6 +22,7 @@ import {
   projectNflSpread,
   roundToDecimal,
 } from '@/lib/nfl/engine';
+import { fetchNflSeasonEvents } from '@/lib/nfl/espnSchedule';
 import { loadNflConfig, loadNflRatings } from '@/lib/nfl/supabase';
 import { matchOddsEvent } from '@/lib/nfl/teamNames';
 import { NflTeamRating } from '@/lib/nfl/types';
@@ -101,17 +102,17 @@ export async function GET(request: NextRequest) {
       totalEdge: number | null; // market - projected; positive = we lean under
     }> = [];
 
-    // One scoreboard call for the whole window (ESPN's NFL feed takes a range)
+    // ESPN's NFL scoreboard no longer accepts date ranges (400 since 2026-09-15):
+    // read the season week by week (60s cache) and keep the events inside our window.
     const end = new Date(start);
     end.setUTCDate(end.getUTCDate() + days);
-    const ymd = (d: Date) => d.toISOString().substring(0, 10).replace(/-/g, '');
-    const res = await fetch(`${ESPN_NFL_SCOREBOARD_URL}?dates=${ymd(start)}-${ymd(end)}&limit=200`);
-    if (!res.ok) throw new Error(`ESPN scoreboard HTTP ${res.status}`);
-    const json = await res.json();
+    const espnEvents = await fetchNflSeasonEvents(NFL_SEASON, [2, 3]);
 
-    for (const event of json.events ?? []) {
+    for (const event of espnEvents) {
       const comp = event.competitions?.[0];
       if (!comp) continue;
+      const eventTime = new Date(comp.date ?? event.date).getTime();
+      if (!(eventTime >= start.getTime() && eventTime <= end.getTime())) continue;
       if (comp.status?.type?.completed === true) continue;
       const gameTime = new Date(comp.date ?? event.date).getTime();
       if (gameTime < now - 4 * 60 * 60 * 1000) continue;
