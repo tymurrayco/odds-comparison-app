@@ -237,6 +237,13 @@ export default function NflSurvivorPanel({ visualFor }: { visualFor: (teamName: 
 
   const entries = plan?.entries ?? [];
   const rules = plan?.rules;
+  const unusedTeams = (() => {
+    if (!plan) return [] as string[];
+    const all = new Set<string>();
+    for (const w of plan.weeks) for (const o of w.options) all.add(o.team);
+    for (const t of plan.usedTeams) all.delete(t);
+    return [...all].sort();
+  })();
 
   return (
     <div className="space-y-3">
@@ -321,6 +328,16 @@ export default function NflSurvivorPanel({ visualFor }: { visualFor: (teamName: 
               <> · <span className="font-semibold text-slate-700">survive the season: {(plan.survivalProb * 100).toFixed(2)}%</span></>
             )}
             {plan.infeasible.length > 0 && <span className="text-amber-600"> · no team available for {plan.infeasible.join(', ')}</span>}
+          </div>
+        )}
+        {plan && unusedTeams.length > 0 && (
+          <div className="flex items-center gap-1.5 flex-wrap" title="Teams still available in this entry">
+            <span className="text-[11px] uppercase tracking-wide text-slate-400 shrink-0">{unusedTeams.length} left</span>
+            {unusedTeams.map((t) => (
+              <span key={t} title={t} className="inline-flex">
+                <Logo team={t} />
+              </span>
+            ))}
           </div>
         )}
         {error && <div className="p-2 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-700">{error}</div>}
