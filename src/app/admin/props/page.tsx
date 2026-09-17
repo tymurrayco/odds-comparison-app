@@ -115,7 +115,7 @@ const pickAccent = (color?: string, alt?: string): string | null => {
   }
   return color;
 };
-interface TeamTheme { color: string; logo: string }
+interface TeamTheme { color: string; logo: string; name: string }
 
 const evCls = (ev: number | null): string =>
   ev === null ? 'text-slate-400'
@@ -168,6 +168,9 @@ export default function PropsAdminPage() {
   // Per-game manual excludes (uncheck a row in the game log) + log visibility
   const [excludedGames, setExcludedGames] = useState<Set<string>>(new Set());
   const [showGameLog, setShowGameLog] = useState(false);
+  const [showModelNotes, setShowModelNotes] = useState(false); // step 2 internals
+  const [showWhy, setShowWhy] = useState(false);               // step 4 model explainer
+  const [showDetails, setShowDetails] = useState(false);       // step 4 stat tiles
 
   // Team theme: page tints to the selected player's team colors. The NFL
   // team map (ESPN colors/logos) is fetched once and cached for the session.
@@ -185,9 +188,9 @@ export default function PropsAdminPage() {
         }
         const code = selectedPlayer.team.toUpperCase();
         const info = teamMapRef.current?.[normalizeTeamKey(TEAM_CODE_ALIASES[code] ?? code)] as
-          ({ color: string; logo: string; alternateColor?: string } | undefined);
+          ({ color: string; logo: string; alternateColor?: string; displayName?: string } | undefined);
         const accent = pickAccent(info?.color, info?.alternateColor);
-        if (!cancelled) setTeamTheme(accent ? { color: accent, logo: info?.logo ?? '' } : null);
+        if (!cancelled) setTeamTheme(info ? { color: accent ?? '64748b', logo: info.logo ?? '', name: info.displayName ?? '' } : null);
       } catch { /* theming is cosmetic — never block */ }
     })();
     return () => { cancelled = true; };
@@ -379,8 +382,18 @@ export default function PropsAdminPage() {
       const map = extractQuotes(json.bookmakers ?? []);
       setQuotes(map);
       setAltLoaded(withAlts);
-      if (!map.size) setMessage('No quotes posted for this market yet');
-      else if (oddsPlayer && !map.has(oddsPlayer)) setOddsPlayer('');
+      if (!map.size) {
+        setMessage('No quotes posted for this market yet');
+      } else if (selectedPlayer) {
+        // Player-first: attach his quote by (normalized) exact name. A miss
+        // shows the pick-a-name dropdown instead of silently pricing nobody.
+        const key = normName(selectedPlayer.player_name);
+        const hit = Array.from(map.keys()).find((n) => normName(n) === key);
+        setOddsPlayer(hit ?? '');
+        setMessage(hit ? null : `No ${marketDef.label} quote matched ${selectedPlayer.player_name} — pick his name in step 3 if it is spelled differently`);
+      } else if (oddsPlayer && !map.has(oddsPlayer)) {
+        setOddsPlayer('');
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load odds');
     } finally {
@@ -533,6 +546,33 @@ export default function PropsAdminPage() {
       setGamesLoading(false);
     }
   }, []);
+
+  // Bind a quote name to the ALREADY selected player (spelling mismatch
+  // fallback) without re-running the player lookup.
+  const attachOddsPlayer = (name: string) => {
+    setOddsPlayer(name);
+    setLineInput('');
+    setOverPriceInput('');
+    setUnderPriceInput('');
+    setMessage(null);
+  };
+
+  // Step 3 automation: the player's team names his game. The events list
+  // is soonest-first, so the first hit is his next game. The user can still
+  // change the dropdown; this only re-fires when the player or list changes.
+  const autoEventId = useMemo(() => {
+    if (!teamTheme?.name || !events.length) return '';
+    const key = normalizeTeamKey(teamTheme.name);
+    const mine = events.filter((e) => normalizeTeamKey(e.home_team) === key || normalizeTeamKey(e.away_team) === key);
+    // The list is the whole season, oldest first: take his next game (an
+    // in-progress one still counts for four hours), else his latest.
+    const cutoff = Date.now() - 4 * 3600 * 1000;
+    const next = mine.find((e) => new Date(e.commence_time).getTime() > cutoff);
+    return (next ?? mine[mine.length - 1])?.id ?? '';
+  }, [teamTheme, events]);
+  useEffect(() => {
+    if (autoEventId) setEventId(autoEventId);
+  }, [autoEventId]);
 
   // Picking a player from the odds list auto-matches game logs by name.
   // Only a (normalized) exact name match auto-attaches — a near-miss must be
@@ -799,6 +839,77 @@ export default function PropsAdminPage() {
       });
   }, [kalshiRungs, selectedPlayer, hasProj, sd, projNum, dist]);
 
+  // ---------- verdict (step 4 headline) ----------
+  // One line that answers the question the page exists for: which side, at
+  // what price, worth how much. Everything else is supporting detail.
+  const verdict = (() => {
+    if (!selectedPlayer && !playerQuotes.length) return null;
+    if (!hasProj || sd === null || sd <= 0) {
+      return { tone: 'muted' as const, title: 'Set a projection to price this prop', sub: null as string | null };
+    }
+    if (!hasLine || !result) {
+      return { tone: 'muted' as const, title: "Enter the book's line to price it", sub: 'Load odds in step 3 to fill the line and prices automatically, or type them here.' };
+    }
+    const far = !!marketFair && Math.abs(result.p - marketFair.pOver) > 0.12;
+    const farNote = far ? ' · far from the market — more likely you are missing something than the whole market is' : '';
+    if (result.ev === null && result.evUnder === null) {
+      return {
+        tone: far ? ('warn' as const) : ('muted' as const),
+        title: `Over ${line}: model ${fmtPct(result.p)} · fair ${fmtAmerican(result.fair)} over / ${fmtAmerican(result.fairUnder)} under`,
+        sub: `${marketFair ? `Market fair ${fmtPct(marketFair.pOver)} · ` : ''}type the book's prices to get an EV${farNote}`,
+      };
+    }
+    const overEv = result.ev ?? Number.NEGATIVE_INFINITY;
+    const underEv = result.evUnder ?? Number.NEGATIVE_INFINITY;
+    const side: 'over' | 'under' = overEv >= underEv ? 'over' : 'under';
+    const ev = side === 'over' ? overEv : underEv;
+    const price = side === 'over' ? overPrice : underPrice;
+    const p = side === 'over' ? result.p : 1 - result.p;
+    const mkt = marketFair ? (side === 'over' ? marketFair.pOver : 1 - marketFair.pOver) : null;
+    const evTxt = (v: number | null) => (v === null ? '—' : `${v > 0 ? '+' : ''}${(v * 100).toFixed(1)}%`);
+    const sub = `Model ${fmtPct(p)} vs market ${mkt !== null ? fmtPct(mkt) : '—'} · breakeven ${price !== null ? fmtPct(americanToProb(price)) : '—'}${farNote}`;
+    if (ev <= 0) {
+      return {
+        tone: far ? ('warn' as const) : ('none' as const),
+        title: `No edge at ${line} · Over ${fmtAmerican(overPrice)} ${evTxt(result.ev)} · Under ${fmtAmerican(underPrice)} ${evTxt(result.evUnder)}`,
+        sub,
+      };
+    }
+    return {
+      tone: far ? ('warn' as const) : ev > 0.02 ? ('good' as const) : ('slight' as const),
+      title: `${side === 'over' ? 'Over' : 'Under'} ${line} at ${fmtAmerican(price)} · ${evTxt(ev)} EV`,
+      sub,
+    };
+  })();
+
+  const verdictCls: Record<string, string> = {
+    good: 'bg-emerald-50 border-emerald-200 text-emerald-900',
+    slight: 'bg-emerald-50/60 border-emerald-100 text-emerald-800',
+    none: 'bg-slate-50 border-slate-200 text-slate-700',
+    warn: 'bg-amber-50 border-amber-200 text-amber-900',
+    muted: 'bg-slate-50 border-slate-200 text-slate-500',
+  };
+
+  // Numbered step header — the four cards read as one flow
+  const Step = ({ n, label, note }: { n: number; label: string; note?: string }) => (
+    <div className="flex items-center gap-2 min-w-0">
+      <span
+        className="inline-flex items-center justify-center w-5 h-5 rounded-full text-white text-[11px] font-bold shrink-0"
+        style={{ backgroundColor: teamTheme ? `#${teamTheme.color}` : '#0f172a' }}
+      >
+        {n}
+      </span>
+      <span className="text-sm font-semibold truncate">{label}</span>
+      {note && <span className="text-xs text-slate-400 truncate">{note}</span>}
+    </div>
+  );
+
+  const evTxt = (v: number | null) => (v === null ? '—' : `${v > 0 ? '+' : ''}${(v * 100).toFixed(1)}%`);
+  const gameLabel = (ev: OddsEvent) =>
+    `${ev.away_team} @ ${ev.home_team} — ${new Date(ev.commence_time).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
+  const currentEvent = events.find((e) => e.id === eventId) ?? null;
+  const quotedBooks = new Set(playerQuotes.map((q) => q.book)).size;
+
   // ---------- render ----------
 
   return (
@@ -939,15 +1050,12 @@ export default function PropsAdminPage() {
           </div>
         )}
 
-        {/* Player-first selection: pick the player, toggle through his
-            markets (instant — logs carry every stat), then optionally attach
-            book quotes below. */}
+        {/* Step 1 — player + market. Logs carry every stat, so switching
+            markets is instant; book quotes attach in step 3. */}
         <div className={`${cardCls} space-y-3`} style={themedCard}>
+          <Step n={1} label="Player" />
           <div>
-            <label className={labelCls}>Player</label>
             {selectedPlayer ? (
-              /* Compact team-themed badge replaces the search bar; × clears
-                 the player and brings the search back. */
               <div
                 className="inline-flex items-center gap-2 text-sm pl-3 pr-1.5 py-1.5 rounded-full bg-slate-100"
                 style={teamTheme ? {
@@ -974,7 +1082,8 @@ export default function PropsAdminPage() {
                 <input
                   value={playerSearch}
                   onChange={(e) => setPlayerSearch(e.target.value)}
-                  placeholder="Josh Jacobs…"
+                  placeholder="Type a player — Josh Jacobs…"
+                  autoFocus
                   className={fieldCls}
                 />
                 {playerSearch.trim().length >= 2 && playerResults.length > 0 && (
@@ -991,6 +1100,9 @@ export default function PropsAdminPage() {
                     ))}
                   </div>
                 )}
+                <div className="text-xs text-slate-400 mt-1.5">
+                  Start here. His markets and game history load at once; his game and the book&apos;s prices attach in step 3.
+                </div>
               </div>
             )}
           </div>
@@ -1015,69 +1127,13 @@ export default function PropsAdminPage() {
               ))}
             </div>
           </div>
-
-          <div className="flex flex-wrap items-end gap-3 pt-2 border-t border-slate-100">
-            <div>
-              <label className={labelCls}>League</label>
-              <div className="flex rounded-lg border border-slate-200 overflow-hidden">
-                {NFL_SPORTS.map((s) => (
-                  <button
-                    key={s.key}
-                    onClick={() => setSportKey(s.key)}
-                    className={`px-3 py-2 text-xs font-medium transition ${
-                      sportKey === s.key ? 'bg-[#0052ff] text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
-                    }`}
-                  >
-                    {s.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="flex-1 min-w-[220px]">
-              <label className={labelCls}>Game {eventsLoading && '(loading…)'}</label>
-              <select value={eventId} onChange={(e) => setEventId(e.target.value)} className={fieldCls}>
-                <option value="">Select game…</option>
-                {events.map((ev) => (
-                  <option key={ev.id} value={ev.id}>
-                    {ev.away_team} @ {ev.home_team} —{' '}
-                    {new Date(ev.commence_time).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <button onClick={() => loadOdds(false)} disabled={!eventId || oddsLoading} className={btnCls}>
-              {oddsLoading ? 'Loading…' : 'Load Odds'}
-            </button>
-            {marketDef.oddsApiAltKey && (
-              <button
-                onClick={() => loadOdds(true)}
-                disabled={!eventId || oddsLoading || altLoaded}
-                className={btnGhostCls}
-                title="Also fetch alternate lines (extra Odds API cost)"
-              >
-                {altLoaded ? 'Alts Loaded' : '+ Alt Lines'}
-              </button>
-            )}
-            {oddsPlayers.length > 0 && (
-              <div className="flex-1 min-w-[200px]">
-                <label className={labelCls}>Match odds player ({oddsPlayers.length})</label>
-                <select value={oddsPlayer} onChange={(e) => pickOddsPlayer(e.target.value)} className={fieldCls}>
-                  <option value="">Select player…</option>
-                  {oddsPlayers.map((p) => (
-                    <option key={p} value={p}>{p}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-          </div>
         </div>
 
-        {/* Measured distribution */}
+        {/* Step 2 — measured distribution */}
         {selectedPlayer && (
           <div className={`${cardCls} space-y-3`} style={themedCard}>
             <div className="flex flex-wrap items-center gap-3">
-              <div className="text-sm font-semibold">Measured — {marketDef.label}</div>
-              {gamesLoading && <span className="text-xs text-slate-400">loading game logs…</span>}
+              <Step n={2} label={`His history — ${marketDef.label}`} note={gamesLoading ? 'loading game logs…' : undefined} />
               <div className="flex gap-1.5">
                 {availableSeasons.map((s) => (
                   <button
@@ -1120,13 +1176,12 @@ export default function PropsAdminPage() {
             </div>
 
             {measured ? (
-              <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 text-center">
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 text-center">
                 {[
                   ['Games', String(measured.games)],
-                  ['Mean', measured.mean.toFixed(1)],
-                  ['Median', measured.median.toFixed(1)],
-                  ['SD', measured.sd.toFixed(1)],
-                  ['SD/Mean', measured.cv.toFixed(2)],
+                  ['Average', measured.mean.toFixed(1)],
+                  ['Typical game', measured.median.toFixed(1)],
+                  ['Swing (SD)', measured.sd.toFixed(1)],
                   [`${marketDef.opportunityStat}/g`, measured.oppMean.toFixed(1)],
                 ].map(([label, val]) => (
                   <div key={label} className="bg-slate-50 rounded-lg py-2">
@@ -1145,21 +1200,13 @@ export default function PropsAdminPage() {
 
             {measured && measured.mean > measured.median && (
               <div className="text-xs text-amber-600">
-                Mean &gt; median by {(measured.mean - measured.median).toFixed(1)} — boom/bust pattern
+                Average is {(measured.mean - measured.median).toFixed(1)} above his typical game — boom/bust pattern
                 present; the Boom/Bust number is the honest one at the main line.
               </div>
             )}
-            {leagueMult !== null && (
-              <div className="text-xs text-slate-400">
-                League {position} multiplier {leagueMult}
-                {tierMult !== null && ` · tier ${tierMult}`}
-                {measured && ` · this player ${measured.cv.toFixed(2)}`}
-              </div>
-            )}
 
-            {/* Game log — uncheck a row to exclude that game from the sample */}
-            {playerGames.length > 0 && seasonsSelected.length > 0 && (
-              <div>
+            <div className="flex flex-wrap items-center gap-3">
+              {playerGames.length > 0 && seasonsSelected.length > 0 && (
                 <button
                   onClick={() => setShowGameLog(!showGameLog)}
                   className="text-xs font-medium text-slate-500 hover:text-slate-700 transition"
@@ -1169,86 +1216,206 @@ export default function PropsAdminPage() {
                     <span className="ml-1.5 text-amber-600">({excludedGames.size} excluded by hand)</span>
                   )}
                 </button>
-                {showGameLog && (() => {
-                  const minOppN = Number(minOpp) || 0;
-                  const rows = playerGames
-                    .filter((g) => seasonsSelected.includes(g.season))
-                    .filter((g) => (includePost ? true : g.season_type === 'REG'))
-                    .sort((a, b) => b.season - a.season || b.week - a.week);
-                  return (
-                    <div className="mt-1.5 overflow-x-auto">
-                      <table className="text-xs">
-                        <thead>
-                          <tr className="text-left text-slate-400 uppercase tracking-wide">
-                            <th className="py-1 pr-2">In</th>
-                            <th className="py-1 pr-3">Season</th>
-                            <th className="py-1 pr-3">Wk</th>
-                            <th className="py-1 pr-3">Opp</th>
-                            <th className="py-1 pr-3 text-right">{marketDef.opportunityStat}</th>
-                            <th className="py-1 pr-3 text-right">{marketDef.label}</th>
-                            <th className="py-1"></th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {rows.map((g) => {
-                            const k = gameKey(g);
-                            const opp = g[marketDef.opportunityStat] ?? 0;
-                            const val = g[marketDef.stat] ?? 0;
-                            const manualOut = excludedGames.has(k);
-                            const autoOut = !manualOut && (opp < minOppN || (excludeZero && val <= 0));
-                            const out = manualOut || autoOut;
-                            return (
-                              <tr key={k} className={`border-t border-slate-100 ${out ? 'opacity-45' : ''}`}>
-                                <td className="py-1 pr-2">
-                                  <input
-                                    type="checkbox"
-                                    checked={!manualOut}
-                                    onChange={() =>
-                                      setExcludedGames((prev) => {
-                                        const next = new Set(prev);
-                                        if (next.has(k)) next.delete(k); else next.add(k);
-                                        return next;
-                                      })
-                                    }
-                                  />
-                                </td>
-                                <td className="py-1 pr-3 tabular-nums">{g.season}</td>
-                                <td className="py-1 pr-3 tabular-nums">
-                                  {g.week}{g.season_type !== 'REG' ? ' P' : ''}
-                                </td>
-                                <td className="py-1 pr-3">{g.opponent ?? '—'}</td>
-                                <td className="py-1 pr-3 text-right tabular-nums text-slate-500">{opp}</td>
-                                <td className={`py-1 pr-3 text-right tabular-nums font-medium ${
-                                  measured && !out ? (val >= measured.median ? 'text-emerald-600' : 'text-red-500') : ''
-                                }`}>
-                                  {val}
-                                </td>
-                                <td className="py-1 text-[10px] text-slate-400">
-                                  {manualOut ? 'excluded' : autoOut ? (opp < minOppN ? 'min-opps' : 'zero') : ''}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  );
-                })()}
+              )}
+              {(leagueMult !== null || measured) && (
+                <button
+                  onClick={() => setShowModelNotes(!showModelNotes)}
+                  className="text-xs font-medium text-slate-500 hover:text-slate-700 transition"
+                >
+                  {showModelNotes ? '▾' : '▸'} Model notes
+                </button>
+              )}
+            </div>
+            {showModelNotes && (
+              <div className="text-xs text-slate-400">
+                Volatility as a share of the average (SD/mean): this player {measured ? measured.cv.toFixed(2) : '—'}
+                {leagueMult !== null && ` · league ${position} ${leagueMult}`}
+                {tierMult !== null && ` · his volume tier ${tierMult}`}. The tier and league numbers are the
+                fallbacks used when his own sample is thin.
               </div>
             )}
+
+            {/* Game log — uncheck a row to exclude that game from the sample */}
+            {showGameLog && playerGames.length > 0 && seasonsSelected.length > 0 && (() => {
+              const minOppN = Number(minOpp) || 0;
+              const rows = playerGames
+                .filter((g) => seasonsSelected.includes(g.season))
+                .filter((g) => (includePost ? true : g.season_type === 'REG'))
+                .sort((a, b) => b.season - a.season || b.week - a.week);
+              return (
+                <div className="overflow-x-auto">
+                  <table className="text-xs">
+                    <thead>
+                      <tr className="text-left text-slate-400 uppercase tracking-wide">
+                        <th className="py-1 pr-2">In</th>
+                        <th className="py-1 pr-3">Season</th>
+                        <th className="py-1 pr-3">Wk</th>
+                        <th className="py-1 pr-3">Opp</th>
+                        <th className="py-1 pr-3 text-right">{marketDef.opportunityStat}</th>
+                        <th className="py-1 pr-3 text-right">{marketDef.label}</th>
+                        <th className="py-1"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((g) => {
+                        const k = gameKey(g);
+                        const opp = g[marketDef.opportunityStat] ?? 0;
+                        const val = g[marketDef.stat] ?? 0;
+                        const manualOut = excludedGames.has(k);
+                        const autoOut = !manualOut && (opp < minOppN || (excludeZero && val <= 0));
+                        const out = manualOut || autoOut;
+                        return (
+                          <tr key={k} className={`border-t border-slate-100 ${out ? 'opacity-45' : ''}`}>
+                            <td className="py-1 pr-2">
+                              <input
+                                type="checkbox"
+                                checked={!manualOut}
+                                onChange={() =>
+                                  setExcludedGames((prev) => {
+                                    const next = new Set(prev);
+                                    if (next.has(k)) next.delete(k); else next.add(k);
+                                    return next;
+                                  })
+                                }
+                              />
+                            </td>
+                            <td className="py-1 pr-3 tabular-nums">{g.season}</td>
+                            <td className="py-1 pr-3 tabular-nums">
+                              {g.week}{g.season_type !== 'REG' ? ' P' : ''}
+                            </td>
+                            <td className="py-1 pr-3">{g.opponent ?? '—'}</td>
+                            <td className="py-1 pr-3 text-right tabular-nums text-slate-500">{opp}</td>
+                            <td className={`py-1 pr-3 text-right tabular-nums font-medium ${
+                              measured && !out ? (val >= measured.median ? 'text-emerald-600' : 'text-red-500') : ''
+                            }`}>
+                              {val}
+                            </td>
+                            <td className="py-1 text-[10px] text-slate-400">
+                              {manualOut ? 'excluded' : autoOut ? (opp < minOppN ? 'min-opps' : 'zero') : ''}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}
           </div>
         )}
 
-        {/* Pricing */}
+        {/* Step 3 — book prices. The game is picked from the player's team
+            and the quote is matched by name; the controls only appear when
+            that automation misses (or when working odds-first, no player). */}
+        <div className={`${cardCls} space-y-3`} style={themedCard}>
+          <div className="flex flex-wrap items-center gap-3">
+            <Step
+              n={3}
+              label="Book prices"
+              note={eventsLoading ? 'loading games…' : selectedPlayer && autoEventId && autoEventId === eventId ? 'game picked from his team' : undefined}
+            />
+          </div>
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <label className={labelCls}>League</label>
+              <div className="flex rounded-lg border border-slate-200 overflow-hidden">
+                {NFL_SPORTS.map((s) => (
+                  <button
+                    key={s.key}
+                    onClick={() => setSportKey(s.key)}
+                    className={`px-3 py-2 text-xs font-medium transition ${
+                      sportKey === s.key ? 'bg-[#0052ff] text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex-1 min-w-[220px]">
+              <label className={labelCls}>Game</label>
+              <select value={eventId} onChange={(e) => setEventId(e.target.value)} className={fieldCls}>
+                <option value="">{selectedPlayer && !eventsLoading && events.length ? 'No game found for his team — pick one…' : 'Select game…'}</option>
+                {events.map((ev) => (
+                  <option key={ev.id} value={ev.id}>{gameLabel(ev)}</option>
+                ))}
+              </select>
+            </div>
+            <button onClick={() => loadOdds(false)} disabled={!eventId || oddsLoading} className={btnCls}>
+              {oddsLoading ? 'Loading…' : quotes.size ? 'Reload Odds' : 'Load Odds'}
+            </button>
+            {marketDef.oddsApiAltKey && (
+              <button
+                onClick={() => loadOdds(true)}
+                disabled={!eventId || oddsLoading || altLoaded}
+                className={btnGhostCls}
+                title="Also fetch alternate lines (extra Odds API cost)"
+              >
+                {altLoaded ? 'Alts Loaded' : '+ Alt Lines'}
+              </button>
+            )}
+          </div>
+
+          {quotes.size === 0 ? (
+            <div className="text-xs text-slate-400">
+              {currentEvent
+                ? `Load Odds pulls ${marketDef.label} quotes for ${gameLabel(currentEvent)} (one API credit). No odds? You can still type a line and prices in step 4.`
+                : 'Pick a game and load odds, or skip this and type the line and prices in step 4.'}
+            </div>
+          ) : oddsPlayer && selectedPlayer ? (
+            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+              <span className="inline-flex items-center gap-1 text-emerald-700 font-medium">
+                <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
+                Matched {oddsPlayer}
+              </span>
+              <span className="text-slate-400">·</span>
+              <span>{quotedBooks} book{quotedBooks === 1 ? '' : 's'}</span>
+              <span className="text-slate-400">·</span>
+              <span>line{bookLines.length === 1 ? '' : 's'} {bookLines.join(', ')}</span>
+              <button className="text-slate-400 underline" onClick={() => attachOddsPlayer('')}>change</button>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="flex-1 min-w-[200px]">
+                <label className={labelCls}>
+                  {selectedPlayer ? `No quote matched "${selectedPlayer.player_name}" — pick his name` : 'Pick a player from the quotes'} ({oddsPlayers.length})
+                </label>
+                <select
+                  value={oddsPlayer}
+                  onChange={(e) => (selectedPlayer ? attachOddsPlayer(e.target.value) : pickOddsPlayer(e.target.value))}
+                  className={fieldCls}
+                >
+                  <option value="">Select player…</option>
+                  {oddsPlayers.map((p) => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Step 4 — price it */}
         {(selectedPlayer || playerQuotes.length > 0) && (
           <div className={`${cardCls} space-y-4`} style={themedCard}>
-            <div className="text-sm font-semibold">Price It</div>
+            <Step n={4} label="Price it" />
 
-            {/* Two clean rows: YOUR MODEL (projection / SD / curve) with one
-                combined explainer line, then THE BOOK'S OFFER (line + prices)
-                with the model-fair verdict as a stat chip on the right. */}
+            {verdict && (
+              <div className={`rounded-lg border px-3 py-2.5 ${verdictCls[verdict.tone]}`}>
+                <div className="text-sm font-semibold tabular-nums">{verdict.title}</div>
+                {verdict.sub && <div className="text-xs mt-0.5 opacity-80 tabular-nums">{verdict.sub}</div>}
+              </div>
+            )}
+
+            {/* Two rows: YOUR MODEL (projection / volatility / curve), then
+                THE BOOK'S OFFER (line + prices) with the model-fair chip. */}
             <div className="space-y-1.5">
-              <div className="text-[10px] uppercase tracking-wide text-slate-400 font-medium">Your model</div>
+              <div className="flex items-center gap-2">
+                <div className="text-[10px] uppercase tracking-wide text-slate-400 font-medium">Your model</div>
+                <button onClick={() => setShowWhy(!showWhy)} className="text-[11px] text-slate-400 underline">
+                  {showWhy ? 'hide' : 'what these mean'}
+                </button>
+              </div>
               <div className="flex flex-wrap items-end gap-3">
                 <div className="w-24">
                   <label className={labelCls}>Projection</label>
@@ -1307,25 +1474,26 @@ export default function PropsAdminPage() {
                   </div>
                 </div>
               </div>
-              {/* One combined explainer line for the whole model row */}
-              <div className="text-[11px] leading-snug text-slate-400">
-                <span className="font-medium text-slate-500">Projection</span> = his average — the curve
-                derives the median.
-                {' · '}
-                <span className="font-medium text-slate-500">Volatility</span>{' '}
-                {sdMode === 'measured' && `= his own game-to-game swings${measured ? ` (${measured.values.length} games)` : ''}.`}
-                {sdMode === 'tier' && '= players at his projected volume (rookie/new-role fallback).'}
-                {sdMode === 'league' && `= all ${position}s blended (coarse backstop).`}
-                {sdMode === 'custom' && '= set by hand.'}
-                {' · '}
-                <span className="font-medium text-slate-500">Curve</span>{' '}
-                {distMode !== 'auto' && '= set by hand.'}
-                {distMode === 'auto' && (autoDist.basis === 'shape' && measured
-                  ? autoDist.dist === 'lognormal'
-                    ? `auto from his shape: average ${(measured.mean - measured.median).toFixed(1)} above his typical game — boom/bust.`
-                    : `auto from his shape: average ≈ typical (${measured.mean.toFixed(1)} vs ${measured.median.toFixed(1)}) — steady.`
-                  : 'auto = market default (needs 8+ games to read his shape).')}
-              </div>
+              {showWhy && (
+                <div className="text-[11px] leading-snug text-slate-400">
+                  <span className="font-medium text-slate-500">Projection</span> = his average — the curve
+                  derives the median.
+                  {' · '}
+                  <span className="font-medium text-slate-500">Volatility</span>{' '}
+                  {sdMode === 'measured' && `= his own game-to-game swings${measured ? ` (${measured.values.length} games)` : ''}.`}
+                  {sdMode === 'tier' && '= players at his projected volume (rookie/new-role fallback).'}
+                  {sdMode === 'league' && `= all ${position}s blended (coarse backstop).`}
+                  {sdMode === 'custom' && '= set by hand.'}
+                  {' · '}
+                  <span className="font-medium text-slate-500">Curve</span>{' '}
+                  {distMode !== 'auto' && '= set by hand.'}
+                  {distMode === 'auto' && (autoDist.basis === 'shape' && measured
+                    ? autoDist.dist === 'lognormal'
+                      ? `auto from his shape: average ${(measured.mean - measured.median).toFixed(1)} above his typical game — boom/bust.`
+                      : `auto from his shape: average ≈ typical (${measured.mean.toFixed(1)} vs ${measured.median.toFixed(1)}) — steady.`
+                    : 'auto = market default (needs 8+ games to read his shape).')}
+                </div>
+              )}
             </div>
 
             <div className="space-y-1.5">
@@ -1429,66 +1597,60 @@ export default function PropsAdminPage() {
             )}
 
             {result && sd !== null && (
-              <>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 text-center">
-                  <div className="bg-slate-50 rounded-lg py-2.5">
-                    <div className="text-[10px] uppercase tracking-wide text-slate-400">P(Over) Balanced</div>
-                    <div className={`text-sm tabular-nums ${dist === 'normal' ? 'font-bold' : 'text-slate-500'}`}>
-                      {fmtPct(result.pNormal)}
+              <div>
+                <button onClick={() => setShowDetails(!showDetails)} className="text-xs font-medium text-slate-500 hover:text-slate-700 transition">
+                  {showDetails ? '▾' : '▸'} Details — both curves, fair prices, breakeven, market hold
+                </button>
+                {showDetails && (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 text-center mt-2">
+                    <div className="bg-slate-50 rounded-lg py-2.5">
+                      <div className="text-[10px] uppercase tracking-wide text-slate-400">P(Over) Balanced</div>
+                      <div className={`text-sm tabular-nums ${dist === 'normal' ? 'font-bold' : 'text-slate-500'}`}>
+                        {fmtPct(result.pNormal)}
+                      </div>
                     </div>
-                  </div>
-                  <div className="bg-slate-50 rounded-lg py-2.5">
-                    <div className="text-[10px] uppercase tracking-wide text-slate-400">P(Over) Boom/Bust</div>
-                    <div className={`text-sm tabular-nums ${dist === 'lognormal' ? 'font-bold' : 'text-slate-500'}`}>
-                      {fmtPct(result.pLog)}
+                    <div className="bg-slate-50 rounded-lg py-2.5">
+                      <div className="text-[10px] uppercase tracking-wide text-slate-400">P(Over) Boom/Bust</div>
+                      <div className={`text-sm tabular-nums ${dist === 'lognormal' ? 'font-bold' : 'text-slate-500'}`}>
+                        {fmtPct(result.pLog)}
+                      </div>
                     </div>
-                  </div>
-                  <div className="bg-slate-50 rounded-lg py-2.5">
-                    <div className="text-[10px] uppercase tracking-wide text-slate-400">Fair Over</div>
-                    <div className="text-sm font-semibold tabular-nums">{fmtAmerican(result.fair)}</div>
-                  </div>
-                  <div className="bg-slate-50 rounded-lg py-2.5">
-                    <div className="text-[10px] uppercase tracking-wide text-slate-400">Fair Under</div>
-                    <div className="text-sm font-semibold tabular-nums">{fmtAmerican(result.fairUnder)}</div>
-                  </div>
-                  <div className="bg-slate-50 rounded-lg py-2.5">
-                    <div className="text-[10px] uppercase tracking-wide text-slate-400">Breakeven</div>
-                    <div className="text-sm tabular-nums">{fmtPct(result.breakeven)}</div>
-                  </div>
-                  <div className="bg-slate-50 rounded-lg py-2.5">
-                    <div className="text-[10px] uppercase tracking-wide text-slate-400">Market Fair</div>
-                    <div className="text-sm tabular-nums">
-                      {marketFair ? fmtPct(marketFair.pOver) : '—'}
-                      {marketFair && marketFair.books > 0 && (
-                        <span className="text-[10px] text-slate-400"> ({marketFair.books}bk)</span>
-                      )}
+                    <div className="bg-slate-50 rounded-lg py-2.5">
+                      <div className="text-[10px] uppercase tracking-wide text-slate-400">Fair Over</div>
+                      <div className="text-sm font-semibold tabular-nums">{fmtAmerican(result.fair)}</div>
                     </div>
-                  </div>
-                  <div className="bg-slate-50 rounded-lg py-2.5">
-                    <div className="text-[10px] uppercase tracking-wide text-slate-400">Overround</div>
-                    <div className="text-sm tabular-nums">{marketFair ? fmtPct(marketFair.overround) : '—'}</div>
-                  </div>
-                  <div className={`rounded-lg py-2.5 ${result.ev !== null && result.ev > 0 ? 'bg-emerald-50' : 'bg-slate-50'}`}>
-                    <div className="text-[10px] uppercase tracking-wide text-slate-400">EV (Over)</div>
-                    <div className={`text-sm tabular-nums ${evCls(result.ev)}`}>
-                      {result.ev !== null ? `${result.ev > 0 ? '+' : ''}${(result.ev * 100).toFixed(1)}%` : '—'}
+                    <div className="bg-slate-50 rounded-lg py-2.5">
+                      <div className="text-[10px] uppercase tracking-wide text-slate-400">Fair Under</div>
+                      <div className="text-sm font-semibold tabular-nums">{fmtAmerican(result.fairUnder)}</div>
                     </div>
-                  </div>
-                  <div className={`rounded-lg py-2.5 ${result.evUnder !== null && result.evUnder > 0 ? 'bg-emerald-50' : 'bg-slate-50'}`}>
-                    <div className="text-[10px] uppercase tracking-wide text-slate-400">EV (Under)</div>
-                    <div className={`text-sm tabular-nums ${evCls(result.evUnder)}`}>
-                      {result.evUnder !== null ? `${result.evUnder > 0 ? '+' : ''}${(result.evUnder * 100).toFixed(1)}%` : '—'}
+                    <div className="bg-slate-50 rounded-lg py-2.5">
+                      <div className="text-[10px] uppercase tracking-wide text-slate-400">Breakeven</div>
+                      <div className="text-sm tabular-nums">{fmtPct(result.breakeven)}</div>
                     </div>
-                  </div>
-                </div>
-
-                {marketFair && Math.abs(result.p - marketFair.pOver) > 0.12 && (
-                  <div className="text-xs text-amber-600">
-                    Your number is {fmtPct(Math.abs(result.p - marketFair.pOver))} from the market&apos;s fair
-                    number — more likely you&apos;re missing something than the whole market is.
+                    <div className="bg-slate-50 rounded-lg py-2.5">
+                      <div className="text-[10px] uppercase tracking-wide text-slate-400">Market Fair</div>
+                      <div className="text-sm tabular-nums">
+                        {marketFair ? fmtPct(marketFair.pOver) : '—'}
+                        {marketFair && marketFair.books > 0 && (
+                          <span className="text-[10px] text-slate-400"> ({marketFair.books}bk)</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="bg-slate-50 rounded-lg py-2.5">
+                      <div className="text-[10px] uppercase tracking-wide text-slate-400">Overround</div>
+                      <div className="text-sm tabular-nums">{marketFair ? fmtPct(marketFair.overround) : '—'}</div>
+                    </div>
+                    <div className={`rounded-lg py-2.5 ${result.ev !== null && result.ev > 0 ? 'bg-emerald-50' : 'bg-slate-50'}`}>
+                      <div className="text-[10px] uppercase tracking-wide text-slate-400">EV (Over)</div>
+                      <div className={`text-sm tabular-nums ${evCls(result.ev)}`}>{evTxt(result.ev)}</div>
+                    </div>
+                    <div className={`rounded-lg py-2.5 ${result.evUnder !== null && result.evUnder > 0 ? 'bg-emerald-50' : 'bg-slate-50'}`}>
+                      <div className="text-[10px] uppercase tracking-wide text-slate-400">EV (Under)</div>
+                      <div className={`text-sm tabular-nums ${evCls(result.evUnder)}`}>{evTxt(result.evUnder)}</div>
+                    </div>
                   </div>
                 )}
-              </>
+              </div>
             )}
 
             {/* Ladder */}
@@ -1531,16 +1693,12 @@ export default function PropsAdminPage() {
                               {fmtAmerican(r.overOdds)}
                               {overQ && <span className="text-[10px] text-slate-400"> {overQ.book}</span>}
                             </td>
-                            <td className={`py-1.5 pr-3 text-right tabular-nums ${evCls(r.overEv)}`}>
-                              {r.overEv !== null ? `${r.overEv > 0 ? '+' : ''}${(r.overEv * 100).toFixed(1)}%` : '—'}
-                            </td>
+                            <td className={`py-1.5 pr-3 text-right tabular-nums ${evCls(r.overEv)}`}>{evTxt(r.overEv)}</td>
                             <td className="py-1.5 pr-3 text-right tabular-nums">
                               {fmtAmerican(r.underOdds)}
                               {underQ && <span className="text-[10px] text-slate-400"> {underQ.book}</span>}
                             </td>
-                            <td className={`py-1.5 text-right tabular-nums ${evCls(r.underEv)}`}>
-                              {r.underEv !== null ? `${r.underEv > 0 ? '+' : ''}${(r.underEv * 100).toFixed(1)}%` : '—'}
-                            </td>
+                            <td className={`py-1.5 text-right tabular-nums ${evCls(r.underEv)}`}>{evTxt(r.underEv)}</td>
                           </tr>
                         );
                       })}
@@ -1584,13 +1742,9 @@ export default function PropsAdminPage() {
                       <td className="py-1.5 pr-3 text-right tabular-nums">{fmtPct(r.pOver)}</td>
                       <td className="py-1.5 pr-3 text-right tabular-nums text-slate-500">{fmtAmerican(r.fairOver)}</td>
                       <td className="py-1.5 pr-3 text-right tabular-nums">{fmtAmerican(r.overOdds)}</td>
-                      <td className={`py-1.5 pr-3 text-right tabular-nums ${evCls(r.overEv)}`}>
-                        {r.overEv !== null ? `${r.overEv > 0 ? '+' : ''}${(r.overEv * 100).toFixed(1)}%` : '—'}
-                      </td>
+                      <td className={`py-1.5 pr-3 text-right tabular-nums ${evCls(r.overEv)}`}>{evTxt(r.overEv)}</td>
                       <td className="py-1.5 pr-3 text-right tabular-nums">{fmtAmerican(r.underOdds)}</td>
-                      <td className={`py-1.5 text-right tabular-nums ${evCls(r.underEv)}`}>
-                        {r.underEv !== null ? `${r.underEv > 0 ? '+' : ''}${(r.underEv * 100).toFixed(1)}%` : '—'}
-                      </td>
+                      <td className={`py-1.5 text-right tabular-nums ${evCls(r.underEv)}`}>{evTxt(r.underEv)}</td>
                     </tr>
                   ))}
                 </tbody>
