@@ -237,6 +237,8 @@ export default function NflSurvivorPanel({ visualFor }: { visualFor: (teamName: 
 
   const entries = plan?.entries ?? [];
   const rules = plan?.rules;
+  const pickResult = new Map<string, Pick['result']>();
+  for (const w of plan?.weeks ?? []) for (const p of w.picks) pickResult.set(p.team, p.result);
   const unusedTeams = (() => {
     if (!plan) return [] as string[];
     const all = new Set<string>();
@@ -329,11 +331,19 @@ export default function NflSurvivorPanel({ visualFor }: { visualFor: (teamName: 
             )}
             <span>· used:</span>
             {plan.usedTeams.length === 0 && <span>none yet</span>}
-            {plan.usedTeams.map((t) => (
-              <span key={t} title={`${t} — used`} className="inline-flex grayscale opacity-40">
-                <Logo team={t} />
-              </span>
-            ))}
+            {plan.usedTeams.map((t) => {
+              // Settled picks go grey; a pick whose game hasn't been played keeps its colour
+              const settled = pickResult.get(t) === 'won' || pickResult.get(t) === 'lost';
+              return (
+                <span
+                  key={t}
+                  title={`${t} — ${pickResult.get(t) ?? 'used'}`}
+                  className={`inline-flex ${settled ? 'grayscale opacity-40' : ''}`}
+                >
+                  <Logo team={t} />
+                </span>
+              );
+            })}
             {plan.infeasible.length > 0 && <span className="text-amber-600">· no team available for {plan.infeasible.join(', ')}</span>}
           </div>
         )}
