@@ -25,7 +25,28 @@ import { normalCdf } from '@/lib/fbs/futures';
 export const SURVIVOR_SIGMA = 13;
 export const SURVIVOR_WEEKS = 18;
 export const DOUBLE_PICK_WEEKS = new Set([9, 12, 13, 14, 15, 16]);
-export const picksRequired = (week: number) => (DOUBLE_PICK_WEEKS.has(week) ? 2 : 1);
+/** One entry's contest format. */
+export interface SurvivorRules {
+  doubleWeeks: number[]; // weeks that take two picks
+  weeks: number;         // last regular-season week that counts
+}
+export const DEFAULT_RULES: SurvivorRules = { doubleWeeks: [...DOUBLE_PICK_WEEKS].sort((a, b) => a - b), weeks: SURVIVOR_WEEKS };
+export const picksRequired = (week: number, rules: SurvivorRules = DEFAULT_RULES) =>
+  rules.doubleWeeks.includes(week) ? 2 : 1;
+
+export interface SurvivorEntry {
+  entry: string;
+  label: string;
+  rules: SurvivorRules;
+}
+
+/** A pick recorded in a DIFFERENT entry — used only to flag overlaps. */
+export interface OtherEntryPick {
+  entry: string;
+  label: string;
+  week: number;
+  team: string;
+}
 
 export interface SurvivorGame {
   id: string;
@@ -51,6 +72,7 @@ export interface SurvivorOption {
   gameId: string;
   date: string;
   started: boolean; // kickoff has passed — can still be recorded, never planned
+  alsoIn: string[]; // labels of other entries that picked this team this week
 }
 
 export interface SurvivorPick {
@@ -59,6 +81,7 @@ export interface SurvivorPick {
   team: string;
   result: 'won' | 'lost' | 'pending' | 'unknown'; // vs the game the team played that week
   option: SurvivorOption | null;
+  alsoIn: string[]; // labels of other entries that picked this team this week
 }
 
 export interface SurvivorWeek {
@@ -73,6 +96,9 @@ export interface SurvivorWeek {
 
 export interface SurvivorPlan {
   season: number;
+  entry: string;
+  label: string;
+  rules: SurvivorRules;
   currentWeek: number;
   homeOnly: boolean;
   weeks: SurvivorWeek[];
@@ -172,8 +198,13 @@ export function buildSurvivorPlan(
   hfaDefault: number,
   picks: Array<{ week: number; slot: number; team: string }>,
   homeOnly: boolean,
+  entry: SurvivorEntry = { entry: 'main', label: 'Survivor', rules: DEFAULT_RULES },
+  otherPicks: OtherEntryPick[] = [],
   now: Date = new Date()
 ): SurvivorPlan {
+  const rules = entry.rules;
+  const alsoInFor = (week: number, team: string) =>
+    otherPicks.filter((p) => p.week === week && p.team === team).map((p) => p.label);
   // Price every game
   for (const g of games) {
     const h = ratings.get(g.home);
@@ -191,8 +222,8 @@ export function buildSurvivorPlan(
     if (!byWeek.has(g.week)) byWeek.set(g.week, []);
     byWeek.get(g.week)!.push(g);
   }
-  let currentWeek = SURVIVOR_WEEKS;
-  for (let w = 1; w <= SURVIVOR_WEEKS; w++) {
+  let currentWeek = rules.weeks;
+  for (let w = 1; w <= rules.weeks; w++) {
     const gs = byWeek.get(w) ?? [];
     if (gs.some((g) => !g.completed)) { currentWeek = w; break; }
   }
@@ -202,8 +233,8 @@ export function buildSurvivorPlan(
     for (const g of byWeek.get(week) ?? []) {
       if (g.homeProb === null || g.spread === null) continue;
       const started = g.completed || new Date(g.date) <= now;
-      out.push({ team: g.home, opponent: g.away, home: true, neutral: g.neutral, prob: g.homeProb, spread: g.spread, gameId: g.id, date: g.date, started });
-      out.push({ team: g.away, opponent: g.home, home: false, neutral: g.neutral, prob: 1 - g.homeProb, spread: -g.spread, gameId: g.id, date: g.date, started });
+      out.push({ team: g.home, opponent: g.away, home: true, neutral: g.neutral, prob: g.homeProb, spread: g.spread, gameId: g.id, date: g.date, started, alsoIn: alsoInFor(week, g.home) });
+      out.push({ team: g.away, opponent: g.home, home: false, neutral: g.neutral, prob: 1 - g.homeProb, spread: -g.spread, gameId: g.id, date: g.date, started, alsoIn: alsoInFor(week, g.away) });
     }
     return out.sort((x, y) => y.prob - x.prob);
   };
@@ -219,8 +250,8 @@ export function buildSurvivorPlan(
   const used = new Set<string>(picks.map((p) => p.team));
   const weeks: SurvivorWeek[] = [];
   const openSlots: Array<{ week: number; slot: number }> = [];
-  for (let w = 1; w <= SURVIVOR_WEEKS; w++) {
-    const required = picksRequired(w);
+  for (let w = 1; w <= rules.weeks; w++) {
+    const required = picksRequired(w, rules);
     const opts = optionsFor(w);
     const mine = picks
       .filter((p) => p.week === w)
@@ -228,6 +259,7 @@ export function buildSurvivorPlan(
       .map((p) => ({
         week: w, slot: p.slot, team: p.team, result: resultFor(w, p.team),
         option: opts.find((o) => o.team === p.team) ?? null,
+        alsoIn: alsoInFor(w, p.team),
       }));
     // A week is locked once its games have started (kickoff passed) — you
     // can still record what you picked, the planner just won't touch it.
@@ -276,5 +308,5 @@ export function buildSurvivorPlan(
     wk.recommended.sort((a, b) => b.prob - a.prob);
   }
 
-  return { season, currentWeek, homeOnly, weeks, usedTeams: [...used].sort(), survivalProb: survival, infeasible };
+  return { season, entry: entry.entry, label: entry.label, rules, currentWeek, homeOnly, weeks, usedTeams: [...used].sort(), survivalProb: survival, infeasible };
 }
