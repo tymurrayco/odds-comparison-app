@@ -165,6 +165,9 @@ export default function PropsAdminPage() {
   const [includePost, setIncludePost] = useState(false);
   const [minOpp, setMinOpp] = useState('0');
   const [excludeZero, setExcludeZero] = useState(false);
+  // History window: null = the selected seasons; a number = his last N
+  // games across every synced season (playoff/min-opp/zero filters still apply)
+  const [lastN, setLastN] = useState<number | null>(null);
   // Per-game manual excludes (uncheck a row in the game log) + log visibility
   const [excludedGames, setExcludedGames] = useState<Set<string>>(new Set());
   const [showGameLog, setShowGameLog] = useState(false);
@@ -421,6 +424,7 @@ export default function PropsAdminPage() {
     includePost?: boolean;
     minOpp?: string;
     excludeZero?: boolean;
+    lastN?: number | null;
     excludedGames?: string[];
     projection?: string;
     projectionEdited?: boolean;
@@ -486,6 +490,7 @@ export default function PropsAdminPage() {
     if (s.includePost !== undefined) setIncludePost(s.includePost);
     if (s.minOpp !== undefined) setMinOpp(s.minOpp);
     if (s.excludeZero !== undefined) setExcludeZero(s.excludeZero);
+    if (s.lastN !== undefined) setLastN(s.lastN);
     if (s.excludedGames?.length) setExcludedGames(new Set(s.excludedGames));
     if (s.sdMode) setSdMode(s.sdMode);
     if (s.sdCustom !== undefined) setSdCustom(s.sdCustom);
@@ -507,13 +512,13 @@ export default function PropsAdminPage() {
     try {
       localStorage.setItem(PERSIST_KEY, JSON.stringify({
         sportKey, marketKey, player: selectedPlayer,
-        seasonsSelected, includePost, minOpp, excludeZero,
+        seasonsSelected, includePost, minOpp, excludeZero, lastN,
         excludedGames: Array.from(excludedGames),
         projection, projectionEdited, sdMode, sdCustom, distMode,
         lineInput, overPriceInput, underPriceInput,
       } satisfies SavedPricerState));
     } catch { /* storage full/blocked — non-blocking */ }
-  }, [sportKey, marketKey, selectedPlayer, seasonsSelected, includePost, minOpp, excludeZero,
+  }, [sportKey, marketKey, selectedPlayer, seasonsSelected, includePost, minOpp, excludeZero, lastN,
       excludedGames, projection, projectionEdited, sdMode, sdCustom, distMode,
       lineInput, overPriceInput, underPriceInput]);
 
@@ -634,15 +639,30 @@ export default function PropsAdminPage() {
   const gameKey = (g: PlayerGameLog): string => `${g.season}-${g.season_type}-${g.week}`;
 
   const measured: MeasuredStats | null = useMemo(() => {
-    if (!playerGames.length || !seasonsSelected.length) return null;
+    if (!playerGames.length || (!lastN && !seasonsSelected.length)) return null;
     const kept = playerGames.filter((g) => !excludedGames.has(gameKey(g)));
     return measurePlayer(kept, marketDef, {
-      seasons: seasonsSelected,
+      seasons: lastN ? undefined : seasonsSelected,
       includePost,
       minOpportunities: Number(minOpp) || 0,
       excludeZero,
+      lastN: lastN ?? undefined,
     });
-  }, [playerGames, seasonsSelected, includePost, minOpp, excludeZero, excludedGames, marketDef]);
+  }, [playerGames, seasonsSelected, includePost, minOpp, excludeZero, excludedGames, marketDef, lastN]);
+
+  // Keys of the games inside the current window (mirrors measurePlayer's
+  // filters) so the game log can show which rows the numbers came from.
+  const windowKeys = useMemo(() => {
+    const minOppN = Number(minOpp) || 0;
+    const rows = playerGames
+      .filter((g) => !excludedGames.has(gameKey(g)))
+      .filter((g) => (lastN ? true : seasonsSelected.includes(g.season)))
+      .filter((g) => (includePost ? true : g.season_type === 'REG'))
+      .filter((g) => (g[marketDef.opportunityStat] ?? 0) >= minOppN)
+      .filter((g) => (excludeZero ? (g[marketDef.stat] ?? 0) > 0 : true))
+      .sort((a, b) => a.season - b.season || a.week - b.week);
+    return new Set((lastN ? rows.slice(-lastN) : rows).map(gameKey));
+  }, [playerGames, excludedGames, lastN, seasonsSelected, includePost, minOpp, excludeZero, marketDef]);
 
   // Default projection follows measured mean until the user edits it
   // (projectionEdited flips on typing; clearing the box re-enables the default)
@@ -1134,7 +1154,20 @@ export default function PropsAdminPage() {
           <div className={`${cardCls} space-y-3`} style={themedCard}>
             <div className="flex flex-wrap items-center gap-3">
               <Step n={2} label={`His history — ${marketDef.label}`} note={gamesLoading ? 'loading game logs…' : undefined} />
-              <div className="flex gap-1.5">
+              <div className="flex rounded-lg border border-slate-200 overflow-hidden" title="Which games the numbers come from">
+                {([4, 6, 8, 12, null] as const).map((n) => (
+                  <button
+                    key={String(n)}
+                    onClick={() => setLastN(n)}
+                    className={`px-2.5 py-1 text-xs font-medium transition whitespace-nowrap ${
+                      lastN === n ? 'bg-[#0052ff] text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    {n === null ? 'Seasons' : `Last ${n}`}
+                  </button>
+                ))}
+              </div>
+              <div className={`flex gap-1.5 ${lastN ? 'opacity-40 pointer-events-none' : ''}`} title={lastN ? `Last ${lastN} games run across every season` : undefined}>
                 {availableSeasons.map((s) => (
                   <button
                     key={s}
@@ -1193,9 +1226,18 @@ export default function PropsAdminPage() {
             ) : (
               !gamesLoading && (
                 <div className="text-xs text-slate-400">
-                  Not enough games in the selected window (need 2+).
+                  Not enough games in this window (need 2+){!lastN && seasonsSelected.length === 1 ? ' — add another season or switch to Last 4' : ''}.
                 </div>
               )
+            )}
+            {measured && lastN && measured.games < lastN && (
+              <div className="text-xs text-slate-400">Only {measured.games} games pass the filters across the synced seasons.</div>
+            )}
+            {measured && measured.games < 8 && (
+              <div className="text-xs text-amber-600">
+                {measured.games} games is a thin sample: the Auto curve falls back to the market default and the measured swing is
+                noisy — Tier volatility is the safer pick.
+              </div>
             )}
 
             {measured && measured.mean > measured.median && (
@@ -1206,7 +1248,7 @@ export default function PropsAdminPage() {
             )}
 
             <div className="flex flex-wrap items-center gap-3">
-              {playerGames.length > 0 && seasonsSelected.length > 0 && (
+              {playerGames.length > 0 && (lastN || seasonsSelected.length > 0) && (
                 <button
                   onClick={() => setShowGameLog(!showGameLog)}
                   className="text-xs font-medium text-slate-500 hover:text-slate-700 transition"
@@ -1236,10 +1278,10 @@ export default function PropsAdminPage() {
             )}
 
             {/* Game log — uncheck a row to exclude that game from the sample */}
-            {showGameLog && playerGames.length > 0 && seasonsSelected.length > 0 && (() => {
+            {showGameLog && playerGames.length > 0 && (lastN || seasonsSelected.length > 0) && (() => {
               const minOppN = Number(minOpp) || 0;
               const rows = playerGames
-                .filter((g) => seasonsSelected.includes(g.season))
+                .filter((g) => (lastN ? true : seasonsSelected.includes(g.season)))
                 .filter((g) => (includePost ? true : g.season_type === 'REG'))
                 .sort((a, b) => b.season - a.season || b.week - a.week);
               return (
@@ -1263,7 +1305,8 @@ export default function PropsAdminPage() {
                         const val = g[marketDef.stat] ?? 0;
                         const manualOut = excludedGames.has(k);
                         const autoOut = !manualOut && (opp < minOppN || (excludeZero && val <= 0));
-                        const out = manualOut || autoOut;
+                        const windowOut = !manualOut && !autoOut && !windowKeys.has(k);
+                        const out = manualOut || autoOut || windowOut;
                         return (
                           <tr key={k} className={`border-t border-slate-100 ${out ? 'opacity-45' : ''}`}>
                             <td className="py-1 pr-2">
@@ -1291,7 +1334,7 @@ export default function PropsAdminPage() {
                               {val}
                             </td>
                             <td className="py-1 text-[10px] text-slate-400">
-                              {manualOut ? 'excluded' : autoOut ? (opp < minOppN ? 'min-opps' : 'zero') : ''}
+                              {manualOut ? 'excluded' : autoOut ? (opp < minOppN ? 'min-opps' : 'zero') : windowOut ? 'outside window' : ''}
                             </td>
                           </tr>
                         );

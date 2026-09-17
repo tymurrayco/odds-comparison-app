@@ -125,15 +125,17 @@ export interface MeasuredStats {
 export function measurePlayer(
   games: PlayerGameLog[],
   def: PropMarketDef,
-  opts: { seasons?: number[]; includePost?: boolean; minOpportunities?: number; excludeZero?: boolean } = {}
+  opts: { seasons?: number[]; includePost?: boolean; minOpportunities?: number; excludeZero?: boolean; lastN?: number } = {}
 ): MeasuredStats | null {
   const minOpp = opts.minOpportunities ?? 0;
-  const filtered = games
+  let filtered = games
     .filter((g) => (opts.seasons ? opts.seasons.includes(g.season) : true))
     .filter((g) => (opts.includePost ? true : g.season_type === 'REG'))
     .filter((g) => (g[def.opportunityStat] ?? 0) >= minOpp)
     .filter((g) => (opts.excludeZero ? (g[def.stat] ?? 0) > 0 : true))
     .sort((a, b) => a.season - b.season || a.week - b.week);
+  // Rolling window: the N most recent games that survived the filters above
+  if (opts.lastN && opts.lastN > 0) filtered = filtered.slice(-opts.lastN);
 
   if (filtered.length < 2) return null;
   const values = filtered.map((g) => g[def.stat] ?? 0);
