@@ -318,7 +318,7 @@ export default function NflSurvivorPanel({ visualFor }: { visualFor: (teamName: 
           <div className="text-xs text-slate-500 tabular-nums">
             Week {plan.currentWeek} now · used: {plan.usedTeams.length ? plan.usedTeams.map(short).join(', ') : 'none yet'}
             {plan.survivalProb !== null && (
-              <> · <span className="font-semibold text-slate-700">survive the season: {(plan.survivalProb * 100).toFixed(1)}%</span></>
+              <> · <span className="font-semibold text-slate-700">survive the season: {(plan.survivalProb * 100).toFixed(2)}%</span></>
             )}
             {plan.infeasible.length > 0 && <span className="text-amber-600"> · no team available for {plan.infeasible.join(', ')}</span>}
           </div>
