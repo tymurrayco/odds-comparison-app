@@ -19,7 +19,7 @@ import { hfaForGame, projectFbsSpread } from '@/lib/fbs/engine';
 import { useTeamColorMap } from '@/lib/myGameBets';
 import { createBet, fetchBets } from '@/lib/betService';
 import FbsFuturesPanel from './FbsFuturesPanel';
-import FbsSosPanel from './FbsSosPanel';
+import SosPanel from './SosPanel';
 
 const btnCls =
   'px-3 py-2 text-sm font-medium rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed';
@@ -1170,7 +1170,7 @@ ${line}` : line);
 
         {view === 'futures' && <FbsFuturesPanel visualFor={visualFor} />}
 
-        {view === 'sos' && <FbsSosPanel visualFor={visualFor} />}
+        {view === 'sos' && <SosPanel endpoint="/api/fbs/sos" league="FBS" groupNoun="conference" visualFor={visualFor} />}
 
         {admin && view === 'ratings' && (data?.unlinedGames ?? []).length > 0 && (
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">

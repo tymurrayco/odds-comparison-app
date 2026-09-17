@@ -20,6 +20,7 @@ import { hfaForGame, impliedHfaForGame, projectNflSpread } from '@/lib/nfl/engin
 import { NFL_HFA_NUDGE_RATE, nflLogoUrl } from '@/lib/nfl/constants';
 import NflTotalsPanel from './NflTotalsPanel';
 import NflSurvivorPanel from './NflSurvivorPanel';
+import SosPanel from './SosPanel';
 import { useTeamColorMap } from '@/lib/myGameBets';
 import { createBet, fetchBets } from '@/lib/betService';
 
@@ -213,7 +214,7 @@ export default function NflRatingsView({ admin = false }: { admin?: boolean }) {
   const [sortDesc, setSortDesc] = useState(true);
   const [manualSpreads, setManualSpreads] = useState<Record<string, string>>({});
   const [savingLine, setSavingLine] = useState<string | null>(null);
-  const [view, setView] = useState<'ratings' | 'upcoming' | 'totals' | 'survivor'>(admin ? 'ratings' : 'upcoming');
+  const [view, setView] = useState<'ratings' | 'upcoming' | 'totals' | 'survivor' | 'sos'>(admin ? 'ratings' : 'upcoming');
   const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
   const [manualDelta, setManualDelta] = useState('');
   const [manualDate, setManualDate] = useState(() => localYmd(new Date()));
@@ -231,10 +232,10 @@ export default function NflRatingsView({ admin = false }: { admin?: boolean }) {
   // "Away @ Home" (ESPN names) -> short labels of pending bets already logged
   const [pendingBets, setPendingBets] = useState<Record<string, string[]>>({});
 
-  // Shared tab link: ?view=ratings|upcoming (read once; mirrored below)
+  // Shared tab link: ?view=ratings|upcoming|totals|sos|survivor (read once; mirrored below)
   useEffect(() => {
     const v = new URLSearchParams(window.location.search).get('view');
-    if (v === 'ratings' || v === 'upcoming' || v === 'totals' || (v === 'survivor' && admin)) setView(v);
+    if (v === 'ratings' || v === 'upcoming' || v === 'totals' || v === 'sos' || (v === 'survivor' && admin)) setView(v);
   }, []);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -947,8 +948,8 @@ ${line}` : line);
           </div>
         )}
 
-        <div className={`grid ${admin ? 'grid-cols-4' : 'grid-cols-3'} bg-slate-200/70 rounded-full p-0.5`}>
-          {(admin ? (['ratings', 'upcoming', 'totals', 'survivor'] as const) : (['ratings', 'upcoming', 'totals'] as const)).map((v) => (
+        <div className={`grid ${admin ? 'grid-cols-5' : 'grid-cols-4'} bg-slate-200/70 rounded-full p-0.5`}>
+          {(admin ? (['ratings', 'upcoming', 'totals', 'sos', 'survivor'] as const) : (['ratings', 'upcoming', 'totals', 'sos'] as const)).map((v) => (
             <button
               key={v}
               onClick={() => setView(v)}
@@ -956,7 +957,7 @@ ${line}` : line);
                 view === v ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'
               }`}
             >
-              {v === 'ratings' ? 'Ratings' : v === 'upcoming' ? 'Upcoming' : v === 'totals' ? 'Totals' : 'Survivor'}
+              {v === 'ratings' ? 'Ratings' : v === 'upcoming' ? 'Upcoming' : v === 'totals' ? 'Totals' : v === 'sos' ? 'SOS' : 'Survivor'}
             </button>
           ))}
         </div>
@@ -1225,6 +1226,7 @@ ${line}` : line);
 
         {view === 'totals' && <NflTotalsPanel admin={admin} visualFor={visualFor} />}
         {view === 'survivor' && admin && <NflSurvivorPanel visualFor={visualFor} />}
+        {view === 'sos' && <SosPanel endpoint="/api/nfl/sos" league="NFL" groupNoun="division" visualFor={visualFor} />}
 
         {admin && view === 'ratings' && (data?.unlinedGames ?? []).length > 0 && (
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">

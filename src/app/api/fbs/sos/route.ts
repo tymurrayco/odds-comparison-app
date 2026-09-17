@@ -13,7 +13,8 @@ import { FBS_SEASON } from '@/lib/fbs/constants';
 import { loadFbsConfig, loadFbsRatings } from '@/lib/fbs/supabase';
 import { loadFcsRatings } from '@/lib/fcs/supabase';
 import { fetchFbsSeasonSchedule } from '@/lib/fbs/futures';
-import { buildSos, SosResult } from '@/lib/fbs/sos';
+import { buildFbsSos } from '@/lib/fbs/sos';
+import { SosResult } from '@/lib/sos';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -34,7 +35,7 @@ export async function GET(request: NextRequest) {
       loadFcsRatings(),
       fetchFbsSeasonSchedule(season),
     ]);
-    const result = { ...buildSos(season, schedule, fbs, fcs, config.hfaDefault), generatedAt: new Date().toISOString() };
+    const result = { ...buildFbsSos(season, schedule, fbs, fcs, config.hfaDefault), generatedAt: new Date().toISOString() };
     cache = { season, at: Date.now(), result };
     return NextResponse.json(
       { success: true, cached: false, ...result },

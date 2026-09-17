@@ -6,6 +6,7 @@
 // manual rating adjustments) and the public read-only page (/fcs).
 
 import Link from 'next/link';
+import SosPanel from './SosPanel';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { MAX_RATED_SPREAD } from '@/lib/ratedSpreadCap';
 import {
@@ -205,7 +206,7 @@ export default function FcsRatingsView({ admin = false }: { admin?: boolean }) {
   const [sortDesc, setSortDesc] = useState(true);
   const [manualSpreads, setManualSpreads] = useState<Record<string, string>>({});
   const [savingLine, setSavingLine] = useState<string | null>(null);
-  const [view, setView] = useState<'ratings' | 'upcoming'>(admin ? 'ratings' : 'upcoming');
+  const [view, setView] = useState<'ratings' | 'upcoming' | 'sos'>(admin ? 'ratings' : 'upcoming');
   const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
   const [manualDelta, setManualDelta] = useState('');
   const [manualDate, setManualDate] = useState(() => localYmd(new Date()));
@@ -229,10 +230,10 @@ export default function FcsRatingsView({ admin = false }: { admin?: boolean }) {
   // "Away @ Home" (ESPN names) -> short labels of pending bets already logged
   const [pendingBets, setPendingBets] = useState<Record<string, string[]>>({});
 
-  // Shared tab link: ?view=ratings|upcoming (read once; mirrored below)
+  // Shared tab link: ?view=ratings|upcoming|sos (read once; mirrored below)
   useEffect(() => {
     const v = new URLSearchParams(window.location.search).get('view');
-    if (v === 'ratings' || v === 'upcoming') setView(v);
+    if (v === 'ratings' || v === 'upcoming' || v === 'sos') setView(v);
   }, []);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -890,8 +891,8 @@ ${line}` : line);
           </div>
         )}
 
-        <div className="grid grid-cols-2 bg-slate-200/70 rounded-full p-0.5">
-          {(['ratings', 'upcoming'] as const).map((v) => (
+        <div className="grid grid-cols-3 bg-slate-200/70 rounded-full p-0.5">
+          {(['ratings', 'upcoming', 'sos'] as const).map((v) => (
             <button
               key={v}
               onClick={() => setView(v)}
@@ -899,7 +900,7 @@ ${line}` : line);
                 view === v ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'
               }`}
             >
-              {v === 'ratings' ? 'Ratings' : 'Upcoming'}
+              {v === 'ratings' ? 'Ratings' : v === 'upcoming' ? 'Upcoming' : 'SOS'}
             </button>
           ))}
         </div>
@@ -1165,6 +1166,8 @@ ${line}` : line);
             )}
           </div>
         )}
+
+        {view === 'sos' && <SosPanel endpoint="/api/fcs/sos" league="FCS" groupNoun="conference" visualFor={visualFor} />}
 
         {admin && view === 'ratings' && (data?.unlinedGames ?? []).length > 0 && (
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">

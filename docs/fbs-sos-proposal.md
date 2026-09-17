@@ -1,6 +1,6 @@
 # FBS Strength of Schedule — proposal (2026-09-17)
 
-Status: **BUILT 2026-09-17** (uncommitted): `src/lib/fbs/sos.ts`, `GET /api/fbs/sos`,
+Status: **LIVE 2026-09-17** (FBS 491435b; FCS + NFL added same day via shared `src/lib/sos.ts` + `SosPanel`): `src/lib/fbs/sos.ts`, `GET /api/fbs/sos`,
 `src/components/FbsSosPanel.tsx`, `?view=sos` tab in `FbsRatingsView` (shows on /fbs and
 /admin/fbs-ratings). Rank metric = median-team win % (expected wins / rated games) so 12- and
 13-game slates and the conference-only toggle compare fairly. Default sort = avg-team record;

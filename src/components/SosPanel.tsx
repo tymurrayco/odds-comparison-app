@@ -1,25 +1,25 @@
 'use client';
 
-// src/components/FbsSosPanel.tsx
-// SOS tab on the FBS ratings page: every team's strength of schedule as the
-// record a MEDIAN FBS team would post against it (venue-adjusted, σ 13.5),
-// with a plain venue-adjusted average opponent rating alongside. Filter to
-// one conference, restrict to conference games, sort by either measure,
-// and open a team to see the game-by-game pricing. Per-game numbers come
-// from /api/fbs/sos; the aggregates are computed here so every toggle is
-// instant.
+// src/components/SosPanel.tsx
+// SOS tab shared by the FBS / FCS / NFL ratings pages: every team's strength
+// of schedule as the record a MEDIAN team of that league would post against
+// it (venue-adjusted), with a plain venue-adjusted average opponent rating
+// alongside. Filter to one conference (division in the NFL), restrict to
+// conference games, sort by either measure, and open a team to see the
+// game-by-game pricing. Per-game numbers come from the league's /sos
+// endpoint (src/lib/sos.ts); the aggregates are computed here so every
+// toggle is instant.
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { TeamVisual } from './FbsFuturesPanel';
 
 interface SosGame {
   id: string;
   date: string;
   week: number | null;
   opponent: string;
-  opponentEspnId: string;
-  opponentDivision: 'fbs' | 'fcs' | 'unrated';
+  opponentKey: string;
+  opponentTag: string | null;
   opponentRating: number | null;
   venue: 'home' | 'away' | 'neutral';
   venueEdge: number;
@@ -34,7 +34,7 @@ interface SosGame {
 interface SosTeam {
   teamName: string;
   espnName: string | null;
-  espnId: string;
+  espnId: string | null;
   conference: string | null;
   rating: number;
   hfa: number | null;
@@ -49,6 +49,12 @@ interface SosResponse {
   medianRating: number;
   teams: SosTeam[];
   generatedAt: string;
+}
+
+interface TeamVisual {
+  logo: string | null;
+  color: string;
+  href?: string | null;
 }
 
 interface Agg {
@@ -107,8 +113,19 @@ function aggregate(games: SosGame[], confOnly: boolean): Agg {
 const fmt1 = (n: number) => (n >= 0 ? n.toFixed(1) : `−${Math.abs(n).toFixed(1)}`);
 const fmtRec = (w: number, l: number) => `${w.toFixed(1)}–${l.toFixed(1)}`;
 const pct = (p: number) => `${(p * 100).toFixed(0)}%`;
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-export default function FbsSosPanel({ visualFor }: { visualFor: (teamName: string) => TeamVisual }) {
+export default function SosPanel({
+  endpoint,
+  league,
+  groupNoun,
+  visualFor,
+}: {
+  endpoint: string;                 // e.g. "/api/fbs/sos"
+  league: string;                   // "FBS" | "FCS" | "NFL" — names the median team
+  groupNoun: 'conference' | 'division';
+  visualFor: (teamName: string) => TeamVisual;
+}) {
   const [data, setData] = useState<SosResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -120,7 +137,7 @@ export default function FbsSosPanel({ visualFor }: { visualFor: (teamName: strin
   const load = useCallback(async (fresh = false) => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/fbs/sos${fresh ? '?fresh=1' : ''}`);
+      const res = await fetch(`${endpoint}${fresh ? '?fresh=1' : ''}`);
       const json: SosResponse = await res.json();
       if (!res.ok || !json.success) throw new Error(json.error || `HTTP ${res.status}`);
       setData(json);
@@ -130,19 +147,19 @@ export default function FbsSosPanel({ visualFor }: { visualFor: (teamName: strin
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [endpoint]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  const conferences = useMemo(() => {
+  const groups = useMemo(() => {
     const set = new Set((data?.teams ?? []).map((t) => t.conference || 'Independent'));
     return [...set].sort((a, b) => a.localeCompare(b));
   }, [data]);
 
-  // Rank every FBS team first (so a conference view keeps national ranks),
-  // then narrow to the selected conference.
+  // Rank every team first (so a group view keeps league-wide ranks), then
+  // narrow to the selected group.
   const ranked = useMemo(() => {
     const rows = (data?.teams ?? []).map((t) => ({ t, a: aggregate(t.games, confOnly) }));
     const cmp = (x: { t: SosTeam; a: Agg }, y: { t: SosTeam; a: Agg }) => {
@@ -164,7 +181,7 @@ export default function FbsSosPanel({ visualFor }: { visualFor: (teamName: strin
     [ranked, conf]
   );
 
-  const confSummary = useMemo(() => {
+  const groupSummary = useMemo(() => {
     if (conf === 'all' || visible.length === 0) return null;
     const n = visible.length;
     return {
@@ -224,7 +241,7 @@ export default function FbsSosPanel({ visualFor }: { visualFor: (teamName: strin
             <div className="text-[16px] font-semibold tracking-[-0.3px] text-slate-700">Strength of schedule</div>
             <div className="text-xs text-slate-500 mt-0.5">
               Each game is priced from the team&apos;s seat — opponent rating plus the venue edge — and turned into the
-              chance a <b>median FBS team</b> (rating {data ? fmt1(data.medianRating) : '…'}) wins it. &quot;Avg-team record&quot; is
+              chance a <b>median {league} team</b> (rating {data ? fmt1(data.medianRating) : '…'}) wins it. &quot;Avg-team record&quot; is
               those chances added up; rank 1 is the hardest slate. Avg opp is the venue-adjusted opponent rating: a
               +20 team visiting you plays like +17, on their own field like +23.
             </div>
@@ -243,27 +260,27 @@ export default function FbsSosPanel({ visualFor }: { visualFor: (teamName: strin
             onChange={(e) => setConf(e.target.value)}
             className="px-2.5 py-1.5 text-sm rounded-lg border border-slate-200 bg-white"
           >
-            <option value="all">All conferences</option>
-            {conferences.map((c) => (
+            <option value="all">All {groupNoun}s</option>
+            {groups.map((c) => (
               <option key={c} value={c}>{c}</option>
             ))}
           </select>
           <div className="flex bg-slate-200/70 rounded-full p-0.5">
-            {sortBtn('expWins', 'Avg-team record', 'Rank by the win % a median FBS team would post against the full slate (hardest first)')}
+            {sortBtn('expWins', 'Avg-team record', `Rank by the win % a median ${league} team would post against the full slate (hardest first)`)}
             {sortBtn('avgOpp', 'Avg opponent', 'Rank by venue-adjusted average opponent rating (highest first)')}
             {sortBtn('remaining', 'Remaining', 'Rank by the unplayed games only (hardest first)')}
           </div>
           <label className="flex items-center gap-1.5 text-sm text-slate-600 select-none">
             <input type="checkbox" checked={confOnly} onChange={(e) => setConfOnly(e.target.checked)} />
-            Conference games only
+            {cap(groupNoun)} games only
           </label>
         </div>
-        {confSummary && (
+        {groupSummary && (
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-600 tabular-nums border-t border-slate-100 pt-2">
             <span><b className="text-slate-800">{conf}</b> · {visible.length} teams</span>
-            <span>avg national rank <b className="text-slate-800">{confSummary.rank.toFixed(1)}</b></span>
-            <span>avg-team win % <b className="text-slate-800">{pct(confSummary.expPct)}</b></span>
-            <span>avg opp <b className="text-slate-800">{fmt1(confSummary.avgOpp)}</b></span>
+            <span>avg {league} rank <b className="text-slate-800">{groupSummary.rank.toFixed(1)}</b></span>
+            <span>avg-team win % <b className="text-slate-800">{pct(groupSummary.expPct)}</b></span>
+            <span>avg opp <b className="text-slate-800">{fmt1(groupSummary.avgOpp)}</b></span>
           </div>
         )}
         {error && <div className="p-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>}
@@ -274,10 +291,10 @@ export default function FbsSosPanel({ visualFor }: { visualFor: (teamName: strin
       ) : (
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
           <div className={`hidden sm:grid ${gridCols} items-center px-3 py-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wide bg-slate-50`}>
-            <div title="National SOS rank under the current sort">#</div>
+            <div title={`${league}-wide SOS rank under the current sort`}>#</div>
             <div>Team</div>
             <div className="text-right" title="The team's own record in scope">W–L</div>
-            <div className="text-right" title="Record a median FBS team would post against this slate">Avg-team rec</div>
+            <div className="text-right" title={`Record a median ${league} team would post against this slate`}>Avg-team rec</div>
             <div className="text-right" title="Median-team win % (the ranking number)">Win %</div>
             <div className="text-right" title="Venue-adjusted average opponent rating">Avg opp</div>
             <div className="text-right" title="Unplayed games only: median-team win % · avg opp">Remaining</div>
@@ -317,9 +334,9 @@ export default function FbsSosPanel({ visualFor }: { visualFor: (teamName: strin
                       <div className={`grid ${gameCols} items-center px-3 py-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wide`}>
                         <div>Wk</div>
                         <div>Opponent</div>
-                        <div className="text-right" title="Opponent rating on the FBS scale (FCS bridged)">Rtg</div>
+                        <div className="text-right" title={`Opponent rating on the ${league} scale`}>Rtg</div>
                         <div className="text-right" title="Opponent rating net of the venue edge — what the game plays like">Venue</div>
-                        <div className="text-right" title="Chance a median FBS team wins this game">Avg-team</div>
+                        <div className="text-right" title={`Chance a median ${league} team wins this game`}>Avg-team</div>
                         <div className="text-right">Result</div>
                       </div>
                       <div className="divide-y divide-slate-100">
@@ -338,8 +355,8 @@ export default function FbsSosPanel({ visualFor }: { visualFor: (teamName: strin
                                   <span className="w-5 h-5 rounded-full shrink-0 bg-slate-200" />
                                 )}
                                 <span className="truncate text-slate-800">{g.opponent}</span>
-                                {g.opponentDivision === 'fcs' && <span className="text-[10px] text-slate-400 shrink-0">FCS</span>}
-                                {g.conferenceGame && <span className="text-[10px] text-slate-400 shrink-0" title="Conference game">conf</span>}
+                                {g.opponentTag && <span className="text-[10px] text-slate-400 shrink-0">{g.opponentTag}</span>}
+                                {g.conferenceGame && <span className="text-[10px] text-slate-400 shrink-0" title={`${cap(groupNoun)} game`}>{groupNoun === 'conference' ? 'conf' : 'div'}</span>}
                               </div>
                               <div className="text-right text-slate-700">{g.opponentRating === null ? '—' : fmt1(g.opponentRating)}</div>
                               <div
@@ -369,7 +386,7 @@ export default function FbsSosPanel({ visualFor }: { visualFor: (teamName: strin
       )}
       {data && (
         <p className="text-[11px] text-slate-400 text-center tabular-nums">
-          σ {data.sigma} pts · median FBS rating {fmt1(data.medianRating)} · {ranked.length} teams · generated {new Date(data.generatedAt).toLocaleTimeString()}
+          σ {data.sigma} pts · median {league} rating {fmt1(data.medianRating)} · {ranked.length} teams · generated {new Date(data.generatedAt).toLocaleTimeString()}
         </p>
       )}
     </div>
