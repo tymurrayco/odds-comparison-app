@@ -2,6 +2,7 @@
 
 import type { KalshiGameOdds, KalshiSpreadOdds, KalshiTotalOdds } from '@/lib/kalshi';
 import { kalshiMarketUrl } from '@/lib/kalshi';
+import type { NovigGameOdds } from '@/lib/novig';
 
 // Define the types we need
 export interface Game {
@@ -227,10 +228,11 @@ export const PROP_MARKET_NAMES: { [key: string]: string } = {
  */
 export async function fetchOdds(sport: string): Promise<ApiResponse<Game[]>> {
   try {
-    // Fetch from the-odds-api and Kalshi in parallel
-    const [oddsResponse, kalshiResponse] = await Promise.all([
+    // Fetch from the-odds-api, Kalshi and Novig in parallel
+    const [oddsResponse, kalshiResponse, novigResponse] = await Promise.all([
       fetch(`/api/odds?sport=${sport}`),
       fetch(`/api/kalshi-odds?sport=${sport}`).catch(() => null),
+      fetch(`/api/novig-odds?sport=${sport}`).catch(() => null),
     ]);
 
     if (!oddsResponse.ok) {
@@ -246,6 +248,14 @@ export async function fetchOdds(sport: string): Promise<ApiResponse<Game[]>> {
       const spreads = Array.isArray(kalshiData) ? [] : (kalshiData.spreads || []);
       const totals = Array.isArray(kalshiData) ? [] : (kalshiData.totals || []);
       mergeKalshiOdds(data, moneyline, spreads, totals);
+    }
+
+    // Direct Novig prices replace the Odds API's Novig relay (which drops
+    // the current NFL week for hours at a time); the relay stays as fallback
+    // for games the direct feed didn't return.
+    if (novigResponse?.ok) {
+      const novigData = await novigResponse.json();
+      mergeNovigOdds(data, Array.isArray(novigData?.games) ? novigData.games : []);
     }
 
     return {
@@ -371,6 +381,64 @@ function mergeKalshiOdds(
         { name: 'Under', price: kt.underPrice, point: kt.total, link: marketLink },
       ],
     });
+  }
+}
+
+/**
+ * Merge direct Novig prices into the-odds-api games. A game that already has a
+ * Novig bookmaker (the Odds API relay) gets it replaced — the direct feed is
+ * the fresher, more complete source.
+ */
+export function mergeNovigOdds(games: Game[], novigGames: NovigGameOdds[]): void {
+  for (const ng of novigGames) {
+    const result = findKalshiMatch(games, ng.awayTeam, ng.homeTeam, ng.commenceTime);
+    if (!result) continue;
+    const { game, swapped } = result;
+    const now = new Date().toISOString();
+    const markets: Market[] = [];
+
+    if (ng.h2h) {
+      const homePrice = swapped ? ng.h2h.awayPrice : ng.h2h.homePrice;
+      const awayPrice = swapped ? ng.h2h.homePrice : ng.h2h.awayPrice;
+      markets.push({
+        key: 'h2h',
+        last_update: now,
+        link: ng.link,
+        outcomes: [
+          { name: game.home_team, price: homePrice, link: ng.link },
+          { name: game.away_team, price: awayPrice, link: ng.link },
+        ],
+      });
+    }
+    if (ng.spread) {
+      const homePoint = swapped ? -ng.spread.homePoint : ng.spread.homePoint;
+      const homePrice = swapped ? ng.spread.awayPrice : ng.spread.homePrice;
+      const awayPrice = swapped ? ng.spread.homePrice : ng.spread.awayPrice;
+      markets.push({
+        key: 'spreads',
+        last_update: now,
+        link: ng.link,
+        outcomes: [
+          { name: game.home_team, price: homePrice, point: homePoint, link: ng.link },
+          { name: game.away_team, price: awayPrice, point: -homePoint, link: ng.link },
+        ],
+      });
+    }
+    if (ng.total) {
+      markets.push({
+        key: 'totals',
+        last_update: now,
+        link: ng.link,
+        outcomes: [
+          { name: 'Over', price: ng.total.overPrice, point: ng.total.point, link: ng.link },
+          { name: 'Under', price: ng.total.underPrice, point: ng.total.point, link: ng.link },
+        ],
+      });
+    }
+    if (markets.length === 0) continue;
+
+    game.bookmakers = game.bookmakers.filter(b => b.key !== 'novig');
+    game.bookmakers.push({ key: 'novig', title: 'Novig', last_update: now, link: ng.link, markets });
   }
 }
 
