@@ -336,10 +336,14 @@ export default function NflSurvivorPanel({ visualFor }: { visualFor: (teamName: 
           for (const p of w.picks) usedElsewhere.delete(p.team);
           const eligible = w.options.filter((o) => !usedElsewhere.has(o.team) && !o.started && (!homeOnly || o.home));
           const alt = eligible.slice(0, showAll[w.week] ? eligible.length : 5);
+          // Every required pick came home: tint the card green
+          const survived = w.picks.length >= w.required && w.picks.every((p) => p.result === 'won');
           return (
             <div
               key={w.week}
-              className={`bg-white rounded-xl border overflow-hidden ${isCurrent ? 'border-[#0052ff]' : 'border-slate-200'} ${w.locked && !isCurrent ? 'opacity-80' : ''}`}
+              className={`rounded-xl border overflow-hidden ${
+                survived ? 'bg-emerald-50 border-emerald-200' : isCurrent ? 'bg-white border-[#0052ff]' : 'bg-white border-slate-200'
+              } ${w.locked && !isCurrent && !survived ? 'opacity-80' : ''}`}
             >
               <div className="px-3 sm:px-4 py-2.5 flex items-center justify-between gap-2 border-b border-slate-100">
                 <div className="text-sm font-semibold text-slate-800">
