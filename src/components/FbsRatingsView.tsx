@@ -21,6 +21,7 @@ import { createBet, fetchBets } from '@/lib/betService';
 import FbsFuturesPanel from './FbsFuturesPanel';
 import SosPanel from './SosPanel';
 import FbsG5PlayoffPanel from './FbsG5PlayoffPanel';
+import FbsHistoryPanel from './FbsHistoryPanel';
 
 const btnCls =
   'px-3 py-2 text-sm font-medium rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed';
@@ -208,7 +209,7 @@ export default function FbsRatingsView({ admin = false }: { admin?: boolean }) {
   const [sortDesc, setSortDesc] = useState(true);
   const [manualSpreads, setManualSpreads] = useState<Record<string, string>>({});
   const [savingLine, setSavingLine] = useState<string | null>(null);
-  const [view, setView] = useState<'ratings' | 'upcoming' | 'futures' | 'sos' | 'g5'>(admin ? 'ratings' : 'upcoming');
+  const [view, setView] = useState<'ratings' | 'upcoming' | 'futures' | 'sos' | 'g5' | 'history'>(admin ? 'ratings' : 'upcoming');
   const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
   const [manualDelta, setManualDelta] = useState('');
   const [manualDate, setManualDate] = useState(() => localYmd(new Date()));
@@ -232,10 +233,10 @@ export default function FbsRatingsView({ admin = false }: { admin?: boolean }) {
   // "Away @ Home" (ESPN names) -> short labels of pending bets already logged
   const [pendingBets, setPendingBets] = useState<Record<string, string[]>>({});
 
-  // Shared tab link: ?view=ratings|upcoming|futures|sos|g5 (read once; mirrored below)
+  // Shared tab link: ?view=ratings|upcoming|futures|sos|g5|history (read once; mirrored below)
   useEffect(() => {
     const v = new URLSearchParams(window.location.search).get('view');
-    if (v === 'ratings' || v === 'upcoming' || v === 'futures' || v === 'sos' || v === 'g5') setView(v);
+    if (v === 'ratings' || v === 'upcoming' || v === 'futures' || v === 'sos' || v === 'g5' || v === 'history') setView(v);
   }, []);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -893,8 +894,8 @@ ${line}` : line);
           </div>
         )}
 
-        <div className="grid grid-cols-5 bg-slate-200/70 rounded-full p-0.5">
-          {(['ratings', 'upcoming', 'futures', 'sos', 'g5'] as const).map((v) => (
+        <div className="grid grid-cols-6 bg-slate-200/70 rounded-full p-0.5">
+          {(['ratings', 'upcoming', 'futures', 'sos', 'g5', 'history'] as const).map((v) => (
             <button
               key={v}
               onClick={() => setView(v)}
@@ -902,7 +903,7 @@ ${line}` : line);
                 view === v ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'
               }`}
             >
-              {v === 'ratings' ? 'Ratings' : v === 'upcoming' ? 'Upcoming' : v === 'futures' ? 'Futures' : v === 'sos' ? 'SOS' : 'G5 Playoff'}
+              {v === 'ratings' ? 'Ratings' : v === 'upcoming' ? 'Upcoming' : v === 'futures' ? 'Futures' : v === 'sos' ? 'SOS' : v === 'g5' ? 'G5' : 'History'}
             </button>
           ))}
         </div>
@@ -1174,6 +1175,8 @@ ${line}` : line);
         {view === 'sos' && <SosPanel endpoint="/api/fbs/sos" league="FBS" groupNoun="conference" visualFor={visualFor} />}
 
         {view === 'g5' && <FbsG5PlayoffPanel visualFor={visualFor} />}
+
+        {view === 'history' && <FbsHistoryPanel visualFor={visualFor} admin={admin} />}
 
         {admin && view === 'ratings' && (data?.unlinedGames ?? []).length > 0 && (
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
