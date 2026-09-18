@@ -186,7 +186,6 @@ export default function FbsFuturesPanel({ visualFor }: { visualFor: (teamName: s
                 {fav && (
                   <div className="flex-1 min-w-0 flex items-center gap-3">
                     <Chip name={fav.teamName} sub={`${fmtRec(fav.wins, fav.losses)} · ${fmtRec(fav.confWins, fav.confLosses)} conf · proj ${fmtRec(fav.projWins, fav.projLosses)}`} />
-                    <TimingBadge timing={fav.timing} outcome="Title" />
                   </div>
                 )}
                 {fav && (
