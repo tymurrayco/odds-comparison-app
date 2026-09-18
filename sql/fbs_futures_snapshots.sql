@@ -27,7 +27,9 @@ create table if not exists fbs_futures_snapshots (
   market_book text,                    -- market rows: bookmaker key
   market_odds integer,                 -- market rows: national-title outright, American
   market_prob numeric,                 -- market rows: implied prob after removing the book's hold
-  games_started integer not null default 0  -- games of the NEXT week already under way at capture (0 = clean)
+  games_started integer not null default 0, -- games of the NEXT week already under way at capture (0 = clean)
+  sos_pct numeric,                     -- futures rows: median-team win % over the full slate (lower = harder)
+  sos_remaining_pct numeric            -- futures rows: same over unplayed games only
 );
 
 create unique index if not exists fbs_futures_snapshots_uniq
@@ -38,3 +40,5 @@ create index if not exists fbs_futures_snapshots_team
 
 -- Already created the table before games_started existed? Add the column:
 alter table fbs_futures_snapshots add column if not exists games_started integer not null default 0;
+alter table fbs_futures_snapshots add column if not exists sos_pct numeric;
+alter table fbs_futures_snapshots add column if not exists sos_remaining_pct numeric;

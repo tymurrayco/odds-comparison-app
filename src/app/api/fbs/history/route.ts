@@ -32,6 +32,8 @@ export interface HistoryPoint {
   marketProb: number | null;   // national title, consensus across books
   marketBooks: number;
   marketBestOdds: number | null;
+  sosPct: number | null;
+  sosRemainingPct: number | null;
 }
 
 export interface HistoryTeam {
@@ -63,6 +65,7 @@ export async function GET(request: NextRequest) {
           rating: null, wins: null, losses: null, projWins: null, projLosses: null,
           titleProb: null, ccgProb: null, top2Prob: null, champProb: null, playoffProb: null,
           fairOdds: null, timing: null, marketProb: null, marketBooks: 0, marketBestOdds: null,
+          sosPct: null, sosRemainingPct: null,
         };
         t.points.push(p);
       }
@@ -86,6 +89,7 @@ export async function GET(request: NextRequest) {
         p.rating = r.rating; p.wins = r.wins; p.losses = r.losses; p.projWins = r.proj_wins; p.projLosses = r.proj_losses;
         p.titleProb = r.title_prob; p.ccgProb = r.ccg_prob; p.top2Prob = r.top2_prob;
         p.fairOdds = r.fair_odds; p.timing = r.timing_signal;
+        p.sosPct = r.sos_pct ?? null; p.sosRemainingPct = r.sos_remaining_pct ?? null;
       } else if (r.source === 'g5') {
         t.inG5 = true;
         p.champProb = r.champ_prob; p.playoffProb = r.playoff_prob;

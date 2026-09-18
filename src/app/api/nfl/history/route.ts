@@ -32,6 +32,8 @@ interface Point {
   marketProb: number | null;
   marketBooks: number;
   marketBestOdds: number | null;
+  sosPct: number | null;
+  sosRemainingPct: number | null;
 }
 interface Team { teamName: string; group: string | null; conference: string | null; points: Point[] }
 
@@ -56,6 +58,7 @@ export async function GET(request: NextRequest) {
           rating: null, wins: null, losses: null, ties: null, projWins: null, projLosses: null,
           divProb: null, playoffProb: null, seed1Prob: null, confProb: null, sbProb: null,
           divOdds: null, timing: null, marketProb: null, marketBooks: 0, marketBestOdds: null,
+          sosPct: null, sosRemainingPct: null,
         };
         t.points.push(p);
       }
@@ -74,6 +77,7 @@ export async function GET(request: NextRequest) {
         p.rating = r.rating; p.wins = r.wins; p.losses = r.losses; p.ties = r.ties; p.projWins = r.proj_wins; p.projLosses = r.proj_losses;
         p.divProb = r.div_prob; p.playoffProb = r.playoff_prob; p.seed1Prob = r.seed1_prob; p.confProb = r.conf_prob; p.sbProb = r.sb_prob;
         p.divOdds = r.div_odds; p.timing = r.timing_signal;
+        p.sosPct = r.sos_pct ?? null; p.sosRemainingPct = r.sos_remaining_pct ?? null;
       } else if (r.source === 'market' && r.market_prob !== null) {
         const k = `${r.team_name}|${r.week}`;
         if (!probs.has(k)) probs.set(k, []);

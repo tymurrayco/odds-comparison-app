@@ -19,6 +19,7 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { FBS_DEFAULT_HFA } from './constants';
 import { buildFutures, fetchFbsSeasonSchedule, ScheduleGame } from './futures';
 import { buildG5Playoff } from './g5Playoff';
+import { buildFbsSos } from './sos';
 import { normalizeName } from './teamNames';
 import { loadFbsConfig, loadFbsRatings } from './supabase';
 import { loadFcsRatings } from '@/lib/fcs/supabase';
@@ -61,6 +62,20 @@ export interface SnapshotRow {
   market_odds: number | null;
   market_prob: number | null;
   games_started?: number;    // games of the NEXT week already under way at capture (0 = clean pre-week snapshot)
+  sos_pct?: number | null;           // futures rows: median-team win % over the full slate (lower = harder)
+  sos_remaining_pct?: number | null; // futures rows: same over unplayed games only
+}
+
+/** Median-team win % over a team's rated games (all, and unplayed only) — the SOS tab's headline numbers. */
+export function sosAggregates(games: { pWin: number | null; completed: boolean }[]): { sosPct: number | null; sosRemainingPct: number | null } {
+  let n = 0, sum = 0, rn = 0, rsum = 0;
+  for (const g of games) {
+    if (g.pWin === null) continue;
+    n++; sum += g.pWin;
+    if (!g.completed) { rn++; rsum += g.pWin; }
+  }
+  const r4 = (x: number) => Math.round(x * 10000) / 10000;
+  return { sosPct: n ? r4(sum / n) : null, sosRemainingPct: rn ? r4(rsum / rn) : null };
 }
 
 /** Completed regular-season weeks so far (0 before the opener). */
@@ -229,10 +244,17 @@ export async function takeSnapshot(season: number, force = false): Promise<Snaps
       if (error) throw new Error(error.message);
     }
     let { error } = await sb().from('fbs_futures_snapshots').insert(rows);
-    if (error && /games_started/.test(error.message)) {
-      // Table predates the games_started column — insert without it (run the ALTER in the sql file to keep the flag)
-      const bare = rows.map((r) => { const { games_started: _gs, ...rest } = r; void _gs; return rest; });
-      ({ error } = await sb().from('fbs_futures_snapshots').insert(bare));
+    // Table predates a column we write (games_started, sos_*…): strip the
+    // named column and retry, so a missed ALTER never blocks the weekly capture.
+    let attempt = 0;
+    let body: Record<string, unknown>[] = rows as unknown as Record<string, unknown>[];
+    while (error && attempt < 4) {
+      const m = /'([a-z_]+)' column/.exec(error.message);
+      if (!m) break;
+      const col = m[1];
+      body = body.map((r) => { const c = { ...r }; delete c[col]; return c; });
+      ({ error } = await sb().from('fbs_futures_snapshots').insert(body));
+      attempt++;
     }
     if (error) throw new Error(`${source}: ${error.message}`);
     written[source] = rows.length;
@@ -240,6 +262,7 @@ export async function takeSnapshot(season: number, force = false): Promise<Snaps
 
   if (shouldWrite('futures')) {
     const fut = buildFutures(season, schedule, fbs, fcs, hfa);
+    const sos = new Map(buildFbsSos(season, schedule, fbs, fcs, hfa).teams.map((t) => [t.teamName, sosAggregates(t.games)]));
     const rows: SnapshotRow[] = fut.conferences.flatMap((c) =>
       c.teams.map((t) => ({
         season, week, source: 'futures' as const,
@@ -250,6 +273,8 @@ export async function takeSnapshot(season: number, force = false): Promise<Snaps
         champ_prob: null, playoff_prob: null,
         fair_odds: t.odds, timing_signal: t.timing?.signal ?? null,
         market_book: null, market_odds: null, market_prob: null,
+        sos_pct: sos.get(t.teamName)?.sosPct ?? null,
+        sos_remaining_pct: sos.get(t.teamName)?.sosRemainingPct ?? null,
       }))
     );
     await write('futures', rows);

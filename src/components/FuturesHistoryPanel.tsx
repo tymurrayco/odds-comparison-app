@@ -8,7 +8,7 @@
 // by and the columns of the per-week table.
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { MouseEvent, useCallback, useEffect, useMemo, useState } from 'react';
 
 export interface HistoryMetric { key: string; label: string; hint: string; pct: boolean }
 export interface HistoryColumn {
@@ -51,6 +51,91 @@ const fmtDelta = (d: number | null, pctFmt: boolean) => {
   return `${v > 0 ? '+' : ''}${v.toFixed(1)}${pctFmt ? 'pp' : ''}`;
 };
 const fmtOdds = (o: number | null) => (o === null ? '—' : o > 0 ? `+${o}` : String(o));
+
+// Fixed categorical order (validated palette, light surface) — a series keeps
+// its colour whatever the filter shows. Slots 1–6.
+const SERIES_COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300'];
+
+// One team, every percentage category over the captured weeks. Crosshair +
+// tooltip on hover, legend row below, last value labelled at the line end.
+function TeamChart({ team, metrics, weeks }: { team: Team; metrics: HistoryMetric[]; weeks: number[] }) {
+  const [hover, setHover] = useState<number | null>(null); // index into weeks
+  const series = metrics
+    .filter((m) => m.pct)
+    .map((m, i) => ({
+      key: m.key, label: m.label, color: SERIES_COLORS[i % SERIES_COLORS.length],
+      values: weeks.map((w) => { const p = team.points.find((x) => x.week === w); return p ? num(p[m.key]) : null; }),
+    }))
+    .filter((s) => s.values.some((v) => v !== null));
+  if (weeks.length < 2 || series.length === 0) {
+    return <div className="text-[11px] text-slate-400 mb-2">Chart appears once two or more weeks are captured.</div>;
+  }
+  const W = 640, H = 220, L = 40, R = 118, T = 12, B = 28;
+  const maxV = Math.max(0.05, ...series.flatMap((s) => s.values.filter((v): v is number => v !== null)));
+  const top = Math.min(1, Math.ceil(maxV * 10) / 10 + 0.05);
+  const x = (i: number) => L + (weeks.length === 1 ? 0 : (i / (weeks.length - 1)) * (W - L - R));
+  const y = (v: number) => T + (1 - v / top) * (H - T - B);
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => f * top);
+  // End labels: push apart so they never overlap (12px line height)
+  const ends = series
+    .map((s) => { const last = [...s.values].reverse().find((v) => v !== null); return last === undefined || last === null ? null : { s, v: last, y: y(last) }; })
+    .filter((e): e is { s: typeof series[number]; v: number; y: number } => !!e)
+    .sort((a, b) => a.y - b.y);
+  for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 12) ends[i].y = ends[i - 1].y + 12;
+  const onMove = (e: MouseEvent<SVGSVGElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const px = ((e.clientX - rect.left) / rect.width) * W;
+    let best = 0;
+    for (let i = 1; i < weeks.length; i++) if (Math.abs(x(i) - px) < Math.abs(x(best) - px)) best = i;
+    setHover(best);
+  };
+  return (
+    <div className="mb-3">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full max-w-[640px] h-auto select-none" onMouseMove={onMove} onMouseLeave={() => setHover(null)} role="img" aria-label={`${team.teamName} odds by week`}>
+        {ticks.map((t) => (
+          <g key={t}>
+            <line x1={L} x2={W - R} y1={y(t)} y2={y(t)} stroke="#e2e8f0" strokeWidth={1} />
+            <text x={L - 6} y={y(t) + 3} textAnchor="end" fontSize={10} fill="#94a3b8">{Math.round(t * 100)}%</text>
+          </g>
+        ))}
+        {weeks.map((w, i) => (
+          <text key={w} x={x(i)} y={H - 10} textAnchor="middle" fontSize={10} fill="#94a3b8">wk {w}</text>
+        ))}
+        {hover !== null && <line x1={x(hover)} x2={x(hover)} y1={T} y2={H - B} stroke="#94a3b8" strokeWidth={1} strokeDasharray="3 3" />}
+        {series.map((s) => {
+          const pts = s.values.map((v, i) => (v === null ? null : [x(i), y(v)] as const));
+          const d = pts.map((p, i) => (p ? `${i === 0 || !pts[i - 1] ? 'M' : 'L'}${p[0].toFixed(1)},${p[1].toFixed(1)}` : '')).join(' ');
+          return (
+            <g key={s.key}>
+              <path d={d} fill="none" stroke={s.color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+              {pts.map((p, i) => p && (
+                <circle key={i} cx={p[0]} cy={p[1]} r={hover === i ? 4 : 2.5} fill={s.color} stroke="#fff" strokeWidth={hover === i ? 2 : 0} />
+              ))}
+            </g>
+          );
+        })}
+        {ends.map((e) => (
+          <text key={e.s.key} x={W - R + 6} y={e.y + 3} fontSize={10} fill="#334155">
+            <tspan fill={e.s.color}>●</tspan> {e.s.label} {(e.v * 100).toFixed(0)}%
+          </text>
+        ))}
+      </svg>
+      {hover !== null && (
+        <div className="text-[11px] text-slate-600 tabular-nums flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
+          <span className="font-semibold text-slate-800">Week {weeks[hover]}</span>
+          {series.map((s) => (
+            <span key={s.key}><span style={{ color: s.color }}>●</span> {s.label} {s.values[hover] === null ? '—' : `${((s.values[hover] as number) * 100).toFixed(1)}%`}</span>
+          ))}
+        </div>
+      )}
+      <div className="text-[11px] text-slate-500 flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
+        {series.map((s) => (
+          <span key={s.key} className="inline-flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: s.color }} /> {s.label}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function Sparkline({ values, pctFmt, weeks }: { values: (number | null)[]; pctFmt: boolean; weeks: number[] }) {
   const pts = values.map((v, i) => [i, v] as const).filter((x): x is readonly [number, number] => x[1] !== null);
@@ -300,7 +385,8 @@ export default function FuturesHistoryPanel({
                     <div className="hidden sm:flex justify-end"><Sparkline values={series} pctFmt={m.pct} weeks={weeks} /></div>
                   </button>
                   {isOpen && (
-                    <div className="px-3 pb-3 pt-1 bg-slate-50/60 overflow-x-auto">
+                    <div className="px-3 pb-3 pt-2 bg-slate-50/60 overflow-x-auto">
+                      <TeamChart team={t} metrics={config.metrics} weeks={weeks} />
                       <table className="text-xs tabular-nums">
                         <thead>
                           <tr className="text-left text-slate-400 uppercase tracking-wide">

@@ -11,7 +11,8 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { NFL_DEFAULT_HFA } from './constants';
 import { buildNflFutures } from './futures';
-import { fetchNflSosSchedule } from './sos';
+import { buildNflSos, fetchNflSosSchedule } from './sos';
+import { sosAggregates } from '@/lib/fbs/snapshots';
 import { loadNflConfig, loadNflRatings } from './supabase';
 import { NflTeamRating } from './types';
 import { SosInputGame } from '@/lib/sos';
@@ -56,6 +57,8 @@ export interface NflSnapshotRow {
   market_odds: number | null;
   market_prob: number | null;
   games_started?: number;    // games of the NEXT week already under way at capture (0 = clean pre-week snapshot)
+  sos_pct?: number | null;
+  sos_remaining_pct?: number | null;
 }
 
 export function completedNflWeek(schedule: SosInputGame[]): number {
@@ -201,10 +204,17 @@ export async function takeNflSnapshot(season: number, force = false): Promise<Nf
       if (error) throw new Error(error.message);
     }
     let { error } = await sb().from('nfl_futures_snapshots').insert(rows);
-    if (error && /games_started/.test(error.message)) {
-      // Table predates the games_started column — insert without it (run the ALTER in the sql file to keep the flag)
-      const bare = rows.map((r) => { const { games_started: _gs, ...rest } = r; void _gs; return rest; });
-      ({ error } = await sb().from('nfl_futures_snapshots').insert(bare));
+    // Table predates a column we write (games_started, sos_*…): strip the
+    // named column and retry, so a missed ALTER never blocks the weekly capture.
+    let attempt = 0;
+    let body: Record<string, unknown>[] = rows as unknown as Record<string, unknown>[];
+    while (error && attempt < 4) {
+      const m = /'([a-z_]+)' column/.exec(error.message);
+      if (!m) break;
+      const col = m[1];
+      body = body.map((r) => { const c = { ...r }; delete c[col]; return c; });
+      ({ error } = await sb().from('nfl_futures_snapshots').insert(body));
+      attempt++;
     }
     if (error) throw new Error(`${source}: ${error.message}`);
     written[source] = rows.length;
@@ -212,6 +222,7 @@ export async function takeNflSnapshot(season: number, force = false): Promise<Nf
 
   if (shouldWrite('futures')) {
     const fut = buildNflFutures(season, schedule, ratings, hfa);
+    const sos = new Map(buildNflSos(season, schedule, ratings, hfa).teams.map((t) => [t.teamName, sosAggregates(t.games)]));
     const rows: NflSnapshotRow[] = fut.teams.map((t) => ({
       season, week, source: 'futures' as const,
       division: t.division, conference: t.conference,
@@ -220,6 +231,8 @@ export async function takeNflSnapshot(season: number, force = false): Promise<Nf
       div_prob: t.pDiv, playoff_prob: t.pPlayoff, seed1_prob: t.pSeed1, conf_prob: t.pConf, sb_prob: t.pSb,
       div_odds: t.divOdds, timing_signal: t.timing?.signal ?? null,
       market_book: null, market_odds: null, market_prob: null,
+      sos_pct: sos.get(t.teamName)?.sosPct ?? null,
+      sos_remaining_pct: sos.get(t.teamName)?.sosRemainingPct ?? null,
     }));
     await write('futures', rows);
   }
