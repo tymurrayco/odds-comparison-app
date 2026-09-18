@@ -60,15 +60,47 @@ export interface SnapshotRow {
   market_book: string | null;
   market_odds: number | null;
   market_prob: number | null;
+  games_started?: number;    // games of the NEXT week already under way at capture (0 = clean pre-week snapshot)
 }
 
 /** Completed regular-season weeks so far (0 before the opener). */
 export function completedCfbWeek(schedule: ScheduleGame[]): number {
-  let w = 0;
+  return weekStatus(schedule).completedWeek;
+}
+
+export interface WeekStatus {
+  completedWeek: number;   // highest week whose games are ALL final (0 before the opener)
+  nextWeek: number;        // the week about to be played
+  gamesStarted: number;    // games of nextWeek that have kicked off or finished
+  gamesInWeek: number;
+  locked: boolean;         // a snapshot keyed to completedWeek must not be rewritten
+}
+
+/**
+ * A week counts as complete only when every game in it is final, so one
+ * Thursday or Friday game can't bump the key. Once any game of the next
+ * week has started, the pre-week snapshot is locked: the season state it
+ * captured is gone and a rewrite would mix in partial results.
+ */
+export function weekStatus(schedule: { week: number | null; date: string; completed: boolean; homeScore: number | null; awayScore: number | null }[], now: Date = new Date()): WeekStatus {
+  const byWeek = new Map<number, { total: number; done: number; started: number }>();
   for (const g of schedule) {
-    if (g.completed && g.homeScore !== null && g.awayScore !== null && g.week && g.week > w) w = g.week;
+    if (!g.week || g.week > 15) continue;
+    const w = byWeek.get(g.week) ?? { total: 0, done: 0, started: 0 };
+    w.total++;
+    const done = g.completed && g.homeScore !== null && g.awayScore !== null;
+    if (done) w.done++;
+    if (done || new Date(g.date).getTime() <= now.getTime()) w.started++;
+    byWeek.set(g.week, w);
   }
-  return w;
+  let completedWeek = 0;
+  for (const [w, s] of [...byWeek.entries()].sort((a, b) => a[0] - b[0])) {
+    if (s.total > 0 && s.done === s.total) completedWeek = w;
+    else break;
+  }
+  const nextWeek = completedWeek + 1;
+  const nx = byWeek.get(nextWeek) ?? { total: 0, done: 0, started: 0 };
+  return { completedWeek, nextWeek, gamesStarted: nx.started, gamesInWeek: nx.total, locked: nx.started > 0 };
 }
 
 const impliedProb = (american: number): number =>
@@ -142,6 +174,10 @@ async function fetchMarketRows(
 export interface SnapshotReport {
   season: number;
   week: number;
+  nextWeek: number;
+  gamesStarted: number;
+  locked: boolean;
+  refused: string[];        // sources not rewritten because the week is locked
   written: Record<string, number>;
   skipped: string[];
   unmatchedMarketNames: string[];
@@ -159,7 +195,8 @@ export async function takeSnapshot(season: number, force = false): Promise<Snaps
     loadFcsRatings(),
     fetchFbsSeasonSchedule(season),
   ]);
-  const week = completedCfbWeek(schedule);
+  const status = weekStatus(schedule);
+  const week = status.completedWeek;
   const hfa = config.hfaDefault ?? FBS_DEFAULT_HFA;
 
   const { data: existing, error: exErr } = await sb()
@@ -172,21 +209,36 @@ export async function takeSnapshot(season: number, force = false): Promise<Snaps
 
   const written: Record<string, number> = {};
   const skipped: string[] = [];
+  const refused: string[] = [];
   let unmatched: string[] = [];
   let remaining: string | null = null;
 
+  // A source is written when the week has no rows for it. With `force` it is
+  // rewritten too — unless the week is locked (next week's games have begun).
+  const shouldWrite = (source: string): boolean => {
+    if (!have.has(source)) return true;
+    if (!force) { skipped.push(source); return false; }
+    if (status.locked) { refused.push(source); return false; }
+    return true;
+  };
   const write = async (source: string, rows: SnapshotRow[]) => {
     if (!rows.length) { written[source] = 0; return; }
-    if (force && have.has(source)) {
+    for (const r of rows) r.games_started = status.gamesStarted;
+    if (have.has(source)) {
       const { error } = await sb().from('fbs_futures_snapshots').delete().eq('season', season).eq('week', week).eq('source', source);
       if (error) throw new Error(error.message);
     }
-    const { error } = await sb().from('fbs_futures_snapshots').insert(rows);
+    let { error } = await sb().from('fbs_futures_snapshots').insert(rows);
+    if (error && /games_started/.test(error.message)) {
+      // Table predates the games_started column — insert without it (run the ALTER in the sql file to keep the flag)
+      const bare = rows.map((r) => { const { games_started: _gs, ...rest } = r; void _gs; return rest; });
+      ({ error } = await sb().from('fbs_futures_snapshots').insert(bare));
+    }
     if (error) throw new Error(`${source}: ${error.message}`);
     written[source] = rows.length;
   };
 
-  if (force || !have.has('futures')) {
+  if (shouldWrite('futures')) {
     const fut = buildFutures(season, schedule, fbs, fcs, hfa);
     const rows: SnapshotRow[] = fut.conferences.flatMap((c) =>
       c.teams.map((t) => ({
@@ -201,9 +253,9 @@ export async function takeSnapshot(season: number, force = false): Promise<Snaps
       }))
     );
     await write('futures', rows);
-  } else skipped.push('futures');
+  }
 
-  if (force || !have.has('g5')) {
+  if (shouldWrite('g5')) {
     const g5 = buildG5Playoff(season, schedule, fbs, fcs, hfa);
     const rows: SnapshotRow[] = g5.teams.map((t) => ({
       season, week, source: 'g5' as const,
@@ -216,16 +268,19 @@ export async function takeSnapshot(season: number, force = false): Promise<Snaps
       market_book: null, market_odds: null, market_prob: null,
     }));
     await write('g5', rows);
-  } else skipped.push('g5');
+  }
 
-  if (force || !have.has('market')) {
+  if (shouldWrite('market')) {
     const m = await fetchMarketRows(season, week, fbs);
     unmatched = m.unmatched;
     remaining = m.remaining;
     await write('market', m.rows);
-  } else skipped.push('market');
+  }
 
-  return { season, week, written, skipped, unmatchedMarketNames: unmatched, oddsApiRemaining: remaining };
+  return {
+    season, week, nextWeek: status.nextWeek, gamesStarted: status.gamesStarted, locked: status.locked, refused,
+    written, skipped, unmatchedMarketNames: unmatched, oddsApiRemaining: remaining,
+  };
 }
 
 export async function loadSnapshots(season: number): Promise<SnapshotRow[]> {

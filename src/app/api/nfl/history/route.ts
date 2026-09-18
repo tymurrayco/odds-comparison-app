@@ -41,7 +41,11 @@ export async function GET(request: NextRequest) {
     const rows = await loadNflSnapshots(season);
     const weeks = [...new Set(rows.map((r) => r.week))].sort((a, b) => a - b);
     const takenAt = new Map<number, string>();
-    for (const r of rows) if (r.taken_at && !takenAt.has(r.week)) takenAt.set(r.week, r.taken_at);
+    const started = new Map<number, number>();
+    for (const r of rows) {
+      if (r.taken_at && !takenAt.has(r.week)) takenAt.set(r.week, r.taken_at);
+      started.set(r.week, Math.max(started.get(r.week) ?? 0, r.games_started ?? 0));
+    }
 
     const teams = new Map<string, Team>();
     const point = (t: Team, week: number): Point => {
@@ -88,7 +92,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       season,
-      weeks: weeks.map((w) => ({ week: w, takenAt: takenAt.get(w) ?? null })),
+      weeks: weeks.map((w) => ({ week: w, takenAt: takenAt.get(w) ?? null, gamesStarted: started.get(w) ?? 0 })),
       teams: [...teams.values()].sort((a, b) => a.teamName.localeCompare(b.teamName)),
       rows: rows.length,
     });

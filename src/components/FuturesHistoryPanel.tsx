@@ -37,7 +37,7 @@ interface HistoryResponse {
   success: boolean;
   error?: string;
   season: number;
-  weeks: { week: number; takenAt: string | null }[];
+  weeks: { week: number; takenAt: string | null; gamesStarted?: number }[];
   teams: Team[];
   rows: number;
 }
@@ -116,7 +116,12 @@ export default function FuturesHistoryPanel({
       const json = await res.json();
       if (!res.ok || !json.success) throw new Error(json.error || `HTTP ${res.status}`);
       const parts = Object.entries((json.written ?? {}) as Record<string, number>).map(([k, v]) => `${k} ${v}`);
-      setNote(`Week ${json.week} captured: ${parts.join(', ')}${json.unmatchedMarketNames?.length ? ` · ${json.unmatchedMarketNames.length} book names unmatched` : ''}`);
+      const refused: string[] = json.refused ?? [];
+      if (refused.length && parts.length === 0) {
+        setNote(`Week ${json.week} is locked — ${json.gamesStarted} of week ${json.nextWeek}'s games have already started, so the pre-week snapshot stays as taken. Nothing rewritten.`);
+      } else {
+        setNote(`Week ${json.week} captured: ${parts.join(', ')}${json.gamesStarted ? ` · taken after ${json.gamesStarted} game${json.gamesStarted === 1 ? '' : 's'} of week ${json.nextWeek} had started` : ''}${refused.length ? ` · kept (locked): ${refused.join(', ')}` : ''}${json.unmatchedMarketNames?.length ? ` · ${json.unmatchedMarketNames.length} book names unmatched` : ''}`);
+      }
       await load();
     } catch (e) {
       setNote(e instanceof Error ? e.message : 'Snapshot failed');
@@ -244,7 +249,8 @@ export default function FuturesHistoryPanel({
           </select>
           {data && (
             <span className="text-[11px] text-slate-400 tabular-nums ml-auto">
-              {weeks.length ? `Weeks captured: ${weeks.join(', ')}` : 'No snapshots yet'}
+              {weeks.length ? `Weeks captured: ${data.weeks.map((w) => `${w.week}${w.gamesStarted ? '*' : ''}`).join(', ')}` : 'No snapshots yet'}
+              {data.weeks.some((w) => w.gamesStarted) ? ' · * taken after some of the next week\'s games had started' : ''}
               {lastWeek !== null && data.weeks[data.weeks.length - 1].takenAt ? ` · latest ${new Date(data.weeks[data.weeks.length - 1].takenAt as string).toLocaleDateString()}` : ''}
             </span>
           )}
