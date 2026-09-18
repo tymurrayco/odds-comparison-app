@@ -37,6 +37,7 @@ export interface HistoryPoint {
 export interface HistoryTeam {
   teamName: string;
   conference: string | null;
+  group: string | null;        // = conference (the generic panel's grouping key)
   inG5: boolean;
   points: HistoryPoint[];      // by week asc
 }
@@ -66,10 +67,10 @@ export async function GET(request: NextRequest) {
     const teamOf = (r: SnapshotRow): HistoryTeam => {
       let t = teams.get(r.team_name);
       if (!t) {
-        t = { teamName: r.team_name, conference: r.conference, inG5: false, points: [] };
+        t = { teamName: r.team_name, conference: r.conference, group: r.conference, inG5: false, points: [] };
         teams.set(r.team_name, t);
       }
-      if (r.conference && !t.conference) t.conference = r.conference;
+      if (r.conference && !t.conference) { t.conference = r.conference; t.group = r.conference; }
       return t;
     };
 

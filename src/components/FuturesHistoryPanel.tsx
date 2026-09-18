@@ -1,36 +1,38 @@
 'use client';
 
-// src/components/FbsHistoryPanel.tsx
-// History tab on the FBS ratings pages: how the futures model, the G5
-// playoff sim and the books' national-title prices have moved week by
-// week. Movers table (this week vs last, and vs the first snapshot),
-// conference filter, tap a team for its lines. Data from /api/fbs/history,
-// captured weekly by /api/fbs/snapshot (Vercel cron) or the admin button.
+// src/components/FuturesHistoryPanel.tsx
+// History tab shared by the FBS and NFL ratings pages: how the futures
+// model and the books' prices have moved week by week. Movers table (this
+// week vs last, and vs the first snapshot), group filter, tap a team for
+// its per-week lines. The league passes its endpoints, the metrics to rank
+// by and the columns of the per-week table.
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { TeamVisual } from './FbsFuturesPanel';
 
-interface Point {
+export interface HistoryMetric { key: string; label: string; hint: string; pct: boolean }
+export interface HistoryColumn {
+  key: string;
+  label: string;
+  kind: 'pct' | 'num' | 'record' | 'proj' | 'odds' | 'market' | 'text';
+}
+export interface HistoryPanelConfig {
+  endpoint: string;         // GET history
+  snapshotEndpoint: string; // GET snapshot?force=1
+  groupNoun: string;        // "conference" | "division"
+  metrics: HistoryMetric[];
+  columns: HistoryColumn[];
+  blurb: string;
+}
+
+type Point = Record<string, unknown> & {
   week: number;
   takenAt: string | null;
-  rating: number | null;
-  wins: number | null;
-  losses: number | null;
-  projWins: number | null;
-  projLosses: number | null;
-  titleProb: number | null;
-  ccgProb: number | null;
-  top2Prob: number | null;
-  champProb: number | null;
-  playoffProb: number | null;
-  fairOdds: number | null;
-  timing: string | null;
   marketProb: number | null;
   marketBooks: number;
   marketBestOdds: number | null;
-}
-interface Team { teamName: string; conference: string | null; inG5: boolean; points: Point[] }
+};
+interface Team { teamName: string; group: string | null; points: Point[] }
 interface HistoryResponse {
   success: boolean;
   error?: string;
@@ -39,15 +41,9 @@ interface HistoryResponse {
   teams: Team[];
   rows: number;
 }
+interface TeamVisual { logo: string | null; color: string; href?: string | null }
 
-type Metric = 'titleProb' | 'playoffProb' | 'marketProb' | 'rating';
-const METRICS: { key: Metric; label: string; hint: string; pct: boolean }[] = [
-  { key: 'titleProb', label: 'Conference title', hint: 'Model: regular-season conference title', pct: true },
-  { key: 'playoffProb', label: 'G5 playoff', hint: 'Model: takes the Group of Five playoff spot', pct: true },
-  { key: 'marketProb', label: 'National title (books)', hint: 'Books: national-title outright, hold removed, median of books', pct: true },
-  { key: 'rating', label: 'Rating', hint: 'Ledger rating', pct: false },
-];
-
+const num = (v: unknown): number | null => (typeof v === 'number' ? v : typeof v === 'string' && v !== '' && Number.isFinite(Number(v)) ? Number(v) : null);
 const fmtVal = (v: number | null, pctFmt: boolean, dp = 1) => (v === null ? '—' : pctFmt ? `${(v * 100).toFixed(dp)}%` : v.toFixed(1));
 const fmtDelta = (d: number | null, pctFmt: boolean) => {
   if (d === null) return '—';
@@ -56,7 +52,7 @@ const fmtDelta = (d: number | null, pctFmt: boolean) => {
 };
 const fmtOdds = (o: number | null) => (o === null ? '—' : o > 0 ? `+${o}` : String(o));
 
-function Sparkline({ values, pctFmt }: { values: (number | null)[]; pctFmt: boolean }) {
+function Sparkline({ values, pctFmt, weeks }: { values: (number | null)[]; pctFmt: boolean; weeks: number[] }) {
   const pts = values.map((v, i) => [i, v] as const).filter((x): x is readonly [number, number] => x[1] !== null);
   if (pts.length < 2) return <span className="text-[11px] text-slate-400">need 2+ weeks</span>;
   const w = 160, h = 40, pad = 3;
@@ -73,17 +69,25 @@ function Sparkline({ values, pctFmt }: { values: (number | null)[]; pctFmt: bool
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="shrink-0" aria-label="trend">
       <path d={d} fill="none" stroke={up ? '#059669' : '#dc2626'} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
       <circle cx={sx(last[0])} cy={sy(last[1])} r={2.5} fill={up ? '#059669' : '#dc2626'} />
-      <title>{pts.map((p) => `wk${values.length ? p[0] : ''}: ${fmtVal(p[1], pctFmt)}`).join(' · ')}</title>
+      <title>{pts.map((p) => `wk ${weeks[p[0]]}: ${fmtVal(p[1], pctFmt)}`).join(' · ')}</title>
     </svg>
   );
 }
 
-export default function FbsHistoryPanel({ visualFor, admin = false }: { visualFor: (teamName: string) => TeamVisual; admin?: boolean }) {
+export default function FuturesHistoryPanel({
+  config,
+  visualFor,
+  admin = false,
+}: {
+  config: HistoryPanelConfig;
+  visualFor: (teamName: string) => TeamVisual;
+  admin?: boolean;
+}) {
   const [data, setData] = useState<HistoryResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [metric, setMetric] = useState<Metric>('titleProb');
-  const [conf, setConf] = useState('all');
+  const [metric, setMetric] = useState<string>(config.metrics[0].key);
+  const [group, setGroup] = useState('all');
   const [openTeam, setOpenTeam] = useState<string | null>(null);
   const [snapping, setSnapping] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -91,7 +95,7 @@ export default function FbsHistoryPanel({ visualFor, admin = false }: { visualFo
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/fbs/history');
+      const res = await fetch(config.endpoint);
       const json: HistoryResponse = await res.json();
       if (!res.ok || !json.success) throw new Error(json.error || `HTTP ${res.status}`);
       setData(json);
@@ -101,17 +105,17 @@ export default function FbsHistoryPanel({ visualFor, admin = false }: { visualFo
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [config.endpoint]);
   useEffect(() => { load(); }, [load]);
 
   const snapshotNow = async () => {
     setSnapping(true);
     setNote(null);
     try {
-      const res = await fetch('/api/fbs/snapshot?force=1');
+      const res = await fetch(config.snapshotEndpoint);
       const json = await res.json();
       if (!res.ok || !json.success) throw new Error(json.error || `HTTP ${res.status}`);
-      const parts = Object.entries(json.written as Record<string, number>).map(([k, v]) => `${k} ${v}`);
+      const parts = Object.entries((json.written ?? {}) as Record<string, number>).map(([k, v]) => `${k} ${v}`);
       setNote(`Week ${json.week} captured: ${parts.join(', ')}${json.unmatchedMarketNames?.length ? ` · ${json.unmatchedMarketNames.length} book names unmatched` : ''}`);
       await load();
     } catch (e) {
@@ -121,25 +125,22 @@ export default function FbsHistoryPanel({ visualFor, admin = false }: { visualFo
     }
   };
 
-  const m = METRICS.find((x) => x.key === metric)!;
-  const weeks = data?.weeks.map((w) => w.week) ?? [];
+  const m = config.metrics.find((x) => x.key === metric) ?? config.metrics[0];
+  const weeks = useMemo(() => data?.weeks.map((w) => w.week) ?? [], [data]);
   const lastWeek = weeks.length ? weeks[weeks.length - 1] : null;
   const prevWeek = weeks.length > 1 ? weeks[weeks.length - 2] : null;
   const firstWeek = weeks.length ? weeks[0] : null;
-
-  const conferences = useMemo(() => [...new Set((data?.teams ?? []).map((t) => t.conference ?? 'Independent'))].sort(), [data]);
+  const groups = useMemo(() => [...new Set((data?.teams ?? []).map((t) => t.group ?? 'Other'))].sort(), [data]);
 
   const rows = useMemo(() => {
     if (!data || lastWeek === null) return [];
     const val = (t: Team, w: number | null): number | null => {
       if (w === null) return null;
       const p = t.points.find((x) => x.week === w);
-      const v = p ? p[metric] : null;
-      return typeof v === 'number' ? v : null;
+      return p ? num(p[m.key]) : null;
     };
     return data.teams
-      .filter((t) => conf === 'all' || (t.conference ?? 'Independent') === conf)
-      .filter((t) => metric !== 'playoffProb' || t.inG5)
+      .filter((t) => group === 'all' || (t.group ?? 'Other') === group)
       .map((t) => {
         const now = val(t, lastWeek);
         const prev = val(t, prevWeek);
@@ -154,7 +155,7 @@ export default function FbsHistoryPanel({ visualFor, admin = false }: { visualFo
       })
       .filter((r) => r.now !== null || r.series.some((v) => v !== null))
       .sort((a, b) => Math.abs(b.dWeek ?? b.dSeason ?? 0) - Math.abs(a.dWeek ?? a.dSeason ?? 0) || (b.now ?? 0) - (a.now ?? 0));
-  }, [data, metric, conf, lastWeek, prevWeek, firstWeek, weeks]);
+  }, [data, m.key, group, lastWeek, prevWeek, firstWeek, weeks]);
 
   const Chip = ({ name, sub }: { name: string; sub?: string }) => {
     const v = visualFor(name);
@@ -179,6 +180,24 @@ export default function FbsHistoryPanel({ visualFor, admin = false }: { visualFo
     );
   };
 
+  const cell = (p: Point, c: HistoryColumn): string => {
+    switch (c.kind) {
+      case 'pct': return fmtVal(num(p[c.key]), true);
+      case 'num': return fmtVal(num(p[c.key]), false);
+      case 'record': {
+        const w = num(p.wins), l = num(p.losses), t = num(p.ties);
+        return w === null ? '—' : `${w}–${l}${t ? `–${t}` : ''}`;
+      }
+      case 'proj': {
+        const w = num(p.projWins), l = num(p.projLosses);
+        return w === null ? '—' : `${w.toFixed(1)}–${(l ?? 0).toFixed(1)}`;
+      }
+      case 'odds': return fmtOdds(num(p[c.key]));
+      case 'market': return p.marketProb !== null ? `${fmtVal(p.marketProb, true)} · best ${fmtOdds(p.marketBestOdds)} (${p.marketBooks} bk)` : '—';
+      case 'text': return p[c.key] === null || p[c.key] === undefined ? '—' : String(p[c.key]);
+    }
+  };
+
   const gridCols = 'sm:grid-cols-[1fr_5rem_5.5rem_5.5rem_11rem]';
 
   return (
@@ -187,11 +206,7 @@ export default function FbsHistoryPanel({ visualFor, admin = false }: { visualFo
         <div className="flex items-center justify-between gap-2">
           <div>
             <div className="text-[16px] font-semibold tracking-[-0.3px] text-slate-700">History — week by week</div>
-            <div className="text-xs text-slate-500 mt-0.5">
-              A snapshot of the futures model, the G5 sim and the books&apos; national-title prices is stored once a week after
-              the games land. Biggest movers first. Conference and G5 numbers are ours only — the books don&apos;t post those
-              markets.
-            </div>
+            <div className="text-xs text-slate-500 mt-0.5">{config.blurb}</div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {admin && (
@@ -210,8 +225,8 @@ export default function FbsHistoryPanel({ visualFor, admin = false }: { visualFo
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex bg-slate-200/70 rounded-full p-0.5">
-            {METRICS.map((x) => (
+          <div className="flex flex-wrap bg-slate-200/70 rounded-full p-0.5">
+            {config.metrics.map((x) => (
               <button
                 key={x.key}
                 type="button"
@@ -223,9 +238,9 @@ export default function FbsHistoryPanel({ visualFor, admin = false }: { visualFo
               </button>
             ))}
           </div>
-          <select value={conf} onChange={(e) => setConf(e.target.value)} className="px-2.5 py-1.5 text-sm rounded-lg border border-slate-200 bg-white">
-            <option value="all">All conferences</option>
-            {conferences.map((c) => <option key={c} value={c}>{c}</option>)}
+          <select value={group} onChange={(e) => setGroup(e.target.value)} className="px-2.5 py-1.5 text-sm rounded-lg border border-slate-200 bg-white">
+            <option value="all">All {config.groupNoun}s</option>
+            {groups.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
           {data && (
             <span className="text-[11px] text-slate-400 tabular-nums ml-auto">
@@ -258,6 +273,8 @@ export default function FbsHistoryPanel({ visualFor, admin = false }: { visualFo
               const v = visualFor(t.teamName);
               const isOpen = openTeam === t.teamName;
               const latest = t.points[t.points.length - 1];
+              const lw = latest ? num(latest.wins) : null;
+              const lr = latest ? num(latest.rating) : null;
               return (
                 <div key={t.teamName}>
                   <button
@@ -266,7 +283,7 @@ export default function FbsHistoryPanel({ visualFor, admin = false }: { visualFo
                     className={`w-full text-left grid grid-cols-[1fr_auto] ${gridCols} items-center gap-2 px-3 py-2 hover:bg-slate-50/60`}
                     style={{ boxShadow: `inset 3px 0 0 ${v.color}` }}
                   >
-                    <Chip name={t.teamName} sub={`${t.conference ?? 'Independent'}${latest?.wins !== null && latest?.wins !== undefined ? ` · ${latest.wins}–${latest.losses}` : ''}${latest?.rating !== null && latest?.rating !== undefined ? ` · ${Number(latest.rating).toFixed(1)}` : ''}`} />
+                    <Chip name={t.teamName} sub={`${t.group ?? ''}${lw !== null ? ` · ${lw}–${num(latest.losses) ?? 0}` : ''}${lr !== null ? ` · ${lr.toFixed(1)}` : ''}`} />
                     <div className="text-right sm:hidden">
                       <div className="text-sm font-semibold tabular-nums text-slate-800">{fmtVal(now, m.pct)}</div>
                       <div className={`text-[11px] tabular-nums ${dWeek === null ? 'text-slate-400' : dWeek > 0 ? 'text-emerald-600' : dWeek < 0 ? 'text-red-600' : 'text-slate-400'}`}>{fmtDelta(dWeek, m.pct)} wk</div>
@@ -274,7 +291,7 @@ export default function FbsHistoryPanel({ visualFor, admin = false }: { visualFo
                     <div className="hidden sm:block text-right text-sm font-semibold tabular-nums text-slate-800">{fmtVal(now, m.pct)}</div>
                     <div className={`hidden sm:block text-right text-sm tabular-nums ${dWeek === null ? 'text-slate-400' : dWeek > 0 ? 'text-emerald-600' : dWeek < 0 ? 'text-red-600' : 'text-slate-500'}`}>{fmtDelta(dWeek, m.pct)}</div>
                     <div className={`hidden sm:block text-right text-sm tabular-nums ${dSeason === null ? 'text-slate-400' : dSeason > 0 ? 'text-emerald-600' : dSeason < 0 ? 'text-red-600' : 'text-slate-500'}`}>{fmtDelta(dSeason, m.pct)}</div>
-                    <div className="hidden sm:flex justify-end"><Sparkline values={series} pctFmt={m.pct} /></div>
+                    <div className="hidden sm:flex justify-end"><Sparkline values={series} pctFmt={m.pct} weeks={weeks} /></div>
                   </button>
                   {isOpen && (
                     <div className="px-3 pb-3 pt-1 bg-slate-50/60 overflow-x-auto">
@@ -283,15 +300,7 @@ export default function FbsHistoryPanel({ visualFor, admin = false }: { visualFo
                           <tr className="text-left text-slate-400 uppercase tracking-wide">
                             <th className="py-1 pr-3">Wk</th>
                             <th className="py-1 pr-3">Taken</th>
-                            <th className="py-1 pr-3 text-right">Rec</th>
-                            <th className="py-1 pr-3 text-right">Rating</th>
-                            <th className="py-1 pr-3 text-right">Proj</th>
-                            <th className="py-1 pr-3 text-right">Conf title</th>
-                            <th className="py-1 pr-3 text-right">Title game</th>
-                            {t.inG5 && <th className="py-1 pr-3 text-right">G5 playoff</th>}
-                            <th className="py-1 pr-3 text-right">Fair</th>
-                            <th className="py-1 pr-3 text-right">Books: natl title</th>
-                            <th className="py-1 text-right">Timing</th>
+                            {config.columns.map((c) => <th key={c.key} className="py-1 pr-3 text-right">{c.label}</th>)}
                           </tr>
                         </thead>
                         <tbody>
@@ -299,15 +308,7 @@ export default function FbsHistoryPanel({ visualFor, admin = false }: { visualFo
                             <tr key={p.week} className="border-t border-slate-200/70">
                               <td className="py-1 pr-3 font-medium">{p.week}</td>
                               <td className="py-1 pr-3 text-slate-500">{p.takenAt ? new Date(p.takenAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—'}</td>
-                              <td className="py-1 pr-3 text-right">{p.wins !== null ? `${p.wins}–${p.losses}` : '—'}</td>
-                              <td className="py-1 pr-3 text-right">{fmtVal(p.rating, false)}</td>
-                              <td className="py-1 pr-3 text-right">{p.projWins !== null ? `${Number(p.projWins).toFixed(1)}–${Number(p.projLosses).toFixed(1)}` : '—'}</td>
-                              <td className="py-1 pr-3 text-right">{fmtVal(p.titleProb, true)}</td>
-                              <td className="py-1 pr-3 text-right">{fmtVal(p.ccgProb, true)}</td>
-                              {t.inG5 && <td className="py-1 pr-3 text-right">{fmtVal(p.playoffProb, true)}</td>}
-                              <td className="py-1 pr-3 text-right">{fmtOdds(p.fairOdds)}</td>
-                              <td className="py-1 pr-3 text-right">{p.marketProb !== null ? `${fmtVal(p.marketProb, true)} · best ${fmtOdds(p.marketBestOdds)} (${p.marketBooks} bk)` : '—'}</td>
-                              <td className="py-1 text-right text-slate-500">{p.timing ?? '—'}</td>
+                              {config.columns.map((c) => <td key={c.key} className="py-1 pr-3 text-right">{cell(p, c)}</td>)}
                             </tr>
                           ))}
                         </tbody>

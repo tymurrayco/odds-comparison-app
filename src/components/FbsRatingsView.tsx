@@ -21,7 +21,34 @@ import { createBet, fetchBets } from '@/lib/betService';
 import FbsFuturesPanel from './FbsFuturesPanel';
 import SosPanel from './SosPanel';
 import FbsG5PlayoffPanel from './FbsG5PlayoffPanel';
-import FbsHistoryPanel from './FbsHistoryPanel';
+import FuturesHistoryPanel, { HistoryPanelConfig } from './FuturesHistoryPanel';
+
+const FBS_HISTORY: HistoryPanelConfig = {
+  endpoint: '/api/fbs/history',
+  snapshotEndpoint: '/api/fbs/snapshot?force=1',
+  groupNoun: 'conference',
+  metrics: [
+    { key: 'titleProb', label: 'Reg-season title', hint: 'Model: best regular-season conference record', pct: true },
+    { key: 'top2Prob', label: 'Title-game berth', hint: 'Model: finishes top two, reaches the conference title game', pct: true },
+    { key: 'ccgProb', label: 'Conf champion', hint: 'Model: wins the conference championship game', pct: true },
+    { key: 'playoffProb', label: 'G5 playoff', hint: 'Model: takes the Group of Five playoff spot', pct: true },
+    { key: 'marketProb', label: 'National title (books)', hint: 'Books: national-title outright, hold removed, median of books', pct: true },
+    { key: 'rating', label: 'Rating', hint: 'Ledger rating', pct: false },
+  ],
+  columns: [
+    { key: 'record', label: 'Rec', kind: 'record' },
+    { key: 'rating', label: 'Rating', kind: 'num' },
+    { key: 'proj', label: 'Proj', kind: 'proj' },
+    { key: 'titleProb', label: 'Reg-season title', kind: 'pct' },
+    { key: 'top2Prob', label: 'Title-game berth', kind: 'pct' },
+    { key: 'ccgProb', label: 'Conf champion', kind: 'pct' },
+    { key: 'playoffProb', label: 'G5 playoff', kind: 'pct' },
+    { key: 'fairOdds', label: 'Fair', kind: 'odds' },
+    { key: 'market', label: 'Books: natl title', kind: 'market' },
+    { key: 'timing', label: 'Timing', kind: 'text' },
+  ],
+  blurb: "A snapshot of the futures model, the G5 sim and the books' national-title prices is stored once a week after the games land. Biggest movers first. Conference and G5 numbers are ours only — the books don't post those markets.",
+};
 
 const btnCls =
   'px-3 py-2 text-sm font-medium rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed';
@@ -1176,7 +1203,7 @@ ${line}` : line);
 
         {view === 'g5' && <FbsG5PlayoffPanel visualFor={visualFor} />}
 
-        {view === 'history' && <FbsHistoryPanel visualFor={visualFor} admin={admin} />}
+        {view === 'history' && <FuturesHistoryPanel config={FBS_HISTORY} visualFor={visualFor} admin={admin} />}
 
         {admin && view === 'ratings' && (data?.unlinedGames ?? []).length > 0 && (
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">

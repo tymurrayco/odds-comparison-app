@@ -21,6 +21,36 @@ import { NFL_HFA_NUDGE_RATE, nflLogoUrl } from '@/lib/nfl/constants';
 import NflTotalsPanel from './NflTotalsPanel';
 import NflSurvivorPanel from './NflSurvivorPanel';
 import SosPanel from './SosPanel';
+import NflFuturesPanel from './NflFuturesPanel';
+import FuturesHistoryPanel, { HistoryPanelConfig } from './FuturesHistoryPanel';
+
+const NFL_HISTORY: HistoryPanelConfig = {
+  endpoint: '/api/nfl/history',
+  snapshotEndpoint: '/api/nfl/snapshot?force=1',
+  groupNoun: 'division',
+  metrics: [
+    { key: 'divProb', label: 'Division', hint: 'Model: wins the division', pct: true },
+    { key: 'confProb', label: 'Conference', hint: 'Model: wins the conference', pct: true },
+    { key: 'sbProb', label: 'Super Bowl', hint: 'Model: wins the Super Bowl', pct: true },
+    { key: 'marketProb', label: 'Super Bowl (books)', hint: 'Books: Super Bowl outright, hold removed, median of books', pct: true },
+    { key: 'playoffProb', label: 'Playoffs', hint: 'Model: makes the playoffs', pct: true },
+    { key: 'rating', label: 'Rating', hint: 'Ledger rating', pct: false },
+  ],
+  columns: [
+    { key: 'record', label: 'Rec', kind: 'record' },
+    { key: 'rating', label: 'Rating', kind: 'num' },
+    { key: 'proj', label: 'Proj', kind: 'proj' },
+    { key: 'divProb', label: 'Division', kind: 'pct' },
+    { key: 'playoffProb', label: 'Playoffs', kind: 'pct' },
+    { key: 'seed1Prob', label: '1 seed', kind: 'pct' },
+    { key: 'confProb', label: 'Conference', kind: 'pct' },
+    { key: 'sbProb', label: 'Super Bowl', kind: 'pct' },
+    { key: 'divOdds', label: 'Div fair', kind: 'odds' },
+    { key: 'market', label: 'Books: Super Bowl', kind: 'market' },
+    { key: 'timing', label: 'Timing', kind: 'text' },
+  ],
+  blurb: "A snapshot of the division / conference / Super Bowl sim and the books' Super Bowl prices is stored once a week after Monday night. Biggest movers first. Division and conference numbers are ours only — the books don't post those markets.",
+};
 import { useTeamColorMap } from '@/lib/myGameBets';
 import { createBet, fetchBets } from '@/lib/betService';
 
@@ -214,7 +244,7 @@ export default function NflRatingsView({ admin = false }: { admin?: boolean }) {
   const [sortDesc, setSortDesc] = useState(true);
   const [manualSpreads, setManualSpreads] = useState<Record<string, string>>({});
   const [savingLine, setSavingLine] = useState<string | null>(null);
-  const [view, setView] = useState<'ratings' | 'upcoming' | 'totals' | 'survivor' | 'sos'>(admin ? 'ratings' : 'upcoming');
+  const [view, setView] = useState<'ratings' | 'upcoming' | 'totals' | 'survivor' | 'sos' | 'futures' | 'history'>(admin ? 'ratings' : 'upcoming');
   const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
   const [manualDelta, setManualDelta] = useState('');
   const [manualDate, setManualDate] = useState(() => localYmd(new Date()));
@@ -235,7 +265,7 @@ export default function NflRatingsView({ admin = false }: { admin?: boolean }) {
   // Shared tab link: ?view=ratings|upcoming|totals|sos|survivor (read once; mirrored below)
   useEffect(() => {
     const v = new URLSearchParams(window.location.search).get('view');
-    if (v === 'ratings' || v === 'upcoming' || v === 'totals' || v === 'sos' || (v === 'survivor' && admin)) setView(v);
+    if (v === 'ratings' || v === 'upcoming' || v === 'totals' || v === 'sos' || v === 'futures' || v === 'history' || (v === 'survivor' && admin)) setView(v);
   }, []);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -948,8 +978,8 @@ ${line}` : line);
           </div>
         )}
 
-        <div className={`grid ${admin ? 'grid-cols-5' : 'grid-cols-4'} bg-slate-200/70 rounded-full p-0.5`}>
-          {(admin ? (['ratings', 'upcoming', 'totals', 'sos', 'survivor'] as const) : (['ratings', 'upcoming', 'totals', 'sos'] as const)).map((v) => (
+        <div className={`grid ${admin ? 'grid-cols-7' : 'grid-cols-6'} bg-slate-200/70 rounded-full p-0.5`}>
+          {(admin ? (['ratings', 'upcoming', 'futures', 'totals', 'sos', 'history', 'survivor'] as const) : (['ratings', 'upcoming', 'futures', 'totals', 'sos', 'history'] as const)).map((v) => (
             <button
               key={v}
               onClick={() => setView(v)}
@@ -957,7 +987,7 @@ ${line}` : line);
                 view === v ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'
               }`}
             >
-              {v === 'ratings' ? 'Ratings' : v === 'upcoming' ? 'Upcoming' : v === 'totals' ? 'Totals' : v === 'sos' ? 'SOS' : 'Survivor'}
+              {v === 'ratings' ? 'Ratings' : v === 'upcoming' ? 'Upcoming' : v === 'totals' ? 'Totals' : v === 'sos' ? 'SOS' : v === 'futures' ? 'Futures' : v === 'history' ? 'History' : 'Survivor'}
             </button>
           ))}
         </div>
@@ -1227,6 +1257,8 @@ ${line}` : line);
         {view === 'totals' && <NflTotalsPanel admin={admin} visualFor={visualFor} />}
         {view === 'survivor' && admin && <NflSurvivorPanel visualFor={visualFor} />}
         {view === 'sos' && <SosPanel endpoint="/api/nfl/sos" league="NFL" groupNoun="division" visualFor={visualFor} />}
+        {view === 'futures' && <NflFuturesPanel visualFor={visualFor} />}
+        {view === 'history' && <FuturesHistoryPanel config={NFL_HISTORY} visualFor={visualFor} admin={admin} />}
 
         {admin && view === 'ratings' && (data?.unlinedGames ?? []).length > 0 && (
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
