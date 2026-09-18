@@ -12,19 +12,21 @@ import { NextRequest, NextResponse } from 'next/server';
 import { FBS_SEASON } from '@/lib/fbs/constants';
 import { loadFbsConfig, loadFbsRatings } from '@/lib/fbs/supabase';
 import { loadFcsRatings } from '@/lib/fcs/supabase';
-import { buildFutures, fetchFbsSeasonSchedule, FuturesResult } from '@/lib/fbs/futures';
+import { buildFutures, fetchFbsSeasonSchedule, FuturesResult, FUTURES_SIGMA, FUTURES_SIMS } from '@/lib/fbs/futures';
+import { clampWindow } from '@/lib/fbs/timing';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 const TTL_MS = 3 * 60 * 1000;
-let cache: { season: number; at: number; result: FuturesResult & { generatedAt: string } } | null = null;
+let cache: { season: number; window: number; at: number; result: FuturesResult & { generatedAt: string } } | null = null;
 
 export async function GET(request: NextRequest) {
   try {
     const season = Number(request.nextUrl.searchParams.get('season')) || FBS_SEASON;
     const fresh = request.nextUrl.searchParams.get('fresh') === '1';
-    if (!fresh && cache && cache.season === season && Date.now() - cache.at < TTL_MS) {
+    const window = clampWindow(request.nextUrl.searchParams.get('window'));
+    if (!fresh && cache && cache.season === season && cache.window === window && Date.now() - cache.at < TTL_MS) {
       return NextResponse.json({ success: true, cached: true, ...cache.result });
     }
     const [config, fbs, fcs, schedule] = await Promise.all([
@@ -33,8 +35,8 @@ export async function GET(request: NextRequest) {
       loadFcsRatings(),
       fetchFbsSeasonSchedule(season),
     ]);
-    const result = { ...buildFutures(season, schedule, fbs, fcs, config.hfaDefault), generatedAt: new Date().toISOString() };
-    cache = { season, at: Date.now(), result };
+    const result = { ...buildFutures(season, schedule, fbs, fcs, config.hfaDefault, FUTURES_SIMS, FUTURES_SIGMA, window), generatedAt: new Date().toISOString() };
+    cache = { season, window, at: Date.now(), result };
     return NextResponse.json(
       { success: true, cached: false, ...result },
       { headers: { 'Cache-Control': 's-maxage=120, stale-while-revalidate=180' } }

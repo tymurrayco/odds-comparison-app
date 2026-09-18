@@ -10,6 +10,12 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { TeamVisual } from './FbsFuturesPanel';
+import TimingBadge, { TimingView } from './TimingBadge';
+
+const WINDOW_KEY = 'fbs-timing-window';
+const readWindow = () => {
+  try { const v = Number(localStorage.getItem(WINDOW_KEY)); return [2, 3, 4].includes(v) ? v : 3; } catch { return 3; }
+};
 
 interface G5Team {
   teamName: string;
@@ -27,6 +33,7 @@ interface G5Team {
   pPlayoff: number;
   odds: number | null;
   avgChampLosses: number | null;
+  timing: TimingView | null;
 }
 
 interface G5Conference {
@@ -64,11 +71,12 @@ export default function FbsG5PlayoffPanel({ visualFor }: { visualFor: (teamName:
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [conf, setConf] = useState('all');
+  const [window, setWindow] = useState<number>(readWindow);
 
-  const load = useCallback(async (p: number, fresh = false) => {
+  const load = useCallback(async (p: number, fresh = false, w: number = window) => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/fbs/g5-playoff?penalty=${p}${fresh ? '&fresh=1' : ''}`);
+      const res = await fetch(`/api/fbs/g5-playoff?penalty=${p}&window=${w}${fresh ? '&fresh=1' : ''}`);
       const json: G5Response = await res.json();
       if (!res.ok || !json.success) throw new Error(json.error || `HTTP ${res.status}`);
       setData(json);
@@ -79,14 +87,15 @@ export default function FbsG5PlayoffPanel({ visualFor }: { visualFor: (teamName:
     } finally {
       setLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Debounce slider drags; persist the chosen penalty per browser
+  // Debounce slider drags; persist the chosen penalty and window per browser
   useEffect(() => {
-    try { localStorage.setItem(PENALTY_KEY, String(penalty)); } catch { /* per-viewer convenience */ }
-    const t = setTimeout(() => load(penalty), 250);
+    try { localStorage.setItem(PENALTY_KEY, String(penalty)); localStorage.setItem(WINDOW_KEY, String(window)); } catch { /* per-viewer convenience */ }
+    const t = setTimeout(() => load(penalty, false, window), 250);
     return () => clearTimeout(t);
-  }, [penalty, load]);
+  }, [penalty, window, load]);
 
   const rows = useMemo(() => {
     const all = data?.teams ?? [];
@@ -117,7 +126,7 @@ export default function FbsG5PlayoffPanel({ visualFor }: { visualFor: (teamName:
     );
   };
 
-  const gridCols = 'sm:grid-cols-[2.25rem_1fr_4rem_5rem_4.5rem_4.5rem_5rem_4.5rem]';
+  const gridCols = 'sm:grid-cols-[2.25rem_1fr_6.5rem_4rem_5rem_4.5rem_4.5rem_5rem_4.5rem]';
 
   return (
     <div className="space-y-3">
@@ -160,7 +169,13 @@ export default function FbsG5PlayoffPanel({ visualFor }: { visualFor: (teamName:
               ? 'Record ignored: best rating wins.'
               : `A loss costs ${penalty} rating points. Two teams tie when the better-rated one has ${penalty} points more per extra loss.`}
           </span>
-          <select value={conf} onChange={(e) => setConf(e.target.value)} className="ml-auto px-2.5 py-1.5 text-sm rounded-lg border border-slate-200 bg-white">
+          <label className="ml-auto flex items-center gap-1.5 text-xs text-slate-500" title="Market timing: how many upcoming games make the stretch">
+            Next
+            <select value={window} onChange={(e) => setWindow(Number(e.target.value))} className="px-1.5 py-1 text-xs rounded-md border border-slate-200 bg-white">
+              {[2, 3, 4].map((w) => <option key={w} value={w}>{w}</option>)}
+            </select>
+          </label>
+          <select value={conf} onChange={(e) => setConf(e.target.value)} className="px-2.5 py-1.5 text-sm rounded-lg border border-slate-200 bg-white">
             <option value="all">All G5 conferences</option>
             {(data?.conferences ?? []).map((c) => (
               <option key={c.name} value={c.name}>{c.name} · {pct(c.pBid, 0)}</option>
@@ -193,6 +208,7 @@ export default function FbsG5PlayoffPanel({ visualFor }: { visualFor: (teamName:
           <div className={`hidden sm:grid ${gridCols} items-center px-3 py-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wide bg-slate-50`}>
             <div>#</div>
             <div>Team</div>
+            <div title="Market timing: ▲ buy before a soft stretch, ▼ sell or wait before a hard one. Hover a badge for the games.">Timing</div>
             <div className="text-right" title="Completed games">W–L</div>
             <div className="text-right" title="Projected regular season (title game not included)">Proj</div>
             <div className="text-right" title="Wins its conference, title game included">Champ</div>
@@ -217,7 +233,9 @@ export default function FbsG5PlayoffPanel({ visualFor }: { visualFor: (teamName:
                   <div className="text-right sm:hidden">
                     <div className="text-sm font-semibold tabular-nums text-slate-800">{pct(t.pPlayoff)}</div>
                     <div className="text-[11px] text-slate-400 tabular-nums">{fmtOdds(t.odds)} · champ {pct(t.pChamp, 0)}</div>
+                    <div className="mt-0.5"><TimingBadge timing={t.timing} outcome="Playoff" /></div>
                   </div>
+                  <div className="hidden sm:block"><TimingBadge timing={t.timing} outcome="Playoff" /></div>
                   <div className="hidden sm:block text-right text-sm text-slate-800 tabular-nums">{rec(t.wins, t.losses)}</div>
                   <div className="hidden sm:block text-right text-sm text-slate-600 tabular-nums">{rec(t.projWins, t.projLosses)}</div>
                   <div className="hidden sm:block text-right text-sm text-slate-600 tabular-nums">{pct(t.pChamp)}</div>

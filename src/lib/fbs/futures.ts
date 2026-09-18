@@ -23,6 +23,7 @@ import { hfaForGame } from './engine';
 import { FbsTeamRating } from './types';
 import { FcsTeamRating } from '@/lib/fcs/types';
 import { FCS_TO_FBS_OFFSET_FALLBACK } from '@/lib/crossDivision';
+import { DEFAULT_TIMING_WINDOW, makeTiming, Timing, TimingGame } from './timing';
 
 export const FUTURES_SIGMA = 13.5;
 export const FUTURES_SIMS = 5000;
@@ -144,6 +145,7 @@ export interface FuturesTeam {
   ccgProb: number;        // wins the conference championship game (berth × neutral-field win)
   ccgOdds: number | null;
   top2Odds: number | null;  // fair price to reach the title game (top-two finish)
+  timing: Timing | null;    // next-N-games market-timing signal on the regular-season title
 }
 
 export interface FuturesConference {
@@ -166,16 +168,27 @@ export interface FuturesResult {
   season: number;
   sims: number;
   sigma: number;
+  window: number;
   conferences: FuturesConference[];
   gamesInSchedule: number;
 }
 
 interface GameEval {
+  id: string;
   homeIdx: number;
   awayIdx: number;
   pHome: number;
   completed: boolean;
   homeWon: boolean;
+}
+
+// One of a team's next games for the timing signal: a conference game
+// (index into the race's games, outcome shared with the race) or an
+// independent draw for a non-conference game.
+interface NextGame {
+  confIdx: number | null;
+  pWin: number;
+  info: TimingGame;
 }
 
 // Deterministic PRNG (mulberry32) so two loads in the same minute agree
@@ -197,7 +210,8 @@ export function buildFutures(
   fcsRatings: Map<string, FcsTeamRating>,
   hfaDefault: number = FBS_DEFAULT_HFA,
   sims: number = FUTURES_SIMS,
-  sigma: number = FUTURES_SIGMA
+  sigma: number = FUTURES_SIGMA,
+  window: number = DEFAULT_TIMING_WINDOW
 ): FuturesResult {
   const fbsById = new Map<string, FbsTeamRating>();
   for (const r of fbsRatings.values()) if (r.espnId) fbsById.set(r.espnId, r);
@@ -234,6 +248,16 @@ export function buildFutures(
   }
   const idxIn = new Map<string, Map<string, number>>();
   for (const [c, teams] of confTeams) idxIn.set(c, new Map(teams.map((x, i) => [x.espnId as string, i])));
+  // Unplayed games per team, soonest first (for the timing window)
+  const upcoming = new Map<string, ScheduleGame[]>();
+  for (const g of [...schedule].sort((a, b) => a.date.localeCompare(b.date))) {
+    if (g.completed && g.homeScore !== null && g.awayScore !== null) continue;
+    for (const id of [g.homeId, g.awayId]) {
+      if (!upcoming.has(id)) upcoming.set(id, []);
+      upcoming.get(id)!.push(g);
+    }
+  }
+  const nameOf = (id: string, fallback: string) => fbsById.get(id)?.teamName ?? fcsById.get(id)?.teamName ?? fallback;
 
   for (const g of schedule) {
     const home = ratingOnScale(g.homeId);
@@ -274,6 +298,7 @@ export function buildFutures(
     const homeSpread = -((homeFbs.rating - awayFbs.rating) + hfa);
     if (!confGames.has(c)) confGames.set(c, []);
     confGames.get(c)!.push({
+      id: g.id,
       homeIdx: hi,
       awayIdx: ai,
       pHome: homeWinProb(homeSpread, sigma),
@@ -286,6 +311,37 @@ export function buildFutures(
   for (const [name, teams] of confTeams) {
     const games = confGames.get(name) ?? [];
     const n = teams.length;
+    // Timing: each team's next `window` games — conference games share the
+    // race's sampled outcome, non-conference games are drawn independently.
+    const idxById = new Map<string, number>(games.map((g, k) => [g.id, k]));
+    const nextOf: NextGame[][] = teams.map((t) => {
+      const out: NextGame[] = [];
+      for (const g of upcoming.get(t.espnId as string) ?? []) {
+        if (out.length >= window) break;
+        const home = g.homeId === t.espnId;
+        const opp = home ? g.awayId : g.homeId;
+        const info: TimingGame = { opponent: nameOf(opp, home ? g.awayName : g.homeName), home, neutral: g.neutral, pWin: 0, date: g.date };
+        const k = idxById.get(g.id);
+        if (k !== undefined) {
+          const pWin = games[k].homeIdx === idxIn.get(name)!.get(t.espnId as string) ? games[k].pHome : 1 - games[k].pHome;
+          out.push({ confIdx: k, pWin, info: { ...info, pWin } });
+          continue;
+        }
+        const h = ratingOnScale(g.homeId);
+        const a = ratingOnScale(g.awayId);
+        if (!h || !a) continue; // unrated opponent: not part of the window
+        const hfa = g.neutral ? 0 : (h.hfa ?? hfaDefault);
+        const pHome = homeWinProb(-((h.rating - a.rating) + hfa), sigma);
+        const pWin = home ? pHome : 1 - pHome;
+        out.push({ confIdx: null, pWin, info: { ...info, pWin } });
+      }
+      return out;
+    });
+    const homeWonArr = new Array<boolean>(games.length).fill(false);
+    const sweepCount = new Array<number>(n).fill(0);
+    const titleIfSweep = new Array<number>(n).fill(0);
+    const titleIfNotSweep = new Array<number>(n).fill(0);
+    const before = new Array<number>(n).fill(0);
     const baseWins = new Array<number>(n).fill(0);
     const baseLosses = new Array<number>(n).fill(0);
     const remaining: GameEval[] = [];
@@ -317,12 +373,14 @@ export function buildFutures(
     const wins = new Array<number>(n);
     const h2h = new Map<string, number>(); // "lo,hi" -> winner idx (this sim)
     for (let s = 0; s < sims; s++) {
-      for (let i = 0; i < n; i++) wins[i] = baseWins[i];
+      for (let i = 0; i < n; i++) { wins[i] = baseWins[i]; before[i] = titles[i]; }
       h2h.clear();
-      for (const g of games) {
+      for (let k = 0; k < games.length; k++) {
+        const g = games[k];
         let homeWon: boolean;
         if (g.completed) homeWon = g.homeWon;
         else homeWon = rand() < g.pHome;
+        homeWonArr[k] = homeWon;
         const w = homeWon ? g.homeIdx : g.awayIdx;
         wins[w]++;
         const lo = Math.min(g.homeIdx, g.awayIdx);
@@ -385,6 +443,19 @@ export function buildFutures(
         ccg[pairA] += p;
         ccg[pairB] += 1 - p;
       }
+      // Timing tally: swept the window? credit = this run's title share
+      for (let i = 0; i < n; i++) {
+        const nx = nextOf[i];
+        if (nx.length < window) continue;
+        let swept = true;
+        for (const g of nx) {
+          const won = g.confIdx !== null ? homeWonArr[g.confIdx] === (games[g.confIdx].homeIdx === i) : rand() < g.pWin;
+          if (!won) { swept = false; break; }
+        }
+        const credit = titles[i] - before[i];
+        if (swept) { sweepCount[i]++; titleIfSweep[i] += credit; }
+        else titleIfNotSweep[i] += credit;
+      }
     }
 
     const rows: FuturesTeam[] = teams.map((r, i) => {
@@ -411,6 +482,7 @@ export function buildFutures(
         ccgProb: Math.round((ccg[i] / sims) * 10000) / 10000,
         ccgOdds: fairAmerican(ccg[i] / sims),
         top2Odds: fairAmerican(top2[i] / sims),
+        timing: makeTiming(window, nextOf[i].map((g) => g.info), sweepCount[i], titleIfSweep[i], titleIfNotSweep[i], sims, p),
       };
     }).sort((a, b) => b.titleProb - a.titleProb || b.rating - a.rating);
 
@@ -436,5 +508,5 @@ export function buildFutures(
     });
   }
   conferences.sort((a, b) => a.name.localeCompare(b.name));
-  return { season, sims, sigma, conferences, gamesInSchedule: schedule.length };
+  return { season, sims, sigma, window, conferences, gamesInSchedule: schedule.length };
 }

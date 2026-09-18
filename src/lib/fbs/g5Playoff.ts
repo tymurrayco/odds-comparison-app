@@ -28,6 +28,7 @@ import { FbsTeamRating } from './types';
 import { FcsTeamRating } from '@/lib/fcs/types';
 import { FCS_TO_FBS_OFFSET_FALLBACK } from '@/lib/crossDivision';
 import { fairAmerican, FUTURES_SIGMA, homeWinProb, normalCdf, ScheduleGame } from './futures';
+import { DEFAULT_TIMING_WINDOW, makeTiming, Timing, TimingGame } from './timing';
 
 export const G5_CONFERENCES = ['American', 'CUSA', 'MAC', 'Mountain West', 'Pac-12', 'Sun Belt'];
 export const DEFAULT_LOSS_PENALTY = 4;
@@ -49,6 +50,7 @@ export interface G5Team {
   pPlayoff: number;
   odds: number | null;     // fair American on pPlayoff
   avgChampLosses: number | null; // losses in the seasons it wins the league
+  timing: Timing | null;         // next-N-games market-timing signal
 }
 
 export interface G5Conference {
@@ -62,6 +64,7 @@ export interface G5Result {
   sims: number;
   sigma: number;
   lossPenalty: number;
+  window: number;
   conferences: G5Conference[];  // by pBid desc
   teams: G5Team[];              // every G5 team by pPlayoff desc
   gamesSimulated: number;
@@ -74,6 +77,10 @@ interface SimGame {
   completed: boolean;
   homeWon: boolean;
   confGame: boolean; // both sides in the same G5 conference
+  date: string;
+  homeName: string;
+  awayName: string;
+  neutral: boolean;
 }
 
 function rng(seed: number) {
@@ -95,7 +102,8 @@ export function buildG5Playoff(
   hfaDefault: number = FBS_DEFAULT_HFA,
   lossPenalty: number = DEFAULT_LOSS_PENALTY,
   sims: number = G5_SIMS,
-  sigma: number = FUTURES_SIGMA
+  sigma: number = FUTURES_SIGMA,
+  window: number = DEFAULT_TIMING_WINDOW
 ): G5Result {
   const fbsById = new Map<string, FbsTeamRating>();
   for (const r of fbsRatings.values()) if (r.espnId) fbsById.set(r.espnId, r);
@@ -150,8 +158,29 @@ export function buildG5Playoff(
     }
     const hfa = g.neutral ? 0 : (home!.hfa ?? hfaDefault);
     const pHome = completed ? (homeWon ? 1 : 0) : homeWinProb(-((home!.rating - away!.rating) + hfa), sigma);
-    games.push({ homeIdx: hi, awayIdx: ai, pHome, completed, homeWon, confGame });
+    games.push({
+      homeIdx: hi, awayIdx: ai, pHome, completed, homeWon, confGame,
+      date: g.date,
+      homeName: fbsById.get(g.homeId)?.teamName ?? fcsById.get(g.homeId)?.teamName ?? g.homeName,
+      awayName: fbsById.get(g.awayId)?.teamName ?? fcsById.get(g.awayId)?.teamName ?? g.awayName,
+      neutral: g.neutral,
+    });
   }
+
+  // Each team's next `window` unplayed rated games (indices into `games`)
+  const order = games.map((g, k) => k).filter((k) => !games[k].completed).sort((a, b) => games[a].date.localeCompare(games[b].date));
+  const nextOf: number[][] = Array.from({ length: n }, () => []);
+  for (const k of order) {
+    const g = games[k];
+    if (g.homeIdx >= 0 && nextOf[g.homeIdx].length < window) nextOf[g.homeIdx].push(k);
+    if (g.awayIdx >= 0 && nextOf[g.awayIdx].length < window) nextOf[g.awayIdx].push(k);
+  }
+  const timingGames = (i: number): TimingGame[] =>
+    nextOf[i].map((k) => {
+      const g = games[k];
+      const home = g.homeIdx === i;
+      return { opponent: home ? g.awayName : g.homeName, home, neutral: g.neutral, pWin: home ? g.pHome : 1 - g.pHome, date: g.date };
+    });
 
   const ratingOf = g5.map((t) => t.rating);
   const pNeutral = (i: number, j: number) => normalCdf((ratingOf[i] - ratingOf[j]) / sigma);
@@ -169,12 +198,18 @@ export function buildG5Playoff(
   const lossSum = new Array<number>(n).fill(0);
   const confBid = new Map<string, number>(confs.map((c) => [c, 0]));
   const h2h = new Map<string, number>();
+  const outcome = new Array<boolean>(games.length).fill(false); // homeWon per game, this sim
+  const sweepCount = new Array<number>(n).fill(0);
+  const bidIfSweep = new Array<number>(n).fill(0);
+  const bidIfNotSweep = new Array<number>(n).fill(0);
 
   for (let s = 0; s < sims; s++) {
     for (let i = 0; i < n; i++) { wins[i] = baseW[i]; losses[i] = baseL[i]; cw[i] = baseCW[i]; cl[i] = baseCL[i]; }
     h2h.clear();
-    for (const g of games) {
+    for (let k = 0; k < games.length; k++) {
+      const g = games[k];
       const homeWon = g.completed ? g.homeWon : rand() < g.pHome;
+      outcome[k] = homeWon;
       if (!g.completed) {
         if (g.homeIdx >= 0) { if (homeWon) wins[g.homeIdx]++; else losses[g.homeIdx]++; if (g.confGame) { if (homeWon) cw[g.homeIdx]++; else cl[g.homeIdx]++; } }
         if (g.awayIdx >= 0) { if (!homeWon) wins[g.awayIdx]++; else losses[g.awayIdx]++; if (g.confGame) { if (!homeWon) cw[g.awayIdx]++; else cl[g.awayIdx]++; } }
@@ -246,6 +281,15 @@ export function buildG5Playoff(
       bidCount[bestIdx]++;
       confBid.set(confOf[bestIdx], (confBid.get(confOf[bestIdx]) ?? 0) + 1);
     }
+    // Timing: did each team sweep its next games this run, and did it get the bid?
+    for (let i = 0; i < n; i++) {
+      const nx = nextOf[i];
+      if (nx.length < window) continue;
+      let swept = true;
+      for (const k of nx) if (outcome[k] !== (games[k].homeIdx === i)) { swept = false; break; }
+      if (swept) { sweepCount[i]++; if (bestIdx === i) bidIfSweep[i]++; }
+      else if (bestIdx === i) bidIfNotSweep[i]++;
+    }
   }
 
   const teams: G5Team[] = g5.map((t, i) => {
@@ -267,6 +311,7 @@ export function buildG5Playoff(
       pPlayoff: Math.round(pPlayoff * 10000) / 10000,
       odds: fairAmerican(pPlayoff),
       avgChampLosses: champCount[i] ? Math.round((champLossSum[i] / champCount[i]) * 10) / 10 : null,
+      timing: makeTiming(window, timingGames(i), sweepCount[i], bidIfSweep[i], bidIfNotSweep[i], sims, pPlayoff),
     };
   });
   teams.sort((a, b) => b.pPlayoff - a.pPlayoff || b.pChamp - a.pChamp || b.rating - a.rating);
@@ -279,5 +324,5 @@ export function buildG5Playoff(
     }))
     .sort((a, b) => b.pBid - a.pBid);
 
-  return { season, sims, sigma, lossPenalty, conferences, teams, gamesSimulated: games.length };
+  return { season, sims, sigma, lossPenalty, window, conferences, teams, gamesSimulated: games.length };
 }

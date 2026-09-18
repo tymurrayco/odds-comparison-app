@@ -8,6 +8,12 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
+import TimingBadge, { TimingView } from './TimingBadge';
+
+const WINDOW_KEY = 'fbs-timing-window';
+const readWindow = () => {
+  try { const v = Number(localStorage.getItem(WINDOW_KEY)); return [2, 3, 4].includes(v) ? v : 3; } catch { return 3; }
+};
 
 interface FuturesTeam {
   teamName: string;
@@ -30,6 +36,7 @@ interface FuturesTeam {
   ccgProb: number;
   ccgOdds: number | null;
   top2Odds: number | null;
+  timing: TimingView | null;
 }
 
 interface FuturesConference {
@@ -70,11 +77,12 @@ export default function FbsFuturesPanel({ visualFor }: { visualFor: (teamName: s
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<Record<string, boolean>>({});
+  const [window, setWindow] = useState<number>(readWindow);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (w: number = window) => {
     setLoading(true);
     try {
-      const res = await fetch('/api/fbs/futures');
+      const res = await fetch(`/api/fbs/futures?window=${w}`);
       const json: FuturesResponse = await res.json();
       if (!res.ok || !json.success) throw new Error(json.error || `HTTP ${res.status}`);
       setData(json);
@@ -84,11 +92,13 @@ export default function FbsFuturesPanel({ visualFor }: { visualFor: (teamName: s
     } finally {
       setLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    try { localStorage.setItem(WINDOW_KEY, String(window)); } catch { /* per-viewer */ }
+    load(window);
+  }, [load, window]);
 
   const Chip = ({ name, sub }: { name: string; sub?: string }) => {
     const v = visualFor(name);
@@ -129,13 +139,27 @@ export default function FbsFuturesPanel({ visualFor }: { visualFor: (teamName: s
               Prices are fair — no vig — so compare them to a book&apos;s after removing its hold.
             </div>
           </div>
-          <button
-            className="px-3 py-2 text-sm font-medium rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50 shrink-0"
-            disabled={loading}
-            onClick={load}
-          >
-            {loading ? '…' : 'Refresh'}
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <label className="flex items-center gap-1.5 text-xs text-slate-500" title="Market timing: how many upcoming games make the stretch">
+              Next
+              <select value={window} onChange={(e) => setWindow(Number(e.target.value))} className="px-1.5 py-1 text-xs rounded-md border border-slate-200 bg-white">
+                {[2, 3, 4].map((w) => <option key={w} value={w}>{w}</option>)}
+              </select>
+            </label>
+            <button
+              className="px-3 py-2 text-sm font-medium rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50"
+              disabled={loading}
+              onClick={() => load(window)}
+            >
+              {loading ? '…' : 'Refresh'}
+            </button>
+          </div>
+        </div>
+        <div className="text-[11px] text-slate-400">
+          <span className="inline-flex items-center gap-1"><span className="px-1 rounded bg-emerald-100 text-emerald-800 font-semibold">▲</span> buy before a soft stretch</span>
+          {' · '}
+          <span className="inline-flex items-center gap-1"><span className="px-1 rounded bg-red-100 text-red-700 font-semibold">▼</span> sell or wait before a hard one</span>
+          {' · '}hover a badge for the games and the move in title odds.
         </div>
         {error && <div className="mt-2 p-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>}
       </div>
@@ -162,6 +186,7 @@ export default function FbsFuturesPanel({ visualFor }: { visualFor: (teamName: s
                 {fav && (
                   <div className="flex-1 min-w-0 flex items-center gap-3">
                     <Chip name={fav.teamName} sub={`${fmtRec(fav.wins, fav.losses)} · ${fmtRec(fav.confWins, fav.confLosses)} conf · proj ${fmtRec(fav.projWins, fav.projLosses)}`} />
+                    <TimingBadge timing={fav.timing} outcome="Title" />
                   </div>
                 )}
                 {fav && (
@@ -219,10 +244,13 @@ export default function FbsFuturesPanel({ visualFor }: { visualFor: (teamName: s
                           style={{ boxShadow: `inset 3px 0 0 ${v.color}` }}
                         >
                           <div className="text-xs text-slate-400 tabular-nums">{medal ?? i + 1}</div>
-                          <Chip
-                            name={t.teamName}
-                            sub={`${t.rating.toFixed(1)} · ${fmtRec(t.wins, t.losses)} · ${fmtRec(t.confWins, t.confLosses)} conf · proj ${fmtRec(t.projWins, t.projLosses)}${t.unratedGames ? ` · ${t.unratedGames} unrated` : ''}`}
-                          />
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Chip
+                              name={t.teamName}
+                              sub={`${t.rating.toFixed(1)} · ${fmtRec(t.wins, t.losses)} · ${fmtRec(t.confWins, t.confLosses)} conf · proj ${fmtRec(t.projWins, t.projLosses)}${t.unratedGames ? ` · ${t.unratedGames} unrated` : ''}`}
+                            />
+                            <TimingBadge timing={t.timing} outcome="Title" />
+                          </div>
                           <div className="text-right sm:hidden" title="Regular-season title / championship game">
                             <div className="text-sm font-semibold tabular-nums text-slate-800">
                               {fmtOdds(t.odds)} <span className="text-slate-300 font-normal">/</span> {fmtOdds(t.ccgOdds)}

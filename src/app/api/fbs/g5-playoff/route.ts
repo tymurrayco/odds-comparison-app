@@ -14,7 +14,9 @@ import { FBS_SEASON } from '@/lib/fbs/constants';
 import { loadFbsConfig, loadFbsRatings } from '@/lib/fbs/supabase';
 import { loadFcsRatings } from '@/lib/fcs/supabase';
 import { fetchFbsSeasonSchedule } from '@/lib/fbs/futures';
-import { buildG5Playoff, DEFAULT_LOSS_PENALTY, G5Result } from '@/lib/fbs/g5Playoff';
+import { buildG5Playoff, DEFAULT_LOSS_PENALTY, G5Result, G5_SIMS } from '@/lib/fbs/g5Playoff';
+import { FUTURES_SIGMA } from '@/lib/fbs/futures';
+import { clampWindow } from '@/lib/fbs/timing';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -30,7 +32,8 @@ export async function GET(request: NextRequest) {
       ? Math.max(0, Math.min(10, Math.round(raw * 2) / 2))
       : DEFAULT_LOSS_PENALTY;
     const fresh = request.nextUrl.searchParams.get('fresh') === '1';
-    const key = `${season}:${penalty}`;
+    const window = clampWindow(request.nextUrl.searchParams.get('window'));
+    const key = `${season}:${penalty}:${window}`;
     const hit = cache.get(key);
     if (!fresh && hit && Date.now() - hit.at < TTL_MS) {
       return NextResponse.json({ success: true, cached: true, ...hit.result });
@@ -41,7 +44,7 @@ export async function GET(request: NextRequest) {
       loadFcsRatings(),
       fetchFbsSeasonSchedule(season),
     ]);
-    const result = { ...buildG5Playoff(season, schedule, fbs, fcs, config.hfaDefault, penalty), generatedAt: new Date().toISOString() };
+    const result = { ...buildG5Playoff(season, schedule, fbs, fcs, config.hfaDefault, penalty, G5_SIMS, FUTURES_SIGMA, window), generatedAt: new Date().toISOString() };
     cache.set(key, { at: Date.now(), result });
     return NextResponse.json(
       { success: true, cached: false, ...result },
