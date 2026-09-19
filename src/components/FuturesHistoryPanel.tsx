@@ -348,7 +348,9 @@ export default function FuturesHistoryPanel({
         <div className="bg-white rounded-xl border border-slate-200 px-4 py-6 text-sm text-slate-500">Loading…</div>
       ) : rows.length === 0 ? (
         <div className="bg-white rounded-xl border border-slate-200 px-4 py-6 text-sm text-slate-500">
-          {weeks.length ? 'Nothing to show for this view.' : 'No snapshots yet. The cron captures one each week; admins can take one now.'}
+          {weeks.length
+            ? `No ${m.label} data in the captured weeks yet — it is recorded from the next weekly snapshot on.`
+            : 'No snapshots yet. The cron captures one each week; admins can take one now.'}
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">

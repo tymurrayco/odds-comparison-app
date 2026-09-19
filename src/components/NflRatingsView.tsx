@@ -982,12 +982,12 @@ ${line}` : line);
           </div>
         )}
 
-        <div className={`grid ${admin ? 'grid-cols-7' : 'grid-cols-6'} bg-slate-200/70 rounded-full p-0.5`}>
+        <div className="flex overflow-x-auto bg-slate-200/70 rounded-full p-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {(admin ? (['ratings', 'upcoming', 'futures', 'totals', 'sos', 'history', 'survivor'] as const) : (['ratings', 'upcoming', 'futures', 'totals', 'sos', 'history'] as const)).map((v) => (
             <button
               key={v}
               onClick={() => setView(v)}
-              className={`py-1.5 rounded-full text-sm font-medium transition ${
+              className={`flex-1 shrink-0 px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition ${
                 view === v ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'
               }`}
             >

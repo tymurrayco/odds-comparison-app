@@ -925,7 +925,7 @@ ${line}` : line);
           </div>
         )}
 
-        <div className="grid grid-cols-6 bg-slate-200/70 rounded-full p-0.5">
+        <div className="flex overflow-x-auto bg-slate-200/70 rounded-full p-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {(['ratings', 'upcoming', 'futures', 'sos', 'g5', 'history'] as const).map((v) => (
             <button
               key={v}
