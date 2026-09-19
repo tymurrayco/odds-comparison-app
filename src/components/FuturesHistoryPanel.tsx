@@ -51,6 +51,9 @@ const fmtDelta = (d: number | null, pctFmt: boolean) => {
   return `${v > 0 ? '+' : ''}${v.toFixed(1)}${pctFmt ? 'pp' : ''}`;
 };
 const fmtOdds = (o: number | null) => (o === null ? '—' : o > 0 ? `+${o}` : String(o));
+// A snapshot is keyed by the last COMPLETED week; people think of it as the
+// odds heading into the next one, so that is how it is labelled everywhere.
+const intoWk = (w: number) => `into wk ${w + 1}`;
 
 // Fixed categorical order (validated palette, light surface) — a series keeps
 // its colour whatever the filter shows. Slots 1–6.
@@ -99,7 +102,7 @@ function TeamChart({ team, metrics, weeks }: { team: Team; metrics: HistoryMetri
           </g>
         ))}
         {weeks.map((w, i) => (
-          <text key={w} x={x(i)} y={H - 10} textAnchor="middle" fontSize={10} fill="#94a3b8">wk {w}</text>
+          <text key={w} x={x(i)} y={H - 10} textAnchor="middle" fontSize={10} fill="#94a3b8">{intoWk(w)}</text>
         ))}
         {hover !== null && <line x1={x(hover)} x2={x(hover)} y1={T} y2={H - B} stroke="#94a3b8" strokeWidth={1} strokeDasharray="3 3" />}
         {series.map((s) => {
@@ -122,7 +125,7 @@ function TeamChart({ team, metrics, weeks }: { team: Team; metrics: HistoryMetri
       </svg>
       {hover !== null && (
         <div className="text-[11px] text-slate-600 tabular-nums flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
-          <span className="font-semibold text-slate-800">Week {weeks[hover]}</span>
+          <span className="font-semibold text-slate-800">{intoWk(weeks[hover])}</span>
           {series.map((s) => (
             <span key={s.key}><span style={{ color: s.color }}>●</span> {s.label} {s.values[hover] === null ? '—' : `${((s.values[hover] as number) * 100).toFixed(1)}%`}</span>
           ))}
@@ -154,7 +157,7 @@ function Sparkline({ values, pctFmt, weeks }: { values: (number | null)[]; pctFm
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="shrink-0" aria-label="trend">
       <path d={d} fill="none" stroke={up ? '#059669' : '#dc2626'} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
       <circle cx={sx(last[0])} cy={sy(last[1])} r={2.5} fill={up ? '#059669' : '#dc2626'} />
-      <title>{pts.map((p) => `wk ${weeks[p[0]]}: ${fmtVal(p[1], pctFmt)}`).join(' · ')}</title>
+      <title>{pts.map((p) => `${intoWk(weeks[p[0]])}: ${fmtVal(p[1], pctFmt)}`).join(' · ')}</title>
     </svg>
   );
 }
@@ -203,9 +206,9 @@ export default function FuturesHistoryPanel({
       const parts = Object.entries((json.written ?? {}) as Record<string, number>).map(([k, v]) => `${k} ${v}`);
       const refused: string[] = json.refused ?? [];
       if (refused.length && parts.length === 0) {
-        setNote(`Week ${json.week} is locked — ${json.gamesStarted} of week ${json.nextWeek}'s games have already started, so the pre-week snapshot stays as taken. Nothing rewritten.`);
+        setNote(`The snapshot ${intoWk(json.week)} is locked — ${json.gamesStarted} of week ${json.nextWeek}'s games have already started, so it stays as taken. Nothing rewritten.`);
       } else {
-        setNote(`Week ${json.week} captured: ${parts.join(', ')}${json.gamesStarted ? ` · taken after ${json.gamesStarted} game${json.gamesStarted === 1 ? '' : 's'} of week ${json.nextWeek} had started` : ''}${refused.length ? ` · kept (locked): ${refused.join(', ')}` : ''}${json.unmatchedMarketNames?.length ? ` · ${json.unmatchedMarketNames.length} book names unmatched` : ''}`);
+        setNote(`Snapshot ${intoWk(json.week)} captured: ${parts.join(', ')}${json.gamesStarted ? ` · taken after ${json.gamesStarted} game${json.gamesStarted === 1 ? '' : 's'} of week ${json.nextWeek} had started` : ''}${refused.length ? ` · kept (locked): ${refused.join(', ')}` : ''}${json.unmatchedMarketNames?.length ? ` · ${json.unmatchedMarketNames.length} book names unmatched` : ''}`);
       }
       await load();
     } catch (e) {
@@ -334,7 +337,7 @@ export default function FuturesHistoryPanel({
           </select>
           {data && (
             <span className="text-[11px] text-slate-400 tabular-nums ml-auto">
-              {weeks.length ? `Weeks captured: ${data.weeks.map((w) => `${w.week}${w.gamesStarted ? '*' : ''}`).join(', ')}` : 'No snapshots yet'}
+              {weeks.length ? `Snapshots: ${data.weeks.map((w) => `${intoWk(w.week)}${w.gamesStarted ? '*' : ''}`).join(', ')}` : 'No snapshots yet'}
               {data.weeks.some((w) => w.gamesStarted) ? ' · * taken after some of the next week\'s games had started' : ''}
               {lastWeek !== null && data.weeks[data.weeks.length - 1].takenAt ? ` · latest ${new Date(data.weeks[data.weeks.length - 1].takenAt as string).toLocaleDateString()}` : ''}
             </span>
@@ -356,9 +359,9 @@ export default function FuturesHistoryPanel({
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
           <div className={`hidden sm:grid ${gridCols} items-center px-3 py-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wide bg-slate-50`}>
             <div>Team</div>
-            <div className="text-right" title={m.hint}>Wk {lastWeek}</div>
-            <div className="text-right" title="Change since the previous snapshot">vs wk {prevWeek ?? '—'}</div>
-            <div className="text-right" title="Change since the first snapshot">vs wk {firstWeek}</div>
+            <div className="text-right" title={m.hint}>{intoWk(lastWeek as number)}</div>
+            <div className="text-right" title="Change since the previous snapshot">vs {prevWeek === null ? '—' : intoWk(prevWeek)}</div>
+            <div className="text-right" title="Change since the first snapshot">vs {intoWk(firstWeek as number)}</div>
             <div className="text-right">Trend</div>
           </div>
           <div className="divide-y divide-slate-100">
@@ -392,7 +395,7 @@ export default function FuturesHistoryPanel({
                       <table className="text-xs tabular-nums">
                         <thead>
                           <tr className="text-left text-slate-400 uppercase tracking-wide">
-                            <th className="py-1 pr-3">Wk</th>
+                            <th className="py-1 pr-3">Into wk</th>
                             <th className="py-1 pr-3">Taken</th>
                             {config.columns.map((c) => <th key={c.key} className="py-1 pr-3 text-right">{c.label}</th>)}
                           </tr>
@@ -400,7 +403,7 @@ export default function FuturesHistoryPanel({
                         <tbody>
                           {t.points.map((p) => (
                             <tr key={p.week} className="border-t border-slate-200/70">
-                              <td className="py-1 pr-3 font-medium">{p.week}</td>
+                              <td className="py-1 pr-3 font-medium">{p.week + 1}</td>
                               <td className="py-1 pr-3 text-slate-500">{p.takenAt ? new Date(p.takenAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—'}</td>
                               {config.columns.map((c) => <td key={c.key} className="py-1 pr-3 text-right">{cell(p, c)}</td>)}
                             </tr>
