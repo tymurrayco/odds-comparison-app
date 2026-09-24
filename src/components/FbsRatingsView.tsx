@@ -930,7 +930,7 @@ ${line}` : line);
             <button
               key={v}
               onClick={() => setView(v)}
-              className={`py-1.5 rounded-full text-sm font-medium transition ${
+              className={`flex-1 shrink-0 px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition ${
                 view === v ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'
               }`}
             >
