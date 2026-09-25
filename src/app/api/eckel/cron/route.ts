@@ -1,7 +1,7 @@
 // src/app/api/eckel/cron/route.ts
 //
 // Weekly in-season Eckel recompute (Vercel cron sends GET — see vercel.json:
-// Sundays 10:00 UTC, after Saturday's games land in CFBD overnight).
+// Mondays 12:00 UTC, once Saturday's games have landed in CFBD).
 // Off-season months (Feb-Jul) no-op so the finished season's snapshot stays
 // the latest without burning CFBD calls.
 

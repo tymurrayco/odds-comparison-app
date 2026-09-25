@@ -2,18 +2,18 @@
 //
 // Methodology tabs for the NCAAF Analysis section: FEI (efficiency ratings
 // from bcftoys), Eckel (quality-drive metrics from CFBD drive data), and
-// Powers (Brad Powers' Vegas power ratings + per-team HFA spread projection),
-// and Ledger (odds.day's own system: the Powers seed moved by closing lines —
-// the /fbs and /fcs ratings, same numbers as their Upcoming tabs).
+// Ledger (odds.day's own system: the Brad Powers preseason seed moved by
+// closing lines — the /fbs and /fcs ratings, same numbers as their Upcoming
+// tabs). The raw Powers tab was dropped 2026-09-24: the preseason numbers
+// went stale once the Ledger had absorbed them.
 
 import { useEffect, useState } from 'react';
 import TeamAnalysis from './TeamAnalysis';
 import EckelMatchup from './EckelMatchup';
-import PowersMatchup from './PowersMatchup';
 import SummaryMatchup from './SummaryMatchup';
 import LedgerMatchup from './LedgerMatchup';
 
-const TABS = ['Summary', 'FEI', 'Eckel', 'Powers', 'Ledger'] as const;
+const TABS = ['Summary', 'FEI', 'Eckel', 'Ledger'] as const;
 export type AnalysisTab = (typeof TABS)[number];
 
 /** A parent's request to show a tab. `seq` bumps on every request so the same
@@ -68,8 +68,6 @@ export default function AnalysisTabs({
         <TeamAnalysis awayTeam={awayTeam} homeTeam={homeTeam} />
       ) : tab === 'Eckel' ? (
         <EckelMatchup awayTeam={awayTeam} homeTeam={homeTeam} isNeutralSite={isNeutralSite} />
-      ) : tab === 'Powers' ? (
-        <PowersMatchup awayTeam={awayTeam} homeTeam={homeTeam} isNeutralSite={isNeutralSite} />
       ) : (
         <LedgerMatchup awayTeam={awayTeam} homeTeam={homeTeam} isNeutralSite={isNeutralSite} />
       )}
