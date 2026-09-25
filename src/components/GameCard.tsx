@@ -303,6 +303,47 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
   };
   
   const impliedScores = calculateImpliedScores();
+
+  // Ledger chip - value side's logo + Ledger spread from its perspective
+  // ("+3.0"), colored by gap vs market; opens the Ledger tab. Rendered next
+  // to the implied score on desktop, in the button row on mobile.
+  const renderLedgerChip = (placement: string) => (isNCAAF || isNFL) && ledgerChip && (
+    <button
+      className={`${placement} items-center gap-1 px-1.5 md:px-2 py-1 text-xs md:text-sm font-semibold rounded-md tabular-nums ${
+        LEDGER_TIER_CLASSES[ledgerChip.tier][
+          expandedMarket === 'analysis' &&
+          (isNFL ? nflPanel === 'ledger' : analysisTabRequest.tab === 'Ledger')
+            ? 1
+            : 0
+        ]
+      }`}
+      onClick={() => {
+        if (isNFL) {
+          setNflPanel('ledger');
+          setExpandedMarket('analysis');
+        } else {
+          openAnalysis('Ledger');
+        }
+      }}
+      title={`Ledger projection: ${ledgerChip.teamName} ${ledgerChip.text} (${ledgerChip.gapText})`}
+      aria-label={`Ledger projection: ${ledgerChip.teamName} ${ledgerChip.text}`}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={ledgerChip.logos[0]}
+        alt=""
+        className="h-4 w-4 object-contain"
+        onError={(e) => {
+          const img = e.currentTarget;
+          const next = ledgerChip.logos[ledgerChip.logos.indexOf(img.getAttribute('src') ?? '') + 1];
+          if (next) img.src = next;
+          else img.style.visibility = 'hidden';
+        }}
+      />
+      <span>{ledgerChip.text}</span>
+    </button>
+  );
+
   
   return (
     <div 
@@ -548,6 +589,8 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                   </span>
                 </div>
               )}
+
+              {renderLedgerChip('hidden md:inline-flex')}
             </div>
 
             {/* Venue detail — expanded by the Neutral badge */}
@@ -617,45 +660,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                 📊
               </button>
             )}
-            {/* Ledger chip - value side's logo + Ledger spread from its
-                perspective ("+3.0"), colored by gap vs market; opens the
-                Ledger tab */}
-            {(isNCAAF || isNFL) && ledgerChip && (
-              <button
-                className={`inline-flex items-center gap-1 px-1.5 md:px-2 py-1 text-xs md:text-sm font-semibold rounded-md tabular-nums ${
-                  LEDGER_TIER_CLASSES[ledgerChip.tier][
-                    expandedMarket === 'analysis' &&
-                    (isNFL ? nflPanel === 'ledger' : analysisTabRequest.tab === 'Ledger')
-                      ? 1
-                      : 0
-                  ]
-                }`}
-                onClick={() => {
-                  if (isNFL) {
-                    setNflPanel('ledger');
-                    setExpandedMarket('analysis');
-                  } else {
-                    openAnalysis('Ledger');
-                  }
-                }}
-                title={`Ledger projection: ${ledgerChip.teamName} ${ledgerChip.text} (${ledgerChip.gapText})`}
-                aria-label={`Ledger projection: ${ledgerChip.teamName} ${ledgerChip.text}`}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={ledgerChip.logos[0]}
-                  alt=""
-                  className="h-4 w-4 object-contain"
-                  onError={(e) => {
-                    const img = e.currentTarget;
-                    const next = ledgerChip.logos[ledgerChip.logos.indexOf(img.getAttribute('src') ?? '') + 1];
-                    if (next) img.src = next;
-                    else img.style.visibility = 'hidden';
-                  }}
-                />
-                <span>{ledgerChip.text}</span>
-              </button>
-            )}
+            {renderLedgerChip('inline-flex md:hidden')}
             {/* Injury report button - only for NFL */}
             {isNFL && (
               <button
