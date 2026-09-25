@@ -146,20 +146,14 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
     return () => { alive = false; };
   }, [isNCAAF, isNFL, game.away_team, game.home_team]);
 
-  // Favorite + spread from the favorite's perspective ("-10.4"); null when
-  // either team is outside the FBS/FCS ratings.
+  // Value side (or Ledger favorite when it agrees with the market) + the
+  // Ledger spread from that team's perspective; null when either team is
+  // outside the ratings.
   const ledgerChip = (() => {
     if (!ledger?.away?.matched || !ledger?.home?.matched) return null;
     // NFL: the matchup route flags the season's neutral games itself
     const homeSpread = neutralGame || ledger.isNeutralSite ? ledger.neutralSpread : ledger.homeSpread;
     if (homeSpread === null || homeSpread === undefined) return null;
-    const homeFavored = homeSpread <= 0;
-    const teamName = homeFavored ? game.home_team : game.away_team;
-    const favSide = homeFavored ? ledger.home : ledger.away;
-    const espnLogo =
-      favSide.logo ??
-      (favSide.espnId && !isNFL ? `https://a.espncdn.com/i/teamlogos/ncaa/500/${favSide.espnId}.png` : null);
-    const favSpread = -Math.abs(homeSpread);
     // Disagreement with the market: books' average spread, home perspective.
     // Tiers from the 2026 wk1-3 backtest (bet the Ledger side vs the close:
     // 1+ ~58%, 2+ ~60%, 3+ ~61%) — small sample, re-check as weeks accrue.
@@ -170,15 +164,28 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
     const gap = marketHome === null ? null : Math.abs(homeSpread - marketHome);
     const tier: 'none' | 'low' | 'mid' | 'high' =
       gap === null || gap < 1 ? 'none' : gap < 2 ? 'low' : gap < 3 ? 'mid' : 'high';
-    const marketFav = marketHome === null ? null : -Math.abs(marketHome);
+    // Side shown: with a real disagreement, the team the Ledger rates better
+    // than the market (the value side); otherwise the Ledger favorite.
+    const showHome = tier !== 'none' && marketHome !== null
+      ? homeSpread < marketHome
+      : homeSpread <= 0;
+    const teamName = showHome ? game.home_team : game.away_team;
+    const side = showHome ? ledger.home : ledger.away;
+    const espnLogo =
+      side.logo ??
+      (side.espnId && !isNFL ? `https://a.espncdn.com/i/teamlogos/ncaa/500/${side.espnId}.png` : null);
+    // Lines from the shown team's perspective, signed ("+3.0", "-10.4", "PK").
+    const fmt = (v: number) => (v === 0 ? 'PK' : `${v > 0 ? '+' : ''}${v.toFixed(1)}`);
+    const sideLedger = showHome ? homeSpread : -homeSpread;
+    const sideMarket = marketHome === null ? null : showHome ? marketHome : -marketHome;
     return {
       teamName,
       logos: [espnLogo, getTeamLogo(teamName)].filter((s): s is string => !!s),
-      text: favSpread === 0 ? 'PK' : favSpread.toFixed(1),
+      text: fmt(sideLedger),
       tier,
-      gapText: gap === null || marketFav === null
+      gapText: gap === null || sideMarket === null
         ? 'no market line'
-        : `market ${marketFav === 0 ? 'PK' : marketFav.toFixed(1)}, ${gap.toFixed(1)} pt gap`,
+        : `market ${fmt(sideMarket)}, ${gap.toFixed(1)} pt gap${tier === 'none' ? '' : ' — value side'}`,
     };
   })();
 
@@ -610,8 +617,9 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                 📊
               </button>
             )}
-            {/* Ledger chip - favorite's logo + projected spread from its
-                perspective ("-10.4"); opens the Ledger tab */}
+            {/* Ledger chip - value side's logo + Ledger spread from its
+                perspective ("+3.0"), colored by gap vs market; opens the
+                Ledger tab */}
             {(isNCAAF || isNFL) && ledgerChip && (
               <button
                 className={`inline-flex items-center gap-1 px-1.5 md:px-2 py-1 text-xs md:text-sm font-semibold rounded-md tabular-nums ${
