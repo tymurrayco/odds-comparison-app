@@ -1,12 +1,11 @@
 // src/components/SummaryMatchup.tsx
 //
-// At-a-glance comparison: FEI, Eckel, and Ledger (Powers seed +
+// At-a-glance comparison: FEI and Ledger (Powers seed +
 // closing-line adjustments) projected lines for one game in a single table,
 // plus the average across available systems.
 
 import { useEffect, useState } from 'react';
 import { fetchFEIData, getTeamFEIData, feiSpread } from '@/lib/feiData';
-import { TeamSeasonMetrics } from '@/lib/eckel/types';
 import { cachedJson } from '@/lib/matchupCache';
 import { ledgerMatchupUrl } from './LedgerMatchup';
 
@@ -62,27 +61,6 @@ export default function SummaryMatchup({ awayTeam, homeTeam, isNeutralSite = fal
       } as SystemRow;
     });
 
-    const eckelPromise = cachedJson<{
-      matchup?: Array<{ metrics: TeamSeasonMetrics | null; rank: number | null }>;
-      hfaPoints?: number;
-      hfaSource?: string;
-    }>(`/api/eckel?teams=${encodeURIComponent(awayTeam)},${encodeURIComponent(homeTeam)}`)
-      .then((d) => {
-        const a: TeamSeasonMetrics | null = d.matchup?.[0]?.metrics ?? null;
-        const h: TeamSeasonMetrics | null = d.matchup?.[1]?.metrics ?? null;
-        const awayRank = d.matchup?.[0]?.rank ?? null;
-        const homeRank = d.matchup?.[1]?.rank ?? null;
-        const hfa: number = isNeutralSite ? 0 : d.hfaPoints ?? 2.5;
-        const line = a && h ? -(h.powerRating - a.powerRating + hfa) : null;
-        return {
-          system: 'Eckel',
-          awayLabel: a ? `${a.powerRating.toFixed(1)} (#${awayRank})` : null,
-          homeLabel: h ? `${h.powerRating.toFixed(1)} (#${homeRank})` : null,
-          homeLine: line === null ? null : round1(line),
-          note: isNeutralSite ? 'no HFA' : d.hfaSource === 'powers' ? 'Powers HFA' : 'fitted HFA',
-        } as SystemRow;
-      });
-
     const ledgerPromise = cachedJson<{
       system?: 'fbs' | 'fcs' | 'cross' | null;
       away?: { matched: boolean; ratingOnScale: number | null; rank: number | null };
@@ -105,13 +83,13 @@ export default function SummaryMatchup({ awayTeam, homeTeam, isNeutralSite = fal
         } as SystemRow;
       });
 
-    Promise.allSettled([feiPromise, eckelPromise, ledgerPromise]).then((results) => {
+    Promise.allSettled([feiPromise, ledgerPromise]).then((results) => {
       if (!alive) return;
       setRows(
         results.map((r, i) =>
           r.status === 'fulfilled'
             ? r.value
-            : { system: ['FEI', 'Eckel', 'Ledger'][i], awayLabel: null, homeLabel: null, homeLine: null }
+            : { system: ['FEI', 'Ledger'][i], awayLabel: null, homeLabel: null, homeLine: null }
         )
       );
       setLoading(false);
@@ -194,7 +172,7 @@ export default function SummaryMatchup({ awayTeam, homeTeam, isNeutralSite = fal
         </tbody>
       </table>
       <p className="mt-3 text-[10px] text-gray-400 text-center">
-        Line shown for the favorite (logo) · FEI = 19.6 × FEI difference + 3.2 HFA · Eckel & Ledger =
+        Line shown for the favorite (logo) · FEI = 19.6 × FEI difference + 3.2 HFA · Ledger =
         rating difference{isNeutralSite
           ? ' · neutral site, no home-field edge applied'
           : ' + Brad Powers’ per-team home HFA'} · ratings shown as value (#rank)

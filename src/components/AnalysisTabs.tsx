@@ -1,19 +1,19 @@
 // src/components/AnalysisTabs.tsx
 //
 // Methodology tabs for the NCAAF Analysis section: FEI (efficiency ratings
-// from bcftoys), Eckel (quality-drive metrics from CFBD drive data), and
-// Ledger (odds.day's own system: the Brad Powers preseason seed moved by
+// from bcftoys) and Ledger (odds.day's own system: the Brad Powers preseason seed moved by
 // closing lines — the /fbs and /fcs ratings, same numbers as their Upcoming
 // tabs). The raw Powers tab was dropped 2026-09-24: the preseason numbers
-// went stale once the Ledger had absorbed them.
+// went stale once the Ledger had absorbed them. The Eckel tab was dropped
+// 2026-09-25: a 2025 walk-forward backtest (607 games) showed no ATS value
+// vs the closing line at any disagreement size.
 
 import { useEffect, useState } from 'react';
 import TeamAnalysis from './TeamAnalysis';
-import EckelMatchup from './EckelMatchup';
 import SummaryMatchup from './SummaryMatchup';
 import LedgerMatchup from './LedgerMatchup';
 
-const TABS = ['Summary', 'FEI', 'Eckel', 'Ledger'] as const;
+const TABS = ['Summary', 'FEI', 'Ledger'] as const;
 export type AnalysisTab = (typeof TABS)[number];
 
 /** A parent's request to show a tab. `seq` bumps on every request so the same
@@ -66,8 +66,6 @@ export default function AnalysisTabs({
         <SummaryMatchup awayTeam={awayTeam} homeTeam={homeTeam} isNeutralSite={isNeutralSite} />
       ) : tab === 'FEI' ? (
         <TeamAnalysis awayTeam={awayTeam} homeTeam={homeTeam} isNeutralSite={isNeutralSite} />
-      ) : tab === 'Eckel' ? (
-        <EckelMatchup awayTeam={awayTeam} homeTeam={homeTeam} isNeutralSite={isNeutralSite} />
       ) : (
         <LedgerMatchup awayTeam={awayTeam} homeTeam={homeTeam} isNeutralSite={isNeutralSite} />
       )}
