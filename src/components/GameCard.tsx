@@ -4,7 +4,7 @@ import OddsTable from './OddsTable';
 import AnalysisTabs, { AnalysisTabRequest } from './AnalysisTabs';
 import LedgerMatchup, { ledgerMatchupUrl } from './LedgerMatchup';
 import { cachedJson } from '@/lib/matchupCache';
-import InjuryReport from './InjuryReport';
+import InjuryReport, { loadInjuries, startingQbOut, injuryStatusLabel, type InjuryEntry } from './InjuryReport';
 import { Game, ESPNGameScore } from '@/lib/api';
 import { GameRestData } from '@/lib/nhlRest';
 import { Bet } from '@/lib/betService';
@@ -307,6 +307,42 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
   // Ledger chip - value side's logo + Ledger spread from its perspective
   // ("+3.0"), colored by gap vs market; opens the Ledger tab. Rendered next
   // to the implied score on desktop, in the button row on mobile.
+  // Starting QB out/doubtful (NFL) - the usual reason the Ledger (which
+  // doesn't know about injuries) sits far from the market.
+  const [qbOut, setQbOut] = useState<{ away: InjuryEntry | null; home: InjuryEntry | null }>({ away: null, home: null });
+  useEffect(() => {
+    if (!isNFL) return;
+    let alive = true;
+    loadInjuries().then((teams) => {
+      if (alive) setQbOut({ away: startingQbOut(teams[game.away_team]), home: startingQbOut(teams[game.home_team]) });
+    });
+    return () => { alive = false; };
+  }, [isNFL, game.away_team, game.home_team]);
+  const renderQbOut = () =>
+    isNFL &&
+    (['away', 'home'] as const).map((side) => {
+      const qb = qbOut[side];
+      if (!qb) return null;
+      const team = side === 'away' ? game.away_team : game.home_team;
+      const logo = (side === 'away' ? liveScore?.awayLogo : liveScore?.homeLogo) || getTeamLogo(team);
+      const lastName = qb.name.split(' ').slice(1).join(' ') || qb.name;
+      return (
+        <button
+          key={side}
+          onClick={() => {
+            setNflPanel('injuries');
+            setExpandedMarket('analysis');
+          }}
+          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-700 hover:bg-red-200"
+          title={`Starting QB ${qb.name}: ${qb.status}${qb.comment ? ` - ${qb.comment}` : ''}`}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={logo} alt="" className="h-3.5 w-3.5 object-contain" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+          <span>QB {lastName} {injuryStatusLabel(qb.status)}</span>
+        </button>
+      );
+    });
+
   const renderLedgerChip = (placement: string) => (isNCAAF || isNFL) && ledgerChip && (
     <button
       className={`${placement} items-center gap-1 px-1.5 md:px-2 py-1 text-xs md:text-sm font-semibold rounded-md tabular-nums ${
@@ -591,6 +627,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
               )}
 
               {renderLedgerChip('hidden md:inline-flex')}
+              {renderQbOut()}
             </div>
 
             {/* Venue detail — expanded by the Neutral badge */}

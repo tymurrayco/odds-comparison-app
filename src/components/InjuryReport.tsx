@@ -3,13 +3,14 @@
 // Data: /api/injuries (ESPN league-wide feed, cached 30 min server-side).
 import { useEffect, useState } from 'react';
 
-interface InjuryEntry {
+export interface InjuryEntry {
   name: string;
   position: string;
   status: string;
   comment: string | null;
   date: string | null;
   depthRank: number | null; // 1 = starter, 2 = backup, null = off depth chart
+  passLeader?: boolean; // team's season passing-yards leader
 }
 
 interface InjuryReportProps {
@@ -19,7 +20,7 @@ interface InjuryReportProps {
 
 // Module-level cache: one fetch per page load serves every expanded card.
 let cachePromise: Promise<Record<string, InjuryEntry[]>> | null = null;
-function loadInjuries(): Promise<Record<string, InjuryEntry[]>> {
+export function loadInjuries(): Promise<Record<string, InjuryEntry[]>> {
   if (!cachePromise) {
     cachePromise = fetch('/api/injuries?league=nfl')
       .then((r) => (r.ok ? r.json() : Promise.reject()))
@@ -58,6 +59,18 @@ function statusLabel(s: string): string {
   if (l === 'doubtful') return 'D';
   return s;
 }
+
+// Starting QB unavailable (Out/IR/PUP/suspended) or unlikely (Doubtful).
+// Starter = depth-chart #1 OR the season passing leader, since ESPN demotes
+// an injured starter on the chart (Dart on IR showed as rank 2).
+export function startingQbOut(entries: InjuryEntry[] | undefined): InjuryEntry | null {
+  return (
+    (entries ?? [])
+      .filter((e) => e.position === 'QB' && statusRank(e.status) <= 1 && (e.depthRank === 1 || e.passLeader))
+      .sort((a, b) => statusRank(a.status) - statusRank(b.status))[0] ?? null
+  );
+}
+export { statusLabel as injuryStatusLabel };
 
 // Relevance from the current depth chart. Starters always matter; backups
 // matter at rotation positions (RB committees, WR/DL rotations, backup QB)

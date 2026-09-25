@@ -17,6 +17,9 @@ interface InjuryEntry {
   /** Depth-chart rank at the player's best position: 1 = starter, 2 = second
    *  string, etc. null = not on the current depth chart. */
   depthRank: number | null;
+  /** Team's season passing-yards leader. Catches a starting QB the depth
+   *  chart has already demoted after the injury (Dart on IR -> rank 2). */
+  passLeader: boolean;
 }
 
 interface ESPNInjury {
@@ -69,6 +72,25 @@ async function getDepthRanks(teamId: string): Promise<Map<string, number>> {
   return ranks;
 }
 
+// Athlete id of the team's regular-season passing-yards leader (null before
+// week 1 or on failure). 12h cache like the depth charts.
+async function getPassLeader(teamId: string): Promise<string | null> {
+  try {
+    const resp = await fetch(
+      `https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/seasons/${new Date().getFullYear()}/types/2/teams/${teamId}/leaders`,
+      { next: { revalidate: 43200 } }
+    );
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    interface Leader { athlete?: { $ref?: string } }
+    interface Category { name?: string; leaders?: Leader[] }
+    const cat = ((data.categories ?? []) as Category[]).find((c) => c.name === 'passingYards');
+    return cat?.leaders?.[0]?.athlete?.$ref?.match(/\/athletes\/(\d+)/)?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // "Active" entries are news blurbs (contract signings, returns to practice),
 // not injuries — drop them so the card shows only players with a designation.
 const SKIP_STATUSES = new Set(['active', 'healthy']);
@@ -93,9 +115,12 @@ export async function GET(request: Request) {
 
     // Depth charts for all teams in parallel (each fetch is 12h-cached, so
     // this is 32 upstream calls twice a day, not per request).
-    const rankMaps = await Promise.all(
-      feed.map((t) => (t.id ? getDepthRanks(t.id) : Promise.resolve(new Map<string, number>())))
-    );
+    const [rankMaps, passLeaders] = await Promise.all([
+      Promise.all(
+        feed.map((t) => (t.id ? getDepthRanks(t.id) : Promise.resolve(new Map<string, number>())))
+      ),
+      Promise.all(feed.map((t) => (t.id ? getPassLeader(t.id) : Promise.resolve(null)))),
+    ]);
 
     const teams: Record<string, InjuryEntry[]> = {};
     feed.forEach((t, ti) => {
@@ -108,6 +133,7 @@ export async function GET(request: Request) {
         if (SKIP_STATUSES.has(status.toLowerCase())) continue;
         const idMatch = i.athlete?.headshot?.href?.match(/\/(\d+)\.png/);
         const depthRank = idMatch ? ranks.get(idMatch[1]) ?? null : null;
+        const passLeader = !!idMatch && idMatch[1] === passLeaders[ti];
         list.push({
           name: i.athlete?.displayName ?? 'Unknown',
           position: i.athlete?.position?.abbreviation ?? '',
@@ -115,6 +141,7 @@ export async function GET(request: Request) {
           comment: i.shortComment || null,
           date: i.date || null,
           depthRank,
+          passLeader,
         });
       }
       if (list.length) teams[name] = list;
