@@ -65,7 +65,7 @@ export default function AnalysisTabs({
       {tab === 'Summary' ? (
         <SummaryMatchup awayTeam={awayTeam} homeTeam={homeTeam} isNeutralSite={isNeutralSite} />
       ) : tab === 'FEI' ? (
-        <TeamAnalysis awayTeam={awayTeam} homeTeam={homeTeam} />
+        <TeamAnalysis awayTeam={awayTeam} homeTeam={homeTeam} isNeutralSite={isNeutralSite} />
       ) : tab === 'Eckel' ? (
         <EckelMatchup awayTeam={awayTeam} homeTeam={homeTeam} isNeutralSite={isNeutralSite} />
       ) : (

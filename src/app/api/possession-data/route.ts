@@ -68,10 +68,13 @@ function parsePossessionTable(html: string): PossessionData[] {
   for (const rowMatch of rowMatches) {
     const row = rowMatch[1];
     
-    // Check if this is a header row
-    if (row.includes('<th')) {
-      const headerCells = [...row.matchAll(/<th[^>]*>([\s\S]*?)<\/th>/g)];
-      const headers = headerCells.map(h => h[1].replace(/<[^>]*>/g, '').trim());
+    // Header row: bcftoys marks headers as <td><strong>…</strong></td>, not
+    // <th> (a <th>-only check silently returned [] and sent every FEI
+    // projection to the crude no-possession fallback). Match either.
+    const rowTexts = [...row.matchAll(/<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/g)]
+      .map(h => h[1].replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim());
+    if (!foundHeader && rowTexts.includes('Team') && rowTexts.includes('OVE')) {
+      const headers = rowTexts;
       
       // Map header positions
       headers.forEach((header, index) => {

@@ -328,26 +328,80 @@ export async function fetchFEIData(): Promise<FEITeamData[]> {
 }
 
 /**
- * Calculate expected score using both FEI and possession data
+ * Points of spread per unit of FEI difference, and the home-field edge, both
+ * fitted 2026-09-24 against the market consensus on 64 upcoming FBS games
+ * (market = -3.2 + 19.6 x FEI diff, corr 0.95, MAE 3.3). The old score-based
+ * spread compressed lines ~3x and landed on whole numbers only; FEI itself is
+ * the strong signal, so the spread now comes straight from it.
+ */
+export const FEI_POINTS_PER_UNIT = 19.6;
+export const FEI_HFA = 3.2;
+
+/** Home margin (positive = home favored) from the FEI rating difference. */
+export function feiSpread(away: FEITeamData, home: FEITeamData, neutral = false): number {
+  return FEI_POINTS_PER_UNIT * (home.fei - away.fei) + (neutral ? 0 : FEI_HFA);
+}
+
+/**
+ * Expected score. The spread comes from feiSpread(); the possession / basic
+ * score models only set the game total (pace + efficiency), and the two team
+ * scores are the total split around that spread.
  */
 export function calculateExpectedScore(
   away: FEITeamData,
-  home: FEITeamData
+  home: FEITeamData,
+  neutral = false
 ): ScoreProjection {
-  // Fallback if no possession data
-  if (!away.possession || !home.possession) {
-    return calculateBasicFEIScore(away, home);
-  }
-  
-  const awayPoss = away.possession;
-  const homePoss = home.possession;
-  
+  const raw = away.possession && home.possession
+    ? possessionScores(away, home, away.possession, home.possession)
+    : basicScores(away, home);
+  const total = raw.away + raw.home;
+  const spread = Math.round(feiSpread(away, home, neutral) * 10) / 10;
+  const awayScore = Math.round((total - spread) / 2);
+  const homeScore = Math.round((total + spread) / 2);
+
+  return {
+    away: {
+      expected: awayScore,
+      low: Math.max(0, awayScore - 4),
+      high: awayScore + 4
+    },
+    home: {
+      expected: homeScore,
+      low: Math.max(0, homeScore - 4),
+      high: homeScore + 4
+    },
+    total: {
+      expected: Math.round(total),
+      low: Math.round(total - 7),
+      high: Math.round(total + 7)
+    },
+    spread,
+    possessions: raw.possessions,
+    confidence: raw.confidence
+  };
+}
+
+interface RawScores {
+  away: number;
+  home: number;
+  possessions: number;
+  confidence: string;
+}
+
+// Possession-based team scores (unrounded) — used for the total only.
+function possessionScores(
+  away: FEITeamData,
+  home: FEITeamData,
+  awayPoss: PossessionData,
+  homePoss: PossessionData
+): RawScores {
   // Method 1: Direct scoring value approach (using actual game values)
   const directMethod = {
     away: 28 + (awayPoss.ovg - homePoss.dvg) / 2,
     home: 30 + (homePoss.ovg - awayPoss.dvg) / 2
   };
-  
+
   // Method 2: Possession-based with FEI adjustments
   const avgPossessions = (awayPoss.npg + homePoss.npg) / 2;
   const possessionMethod = {
@@ -355,68 +409,29 @@ export function calculateExpectedScore(
     away: (awayPoss.ove * avgPossessions / 2) + (away.ofei * 5) - (home.dfei * 3),
     home: (homePoss.ove * avgPossessions / 2) + (home.ofei * 5) - (away.dfei * 3) + 2.5
   };
-  
+
   // Method 3: Hybrid approach weighing both
   const hybrid = {
     away: (directMethod.away * 0.4) + (possessionMethod.away * 0.6),
     home: (directMethod.home * 0.4) + (possessionMethod.home * 0.6)
   };
-  
+
   // Add pace adjustment
   const paceMultiplier = avgPossessions / 21; // 21 is roughly average
-  
-  const finalScores = {
-    away: Math.round(hybrid.away * (paceMultiplier * 0.2 + 0.8)), // Mild pace adjustment
-    home: Math.round(hybrid.home * (paceMultiplier * 0.2 + 0.8))
-  };
-  
-  // Calculate confidence
-  const confidence = getProjectionConfidence(away, home, awayPoss, homePoss);
-  
+
   return {
-    away: {
-      expected: finalScores.away,
-      low: Math.max(0, finalScores.away - 4),
-      high: finalScores.away + 4
-    },
-    home: {
-      expected: finalScores.home,
-      low: Math.max(0, finalScores.home - 4),
-      high: finalScores.home + 4
-    },
-    total: {
-      expected: finalScores.away + finalScores.home,
-      low: finalScores.away + finalScores.home - 7,
-      high: finalScores.away + finalScores.home + 7
-    },
-    spread: finalScores.home - finalScores.away,
+    away: hybrid.away * (paceMultiplier * 0.2 + 0.8), // Mild pace adjustment
+    home: hybrid.home * (paceMultiplier * 0.2 + 0.8),
     possessions: Math.round(avgPossessions),
-    confidence
+    confidence: getProjectionConfidence(away, home, awayPoss, homePoss)
   };
 }
 
 // Fallback for teams without possession data
-function calculateBasicFEIScore(away: FEITeamData, home: FEITeamData): ScoreProjection {
-  const awayScore = 28 + (away.ofei * 10) - (home.dfei * 5);
-  const homeScore = 30 + (home.ofei * 10) - (away.dfei * 5);
-  
+function basicScores(away: FEITeamData, home: FEITeamData): RawScores {
   return {
-    away: {
-      expected: Math.round(awayScore),
-      low: Math.max(0, Math.round(awayScore - 4)),
-      high: Math.round(awayScore + 4)
-    },
-    home: {
-      expected: Math.round(homeScore),
-      low: Math.max(0, Math.round(homeScore - 4)),
-      high: Math.round(homeScore + 4)
-    },
-    total: {
-      expected: Math.round(awayScore + homeScore),
-      low: Math.round(awayScore + homeScore - 7),
-      high: Math.round(awayScore + homeScore + 7)
-    },
-    spread: Math.round(homeScore - awayScore),
+    away: 28 + (away.ofei * 10) - (home.dfei * 5),
+    home: 30 + (home.ofei * 10) - (away.dfei * 5),
     possessions: 21, // Default average
     confidence: 'Moderate (No Possession Data)'
   };

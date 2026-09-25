@@ -5,6 +5,7 @@ import { FEITeamData, fetchFEIData, getTeamFEIData, formatFEIValue, getTeamLogoN
 interface TeamAnalysisProps {
   awayTeam: string;
   homeTeam: string;
+  isNeutralSite?: boolean;
 }
 
 interface BettingInsight {
@@ -15,12 +16,14 @@ interface BettingInsight {
 // Score Projection Component
 const ScoreProjectionDisplay = ({ 
   awayData, 
-  homeData 
+  homeData,
+  isNeutralSite = false
 }: { 
   awayData: FEITeamData; 
   homeData: FEITeamData;
+  isNeutralSite?: boolean;
 }) => {
-  const projection = calculateExpectedScore(awayData, homeData);
+  const projection = calculateExpectedScore(awayData, homeData, isNeutralSite);
   
   // Determine insights based on projection
   const getInsights = () => {
@@ -165,7 +168,7 @@ const ScoreProjectionDisplay = ({
   );
 };
 
-export default function TeamAnalysis({ awayTeam, homeTeam }: TeamAnalysisProps) {
+export default function TeamAnalysis({ awayTeam, homeTeam, isNeutralSite = false }: TeamAnalysisProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [awayData, setAwayData] = useState<FEITeamData | null>(null);
@@ -634,7 +637,7 @@ export default function TeamAnalysis({ awayTeam, homeTeam }: TeamAnalysisProps) 
       </div>
 
       {/* Score Projection Component */}
-      <ScoreProjectionDisplay awayData={awayData} homeData={homeData} />
+      <ScoreProjectionDisplay awayData={awayData} homeData={homeData} isNeutralSite={isNeutralSite} />
 
       {/* Betting Insights Section */}
       {insights.length > 0 && (

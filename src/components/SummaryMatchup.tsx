@@ -5,7 +5,7 @@
 // plus the average across available systems.
 
 import { useEffect, useState } from 'react';
-import { fetchFEIData, getTeamFEIData, calculateExpectedScore } from '@/lib/feiData';
+import { fetchFEIData, getTeamFEIData, feiSpread } from '@/lib/feiData';
 import { TeamSeasonMetrics } from '@/lib/eckel/types';
 import { cachedJson } from '@/lib/matchupCache';
 import { ledgerMatchupUrl } from './LedgerMatchup';
@@ -52,21 +52,13 @@ export default function SummaryMatchup({ awayTeam, homeTeam, isNeutralSite = fal
     const feiPromise = fetchFEIData().then((data) => {
       const away = getTeamFEIData(awayTeam, data);
       const home = getTeamFEIData(homeTeam, data);
-      let line: number | null = null;
-      if (away && home) {
-        // calculateExpectedScore bakes a home bump into whichever team is passed
-        // as "home". On a neutral field, averaging both orientations cancels it.
-        const margin = isNeutralSite
-          ? (calculateExpectedScore(away, home).spread - calculateExpectedScore(home, away).spread) / 2
-          : calculateExpectedScore(away, home).spread;
-        line = -margin;
-      }
+      const line = away && home ? -feiSpread(away, home, isNeutralSite) : null;
       return {
         system: 'FEI',
         awayLabel: away ? `${away.fei.toFixed(2)} (#${away.rank})` : null,
         homeLabel: home ? `${home.fei.toFixed(2)} (#${home.rank})` : null,
         homeLine: line === null ? null : round1(line),
-        note: isNeutralSite ? 'score proj · neutral' : 'score projection',
+        note: isNeutralSite ? 'rating diff · neutral' : 'rating diff + HFA',
       } as SystemRow;
     });
 
@@ -202,7 +194,7 @@ export default function SummaryMatchup({ awayTeam, homeTeam, isNeutralSite = fal
         </tbody>
       </table>
       <p className="mt-3 text-[10px] text-gray-400 text-center">
-        Line shown for the favorite (logo) · FEI = expected-score projection · Eckel & Ledger =
+        Line shown for the favorite (logo) · FEI = 19.6 × FEI difference + 3.2 HFA · Eckel & Ledger =
         rating difference{isNeutralSite
           ? ' · neutral site, no home-field edge applied'
           : ' + Brad Powers’ per-team home HFA'} · ratings shown as value (#rank)
