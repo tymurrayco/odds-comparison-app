@@ -160,12 +160,36 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
       favSide.logo ??
       (favSide.espnId && !isNFL ? `https://a.espncdn.com/i/teamlogos/ncaa/500/${favSide.espnId}.png` : null);
     const favSpread = -Math.abs(homeSpread);
+    // Disagreement with the market: books' average spread, home perspective.
+    // Tiers from the 2026 wk1-3 backtest (bet the Ledger side vs the close:
+    // 1+ ~58%, 2+ ~60%, 3+ ~61%) — small sample, re-check as weeks accrue.
+    const awayPoints = (game.bookmakers ?? [])
+      .map((b) => b.markets.find((m) => m.key === 'spreads')?.outcomes.find((o) => o.name === game.away_team)?.point)
+      .filter((p): p is number => typeof p === 'number');
+    const marketHome = awayPoints.length ? -(awayPoints.reduce((a, b) => a + b, 0) / awayPoints.length) : null;
+    const gap = marketHome === null ? null : Math.abs(homeSpread - marketHome);
+    const tier: 'none' | 'low' | 'mid' | 'high' =
+      gap === null || gap < 1 ? 'none' : gap < 2 ? 'low' : gap < 3 ? 'mid' : 'high';
+    const marketFav = marketHome === null ? null : -Math.abs(marketHome);
     return {
       teamName,
       logos: [espnLogo, getTeamLogo(teamName)].filter((s): s is string => !!s),
       text: favSpread === 0 ? 'PK' : favSpread.toFixed(1),
+      tier,
+      gapText: gap === null || marketFav === null
+        ? 'no market line'
+        : `market ${marketFav === 0 ? 'PK' : marketFav.toFixed(1)}, ${gap.toFixed(1)} pt gap`,
     };
   })();
+
+  // Ledger chip colors by disagreement with the market: <1 gray, 1+ yellow,
+  // 2+ blue, 3+ green. [resting, active (analysis panel open)].
+  const LEDGER_TIER_CLASSES: Record<'none' | 'low' | 'mid' | 'high', [string, string]> = {
+    none: ['bg-gray-100 text-gray-600 hover:bg-gray-200', 'bg-gray-600 text-white'],
+    low: ['bg-yellow-100 text-yellow-800 hover:bg-yellow-200', 'bg-yellow-500 text-white'],
+    mid: ['bg-blue-50 text-blue-700 hover:bg-blue-100', 'bg-blue-600 text-white'],
+    high: ['bg-green-100 text-green-800 hover:bg-green-200', 'bg-green-600 text-white'],
+  };
 
   const favoriteShareButtons = (
     <>
@@ -591,10 +615,12 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
             {(isNCAAF || isNFL) && ledgerChip && (
               <button
                 className={`inline-flex items-center gap-1 px-1.5 md:px-2 py-1 text-xs md:text-sm font-semibold rounded-md tabular-nums ${
-                  expandedMarket === 'analysis' &&
-                  (isNFL ? nflPanel === 'ledger' : analysisTabRequest.tab === 'Ledger')
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                  LEDGER_TIER_CLASSES[ledgerChip.tier][
+                    expandedMarket === 'analysis' &&
+                    (isNFL ? nflPanel === 'ledger' : analysisTabRequest.tab === 'Ledger')
+                      ? 1
+                      : 0
+                  ]
                 }`}
                 onClick={() => {
                   if (isNFL) {
@@ -604,7 +630,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                     openAnalysis('Ledger');
                   }
                 }}
-                title={`Ledger projection: ${ledgerChip.teamName} ${ledgerChip.text}`}
+                title={`Ledger projection: ${ledgerChip.teamName} ${ledgerChip.text} (${ledgerChip.gapText})`}
                 aria-label={`Ledger projection: ${ledgerChip.teamName} ${ledgerChip.text}`}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
