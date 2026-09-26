@@ -747,11 +747,18 @@ function HomeContent() {
   const effectiveView: 'games' | 'futures' | 'props' | 'mybets' = isFuturesOnly(activeLeague) ? 'futures' : activeView;
 
   // Filter games based on team name AND conferences
+  const [showLiveGames, setShowLiveGames] = useState(false);
   const filteredGames = useMemo(() => {
     // A game that has gone final (per the ESPN scores feed) has nothing left
     // to price — drop its card. Games the feed can't match stay, so an empty
     // or failed feed never hides anything.
     let filtered = games.filter((game) => matchGameToScore(game, espnScores)?.state !== 'post');
+
+    // Live games (kicked off, not final) are hidden unless the Live switch is on
+    if (!showLiveGames) {
+      const now = Date.now();
+      filtered = filtered.filter((game) => new Date(game.commence_time).getTime() > now);
+    }
 
     if (teamFilter.trim()) {
       const searchTerm = teamFilter.toLowerCase().trim();
@@ -772,7 +779,7 @@ function HomeContent() {
     }
 
     return filtered;
-  }, [games, teamFilter, selectedConferences, activeLeague, espnScores]);
+  }, [games, teamFilter, selectedConferences, activeLeague, espnScores, showLiveGames]);
 
   // Filter futures based on team/player name
   const filteredFutures = futures.map(market => ({
@@ -1196,22 +1203,42 @@ function HomeContent() {
             
             {/* Deep link tip - only show for games view */}
             {activeView === 'games' && activeLeague !== 'favorites' && (
-              <>
+              <div className="flex items-center justify-center gap-3 mb-4">
                 {/* Mobile: shorter message */}
-                <p className="md:hidden text-xs text-gray-500 text-center mb-4 flex items-center justify-center gap-1">
+                <p className="md:hidden text-xs text-gray-500 text-center flex items-center justify-center gap-1">
                   <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                   </svg>
                   Tap odds to open in sportsbook app
                 </p>
                 {/* Desktop: full message */}
-                <p className="hidden md:flex text-xs text-gray-500 text-center mb-4 items-center justify-center gap-1">
+                <p className="hidden md:flex text-xs text-gray-500 text-center items-center justify-center gap-1">
                   <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                   </svg>
                   Click FanDuel, DraftKings, or Caesars odds to directly create betslip
                 </p>
-              </>
+                {/* Live games switch (iOS style) — off hides games already under way */}
+                <label className="inline-flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none shrink-0">
+                  <span>Live</span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={showLiveGames}
+                    aria-label="Show live games"
+                    onClick={() => setShowLiveGames((v) => !v)}
+                    className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500/40 ${
+                      showLiveGames ? 'bg-green-500' : 'bg-gray-300'
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ${
+                        showLiveGames ? 'translate-x-4' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </label>
+              </div>
             )}
             
             {/* NHL Rest Badges Key - only show for NHL */}
@@ -1287,7 +1314,9 @@ function HomeContent() {
                   <div className="bg-white rounded-lg shadow p-6 text-center">
                     {teamFilter || selectedConferences.length > 0 
                       ? 'No games match your filters.' 
-                      : 'No games available for this league right now.'}
+                      : !showLiveGames && games.length > 0
+                        ? 'Only live games right now — switch on Live to see them.'
+                        : 'No games available for this league right now.'}
                   </div>
                 ) : (
                   <div>
