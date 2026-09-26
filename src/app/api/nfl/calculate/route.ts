@@ -4,7 +4,7 @@
  * POST /api/nfl/calculate — NFL market-driven ratings orchestrator.
  *
  * Actions (body.action):
- * - 'sync' (default): process new completed NFL games — ESPN scoreboard
+ * - 'sync' (default): process new NFL games once under way (in progress or final) — ESPN scoreboard
  *   for the game list, Odds API historical snapshot at
  *   kickoff-5min for the closing line (US consensus average), then
  *   adjustment = (closing - projected)/2 applied zero-sum.
@@ -89,7 +89,7 @@ async function fetchNflGamesForDate(dateYmd: string): Promise<EspnNflGame[]> {
       homeId: String(home.team?.id ?? ''),
       awayId: String(away.team?.id ?? ''),
       isNeutralSite: comp.neutralSite === true || comp.venue?.neutral === true,
-      isCompleted: comp.status?.type?.completed === true,
+      isUnderway: comp.status?.type?.completed === true || comp.status?.type?.state === 'in',
     });
   }
   return out;
@@ -276,7 +276,7 @@ async function handleSync(body: {
     const games = await fetchNflGamesForDate(day.replace(/-/g, ''));
     for (const game of games) {
       if (processed.length >= maxGames) break outer;
-      if (!game.isCompleted || processedIds.has(game.id)) continue;
+      if (!game.isUnderway || processedIds.has(game.id)) continue;
 
       const label = `${game.awayTeam} @ ${game.homeTeam}`;
       const home = byEspnId.get(game.homeId) ?? byEspnName.get(game.homeTeam.toLowerCase());

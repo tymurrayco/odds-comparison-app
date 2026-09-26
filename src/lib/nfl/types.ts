@@ -70,7 +70,7 @@ export interface EspnNflGame {
   homeId: string;
   awayId: string;
   isNeutralSite: boolean;
-  isCompleted: boolean;
+  isUnderway: boolean; // in progress or final — closing line is set; postponed/cancelled never qualify
 }
 
 export interface NflConfig {
