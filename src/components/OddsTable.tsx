@@ -7,7 +7,7 @@ import { Game, BOOKMAKERS } from '@/lib/api';
 import { formatOdds } from '@/lib/utils';
 import { createBet } from '@/lib/betService';
 import { GameRestData, TeamRestInfo } from '@/lib/nhlRest';
-import { resolveDeepLink, fillLinkTemplate, promptForState } from '@/lib/betLinks';
+import { resolveDeepLink, fillLinkTemplate, promptForState, openBetLink } from '@/lib/betLinks';
 import { useTeamColorMap, teamInfoFromMap } from '@/lib/myGameBets';
 
 // Sport keys whose team cells link to /team/[league]/[name] pages
@@ -192,7 +192,7 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
         if (!state) return;
         resolved = fillLinkTemplate(link, state);
       }
-      window.open(resolved, '_blank');
+      openBetLink(resolved);
     }
   };
 

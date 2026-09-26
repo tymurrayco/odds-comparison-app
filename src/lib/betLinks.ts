@@ -56,3 +56,18 @@ export function promptForState(): string | null {
   setBetState(c);
   return c;
 }
+
+// Books whose links are universal links / Android app links (the domain's
+// apple-app-site-association + assetlinks.json claim every path). iOS only
+// hands those to the app on a same-tab navigation from a tap — a
+// window.open(_blank) new tab just loads the website.
+const APP_LINK_HOSTS = ['prophetx.co'];
+
+export function openBetLink(url: string): void {
+  let host = '';
+  try { host = new URL(url).hostname; } catch { /* malformed — fall through */ }
+  const appLink = APP_LINK_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
+  const mobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  if (appLink && mobile) window.location.href = url;
+  else window.open(url, '_blank');
+}
