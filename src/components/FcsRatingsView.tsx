@@ -8,7 +8,7 @@
 import Link from 'next/link';
 import SosPanel from './SosPanel';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { FCS_MAX_RATED_SPREAD } from '@/lib/ratedSpreadCap';
+import { CFB_MAX_RATED_SPREAD } from '@/lib/ratedSpreadCap';
 import {
   FcsClosingLine,
   FcsConfig,
@@ -1655,8 +1655,8 @@ ${manualByTeam.get(r.teamName)}` : null}
                         </div>
                         <div className="text-[11px] text-slate-400">
                           {a.closingSource}
-                          {Math.abs(a.closingSpread) >= FCS_MAX_RATED_SPREAD && (
-                            <span className="ml-1 text-amber-600">· not rated (line ±{FCS_MAX_RATED_SPREAD} or more)</span>
+                          {Math.abs(a.closingSpread) >= CFB_MAX_RATED_SPREAD && (
+                            <span className="ml-1 text-amber-600">· not rated (line ±{CFB_MAX_RATED_SPREAD} or more)</span>
                           )}
                         </div>
                       </div>

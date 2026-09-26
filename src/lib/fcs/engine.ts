@@ -43,7 +43,7 @@ export function hfaForGame(
  * Process one game against a mutable ratings map (keyed by canonical teamName).
  * Mutates the two team ratings and returns the adjustment record.
  */
-import { exceedsFcsRatedSpreadCap } from '@/lib/ratedSpreadCap';
+import { exceedsCfbRatedSpreadCap } from '@/lib/ratedSpreadCap';
 
 export function processFcsGame(
   game: {
@@ -71,7 +71,7 @@ export function processFcsGame(
     FCS_RATINGS_DECIMAL_PLACES
   );
   // Lines beyond the cap are logged but never re-rate (see ratedSpreadCap.ts)
-  const capped = exceedsFcsRatedSpreadCap(game.closingSpread);
+  const capped = exceedsCfbRatedSpreadCap(game.closingSpread);
   const adjustment = capped ? 0 : roundToDecimal(difference / 2, FCS_RATINGS_DECIMAL_PLACES);
 
   const homeRatingBefore = home.rating;
