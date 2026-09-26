@@ -63,11 +63,26 @@ export function promptForState(): string | null {
 // window.open(_blank) new tab just loads the website.
 const APP_LINK_HOSTS = ['prophetx.co'];
 
-export function openBetLink(url: string): void {
+export function isAppLinkUrl(url: string): boolean {
   let host = '';
-  try { host = new URL(url).hostname; } catch { /* malformed — fall through */ }
-  const appLink = APP_LINK_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
-  const mobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-  if (appLink && mobile) window.location.href = url;
+  try { host = new URL(url).hostname; } catch { return false; }
+  return APP_LINK_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
+}
+
+export function isMobileDevice(): boolean {
+  return typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+}
+
+// On phones an app-link book needs a REAL <a> tap (see appLinkHref) — iOS
+// ignores JS navigations to universal links. This is the fallback path.
+export function openBetLink(url: string): void {
+  if (isAppLinkUrl(url) && isMobileDevice()) window.location.href = url;
   else window.open(url, '_blank');
+}
+
+/** Href for a real-anchor overlay when this link should open a native app, else null. */
+export function appLinkHref(link: string | undefined): string | null {
+  if (!link || !isMobileDevice()) return null;
+  const url = resolveDeepLink(link);
+  return url && isAppLinkUrl(url) ? url : null;
 }

@@ -7,7 +7,7 @@ import { Game, BOOKMAKERS } from '@/lib/api';
 import { formatOdds } from '@/lib/utils';
 import { createBet } from '@/lib/betService';
 import { GameRestData, TeamRestInfo } from '@/lib/nhlRest';
-import { resolveDeepLink, fillLinkTemplate, promptForState, openBetLink } from '@/lib/betLinks';
+import { resolveDeepLink, fillLinkTemplate, promptForState, openBetLink, appLinkHref } from '@/lib/betLinks';
 import { useTeamColorMap, teamInfoFromMap } from '@/lib/myGameBets';
 
 // Sport keys whose team cells link to /team/[league]/[name] pages
@@ -184,6 +184,8 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
   // from localStorage, prompted once on first use.
   const handleDeepLinkClick = (link: string | undefined, e: React.MouseEvent) => {
     if (link) {
+      // Tap landed on the app-link overlay: let the native anchor navigate
+      if ((e.target as HTMLElement).closest?.('a[data-app-link]')) return;
       e.preventDefault();
       e.stopPropagation();
       let resolved = resolveDeepLink(link);
@@ -194,6 +196,22 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
       }
       openBetLink(resolved);
     }
+  };
+
+  // App-link books (ProphetX) on phones: an invisible real <a> over the cell,
+  // since iOS only opens the app from a genuine link tap. Callout off so the
+  // press-and-hold bet logger still works.
+  const renderAppLink = (link: string | undefined, enabled: boolean) => {
+    const href = enabled ? appLinkHref(link) : null;
+    return href ? (
+      <a
+        href={href}
+        data-app-link
+        aria-label="Open in app"
+        className="absolute inset-0"
+        style={{ WebkitTouchCallout: 'none' }}
+      />
+    ) : null;
   };
 
   // Bookmakers that support deep linking
@@ -574,7 +592,7 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                         return (
                           <td 
                             key={book} 
-                            className={`px-2 md:px-4 py-3 whitespace-nowrap text-center cursor-pointer select-none ${index === 0 ? 'border-b border-gray-200' : ''} ${hasDeepLink && deepLink ? 'hover:bg-blue-50' : ''}`}
+                            className={`relative px-2 md:px-4 py-3 whitespace-nowrap text-center cursor-pointer select-none ${index === 0 ? 'border-b border-gray-200' : ''} ${hasDeepLink && deepLink ? 'hover:bg-blue-50' : ''}`}
                             onTouchStart={() => outcomeData && 
                               handlePressStart(game, team, outcomeData.price, book, 'moneyline')}
                             onTouchEnd={handlePressEnd}
@@ -585,6 +603,7 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                             onMouseLeave={handlePressEnd}
                             onClick={(e) => hasDeepLink && handleDeepLinkClick(deepLink, e)}
                           >
+                            {renderAppLink(deepLink, hasDeepLink)}
                             {outcomeData ? (
                               <div className={`text-xs md:text-sm font-medium ${
                                 isBest ? 'text-green-600 font-bold' : 'text-gray-900'
@@ -611,7 +630,7 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                         return (
                           <td 
                             key={book} 
-                            className={`px-2 md:px-4 py-3 whitespace-nowrap text-center cursor-pointer select-none ${index === 0 ? 'border-b border-gray-200' : ''} ${hasDeepLink && deepLink ? 'hover:bg-blue-50' : ''}`}
+                            className={`relative px-2 md:px-4 py-3 whitespace-nowrap text-center cursor-pointer select-none ${index === 0 ? 'border-b border-gray-200' : ''} ${hasDeepLink && deepLink ? 'hover:bg-blue-50' : ''}`}
                             onTouchStart={() => outcomeData && typeof outcomeData.point !== 'undefined' && 
                               handlePressStart(game, team, outcomeData.price, book, 'spread', outcomeData.point)}
                             onTouchEnd={handlePressEnd}
@@ -622,6 +641,7 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                             onMouseLeave={handlePressEnd}
                             onClick={(e) => hasDeepLink && handleDeepLinkClick(deepLink, e)}
                           >
+                            {renderAppLink(deepLink, hasDeepLink)}
                             {outcomeData && typeof outcomeData.point !== 'undefined' ? (
                               <div className={`text-xs md:text-sm ${
                                 isBest ? 'text-green-600 font-bold' : 'text-gray-900'
@@ -651,7 +671,7 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                         return (
                           <td 
                             key={book} 
-                            className={`px-2 md:px-4 py-3 whitespace-nowrap text-center cursor-pointer select-none ${index === 0 ? 'border-b border-gray-200' : ''} ${hasDeepLink && deepLink ? 'hover:bg-blue-50' : ''}`}
+                            className={`relative px-2 md:px-4 py-3 whitespace-nowrap text-center cursor-pointer select-none ${index === 0 ? 'border-b border-gray-200' : ''} ${hasDeepLink && deepLink ? 'hover:bg-blue-50' : ''}`}
                             onTouchStart={() => outcomeData && typeof outcomeData.point !== 'undefined' && 
                               handlePressStart(game, team, outcomeData.price, book, 'total', outcomeData.point, totalType)}
                             onTouchEnd={handlePressEnd}
@@ -662,6 +682,7 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                             onMouseLeave={handlePressEnd}
                             onClick={(e) => hasDeepLink && handleDeepLinkClick(deepLink, e)}
                           >
+                            {renderAppLink(deepLink, hasDeepLink)}
                             {outcomeData && typeof outcomeData.point !== 'undefined' ? (
                               <div className={`text-xs md:text-sm ${
                                 isBest ? 'text-green-600 font-bold' : 'text-gray-900'
