@@ -73,6 +73,9 @@ export interface TeamVisual {
 }
 
 const pct = (p: number) => `${(p * 100).toFixed(0)}%`;
+// A "great week" for an unused team: Ledger win probability at or above this
+// (≈ a 7-point favorite at σ = 13). Counted over weeks not yet kicked off.
+const GREAT_WEEK_PROB = 0.7;
 const spreadTxt = (s: number) => (s === 0 ? 'PK' : s > 0 ? `+${s.toFixed(1)}` : s.toFixed(1));
 const short = (name: string) => name.split(' ').pop() ?? name;
 
@@ -246,6 +249,18 @@ export default function NflSurvivorPanel({ visualFor }: { visualFor: (teamName: 
     for (const t of plan.usedTeams) all.delete(t);
     return [...all].sort();
   })();
+  // Remaining great weeks per unused team (respects the home-only toggle)
+  const greatWeeks = new Map<string, Array<{ week: number; o: Option }>>();
+  for (const w of plan?.weeks ?? []) {
+    if (w.locked || w.week < (plan?.currentWeek ?? 1)) continue;
+    for (const o of w.options) {
+      if (o.started || o.prob < GREAT_WEEK_PROB || (homeOnly && !o.home)) continue;
+      if (!greatWeeks.has(o.team)) greatWeeks.set(o.team, []);
+      greatWeeks.get(o.team)!.push({ week: w.week, o });
+    }
+  }
+  const greatCount = (t: string) => greatWeeks.get(t)?.length ?? 0;
+  const unusedByGreat = [...unusedTeams].sort((a, b) => greatCount(b) - greatCount(a) || a.localeCompare(b));
 
   return (
     <div className="space-y-3">
@@ -348,13 +363,35 @@ export default function NflSurvivorPanel({ visualFor }: { visualFor: (teamName: 
           </div>
         )}
         {plan && unusedTeams.length > 0 && (
-          <div className="flex items-center gap-1.5 flex-wrap" title="Teams still available in this entry">
-            <span className="text-[11px] uppercase tracking-wide text-slate-400 shrink-0">{unusedTeams.length} left</span>
-            {unusedTeams.map((t) => (
-              <span key={t} title={t} className="inline-flex">
-                <Logo team={t} />
-              </span>
-            ))}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span
+              className="text-[11px] uppercase tracking-wide text-slate-400 shrink-0"
+              title={`Teams still available in this entry. Badge = remaining weeks at ${pct(GREAT_WEEK_PROB)}+ to win${homeOnly ? ' (home games only)' : ''}.`}
+            >
+              {unusedTeams.length} left · great wks
+            </span>
+            {unusedByGreat.map((t) => {
+              const gw = greatWeeks.get(t) ?? [];
+              const n = gw.length;
+              const tip = n
+                ? `${t} — ${n} great week${n > 1 ? 's' : ''} left:\n` +
+                  gw.map(({ week, o }) => `W${week} ${o.home || o.neutral ? 'vs' : '@'} ${short(o.opponent)} ${pct(o.prob)}`).join('\n')
+                : `${t} — no week at ${pct(GREAT_WEEK_PROB)}+ left`;
+              return (
+                <span key={t} title={tip} className={`relative inline-flex ${n === 0 ? 'opacity-40' : ''}`}>
+                  <Logo team={t} />
+                  {n > 0 && (
+                    <span
+                      className={`absolute -bottom-1 -right-1.5 min-w-[13px] h-[13px] px-[2px] rounded-full text-[9px] leading-[13px] font-bold text-center text-white tabular-nums ring-1 ring-white ${
+                        n >= 3 ? 'bg-emerald-600' : n === 2 ? 'bg-emerald-400' : 'bg-amber-500'
+                      }`}
+                    >
+                      {n}
+                    </span>
+                  )}
+                </span>
+              );
+            })}
           </div>
         )}
         {error && <div className="p-2 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-700">{error}</div>}
