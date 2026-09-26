@@ -252,6 +252,7 @@ export default function FbsRatingsView({ admin = false }: { admin?: boolean }) {
   const [upcomingLoading, setUpcomingLoading] = useState(false);
   const [upcomingNote, setUpcomingNote] = useState<string | null>(null);
   const [upcomingSearch, setUpcomingSearch] = useState('');
+  const [upcomingConf, setUpcomingConf] = useState('all');
   const [crossInfo, setCrossInfo] = useState<{
     count: number;
     scaleOffset: number;
@@ -304,14 +305,21 @@ export default function FbsRatingsView({ admin = false }: { admin?: boolean }) {
   }, [load]);
 
   // Upcoming tab search: matches either team by display or ESPN name, accent-folded.
+  // Conference filter keeps a game when either side plays in it (cross-division
+  // opponents aren't in this pool, so they match through their rated side).
   const upcomingFiltered = useMemo(() => {
     const fold = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
     const q = fold(upcomingSearch.trim());
-    if (!q) return upcoming ?? [];
-    return (upcoming ?? []).filter((g) =>
+    let list = upcoming ?? [];
+    if (upcomingConf !== 'all') {
+      const confOf = new Map((data?.ratings ?? []).map((r) => [r.teamName, r.conference || 'Unknown']));
+      list = list.filter((g) => confOf.get(g.homeTeam) === upcomingConf || confOf.get(g.awayTeam) === upcomingConf);
+    }
+    if (!q) return list;
+    return list.filter((g) =>
       [g.homeTeam, g.awayTeam, g.homeEspnName, g.awayEspnName].some((n) => n && fold(n).includes(q))
     );
-  }, [upcoming, upcomingSearch]);
+  }, [upcoming, upcomingSearch, upcomingConf, data]);
 
   const loadUpcoming = useCallback(async () => {
     setUpcomingAttempted(true);
@@ -964,15 +972,28 @@ ${line}` : line);
                 {upcomingLoading ? '…' : 'Refresh'}
               </button>
             </div>
-            <div className="px-3 sm:px-4 py-2 border-b border-slate-100">
+            <div className="px-3 sm:px-4 py-2 border-b border-slate-100 flex gap-2">
               <input
                 type="search"
-                className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0052ff]/25"
+                className="flex-1 min-w-0 px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0052ff]/25"
                 placeholder="Search team…"
                 value={upcomingSearch}
                 onChange={(e) => setUpcomingSearch(e.target.value)}
                 aria-label="Search upcoming games by team"
               />
+              <select
+                className="px-2 py-2 text-sm bg-white border border-slate-200 rounded-lg max-w-[45%]"
+                value={upcomingConf}
+                onChange={(e) => setUpcomingConf(e.target.value)}
+                aria-label="Filter upcoming games by conference"
+              >
+                <option value="all">All conferences</option>
+                {conferences.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
             </div>
             {upcomingNote && (
               <div className="px-3 sm:px-4 py-2 text-xs text-amber-600 border-b border-slate-100">
@@ -981,9 +1002,11 @@ ${line}` : line);
             )}
             {upcomingLoading && upcoming === null ? (
               <div className="px-4 py-6 text-sm text-slate-500">Loading…</div>
-            ) : upcomingFiltered.length === 0 && upcomingSearch.trim() ? (
+            ) : upcomingFiltered.length === 0 && (upcomingSearch.trim() || upcomingConf !== 'all') ? (
               <div className="px-4 py-6 text-sm text-slate-500">
-                No upcoming games match &ldquo;{upcomingSearch.trim()}&rdquo;.
+                No upcoming games match
+                {upcomingSearch.trim() && <> &ldquo;{upcomingSearch.trim()}&rdquo;</>}
+                {upcomingConf !== 'all' && <> in {upcomingConf}</>}.
               </div>
             ) : (upcoming ?? []).length === 0 ? (
               <div className="px-4 py-6 text-sm text-slate-500">
