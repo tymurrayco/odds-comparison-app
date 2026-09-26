@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { recordCreditSnapshot } from '@/lib/creditUsage';
 import { ODDS_API_BOOKMAKERS } from '@/lib/api';
+import { captureLineOpeners } from '@/lib/lineOpeners';
 
 // Whitelist of sport keys we proxy to the Odds API. Anything else is rejected
 // before it hits the paid API to prevent quota abuse via arbitrary sport keys.
@@ -63,6 +64,10 @@ export async function GET(request: Request) {
     // credits panel has history. Awaited — serverless may kill the lambda
     // after the response otherwise — but never throws.
     await recordCreditSnapshot(requestsRemaining, requestsUsed, 'odds-route');
+
+    // First sighting of a football game's spread = its opener for the card's
+    // line-move token. Throttled, never throws.
+    await captureLineOpeners(sport, data);
 
     // Create a new response with the data and pass through the headers
     const nextResponse = NextResponse.json(data);
