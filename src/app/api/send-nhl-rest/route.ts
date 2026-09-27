@@ -30,8 +30,10 @@ function fatigueOf(r: { isB2B: boolean; is4in6: boolean; is3in4: boolean; restDa
 
 // No reports until a month into the regular season (Tyler, 2026-09-27):
 // rest data is noisy early on and preseason games aren't worth posting.
-// Playoffs stay on. The opener comes from ESPN each season: the regular-season
-// window start (core API), then the first day with a season-type-2 game.
+// Playoffs stay on. The clock starts the day EVERY team has played a
+// regular-season game (not the first game — an early overseas series would
+// otherwise start it weeks early), scanning ESPN from the regular-season
+// window start (core API).
 const START_DELAY_DAYS = 30;
 
 const addDays = (ymd: string, n: number) => {
@@ -51,15 +53,27 @@ async function reportsStartDate(today: string): Promise<string | null> {
   if (!typeRes.ok) return null;
   const windowStart: string | undefined = (await typeRes.json())?.startDate?.substring(0, 10);
   if (!windowStart) return null;
-  for (let i = 0; i < 21; i++) {
+  const teamsRes = await fetch('https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/teams', { next: { revalidate: 86400 } });
+  const leagueSize: number = teamsRes.ok
+    ? ((await teamsRes.json())?.sports?.[0]?.leagues?.[0]?.teams?.length || 32)
+    : 32;
+  const played = new Set<string>();
+  for (let i = 0; i < 45; i++) {
     const day = addDays(windowStart, i);
     const res = await fetch(
       `https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard?dates=${day.replace(/-/g, '')}`,
       { next: { revalidate: 86400 } }
     );
     if (!res.ok) continue;
-    const events: Array<{ season?: { type?: number } }> = (await res.json())?.events ?? [];
-    if (events.some((e) => e.season?.type === 2)) return addDays(day, START_DELAY_DAYS);
+    const events: Array<{
+      season?: { type?: number };
+      competitions?: Array<{ competitors?: Array<{ team?: { id?: string } }> }>;
+    }> = (await res.json())?.events ?? [];
+    for (const e of events) {
+      if (e.season?.type !== 2) continue;
+      for (const c of e.competitions?.[0]?.competitors ?? []) if (c.team?.id) played.add(c.team.id);
+    }
+    if (played.size >= leagueSize) return addDays(day, START_DELAY_DAYS);
   }
   return null;
 }
@@ -80,7 +94,7 @@ async function buildAndSend(manual: boolean) {
       success: true,
       posted: false,
       reason: startsOn
-        ? `rest reports start ${startsOn} (a month into the regular season)`
+        ? `rest reports start ${startsOn} (a month after every team has opened)`
         : 'regular-season start not found — reports held',
     });
   }
