@@ -304,7 +304,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
   
   const impliedScores = calculateImpliedScores();
 
-  // Live score badge: the team that's ahead on the left (away first when tied)
+  // Live and final score badges: the team that's ahead on the left (away first when tied)
   const awaySide = { logo: liveScore?.awayLogo || getTeamLogo(game.away_team), score: liveScore?.awayScore };
   const homeSide = { logo: liveScore?.homeLogo || getTeamLogo(game.home_team), score: liveScore?.homeScore };
   const homeLeads = Number(liveScore?.homeScore) > Number(liveScore?.awayScore);
@@ -468,16 +468,16 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                 {isCompleted && liveScore && (
                   <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
                     <img 
-                      src={liveScore.awayLogo || getTeamLogo(game.away_team)}
+                      src={liveLeft.logo}
                       alt=""
                       className="h-4 w-4 mr-0.5"
                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
                     />
-                    <span className="font-bold">{liveScore.awayScore}</span>
+                    <span className="font-bold">{liveLeft.score}</span>
                     <span className="mx-1">-</span>
-                    <span className="font-bold">{liveScore.homeScore}</span>
+                    <span className="font-bold">{liveRight.score}</span>
                     <img 
-                      src={liveScore.homeLogo || getTeamLogo(game.home_team)}
+                      src={liveRight.logo}
                       alt=""
                       className="h-4 w-4 ml-0.5"
                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
@@ -578,16 +578,16 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                 {isCompleted && liveScore && (
                   <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
                     <img 
-                      src={liveScore.awayLogo || getTeamLogo(game.away_team)}
+                      src={liveLeft.logo}
                       alt=""
                       className="h-4 w-4 mr-0.5"
                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
                     />
-                    <span className="font-bold">{liveScore.awayScore}</span>
+                    <span className="font-bold">{liveLeft.score}</span>
                     <span className="mx-0.5">-</span>
-                    <span className="font-bold">{liveScore.homeScore}</span>
+                    <span className="font-bold">{liveRight.score}</span>
                     <img 
-                      src={liveScore.homeLogo || getTeamLogo(game.home_team)}
+                      src={liveRight.logo}
                       alt=""
                       className="h-4 w-4 ml-0.5"
                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
