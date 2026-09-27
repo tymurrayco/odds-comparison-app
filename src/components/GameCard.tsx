@@ -304,10 +304,11 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
   
   const impliedScores = calculateImpliedScores();
 
-  // Line move since open (NFL + NCAAF). Opener = first consensus spread the
-  // app saw (game_line_openers, src/lib/lineOpeners.ts). Both lines round to
-  // the half point; hidden under a half-point move. Amber when the move is
-  // 2+, crosses a key number (3, 7) or flips the favorite.
+  // Line move since open (NFL + NCAAF): "[fav logo] −3.0 → −4.5", both from
+  // the current favorite's side. Opener = first consensus spread the app saw
+  // (game_line_openers, src/lib/lineOpeners.ts). Both lines round to the half
+  // point; hidden under a half-point move. Amber when the move is 2+, crosses
+  // a key number (3, 7) or flips the favorite. Tap shows the capture date.
   const [opener, setOpener] = useState<{ homeSpread: number; capturedAt: string } | null>(null);
   const [showOpen, setShowOpen] = useState(false);
   useEffect(() => {
@@ -329,20 +330,21 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
     const open = half(opener.homeSpread);
     if (Math.abs(cur - open) < 0.5) return null;
     const flip = cur !== 0 && open !== 0 && Math.sign(cur) !== Math.sign(open);
-    const move = Math.abs(cur) - Math.abs(open); // + = favorite grew
+    const move = Math.abs(cur) - Math.abs(open);
     const crossed = !flip && [3, 7].some((k) => Math.sign(Math.abs(open) - k) !== Math.sign(Math.abs(cur) - k));
+    // Both numbers from the CURRENT favorite's side, so a flip reads "+1 → −2"
     const favHome = cur < 0 || (cur === 0 && open > 0);
     const fav = favHome ? game.home_team : game.away_team;
-    const openFav = open < 0 ? game.home_team : game.away_team;
-    const fmt = (v: number) => (v === 0 ? 'PK' : `−${Math.abs(v).toFixed(1)}`);
+    const side = (homeLine: number) => (favHome ? homeLine : -homeLine);
+    const fmt = (v: number) => (v === 0 ? 'PK' : `${v > 0 ? '+' : '−'}${Math.abs(v).toFixed(1)}`);
     const openedOn = new Date(opener.capturedAt).toLocaleDateString(undefined, { weekday: 'short', month: 'numeric', day: 'numeric' });
     return {
       logo: (favHome ? liveScore?.homeLogo : liveScore?.awayLogo) || getTeamLogo(fav),
-      now: fmt(cur),
-      delta: flip ? 'flip' : `${move > 0 ? '▲' : '▼'}${Math.abs(move).toFixed(1)}`,
-      openText: `${open === 0 ? 'PK' : `${getFirstWord(openFav)} ${fmt(open)}`}`,
+      open: fmt(side(open)),
+      now: fmt(side(cur)),
+      openedOn,
       loud: flip || crossed || Math.abs(move) >= 2,
-      title: `Opened ${open === 0 ? 'PK' : `${openFav} ${fmt(open)}`} (${openedOn}) → now ${cur === 0 ? 'PK' : `${fav} ${fmt(cur)}`}`,
+      title: `${fav}: opened ${fmt(side(open))} (${openedOn}), now ${fmt(side(cur))}`,
     };
   })();
   const renderLineMove = () => lineMove && !isCompleted && (
@@ -351,13 +353,14 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
       onClick={() => setShowOpen((v) => !v)}
       title={lineMove.title}
       aria-label={lineMove.title}
-      className="inline-flex items-center gap-0.5 text-xs md:text-sm tabular-nums text-gray-500 hover:text-gray-700"
+      className="inline-flex items-center gap-1 text-xs md:text-sm tabular-nums text-gray-500 hover:text-gray-700"
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={lineMove.logo} alt="" className="h-3.5 w-3.5 object-contain" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-      <span className="text-gray-700">{lineMove.now}</span>
-      <span className={`font-semibold ${lineMove.loud ? 'text-amber-600' : 'text-gray-400'}`}>{lineMove.delta}</span>
-      {showOpen && <span className="text-gray-400">· open {lineMove.openText}</span>}
+      <span className="text-gray-400">{lineMove.open}</span>
+      <span className={lineMove.loud ? 'text-amber-500' : 'text-gray-300'}>→</span>
+      <span className={`font-semibold ${lineMove.loud ? 'text-amber-600' : 'text-gray-700'}`}>{lineMove.now}</span>
+      {showOpen && <span className="text-gray-400">· opened {lineMove.openedOn}</span>}
     </button>
   );
 
