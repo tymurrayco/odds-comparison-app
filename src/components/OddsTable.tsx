@@ -27,7 +27,7 @@ interface OddsTableProps {
   restData?: GameRestData | null;
   isLive?: boolean; // in-progress: drop books whose line has gone stale
   // Opening spread (home perspective) for the "Open" column, spread view only
-  openLine?: { homeSpread: number; moved: boolean; openedOn: string } | null;
+  openLine?: { homeSpread: number; openedOn: string } | null;
 }
 
 interface OddsItem {
@@ -590,8 +590,8 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                       const v = index === 0 ? -openLine.homeSpread : openLine.homeSpread;
                       return (
                         <td
-                          className={`px-2 md:px-4 py-3 whitespace-nowrap text-center text-xs md:text-sm tabular-nums bg-gray-50/60 border-r border-gray-100 cursor-pointer select-none ${index === 0 ? 'border-b border-b-gray-200' : ''} ${openLine.moved ? 'text-amber-600 font-semibold' : 'text-gray-500'}`}
-                          title={`Opened ${v === 0 ? 'PK' : `${v > 0 ? '+' : ''}${v}`} (${openLine.openedOn})${openLine.moved ? ' — line has moved a lot since' : ''}`}
+                          className={`px-2 md:px-4 py-3 whitespace-nowrap text-center text-xs md:text-sm tabular-nums bg-gray-50/60 border-r border-gray-100 cursor-pointer select-none ${index === 0 ? 'border-b border-b-gray-200' : ''} text-gray-500`}
+                          title={`Opened ${v === 0 ? 'PK' : `${v > 0 ? '+' : ''}${v}`} (${openLine.openedOn})`}
                           onClick={() => setShowOpenedOn((x) => !x)}
                         >
                           {v === 0 ? 'PK' : `${v > 0 ? '+' : ''}${v}`}

@@ -306,8 +306,8 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
 
   // Opening spread (NFL + NCAAF) for the odds table's "Open" column, left of
   // the books. Opener = first consensus spread the app saw (game_line_openers,
-  // src/lib/lineOpeners.ts), rounded to the half point. Amber when the line
-  // has since moved 2+, crossed a key number (3, 7) or flipped favorites.
+  // src/lib/lineOpeners.ts), rounded to the half point. No conditional color
+  // (Tyler, 2026-09-27) — just the number.
   const [opener, setOpener] = useState<{ homeSpread: number; capturedAt: string } | null>(null);
   useEffect(() => {
     if (game.sport_key !== 'americanfootball_nfl' && !isNCAAF) return;
@@ -321,19 +321,8 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
     if (!opener) return null;
     const half = (v: number) => Math.round(v * 2) / 2;
     const open = half(opener.homeSpread);
-    const awayPts = (game.bookmakers ?? [])
-      .map((b) => b.markets.find((m) => m.key === 'spreads')?.outcomes.find((o) => o.name === game.away_team)?.point)
-      .filter((p): p is number => typeof p === 'number');
-    let moved = false;
-    if (awayPts.length) {
-      const cur = half(-(awayPts.reduce((a, b) => a + b, 0) / awayPts.length));
-      const flip = cur !== 0 && open !== 0 && Math.sign(cur) !== Math.sign(open);
-      const crossed = [3, 7].some((k) => Math.sign(Math.abs(open) - k) !== Math.sign(Math.abs(cur) - k));
-      moved = flip || crossed || Math.abs(Math.abs(cur) - Math.abs(open)) >= 2;
-    }
     return {
       homeSpread: open,
-      moved,
       openedOn: new Date(opener.capturedAt).toLocaleDateString(undefined, { weekday: 'short', month: 'numeric', day: 'numeric' }),
     };
   })();
