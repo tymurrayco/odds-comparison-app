@@ -26,8 +26,8 @@ interface OddsTableProps {
   homeLogo?: string;
   restData?: GameRestData | null;
   isLive?: boolean; // in-progress: drop books whose line has gone stale
-  // Opening spread (home perspective) for the "Open" column, spread view only
-  openLine?: { homeSpread: number; openedOn: string } | null;
+  // Open (pre-game) or Close (started) spread, home perspective — spread view only
+  openLine?: { kind: 'open' | 'close'; homeSpread: number; openedOn: string } | null;
 }
 
 interface OddsItem {
@@ -525,9 +525,11 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                 {marketKey === 'spreads' && openLine && (
                   <th
                     className="px-2 md:px-4 py-2 md:py-3 text-center text-xs font-medium text-gray-400 uppercase tracking-wider border-b border-r border-gray-100"
-                    title={`First consensus spread seen, ${openLine.openedOn}`}
+                    title={openLine.kind === 'close'
+                      ? 'Last consensus spread seen before kickoff'
+                      : `First consensus spread seen, ${openLine.openedOn}`}
                   >
-                    Open
+                    {openLine.kind === 'close' ? 'Close' : 'Open'}
                   </th>
                 )}
                 {activeBookmakers.map(book => (
@@ -591,8 +593,10 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                       return (
                         <td
                           className={`px-2 md:px-4 py-3 whitespace-nowrap text-center text-xs md:text-sm tabular-nums bg-gray-50/60 border-r border-gray-100 cursor-pointer select-none ${index === 0 ? 'border-b border-b-gray-200' : ''} text-gray-500`}
-                          title={`Opened ${v === 0 ? 'PK' : `${v > 0 ? '+' : ''}${v}`} (${openLine.openedOn})`}
-                          onClick={() => setShowOpenedOn((x) => !x)}
+                          title={openLine.kind === 'close'
+                            ? `Closed ${v === 0 ? 'PK' : `${v > 0 ? '+' : ''}${v}`}`
+                            : `Opened ${v === 0 ? 'PK' : `${v > 0 ? '+' : ''}${v}`} (${openLine.openedOn})`}
+                          onClick={() => openLine.kind === 'open' && setShowOpenedOn((x) => !x)}
                         >
                           {v === 0 ? 'PK' : `${v > 0 ? '+' : ''}${v}`}
                           {showOpenedOn && index === 1 && (

@@ -14,3 +14,8 @@ create table if not exists game_line_openers (
   captured_at timestamptz not null default now()
 );
 create index if not exists game_line_openers_sport_time on game_line_openers (sport_key, commence_time);
+
+-- 2026-09-27: closing line = last consensus seen before kickoff (Close column
+-- on started games). Rewritten on every pre-kickoff capture.
+alter table game_line_openers add column if not exists close_home_spread numeric;
+alter table game_line_openers add column if not exists close_seen_at timestamptz;

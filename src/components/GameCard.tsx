@@ -304,25 +304,30 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
   
   const impliedScores = calculateImpliedScores();
 
-  // Opening spread (NFL + NCAAF) for the odds table's "Open" column, left of
-  // the books. Opener = first consensus spread the app saw (game_line_openers,
-  // src/lib/lineOpeners.ts), rounded to the half point. No conditional color
-  // (Tyler, 2026-09-27) — just the number.
-  const [opener, setOpener] = useState<{ homeSpread: number; capturedAt: string } | null>(null);
+  // Open/close spread (NFL + NCAAF) for the odds table's first column, left of
+  // the books: the opener before kickoff, the close once the game has started
+  // (game_line_openers, src/lib/lineOpeners.ts), rounded to the half point. No
+  // conditional color (Tyler, 2026-09-27) — just the number.
+  const [opener, setOpener] = useState<{ homeSpread: number; capturedAt: string; closeHomeSpread: number | null } | null>(null);
   useEffect(() => {
     if (game.sport_key !== 'americanfootball_nfl' && !isNCAAF) return;
     let alive = true;
-    cachedJson<Record<string, { homeSpread: number; capturedAt: string }>>(`/api/line-openers?sport=${game.sport_key}`)
+    cachedJson<Record<string, { homeSpread: number; capturedAt: string; closeHomeSpread: number | null }>>(`/api/line-openers?sport=${game.sport_key}`)
       .then((m) => { if (alive) setOpener(m?.[game.id] ?? null); })
       .catch(() => {});
     return () => { alive = false; };
   }, [game.sport_key, game.id, isNCAAF]);
+  const gameStarted = now > gameDate;
   const openLine = (() => {
     if (!opener) return null;
     const half = (v: number) => Math.round(v * 2) / 2;
-    const open = half(opener.homeSpread);
+    if (gameStarted) {
+      if (opener.closeHomeSpread === null || opener.closeHomeSpread === undefined) return null;
+      return { kind: 'close' as const, homeSpread: half(opener.closeHomeSpread), openedOn: '' };
+    }
     return {
-      homeSpread: open,
+      kind: 'open' as const,
+      homeSpread: half(opener.homeSpread),
       openedOn: new Date(opener.capturedAt).toLocaleDateString(undefined, { weekday: 'short', month: 'numeric', day: 'numeric' }),
     };
   })();
@@ -599,7 +604,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                   {!isLive && !isCompleted && <span className="text-gray-400 hidden md:inline">•</span>}
                   {(isLive || isCompleted) && liveScore && <span className="text-gray-400">•</span>}
                   <span className="text-gray-600 flex items-center gap-0.5">
-                    <span className="text-gray-500">Implied:</span>
+                    <span className="text-gray-500">{gameStarted ? 'Proj:' : 'Implied:'}</span>
                     {impliedScores.awayWinning ? (
                       <>
                         <img 
