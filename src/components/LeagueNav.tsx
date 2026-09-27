@@ -68,8 +68,8 @@ export default function LeagueNav({
     'flex-none scroll-ml-2 snap-start px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors';
 
   return (
-    // Sticky: switching leagues never requires scrolling back to the top
-    <div className="sticky top-0 z-30 -mx-4 px-4 sm:mx-0 sm:px-0 mb-4">
+    // Scrolls with the page — the header above (logo, books, Bets) is the sticky bar
+    <div className="-mx-4 px-4 sm:mx-0 sm:px-0 mb-4">
       <div className="bg-white/95 backdrop-blur rounded-lg shadow-sm px-3 py-2 sm:px-4 sm:py-3">
         <div className="flex items-center gap-2">
           {/* Horizontally scrolling league strip with a fade at the right edge */}
