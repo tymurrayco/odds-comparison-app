@@ -1,7 +1,7 @@
 // src/app/api/odds/route.ts
 import { NextResponse } from 'next/server';
 import { recordCreditSnapshot } from '@/lib/creditUsage';
-import { ODDS_API_BOOKMAKERS } from '@/lib/api';
+import { ODDS_API_BOOKMAKERS, dropJuicedNovigSpreads } from '@/lib/api';
 import { captureLineOpeners } from '@/lib/lineOpeners';
 
 // Whitelist of sport keys we proxy to the Odds API. Anything else is rejected
@@ -53,7 +53,7 @@ export async function GET(request: Request) {
       return NextResponse.json([], { status: 200 });
     }
 
-    const data = await response.json();
+    const data = dropJuicedNovigSpreads(await response.json());
 
     // Extract rate limit headers
     const requestsRemaining = response.headers.get('x-requests-remaining');

@@ -134,6 +134,29 @@ export const ODDS_API_BOOKMAKERS = [
   'draftkings', 'fanduel', 'betmgm', 'betrivers', 'williamhill_us', 'betonlineag', 'novig', 'prophetx',
 ];
 
+// Novig posts spreads at whatever point has liquidity, so a side can sit at
+// -250 on a number nowhere near the market. Those aren't real spread lines —
+// drop Novig's spread market for a game when either side is juiced past -200,
+// before it reaches the cards, "Best", consensus averages or line openers.
+export const NOVIG_MAX_SPREAD_JUICE = -200;
+
+type OddsFeedGame = {
+  bookmakers?: Array<{ key: string; markets: Array<{ key: string; outcomes: Array<{ price: number }> }> }>;
+};
+
+export function dropJuicedNovigSpreads<T>(games: T): T {
+  if (!Array.isArray(games)) return games;
+  for (const g of games as OddsFeedGame[]) {
+    for (const b of g.bookmakers ?? []) {
+      if (b.key !== 'novig') continue;
+      b.markets = b.markets.filter(
+        (m) => !m.key.startsWith('spreads') || m.outcomes.every((o) => o.price >= NOVIG_MAX_SPREAD_JUICE)
+      );
+    }
+  }
+  return games;
+}
+
 // List of leagues with isActive flag
 export const LEAGUES = [
   { id: 'baseball_mlb', name: 'MLB', icon: '/league-icons/mlb.png', isActive: true },
