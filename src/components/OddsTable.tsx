@@ -26,6 +26,8 @@ interface OddsTableProps {
   homeLogo?: string;
   restData?: GameRestData | null;
   isLive?: boolean; // in-progress: drop books whose line has gone stale
+  // Opening spread (home perspective) for the "Open" column, spread view only
+  openLine?: { homeSpread: number; moved: boolean; openedOn: string } | null;
 }
 
 interface OddsItem {
@@ -155,9 +157,10 @@ function getTeamRestBadges(teamRest: TeamRestInfo, hasAdvantage: boolean, advant
   return null;
 }
 
-export default function OddsTable({ games, view = 'moneyline', league = 'basketball_nba', selectedBookmakers, awayLogo, homeLogo, restData, isLive = false }: OddsTableProps) {
+export default function OddsTable({ games, view = 'moneyline', league = 'basketball_nba', selectedBookmakers, awayLogo, homeLogo, restData, isLive = false, openLine = null }: OddsTableProps) {
   const pressTimer = useRef<NodeJS.Timeout | null>(null);
   const [isHolding, setIsHolding] = useState(false);
+  const [showOpenedOn, setShowOpenedOn] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   // ESPN logos for every team in the league — local /team-logos files use
   // abbreviated names ("northdakotastbison") that the odds-API names never
@@ -519,6 +522,14 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                 <th className="px-2 md:px-4 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-0 z-20 bg-gray-50 border-r border-b border-gray-100">
                   Team
                 </th>
+                {marketKey === 'spreads' && openLine && (
+                  <th
+                    className="px-2 md:px-4 py-2 md:py-3 text-center text-xs font-medium text-gray-400 uppercase tracking-wider border-b border-r border-gray-100"
+                    title={`First consensus spread seen, ${openLine.openedOn}`}
+                  >
+                    Open
+                  </th>
+                )}
                 {activeBookmakers.map(book => (
                   <th key={book} className="px-2 md:px-4 py-2 md:py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-100">
                     <img src={bookmakerLogos[book]} alt={book} className="h-6 mx-auto" />
@@ -574,7 +585,23 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                         <TeamLogoOrName srcs={logoSrcs} name={team} restBadge={restBadge} />
                       )}
                     </td>
-                    
+
+                    {marketKey === 'spreads' && openLine && (() => {
+                      const v = index === 0 ? -openLine.homeSpread : openLine.homeSpread;
+                      return (
+                        <td
+                          className={`px-2 md:px-4 py-3 whitespace-nowrap text-center text-xs md:text-sm tabular-nums bg-gray-50/60 border-r border-gray-100 cursor-pointer select-none ${index === 0 ? 'border-b border-b-gray-200' : ''} ${openLine.moved ? 'text-amber-600 font-semibold' : 'text-gray-500'}`}
+                          title={`Opened ${v === 0 ? 'PK' : `${v > 0 ? '+' : ''}${v}`} (${openLine.openedOn})${openLine.moved ? ' — line has moved a lot since' : ''}`}
+                          onClick={() => setShowOpenedOn((x) => !x)}
+                        >
+                          {v === 0 ? 'PK' : `${v > 0 ? '+' : ''}${v}`}
+                          {showOpenedOn && index === 1 && (
+                            <div className="text-[10px] font-normal text-gray-400">{openLine.openedOn}</div>
+                          )}
+                        </td>
+                      );
+                    })()}
+
                     {activeBookmakers.map(book => {
                       const bookieData = game.bookmakers.find(b => b.title === book);
                       

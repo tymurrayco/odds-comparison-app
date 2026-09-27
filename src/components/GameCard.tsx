@@ -304,13 +304,11 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
   
   const impliedScores = calculateImpliedScores();
 
-  // Line move since open (NFL + NCAAF): "[fav logo] −3.0 → −4.5", both from
-  // the current favorite's side. Opener = first consensus spread the app saw
-  // (game_line_openers, src/lib/lineOpeners.ts). Both lines round to the half
-  // point; hidden under a half-point move. Amber when the move is 2+, crosses
-  // a key number (3, 7) or flips the favorite. Tap shows the capture date.
+  // Opening spread (NFL + NCAAF) for the odds table's "Open" column, left of
+  // the books. Opener = first consensus spread the app saw (game_line_openers,
+  // src/lib/lineOpeners.ts), rounded to the half point. Amber when the line
+  // has since moved 2+, crossed a key number (3, 7) or flipped favorites.
   const [opener, setOpener] = useState<{ homeSpread: number; capturedAt: string } | null>(null);
-  const [showOpen, setShowOpen] = useState(false);
   useEffect(() => {
     if (game.sport_key !== 'americanfootball_nfl' && !isNCAAF) return;
     let alive = true;
@@ -319,50 +317,26 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
       .catch(() => {});
     return () => { alive = false; };
   }, [game.sport_key, game.id, isNCAAF]);
-  const lineMove = (() => {
+  const openLine = (() => {
     if (!opener) return null;
+    const half = (v: number) => Math.round(v * 2) / 2;
+    const open = half(opener.homeSpread);
     const awayPts = (game.bookmakers ?? [])
       .map((b) => b.markets.find((m) => m.key === 'spreads')?.outcomes.find((o) => o.name === game.away_team)?.point)
       .filter((p): p is number => typeof p === 'number');
-    if (!awayPts.length) return null;
-    const half = (v: number) => Math.round(v * 2) / 2;
-    const cur = half(-(awayPts.reduce((a, b) => a + b, 0) / awayPts.length));
-    const open = half(opener.homeSpread);
-    if (Math.abs(cur - open) < 0.5) return null;
-    const flip = cur !== 0 && open !== 0 && Math.sign(cur) !== Math.sign(open);
-    const move = Math.abs(cur) - Math.abs(open);
-    const crossed = !flip && [3, 7].some((k) => Math.sign(Math.abs(open) - k) !== Math.sign(Math.abs(cur) - k));
-    // Both numbers from the CURRENT favorite's side, so a flip reads "+1 → −2"
-    const favHome = cur < 0 || (cur === 0 && open > 0);
-    const fav = favHome ? game.home_team : game.away_team;
-    const side = (homeLine: number) => (favHome ? homeLine : -homeLine);
-    const fmt = (v: number) => (v === 0 ? 'PK' : `${v > 0 ? '+' : '−'}${Math.abs(v).toFixed(1)}`);
-    const openedOn = new Date(opener.capturedAt).toLocaleDateString(undefined, { weekday: 'short', month: 'numeric', day: 'numeric' });
+    let moved = false;
+    if (awayPts.length) {
+      const cur = half(-(awayPts.reduce((a, b) => a + b, 0) / awayPts.length));
+      const flip = cur !== 0 && open !== 0 && Math.sign(cur) !== Math.sign(open);
+      const crossed = [3, 7].some((k) => Math.sign(Math.abs(open) - k) !== Math.sign(Math.abs(cur) - k));
+      moved = flip || crossed || Math.abs(Math.abs(cur) - Math.abs(open)) >= 2;
+    }
     return {
-      logo: (favHome ? liveScore?.homeLogo : liveScore?.awayLogo) || getTeamLogo(fav),
-      open: fmt(side(open)),
-      now: fmt(side(cur)),
-      openedOn,
-      loud: flip || crossed || Math.abs(move) >= 2,
-      title: `${fav}: opened ${fmt(side(open))} (${openedOn}), now ${fmt(side(cur))}`,
+      homeSpread: open,
+      moved,
+      openedOn: new Date(opener.capturedAt).toLocaleDateString(undefined, { weekday: 'short', month: 'numeric', day: 'numeric' }),
     };
   })();
-  const renderLineMove = () => lineMove && !isCompleted && (
-    <button
-      type="button"
-      onClick={() => setShowOpen((v) => !v)}
-      title={lineMove.title}
-      aria-label={lineMove.title}
-      className="inline-flex items-center gap-1 text-xs md:text-sm tabular-nums text-gray-500 hover:text-gray-700"
-    >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={lineMove.logo} alt="" className="h-3.5 w-3.5 object-contain" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-      <span className="text-gray-400">{lineMove.open}</span>
-      <span className={lineMove.loud ? 'text-amber-500' : 'text-gray-300'}>→</span>
-      <span className={`font-semibold ${lineMove.loud ? 'text-amber-600' : 'text-gray-700'}`}>{lineMove.now}</span>
-      {showOpen && <span className="text-gray-400">· opened {lineMove.openedOn}</span>}
-    </button>
-  );
 
   // Ledger chip - value side's logo + Ledger spread from its perspective
   // ("+3.0"), colored by gap vs market; opens the Ledger tab. Rendered next
@@ -686,7 +660,6 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                 </div>
               )}
 
-              {renderLineMove()}
               {renderLedgerChip('hidden md:inline-flex')}
               {renderQbOut()}
             </div>
@@ -829,6 +802,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
           homeLogo={liveScore?.homeLogo}
           restData={restData}
           isLive={isLive}
+          openLine={openLine}
         />
       )}
     </div>
