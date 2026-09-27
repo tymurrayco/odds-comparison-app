@@ -637,7 +637,8 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                               } ${isHolding ? 'opacity-50' : ''}`}>
                                 {formatOdds(outcomeData.price)}
                                 {isBest && (
-                                  <span className="ml-1 inline-flex items-center px-1 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                  // Tucked into the cell's bottom padding (td is relative) — no extra row height
+                                  <span className="absolute bottom-px left-1/2 -translate-x-1/2 px-1 rounded-full text-[8px] leading-[11px] font-semibold uppercase tracking-wide bg-green-100 text-green-800 pointer-events-none">
                                     Best
                                   </span>
                                 )}
@@ -675,7 +676,8 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                               } ${isHolding ? 'opacity-50' : ''}`}>
                                 {outcomeData.point > 0 ? '+' : ''}{outcomeData.point} ({formatOdds(outcomeData.price)})
                                 {isBest && (
-                                  <span className="ml-1 inline-flex items-center px-1 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                  // Tucked into the cell's bottom padding (td is relative) — no extra row height
+                                  <span className="absolute bottom-px left-1/2 -translate-x-1/2 px-1 rounded-full text-[8px] leading-[11px] font-semibold uppercase tracking-wide bg-green-100 text-green-800 pointer-events-none">
                                     Best
                                   </span>
                                 )}
@@ -716,7 +718,8 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                               } ${isHolding ? 'opacity-50' : ''}`}>
                                 {index === 0 ? 'O' : 'U'} {outcomeData.point} ({formatOdds(outcomeData.price)})
                                 {isBest && (
-                                  <span className="ml-1 inline-flex items-center px-1 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                  // Tucked into the cell's bottom padding (td is relative) — no extra row height
+                                  <span className="absolute bottom-px left-1/2 -translate-x-1/2 px-1 rounded-full text-[8px] leading-[11px] font-semibold uppercase tracking-wide bg-green-100 text-green-800 pointer-events-none">
                                     Best
                                   </span>
                                 )}
