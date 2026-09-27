@@ -638,7 +638,7 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                                 {formatOdds(outcomeData.price)}
                                 {isBest && (
                                   // Tucked into the cell's bottom padding (td is relative) — no extra row height
-                                  <span className="absolute bottom-px left-1/2 -translate-x-1/2 px-1 rounded-full text-[8px] leading-[11px] font-semibold uppercase tracking-wide bg-green-100 text-green-800 pointer-events-none">
+                                  <span className="absolute bottom-[6px] left-1/2 -translate-x-1/2 px-1 rounded-full text-[8px] leading-[11px] font-semibold uppercase tracking-wide bg-green-100 text-green-800 pointer-events-none">
                                     Best
                                   </span>
                                 )}
@@ -677,7 +677,7 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                                 {outcomeData.point > 0 ? '+' : ''}{outcomeData.point} ({formatOdds(outcomeData.price)})
                                 {isBest && (
                                   // Tucked into the cell's bottom padding (td is relative) — no extra row height
-                                  <span className="absolute bottom-px left-1/2 -translate-x-1/2 px-1 rounded-full text-[8px] leading-[11px] font-semibold uppercase tracking-wide bg-green-100 text-green-800 pointer-events-none">
+                                  <span className="absolute bottom-[6px] left-1/2 -translate-x-1/2 px-1 rounded-full text-[8px] leading-[11px] font-semibold uppercase tracking-wide bg-green-100 text-green-800 pointer-events-none">
                                     Best
                                   </span>
                                 )}
@@ -719,7 +719,7 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                                 {index === 0 ? 'O' : 'U'} {outcomeData.point} ({formatOdds(outcomeData.price)})
                                 {isBest && (
                                   // Tucked into the cell's bottom padding (td is relative) — no extra row height
-                                  <span className="absolute bottom-px left-1/2 -translate-x-1/2 px-1 rounded-full text-[8px] leading-[11px] font-semibold uppercase tracking-wide bg-green-100 text-green-800 pointer-events-none">
+                                  <span className="absolute bottom-[6px] left-1/2 -translate-x-1/2 px-1 rounded-full text-[8px] leading-[11px] font-semibold uppercase tracking-wide bg-green-100 text-green-800 pointer-events-none">
                                     Best
                                   </span>
                                 )}
