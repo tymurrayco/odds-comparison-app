@@ -31,8 +31,8 @@ const LEAGUES: Record<string, LeagueConfig> = {
   nfl: {
     site: 'https://site.api.espn.com/apis/site/v2/sports/football/nfl',
     core: 'https://sports.core.api.espn.com/v2/sports/football/leagues/nfl',
-    // NFL preseason games are bettable and on the odds board — include them.
-    seasonTypes: [['preseason', 1], ['regular', 2], ['postseason', 3]],
+    // Preseason left off the team-page schedule (Tyler, 2026-09-27)
+    seasonTypes: [['regular', 2], ['postseason', 3]],
   },
 };
 
