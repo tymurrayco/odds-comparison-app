@@ -28,6 +28,42 @@ function fatigueOf(r: { isB2B: boolean; is4in6: boolean; is3in4: boolean; restDa
   return null;
 }
 
+// No reports until a month into the regular season (Tyler, 2026-09-27):
+// rest data is noisy early on and preseason games aren't worth posting.
+// Playoffs stay on. The opener comes from ESPN each season: the regular-season
+// window start (core API), then the first day with a season-type-2 game.
+const START_DELAY_DAYS = 30;
+
+const addDays = (ymd: string, n: number) => {
+  const d = new Date(`${ymd}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().substring(0, 10);
+};
+
+async function reportsStartDate(today: string): Promise<string | null> {
+  // NHL seasons are named by their ending year (2026-27 = 2027)
+  const [y, m] = today.split('-').map(Number);
+  const seasonYear = m >= 7 ? y + 1 : y;
+  const typeRes = await fetch(
+    `https://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/seasons/${seasonYear}/types/2`,
+    { next: { revalidate: 86400 } }
+  );
+  if (!typeRes.ok) return null;
+  const windowStart: string | undefined = (await typeRes.json())?.startDate?.substring(0, 10);
+  if (!windowStart) return null;
+  for (let i = 0; i < 21; i++) {
+    const day = addDays(windowStart, i);
+    const res = await fetch(
+      `https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard?dates=${day.replace(/-/g, '')}`,
+      { next: { revalidate: 86400 } }
+    );
+    if (!res.ok) continue;
+    const events: Array<{ season?: { type?: number } }> = (await res.json())?.events ?? [];
+    if (events.some((e) => e.season?.type === 2)) return addDays(day, START_DELAY_DAYS);
+  }
+  return null;
+}
+
 async function buildAndSend(manual: boolean) {
   const webhook = process.env.DISCORD_WEBHOOK_URL_NHL || process.env.DISCORD_WEBHOOK_URL;
   if (!webhook) {
@@ -38,6 +74,17 @@ async function buildAndSend(manual: boolean) {
   }
 
   const today = nhlToday();
+  const startsOn = await reportsStartDate(today);
+  if (!startsOn || today < startsOn) {
+    return NextResponse.json({
+      success: true,
+      posted: false,
+      reason: startsOn
+        ? `rest reports start ${startsOn} (a month into the regular season)`
+        : 'regular-season start not found — reports held',
+    });
+  }
+
   const games = (await getNHLRestData()).filter(g => g.gameDate === today);
 
   // Only games where exactly one side carries a fatigue flag — a mismatch.
