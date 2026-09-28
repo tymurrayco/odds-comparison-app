@@ -2,7 +2,7 @@
 //
 // GET /api/line-openers/capture — daily cron (vercel.json). /api/odds already
 // records openers whenever someone loads a football board; this catches games
-// posted while nobody is looking. Spreads only: 1 credit per sport.
+// posted while nobody is looking. Spreads + totals: 2 credits per sport.
 
 import { NextResponse } from 'next/server';
 import { ODDS_API_BOOKMAKERS, dropJuicedNovigSpreads } from '@/lib/api';
@@ -19,7 +19,7 @@ export async function GET() {
   for (const sport of LINE_OPENER_SPORTS) {
     try {
       const res = await fetch(
-        `https://api.the-odds-api.com/v4/sports/${sport}/odds/?apiKey=${apiKey}&bookmakers=${ODDS_API_BOOKMAKERS.join(',')}&markets=spreads&oddsFormat=american`,
+        `https://api.the-odds-api.com/v4/sports/${sport}/odds/?apiKey=${apiKey}&bookmakers=${ODDS_API_BOOKMAKERS.join(',')}&markets=spreads,totals&oddsFormat=american`,
         { cache: 'no-store' }
       );
       if (!res.ok) { report[sport] = `HTTP ${res.status}`; continue; }

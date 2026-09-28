@@ -19,3 +19,8 @@ create index if not exists game_line_openers_sport_time on game_line_openers (sp
 -- on started games). Rewritten on every pre-kickoff capture.
 alter table game_line_openers add column if not exists close_home_spread numeric;
 alter table game_line_openers add column if not exists close_seen_at timestamptz;
+
+-- 2026-09-28: consensus totals (average Over point) — opener kept, close
+-- rewritten on every pre-kickoff capture, like the spread columns.
+alter table game_line_openers add column if not exists open_total numeric;
+alter table game_line_openers add column if not exists close_total numeric;

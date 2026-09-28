@@ -26,8 +26,9 @@ interface OddsTableProps {
   homeLogo?: string;
   restData?: GameRestData | null;
   isLive?: boolean; // in-progress: drop books whose line has gone stale
-  // Open (pre-game) or Close (started) spread, home perspective — spread view only
-  openLine?: { kind: 'open' | 'close'; homeSpread: number; openedOn: string } | null;
+  // Open (pre-game) or Close (started) line: spread (home perspective) in the
+  // spread view, total in the O/U view
+  openLine?: { kind: 'open' | 'close'; homeSpread: number | null; total: number | null; openedOn: string } | null;
 }
 
 interface OddsItem {
@@ -306,6 +307,11 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
   const marketKey = view === 'moneyline' ? 'h2h' : 
                    view === 'spread' ? 'spreads' : 
                    view === 'spreads_h1' ? 'spreads_h1' : 'totals';
+  // Open/Close column: spread view needs a spread line, O/U view a total
+  const openLineShown =
+    !!openLine &&
+    ((marketKey === 'spreads' && openLine.homeSpread !== null) ||
+      (marketKey === 'totals' && openLine.total !== null));
 
   return (
     <div className="overflow-x-auto">
@@ -522,12 +528,12 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                 <th className="px-2 md:px-4 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-0 z-20 bg-gray-50 border-r border-b border-gray-100">
                   Team
                 </th>
-                {marketKey === 'spreads' && openLine && (
+                {openLineShown && openLine && (
                   <th
                     className="px-2 md:px-4 py-2 md:py-3 text-center text-xs font-medium text-gray-400 uppercase tracking-wider border-b border-r border-gray-100"
                     title={openLine.kind === 'close'
-                      ? 'Last consensus spread seen before kickoff'
-                      : `First consensus spread seen, ${openLine.openedOn}`}
+                      ? `Last consensus ${marketKey === 'totals' ? 'total' : 'spread'} seen before kickoff`
+                      : `First consensus ${marketKey === 'totals' ? 'total' : 'spread'} seen, ${openLine.openedOn}`}
                   >
                     {openLine.kind === 'close' ? 'Close' : 'Open'}
                   </th>
@@ -588,17 +594,19 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                       )}
                     </td>
 
-                    {marketKey === 'spreads' && openLine && (() => {
-                      const v = index === 0 ? -openLine.homeSpread : openLine.homeSpread;
+                    {openLineShown && openLine && (() => {
+                      // Spread from this row's team side; total as O/U by row
+                      const fmtSpread = (v: number) => (v === 0 ? 'PK' : `${v > 0 ? '+' : ''}${v}`);
+                      const text = marketKey === 'totals'
+                        ? `${index === 0 ? 'O' : 'U'} ${openLine.total}`
+                        : fmtSpread(index === 0 ? -openLine.homeSpread! : openLine.homeSpread!);
                       return (
                         <td
                           className={`px-2 md:px-4 py-3 whitespace-nowrap text-center text-xs md:text-sm tabular-nums bg-gray-50/60 border-r border-gray-100 cursor-pointer select-none ${index === 0 ? 'border-b border-b-gray-200' : ''} text-gray-500`}
-                          title={openLine.kind === 'close'
-                            ? `Closed ${v === 0 ? 'PK' : `${v > 0 ? '+' : ''}${v}`}`
-                            : `Opened ${v === 0 ? 'PK' : `${v > 0 ? '+' : ''}${v}`} (${openLine.openedOn})`}
+                          title={openLine.kind === 'close' ? `Closed ${text}` : `Opened ${text} (${openLine.openedOn})`}
                           onClick={() => openLine.kind === 'open' && setShowOpenedOn((x) => !x)}
                         >
-                          {v === 0 ? 'PK' : `${v > 0 ? '+' : ''}${v}`}
+                          {text}
                           {showOpenedOn && index === 1 && (
                             <div className="text-[10px] font-normal text-gray-400">{openLine.openedOn}</div>
                           )}

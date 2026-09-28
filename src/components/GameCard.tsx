@@ -310,15 +310,15 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
   const homeLeads = Number(liveScore?.homeScore) > Number(liveScore?.awayScore);
   const [liveLeft, liveRight] = homeLeads ? [homeSide, awaySide] : [awaySide, homeSide];
 
-  // Open/close spread (NFL + NCAAF) for the odds table's first column, left of
+  // Open/close spread + total (NFL + NCAAF) for the odds table's first column, left of
   // the books: the opener before kickoff, the close once the game has started
   // (game_line_openers, src/lib/lineOpeners.ts), rounded to the half point. No
   // conditional color (Tyler, 2026-09-27) — just the number.
-  const [opener, setOpener] = useState<{ homeSpread: number; capturedAt: string; closeHomeSpread: number | null } | null>(null);
+  const [opener, setOpener] = useState<{ homeSpread: number; capturedAt: string; closeHomeSpread: number | null; openTotal?: number | null; closeTotal?: number | null } | null>(null);
   useEffect(() => {
     if (game.sport_key !== 'americanfootball_nfl' && !isNCAAF) return;
     let alive = true;
-    cachedJson<Record<string, { homeSpread: number; capturedAt: string; closeHomeSpread: number | null }>>(`/api/line-openers?sport=${game.sport_key}`)
+    cachedJson<Record<string, { homeSpread: number; capturedAt: string; closeHomeSpread: number | null; openTotal?: number | null; closeTotal?: number | null }>>(`/api/line-openers?sport=${game.sport_key}`)
       .then((m) => { if (alive) setOpener(m?.[game.id] ?? null); })
       .catch(() => {});
     return () => { alive = false; };
@@ -327,13 +327,17 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
   const openLine = (() => {
     if (!opener) return null;
     const half = (v: number) => Math.round(v * 2) / 2;
+    const h = (v: number | null | undefined) => (v === null || v === undefined ? null : half(v));
     if (gameStarted) {
-      if (opener.closeHomeSpread === null || opener.closeHomeSpread === undefined) return null;
-      return { kind: 'close' as const, homeSpread: half(opener.closeHomeSpread), openedOn: '' };
+      const homeSpread = h(opener.closeHomeSpread);
+      const total = h(opener.closeTotal);
+      if (homeSpread === null && total === null) return null;
+      return { kind: 'close' as const, homeSpread, total, openedOn: '' };
     }
     return {
       kind: 'open' as const,
       homeSpread: half(opener.homeSpread),
+      total: h(opener.openTotal),
       openedOn: new Date(opener.capturedAt).toLocaleDateString(undefined, { weekday: 'short', month: 'numeric', day: 'numeric' }),
     };
   })();
