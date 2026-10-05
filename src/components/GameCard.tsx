@@ -352,8 +352,9 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
   })();
 
   // Ledger chip - value side's logo + Ledger spread from its perspective
-  // ("+3.0"), colored by gap vs market; opens the Ledger tab. Rendered next
-  // to the implied score on desktop, in the button row on mobile.
+  // ("+3.0"), colored by gap vs market; opens the Ledger tab. Rendered right
+  // after the implied/proj score on every breakpoint (was the button row on
+  // mobile until 2026-10-04).
   // Starting QB out/doubtful (NFL) - the usual reason the Ledger (which
   // doesn't know about injuries) sits far from the market.
   const [qbOut, setQbOut] = useState<{ away: InjuryEntry | null; home: InjuryEntry | null }>({ away: null, home: null });
@@ -380,7 +381,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
             setNflPanel('injuries');
             setExpandedMarket('analysis');
           }}
-          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-700 hover:bg-red-200"
+          className="inline-flex items-center gap-1 px-1.5 py-1 rounded-md text-xs font-semibold bg-red-100 text-red-700 hover:bg-red-200"
           title={`Starting QB ${qb.name}: ${qb.status}${qb.comment ? ` - ${qb.comment}` : ''}`}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -670,11 +671,14 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                       </>
                     )}
                   </span>
+                  {/* Ledger chip glued to the implied/proj score (both breakpoints)
+                      so the two wrap as one unit on narrow phones */}
+                  {renderLedgerChip('inline-flex ml-1')}
                 </div>
               )}
 
-              {renderLedgerChip('hidden md:inline-flex')}
-              {renderQbOut()}
+              {/* No implied score (no books yet): chip stands on its own */}
+              {!impliedScores && renderLedgerChip('inline-flex')}
             </div>
 
             {/* Venue detail — expanded by the Neutral badge */}
@@ -699,8 +703,9 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
             )}
           </div>
 
-          {/* Market toggle buttons */}
-          <div className="flex space-x-1 md:space-x-2">
+          {/* Market toggle buttons (+ NFL injury icon and starting-QB-out chip;
+              wraps so two QB chips never overflow a phone) */}
+          <div className="flex flex-wrap items-center gap-1 md:gap-2">
             <button 
               className={`px-2 md:px-3 py-1 text-xs md:text-sm rounded-md ${
                 expandedMarket === 'spread' 
@@ -744,7 +749,6 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                 📊
               </button>
             )}
-            {renderLedgerChip('inline-flex md:hidden')}
             {/* Injury report button - only for NFL */}
             {isNFL && (
               <button
@@ -762,6 +766,8 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                 🏥
               </button>
             )}
+            {/* Starting QB out/doubtful — sits right of the injury icon it opens */}
+            {renderQbOut()}
           </div>
         </div>
       </div>
