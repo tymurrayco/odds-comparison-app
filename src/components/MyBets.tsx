@@ -537,9 +537,9 @@ export default function MyBets({ yearFilter = 'all', onYearsLoaded }: MyBetsProp
       sort: d.getTime(),
     };
   };
-  // Newest week first. When the bets span more than one season the label
-  // carries the year ("2025 Super Bowl" under "2026 Wk 5") so the seasons
-  // don't read as one run.
+  // Oldest week first (Wk 1 at the top, Tyler's call 2026-10-05). When the
+  // bets span more than one season the label carries the year ("2025 Super
+  // Bowl" above "2026 Wk 1") so the seasons don't read as one run.
   const weekRows = (bets: Bet[]) => {
     const groups = new Map<string, { label: string; season: number; sort: number; bets: Bet[] }>();
     for (const b of bets) {
@@ -551,7 +551,7 @@ export default function MyBets({ yearFilter = 'all', onYearsLoaded }: MyBetsProp
     }
     const multiSeason = new Set([...groups.values()].map((g) => g.season)).size > 1;
     return [...groups.values()]
-      .sort((a, b) => b.sort - a.sort)
+      .sort((a, b) => a.sort - b.sort)
       .map((g) => ({ label: multiSeason ? `${g.season} ${g.label}` : g.label, stats: getBetStats(g.bets) }));
   };
   // Which NCAAF split (FBS / FCS / ...) is open to its weeks
