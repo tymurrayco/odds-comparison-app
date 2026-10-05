@@ -7,7 +7,8 @@ import { Game, BOOKMAKERS } from '@/lib/api';
 import { formatOdds } from '@/lib/utils';
 import { createBet } from '@/lib/betService';
 import { GameRestData, TeamRestInfo } from '@/lib/nhlRest';
-import { resolveDeepLink, fillLinkTemplate, promptForState, openBetLink, appLinkHref } from '@/lib/betLinks';
+import { resolveDeepLink, fillLinkTemplate, promptForState, openBetLink, appLinkHref, logClickBeacon } from '@/lib/betLinks';
+import { goUrl } from '@/lib/books';
 import { useTeamColorMap, teamInfoFromMap } from '@/lib/myGameBets';
 
 // Sport keys whose team cells link to /team/[league]/[name] pages
@@ -160,6 +161,9 @@ function getTeamRestBadges(teamRest: TeamRestInfo, hasAdvantage: boolean, advant
 
 export default function OddsTable({ games, view = 'moneyline', league = 'basketball_nba', selectedBookmakers, awayLogo, homeLogo, restData, isLive = false, openLine = null }: OddsTableProps) {
   const pressTimer = useRef<NodeJS.Timeout | null>(null);
+  // A completed press-and-hold still fires a click on release — swallow that
+  // one so logging a bet doesn't also open the book.
+  const holdCompleted = useRef(false);
   const [isHolding, setIsHolding] = useState(false);
   const [showOpenedOn, setShowOpenedOn] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -183,33 +187,56 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
     setTimeout(() => setToast(null), 3000);
   };
 
-  // Handle click on odds with deep link - open sportsbook betslip.
-  // BetMGM/BetRivers links are templates needing the user's state — resolved
-  // from localStorage, prompted once on first use.
-  const handleDeepLinkClick = (link: string | undefined, e: React.MouseEvent) => {
+  // What a click on a book cell is about — carried on the /go URL for logging.
+  type ClickContext = { game: Game; market: string; outcome: string };
+  const goParams = (book: string, ctx: ClickContext) => ({
+    book,
+    sport: ctx.game.sport_key,
+    game: ctx.game.id,
+    market: ctx.market,
+    outcome: ctx.outcome,
+  });
+
+  // Click on any priced book cell → /go/[book] click-out (logged, 302). With a
+  // deep link it lands on the betslip; without one (BetOnline, or a book that
+  // sent no link) on the book's home/affiliate page. BetMGM/BetRivers links
+  // are templates needing the user's state — resolved from localStorage,
+  // prompted once on first use; cancelling the prompt does nothing.
+  const handleBookClick = (book: string, link: string | undefined, e: React.MouseEvent, ctx: ClickContext) => {
+    // Tap landed on the app-link overlay: let the native anchor navigate
+    if ((e.target as HTMLElement).closest?.('a[data-app-link]')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (holdCompleted.current) {
+      holdCompleted.current = false;
+      return;
+    }
+    let resolved: string | undefined;
     if (link) {
-      // Tap landed on the app-link overlay: let the native anchor navigate
-      if ((e.target as HTMLElement).closest?.('a[data-app-link]')) return;
-      e.preventDefault();
-      e.stopPropagation();
-      let resolved = resolveDeepLink(link);
-      if (!resolved) {
+      const r = resolveDeepLink(link);
+      if (r) {
+        resolved = r;
+      } else {
         const state = promptForState();
         if (!state) return;
         resolved = fillLinkTemplate(link, state);
       }
-      openBetLink(resolved);
     }
+    openBetLink(goUrl({ ...goParams(book, ctx), to: resolved }), resolved);
   };
 
   // App-link books (ProphetX) on phones: an invisible real <a> over the cell,
   // since iOS only opens the app from a genuine link tap. Callout off so the
   // press-and-hold bet logger still works.
-  const renderAppLink = (link: string | undefined, enabled: boolean) => {
-    const href = enabled ? appLinkHref(link) : null;
+  // The anchor points STRAIGHT at the app link (iOS won't open the app from a
+  // 302 landing on a universal link), so the click is logged with a beacon
+  // POST to /go instead of going through the redirect.
+  const renderAppLink = (book: string, link: string | undefined, ctx: ClickContext) => {
+    const href = appLinkHref(link);
     return href ? (
       <a
         href={href}
+        onClick={() => logClickBeacon(goUrl({ ...goParams(book, ctx), to: href }))}
         data-app-link
         aria-label="Open in app"
         className="absolute inset-0"
@@ -217,9 +244,6 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
       />
     ) : null;
   };
-
-  // Bookmakers that support deep linking
-  const deepLinkBookmakers = ['FanDuel', 'DraftKings', 'Caesars', 'Kalshi', 'BetMGM', 'BetRivers', 'Novig', 'ProphetX'];
 
   // Handle press-and-hold to create bet
   const handlePressStart = (
@@ -233,6 +257,7 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
   ) => {
     setIsHolding(true);
     pressTimer.current = setTimeout(async () => {
+      holdCompleted.current = true;
       // Calculate stake for 1 unit to-win
       const stake = calculateStakeForOneUnit(odds);
       
@@ -288,6 +313,12 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
       clearTimeout(pressTimer.current);
     }
     setIsHolding(false);
+    // Desktop: the release after a completed hold fires a click within a few
+    // ms, which handleBookClick swallows. Touch: a long press fires NO click,
+    // so clear the guard shortly after release or the next tap would be eaten.
+    if (holdCompleted.current) {
+      setTimeout(() => { holdCompleted.current = false; }, 400);
+    }
   };
 
   // Bookmaker logos mapping with type annotation
@@ -619,30 +650,28 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                       
                       // Check if this is one of the best bookmakers for this team
                       const isBest = bestBookmakersByTeam[team]?.includes(book) || false;
-                      
-                      // Check if this bookmaker supports deep linking
-                      const hasDeepLink = deepLinkBookmakers.includes(book);
-                      
+
                       if (marketKey === 'h2h') {
                         const marketData = bookieData?.markets.find(m => m.key === 'h2h');
                         const outcomeData = marketData?.outcomes.find(o => o.name === team);
                         const deepLink = outcomeData?.link;
-                        
+                        const ctx: ClickContext = { game, market: marketKey, outcome: team };
+
                         return (
-                          <td 
-                            key={book} 
-                            className={`relative px-2 md:px-4 py-3 whitespace-nowrap text-center cursor-pointer select-none ${index === 0 ? 'border-b border-gray-200' : ''} ${hasDeepLink && deepLink ? 'hover:bg-blue-50' : ''}`}
-                            onTouchStart={() => outcomeData && 
+                          <td
+                            key={book}
+                            className={`relative px-2 md:px-4 py-3 whitespace-nowrap text-center cursor-pointer select-none ${index === 0 ? 'border-b border-gray-200' : ''} ${outcomeData ? 'hover:bg-blue-50' : ''}`}
+                            onTouchStart={() => outcomeData &&
                               handlePressStart(game, team, outcomeData.price, book, 'moneyline')}
                             onTouchEnd={handlePressEnd}
                             onTouchMove={handlePressEnd}
-                            onMouseDown={() => outcomeData && 
+                            onMouseDown={() => outcomeData &&
                               handlePressStart(game, team, outcomeData.price, book, 'moneyline')}
                             onMouseUp={handlePressEnd}
                             onMouseLeave={handlePressEnd}
-                            onClick={(e) => hasDeepLink && handleDeepLinkClick(deepLink, e)}
+                            onClick={(e) => outcomeData && handleBookClick(book, deepLink, e, ctx)}
                           >
-                            {renderAppLink(deepLink, hasDeepLink)}
+                            {outcomeData && renderAppLink(book, deepLink, ctx)}
                             {outcomeData ? (
                               <div className={`text-xs md:text-sm font-medium ${
                                 isBest ? 'text-green-600 font-bold' : 'text-gray-900'
@@ -666,22 +695,28 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                         const marketData = bookieData?.markets.find(m => m.key === marketKey);
                         const outcomeData = marketData?.outcomes.find(o => o.name === team);
                         const deepLink = outcomeData?.link;
-                        
+                        const priced = !!outcomeData && typeof outcomeData.point !== 'undefined';
+                        const ctx: ClickContext = {
+                          game,
+                          market: marketKey,
+                          outcome: priced ? `${team} ${(outcomeData?.point ?? 0) > 0 ? '+' : ''}${outcomeData?.point}` : team,
+                        };
+
                         return (
-                          <td 
-                            key={book} 
-                            className={`relative px-2 md:px-4 py-3 whitespace-nowrap text-center cursor-pointer select-none ${index === 0 ? 'border-b border-gray-200' : ''} ${hasDeepLink && deepLink ? 'hover:bg-blue-50' : ''}`}
-                            onTouchStart={() => outcomeData && typeof outcomeData.point !== 'undefined' && 
+                          <td
+                            key={book}
+                            className={`relative px-2 md:px-4 py-3 whitespace-nowrap text-center cursor-pointer select-none ${index === 0 ? 'border-b border-gray-200' : ''} ${priced ? 'hover:bg-blue-50' : ''}`}
+                            onTouchStart={() => outcomeData && typeof outcomeData.point !== 'undefined' &&
                               handlePressStart(game, team, outcomeData.price, book, 'spread', outcomeData.point)}
                             onTouchEnd={handlePressEnd}
                             onTouchMove={handlePressEnd}
-                            onMouseDown={() => outcomeData && typeof outcomeData.point !== 'undefined' && 
+                            onMouseDown={() => outcomeData && typeof outcomeData.point !== 'undefined' &&
                               handlePressStart(game, team, outcomeData.price, book, 'spread', outcomeData.point)}
                             onMouseUp={handlePressEnd}
                             onMouseLeave={handlePressEnd}
-                            onClick={(e) => hasDeepLink && handleDeepLinkClick(deepLink, e)}
+                            onClick={(e) => priced && handleBookClick(book, deepLink, e, ctx)}
                           >
-                            {renderAppLink(deepLink, hasDeepLink)}
+                            {priced && renderAppLink(book, deepLink, ctx)}
                             {outcomeData && typeof outcomeData.point !== 'undefined' ? (
                               <div className={`text-xs md:text-sm ${
                                 isBest ? 'text-green-600 font-bold' : 'text-gray-900'
@@ -708,22 +743,28 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                           (index === 0 && o.name === 'Over') || (index === 1 && o.name === 'Under')
                         );
                         const deepLink = outcomeData?.link;
-                        
+                        const priced = !!outcomeData && typeof outcomeData.point !== 'undefined';
+                        const ctx: ClickContext = {
+                          game,
+                          market: marketKey,
+                          outcome: priced ? `${totalType} ${outcomeData?.point}` : totalType,
+                        };
+
                         return (
-                          <td 
-                            key={book} 
-                            className={`relative px-2 md:px-4 py-3 whitespace-nowrap text-center cursor-pointer select-none ${index === 0 ? 'border-b border-gray-200' : ''} ${hasDeepLink && deepLink ? 'hover:bg-blue-50' : ''}`}
-                            onTouchStart={() => outcomeData && typeof outcomeData.point !== 'undefined' && 
+                          <td
+                            key={book}
+                            className={`relative px-2 md:px-4 py-3 whitespace-nowrap text-center cursor-pointer select-none ${index === 0 ? 'border-b border-gray-200' : ''} ${priced ? 'hover:bg-blue-50' : ''}`}
+                            onTouchStart={() => outcomeData && typeof outcomeData.point !== 'undefined' &&
                               handlePressStart(game, team, outcomeData.price, book, 'total', outcomeData.point, totalType)}
                             onTouchEnd={handlePressEnd}
                             onTouchMove={handlePressEnd}
-                            onMouseDown={() => outcomeData && typeof outcomeData.point !== 'undefined' && 
+                            onMouseDown={() => outcomeData && typeof outcomeData.point !== 'undefined' &&
                               handlePressStart(game, team, outcomeData.price, book, 'total', outcomeData.point, totalType)}
                             onMouseUp={handlePressEnd}
                             onMouseLeave={handlePressEnd}
-                            onClick={(e) => hasDeepLink && handleDeepLinkClick(deepLink, e)}
+                            onClick={(e) => priced && handleBookClick(book, deepLink, e, ctx)}
                           >
-                            {renderAppLink(deepLink, hasDeepLink)}
+                            {priced && renderAppLink(book, deepLink, ctx)}
                             {outcomeData && typeof outcomeData.point !== 'undefined' ? (
                               <div className={`text-xs md:text-sm ${
                                 isBest ? 'text-green-600 font-bold' : 'text-gray-900'

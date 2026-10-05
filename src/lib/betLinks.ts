@@ -75,9 +75,30 @@ export function isMobileDevice(): boolean {
 
 // On phones an app-link book needs a REAL <a> tap (see appLinkHref) — iOS
 // ignores JS navigations to universal links. This is the fallback path.
-export function openBetLink(url: string): void {
-  if (isAppLinkUrl(url) && isMobileDevice()) window.location.href = url;
-  else window.open(url, '_blank');
+// `goHref` is the /go/[book] click-out (logs, then 302s to the book);
+// `destination` is where it ends up. iOS does NOT open an app from a 302 that
+// lands on a universal link, so app-link books on phones navigate straight to
+// the destination and the click is logged with a beacon instead.
+export function openBetLink(goHref: string, destination?: string): void {
+  if (destination && isAppLinkUrl(destination) && isMobileDevice()) {
+    logClickBeacon(goHref);
+    window.location.href = destination;
+  } else {
+    window.open(goHref, '_blank', 'noopener,noreferrer');
+  }
+}
+
+/** Log a click-out without navigating through it: POST /go/[book]?... (204, no redirect). */
+export function logClickBeacon(goHref: string): void {
+  try {
+    if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
+      navigator.sendBeacon(goHref);
+    } else {
+      fetch(goHref, { method: 'POST', keepalive: true }).catch(() => {});
+    }
+  } catch {
+    /* logging is best-effort */
+  }
 }
 
 /** Href for a real-anchor overlay when this link should open a native app, else null. */

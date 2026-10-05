@@ -3,6 +3,7 @@
 
 import { FuturesMarket, BOOKMAKERS } from '@/lib/api';
 import { createBet } from '@/lib/betService';
+import { goUrl } from '@/lib/books';
 import {
   usePendingFutureBets,
   useTeamColorMap,
@@ -326,19 +327,28 @@ export default function FuturesTable({
       clearTimeout(pressTimer.current);
     }
     setHoldingKey(null);
+    // Touch long-presses fire no click, so the guard set by a completed hold
+    // must clear on its own or the next tap on any cell would be swallowed.
+    if (holdCompleted.current) {
+      setTimeout(() => { holdCompleted.current = false; }, 400);
+    }
   };
 
-  // Quick click opens the bookmaker's market page (currently Kalshi only);
-  // press-and-hold still creates a tracked bet without navigating
-  const handleCellClick = (links: { [bookmaker: string]: string } | undefined, book: string) => {
+  // Quick click goes through /go/[book] (logged click-out): to the book's
+  // market page when it sent one (currently Kalshi only), else the book's
+  // home/affiliate page. Press-and-hold still creates a tracked bet without
+  // navigating.
+  const handleCellClick = (links: { [bookmaker: string]: string } | undefined, book: string, team: string) => {
     if (holdCompleted.current) {
       holdCompleted.current = false;
       return;
     }
     const link = links?.[book];
-    if (link) {
-      window.open(link, '_blank', 'noopener,noreferrer');
-    }
+    window.open(
+      goUrl({ book, to: link, sport: league, market: 'futures', outcome: team }),
+      '_blank',
+      'noopener,noreferrer'
+    );
   };
 
   // Function to get last name from full name
@@ -668,8 +678,8 @@ export default function FuturesTable({
                         onMouseDown={() => hasOdds && handlePressStart(item.team, item.odds[book], book, cellKey)}
                         onMouseUp={handlePressEnd}
                         onMouseLeave={handlePressEnd}
-                        onClick={() => hasOdds && handleCellClick(item.links, book)}
-                        title={hasOdds ? (item.links?.[book] ? `Click to view on ${book} — hold to track bet` : 'Hold to track bet') : undefined}
+                        onClick={() => hasOdds && handleCellClick(item.links, book, item.team)}
+                        title={hasOdds ? (item.links?.[book] ? `Click to view on ${book} — hold to track bet` : `Click to open ${book} — hold to track bet`) : undefined}
                       >
                         {hasOdds ? (
                           <div className={`text-xs md:text-sm font-medium ${
