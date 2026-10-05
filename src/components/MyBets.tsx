@@ -47,6 +47,41 @@ const hexToRgba = (hex: string, alpha: number): string => {
   return `rgba(${r},${g},${b},${alpha})`;
 };
 
+// One line of the league-stats unfurl (division split or week): record,
+// win rate, units, pending. Clickable when it unfurls further. `week` rows
+// are tighter (narrower label, pending only when non-zero) so "2025 Conf
+// Champ 4-3-0 57% Win +0.66u" still fits one phone line.
+function SubStatRow({
+  label, stats: s, onClick, title, week,
+}: {
+  label: string;
+  stats: ReturnType<typeof getBetStats>;
+  onClick?: () => void;
+  title?: string;
+  week?: boolean;
+}) {
+  return (
+    <div
+      className={`flex items-center justify-between gap-2 text-[11px] ${onClick ? 'cursor-pointer select-none' : ''}`}
+      role={onClick ? 'button' : undefined}
+      title={title}
+      onClick={onClick}
+    >
+      <div className={`flex items-center ${week ? 'gap-2' : 'gap-3'} min-w-0`}>
+        <span className={`font-medium whitespace-nowrap ${week ? 'min-w-[56px] text-gray-500' : 'min-w-[80px] text-gray-600'}`}>{label}</span>
+        <span className="font-medium whitespace-nowrap">{s.wonBets}-{s.lostBets}-{s.pushBets}</span>
+        <span className="text-gray-500 whitespace-nowrap">{s.winRate.toFixed(0)}% Win</span>
+        <span className={`font-medium whitespace-nowrap ${s.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+          {s.profit >= 0 ? '+' : ''}{s.profit.toFixed(2)}u
+        </span>
+      </div>
+      {(!week || s.pendingBets > 0) && (
+        <span className="text-gray-400 whitespace-nowrap shrink-0">{s.pendingBets} pending</span>
+      )}
+    </div>
+  );
+}
+
 // Logo with fallback chain: ESPN first, then the legacy local file, then hidden.
 function TeamLogoImg({ srcs, className }: { srcs: string[]; className: string }) {
   const [idx, setIdx] = useState(0);
@@ -448,9 +483,79 @@ export default function MyBets({ yearFilter = 'all', onYearsLoaded }: MyBetsProp
     }
     return Object.entries(groups)
       .filter(([, b]) => b.length > 0)
-      .map(([label, b]) => ({ label, stats: getBetStats(b) }));
+      .map(([label, b]) => ({ label, stats: getBetStats(b), bets: b }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [divisions, currentBets]);
+
+  // Week-by-week records (NFL row, and each NCAAF split). Weeks come from
+  // ESPN's season calendar via /api/football-weeks (one fetch per league +
+  // season, cached); a bet whose date no calendar covers falls back to a
+  // Tue→Mon bucket labelled by its Tuesday.
+  interface WeekRange { label: string; start: string; end: string }
+  const [weekCalendars, setWeekCalendars] = useState<Record<string, WeekRange[]>>({});
+  const requestedCalendars = React.useRef<Set<string>>(new Set());
+  // Jan/Feb games belong to the season that started the previous fall.
+  const candidateSeasons = (eventDate: string): number[] => {
+    const y = parseInt(String(eventDate).substring(0, 4), 10);
+    const m = parseInt(String(eventDate).substring(5, 7), 10);
+    if (!Number.isFinite(y)) return [];
+    return m <= 2 ? [y - 1, y] : [y];
+  };
+  useEffect(() => {
+    const keys = new Set<string>();
+    for (const b of currentBets) {
+      if (b.league !== 'NFL' && b.league !== 'NCAAF') continue;
+      for (const s of candidateSeasons(b.eventDate)) keys.add(`${b.league}:${s}`);
+    }
+    for (const key of keys) {
+      if (requestedCalendars.current.has(key)) continue;
+      requestedCalendars.current.add(key);
+      const [league, season] = key.split(':');
+      fetch(`/api/football-weeks?league=${league}&season=${season}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j) => setWeekCalendars((prev) => ({ ...prev, [key]: (j?.weeks as WeekRange[]) ?? [] })))
+        .catch(() => setWeekCalendars((prev) => ({ ...prev, [key]: [] })));
+    }
+  }, [currentBets]);
+  const weekOf = (bet: Bet): { label: string; season: number; sort: number } => {
+    const t = new Date(`${String(bet.eventDate).substring(0, 10)}T12:00:00`).getTime();
+    const seasons = candidateSeasons(bet.eventDate);
+    for (const s of seasons) {
+      for (const w of weekCalendars[`${bet.league}:${s}`] ?? []) {
+        const start = Date.parse(w.start);
+        const end = Date.parse(w.end);
+        if (t >= start && t < end) return { label: w.label, season: s, sort: start };
+      }
+    }
+    // Fallback: Tuesday-to-Monday bucket in the season that started last fall
+    const d = new Date(t);
+    d.setDate(d.getDate() - ((d.getDay() - 2 + 7) % 7));
+    d.setHours(0, 0, 0, 0);
+    return {
+      label: `Wk of ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
+      season: seasons[0] ?? d.getFullYear(),
+      sort: d.getTime(),
+    };
+  };
+  // Newest week first. When the bets span more than one season the label
+  // carries the year ("2025 Super Bowl" under "2026 Wk 5") so the seasons
+  // don't read as one run.
+  const weekRows = (bets: Bet[]) => {
+    const groups = new Map<string, { label: string; season: number; sort: number; bets: Bet[] }>();
+    for (const b of bets) {
+      const w = weekOf(b);
+      const key = `${w.season}:${w.label}`;
+      const g = groups.get(key) ?? { label: w.label, season: w.season, sort: w.sort, bets: [] };
+      g.bets.push(b);
+      groups.set(key, g);
+    }
+    const multiSeason = new Set([...groups.values()].map((g) => g.season)).size > 1;
+    return [...groups.values()]
+      .sort((a, b) => b.sort - a.sort)
+      .map((g) => ({ label: multiSeason ? `${g.season} ${g.label}` : g.label, stats: getBetStats(g.bets) }));
+  };
+  // Which NCAAF split (FBS / FCS / ...) is open to its weeks
+  const [expandedSplit, setExpandedSplit] = useState<string | null>(null);
 
   // Accent = the team the wager is on: leading tokens of the bet text (e.g.
   // "Texas -3.5" → Texas), bet.team for futures. Totals use the home team.
@@ -629,15 +734,23 @@ export default function MyBets({ yearFilter = 'all', onYearsLoaded }: MyBetsProp
           <div className="space-y-2">
             {Object.entries(statsByLeague).map(([league, leagueStats], index) => {
               const splits = league === 'NCAAF' ? ncaafSplits : null;
-              const expandable = !!splits && splits.length > 0;
+              // NCAAF unfurls to divisions (then weeks); NFL unfurls straight to weeks
+              const expandable = league === 'NFL' || (!!splits && splits.length > 0);
               const isOpen = expandedLeague === league;
+              const nflWeeks = league === 'NFL' && isOpen
+                ? weekRows(currentBets.filter((b) => b.league === 'NFL'))
+                : null;
               return (
               <div key={league} className={index > 0 ? 'border-t pt-2' : ''}>
               <div
                 className={`flex flex-wrap items-center justify-between gap-2 text-xs ${expandable ? 'cursor-pointer select-none' : ''}`}
                 role={expandable ? 'button' : undefined}
-                title={expandable ? 'Tap for the FBS / FBS vs FCS split' : undefined}
-                onClick={() => expandable && setExpandedLeague(isOpen ? null : league)}
+                title={expandable ? (league === 'NFL' ? 'Tap for week by week' : 'Tap for the FBS / FBS vs FCS split') : undefined}
+                onClick={() => {
+                  if (!expandable) return;
+                  setExpandedLeague(isOpen ? null : league);
+                  setExpandedSplit(null);
+                }}
               >
                 <div className="flex items-center gap-3">
                   <span className="font-semibold text-gray-700 min-w-[50px]">{league}{expandable ? (isOpen ? ' ▾' : ' ▸') : ''}</span>
@@ -655,21 +768,37 @@ export default function MyBets({ yearFilter = 'all', onYearsLoaded }: MyBetsProp
                   {leagueStats.pendingBets} pending
                 </span>
               </div>
-              {expandable && isOpen && (
+              {/* NFL: week rows directly under the league */}
+              {nflWeeks && (
                 <div className="mt-1.5 ml-3 pl-3 border-l-2 border-gray-100 space-y-1">
-                  {splits!.map(({ label, stats: s }) => (
-                    <div key={label} className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
-                      <div className="flex items-center gap-3">
-                        <span className="font-medium text-gray-600 min-w-[80px]">{label}</span>
-                        <span className="font-medium">{s.wonBets}-{s.lostBets}-{s.pushBets}</span>
-                        <span className="text-gray-500">{s.winRate.toFixed(0)}% Win</span>
-                        <span className={`font-medium ${s.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {s.profit >= 0 ? '+' : ''}{s.profit.toFixed(2)}u
-                        </span>
-                      </div>
-                      <span className="text-gray-400">{s.pendingBets} pending</span>
-                    </div>
+                  {nflWeeks.map(({ label, stats: s }) => (
+                    <SubStatRow key={label} label={label} stats={s} week />
                   ))}
+                </div>
+              )}
+              {/* NCAAF: division split rows, each unfurling to its weeks */}
+              {splits && isOpen && (
+                <div className="mt-1.5 ml-3 pl-3 border-l-2 border-gray-100 space-y-1">
+                  {splits.map(({ label, stats: s, bets: splitBets }) => {
+                    const splitOpen = expandedSplit === label;
+                    return (
+                      <div key={label}>
+                        <SubStatRow
+                          label={`${label}${splitOpen ? ' ▾' : ' ▸'}`}
+                          stats={s}
+                          onClick={() => setExpandedSplit(splitOpen ? null : label)}
+                          title="Tap for week by week"
+                        />
+                        {splitOpen && (
+                          <div className="mt-1 ml-3 pl-3 border-l-2 border-gray-100 space-y-1">
+                            {weekRows(splitBets).map(({ label: wk, stats: ws }) => (
+                              <SubStatRow key={wk} label={wk} stats={ws} week />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
               </div>
