@@ -1,6 +1,13 @@
 @import "tailwindcss";
 
+/*
+ * Light-only (2026-10-04). The site has no dark: styles, so the old
+ * prefers-color-scheme rule painted a near-black body behind white cards on
+ * dark phones. color-scheme: light also keeps form controls and scrollbars
+ * light. A real dark pass would replace this block, not add to it.
+ */
 :root {
+  color-scheme: light;
   --background: #ffffff;
   --foreground: #171717;
 }
@@ -10,13 +17,6 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {

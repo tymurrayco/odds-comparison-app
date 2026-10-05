@@ -48,25 +48,22 @@ interface OddsEvent {
   }>;
 }
 
-// Current-odds feed cache (per lambda instance)
-let oddsCache: { at: number; events: OddsEvent[] } | null = null;
-const ODDS_TTL_MS = 5 * 60 * 1000;
+// Current-odds feed: 5-min shared Next data cache. (Was a module-level Map,
+// which lives per lambda instance — every cold instance paid a credit.)
+const ODDS_REVALIDATE_S = 5 * 60;
 
 async function fetchCurrentOdds(): Promise<OddsEvent[]> {
-  if (oddsCache && Date.now() - oddsCache.at < ODDS_TTL_MS) return oddsCache.events;
   const apiKey = process.env.ODDS_API_KEY;
   if (!apiKey) throw new Error('ODDS_API_KEY missing');
   const url =
     `${ODDS_API_BASE_URL}/sports/${NCAAF_SPORT_KEY}/odds` +
     `?apiKey=${apiKey}&regions=us&markets=spreads&oddsFormat=american` +
     `&bookmakers=${FBS_CONSENSUS_BOOKS.join(',')}`;
-  const res = await fetch(url);
+  const res = await fetch(url, { next: { revalidate: ODDS_REVALIDATE_S } });
   if (!res.ok) {
     throw new Error(`Odds API HTTP ${res.status}: ${(await res.text()).slice(0, 150)}`);
   }
-  const events: OddsEvent[] = await res.json();
-  oddsCache = { at: Date.now(), events };
-  return events;
+  return (await res.json()) as OddsEvent[];
 }
 
 export async function GET(request: NextRequest) {

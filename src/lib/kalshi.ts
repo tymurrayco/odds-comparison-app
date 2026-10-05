@@ -615,7 +615,9 @@ async function fetchSeriesEvents(series: string): Promise<Map<string, KalshiMark
     });
     if (cursor) params.set('cursor', cursor);
 
-    const resp = await fetch(`${KALSHI_API_BASE}/events?${params}`, { cache: 'no-store' });
+    // Shared Next data cache (60s): every visitor's board load reuses one
+    // Kalshi call per page instead of hitting Kalshi per visitor.
+    const resp = await fetch(`${KALSHI_API_BASE}/events?${params}`, { next: { revalidate: 60 } });
     if (!resp.ok) break;
 
     const data = await resp.json();
@@ -643,7 +645,7 @@ async function fetchSeriesEvents(series: string): Promise<Map<string, KalshiMark
       });
       if (cursor) params.set('cursor', cursor);
 
-      const resp = await fetch(`${KALSHI_API_BASE}/events?${params}`, { cache: 'no-store' });
+      const resp = await fetch(`${KALSHI_API_BASE}/events?${params}`, { next: { revalidate: 60 } });
       if (!resp.ok) break;
 
       const data = await resp.json();
