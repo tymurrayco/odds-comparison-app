@@ -198,31 +198,39 @@ export default function PropsTable({
     );
   };
 
-  // Find best odds for over and under across bookmakers (considering same line)
+  // Find the best Over and best Under across bookmakers. Books may post
+  // different lines for the same prop, so the LINE wins first (lower is
+  // better for Over, higher is better for Under — same rule the spreads
+  // table uses: best point, then best price), and odds only break ties.
   const findBestOdds = (prop: ProcessedProp): { bestOver: string[], bestUnder: string[] } => {
+    let bestOverLine = Infinity;
     let bestOverValue = -Infinity;
+    let bestUnderLine = -Infinity;
     let bestUnderValue = -Infinity;
     let bestOver: string[] = [];
     let bestUnder: string[] = [];
 
     displayBookmakers.forEach(book => {
       const odds = prop.odds[book];
-      if (odds) {
-        if (odds.over !== null) {
-          if (odds.over > bestOverValue) {
-            bestOverValue = odds.over;
-            bestOver = [book];
-          } else if (odds.over === bestOverValue) {
-            bestOver.push(book);
-          }
+      if (!odds) return;
+      const line = odds.line ?? prop.line;
+
+      if (odds.over !== null) {
+        if (line < bestOverLine || (line === bestOverLine && odds.over > bestOverValue)) {
+          bestOverLine = line;
+          bestOverValue = odds.over;
+          bestOver = [book];
+        } else if (line === bestOverLine && odds.over === bestOverValue) {
+          bestOver.push(book);
         }
-        if (odds.under !== null) {
-          if (odds.under > bestUnderValue) {
-            bestUnderValue = odds.under;
-            bestUnder = [book];
-          } else if (odds.under === bestUnderValue) {
-            bestUnder.push(book);
-          }
+      }
+      if (odds.under !== null) {
+        if (line > bestUnderLine || (line === bestUnderLine && odds.under > bestUnderValue)) {
+          bestUnderLine = line;
+          bestUnderValue = odds.under;
+          bestUnder = [book];
+        } else if (line === bestUnderLine && odds.under === bestUnderValue) {
+          bestUnder.push(book);
         }
       }
     });
