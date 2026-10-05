@@ -2,6 +2,7 @@
 import { ReactNode } from 'react';
 import type { Metadata, Viewport } from 'next';
 import { Inter_Tight } from 'next/font/google';
+import SiteFooter from '@/components/SiteFooter';
 import './globals.css';
 
 // Site font (design pass 2026-09-07, see DESIGN.md). Exposed as a CSS variable
@@ -68,6 +69,10 @@ export default function RootLayout({ children }: RootLayoutProps) {
     <html lang="en" className={interTight.variable}>
       <body>
         {children}
+        {/* Compliance footer on every page (21+, 1-800-GAMBLER, affiliate
+            disclosure, Terms/Privacy). Share-preview pages (/game, /bet,
+            /futures) redirect instantly, so it never shows there. */}
+        <SiteFooter />
       </body>
     </html>
   );
