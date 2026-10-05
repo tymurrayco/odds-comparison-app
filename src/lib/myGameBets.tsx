@@ -38,6 +38,7 @@ export interface BetTeamInfo {
   logo: string;
   color: string;          // hex without leading #
   alternateColor?: string;
+  abbreviation?: string;  // ESPN abbreviation ("CAR", "KC") — game-card wager badges
 }
 
 const SPORT_KEY_TO_LEAGUE: Record<string, string> = {

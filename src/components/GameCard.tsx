@@ -8,7 +8,7 @@ import InjuryReport, { loadInjuries, startingQbOut, injuryStatusLabel, type Inju
 import { Game, ESPNGameScore } from '@/lib/api';
 import { GameRestData } from '@/lib/nhlRest';
 import { Bet } from '@/lib/betService';
-import { usePendingBetsForGame, useTeamColorMap, wageredTeamColor, MyBetBadge } from '@/lib/myGameBets';
+import { usePendingBetsForGame, useTeamColorMap, teamInfoFromMap, wageredTeamColor, MyBetBadge } from '@/lib/myGameBets';
 import { NeutralGame, fetchNeutralGames, findNeutralGame, venueLocation } from '@/lib/neutralSites';
 
 interface GameCardProps {
@@ -227,21 +227,30 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
     </>
   );
 
-  // Mobile-compact bet text: "TCU Horned Frogs -6.5" → "TCU -6.5", Over/Under → O/U
-  const compactBetText = (bet: Bet): string => {
+  // Team name → ESPN abbreviation ("Carolina Panthers" → "CAR") from the
+  // league team map the badge already loads for its color; first word of the
+  // name until the map arrives or for leagues without abbreviations (soccer).
+  const shortTeam = (teamName: string): string =>
+    teamInfoFromMap(teamColorMap, teamName)?.abbreviation ?? getFirstWord(teamName);
+
+  // Wager badge text: "Carolina Panthers -3.5" → "CAR -3.5" (both breakpoints);
+  // the hover title keeps the full bet text. `compact` (mobile) also shortens
+  // Over/Under → O/U and props to "Mahomes O 275.5".
+  const badgeBetText = (bet: Bet, compact: boolean): string => {
     if (bet.betType === 'prop') {
+      if (!compact) return bet.bet;
       // "Patrick Mahomes Over 275.5 Passing Yards" -> "Mahomes O 275.5"
       const m = bet.bet.match(/^(.+?)\s+(over|under)\s*([\d.]+)/i);
       if (m) {
         const last = m[1].trim().split(/\s+/).pop() ?? m[1];
         return `${last} ${m[2][0].toUpperCase()} ${m[3]}`;
       }
+      return bet.bet;
     }
-    return bet.bet
-      .replace(game.away_team, getFirstWord(game.away_team))
-      .replace(game.home_team, getFirstWord(game.home_team))
-      .replace(/^Over\s+/i, 'O ')
-      .replace(/^Under\s+/i, 'U ');
+    const text = bet.bet
+      .replace(game.away_team, shortTeam(game.away_team))
+      .replace(game.home_team, shortTeam(game.home_team));
+    return compact ? text.replace(/^Over\s+/i, 'O ').replace(/^Under\s+/i, 'U ') : text;
   };
   
   // Calculate implied scores based on average spread and total
@@ -547,8 +556,8 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                       status={bet.status}
                       title={`Your bet: ${bet.bet}${bet.book ? ` (${bet.book})` : ''}${bet.status !== 'pending' ? ` — ${bet.status}` : ''}`}
                     >
-                      <span className="hidden md:inline whitespace-nowrap">{bet.bet}</span>
-                      <span className="md:hidden whitespace-nowrap">{compactBetText(bet)}</span>
+                      <span className="hidden md:inline whitespace-nowrap">{badgeBetText(bet, false)}</span>
+                      <span className="md:hidden whitespace-nowrap">{badgeBetText(bet, true)}</span>
                     </MyBetBadge>
                   );
                 })}
