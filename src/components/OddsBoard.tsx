@@ -1082,12 +1082,6 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
                     </button>
                   </div>
                 )}
-
-                {(teamFilter || selectedConferences.length > 0) && (
-                  <p className="text-sm text-gray-600">
-                    Showing {filteredGames.length} of {games.length} games
-                  </p>
-                )}
               </div>
             )}
 
@@ -1334,9 +1328,6 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
                   </div>
                 ) : (
                   <div>
-                    <p className="text-sm text-gray-600 mb-4">
-                      Showing {favoritedGamesFromCache.length} favorited game{favoritedGamesFromCache.length !== 1 ? 's' : ''}
-                    </p>
                     {favoritedGamesFromCache.map(game => (
                       <GameCard 
                         key={game.id} 
