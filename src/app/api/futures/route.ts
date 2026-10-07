@@ -1,5 +1,6 @@
 // src/app/api/futures/route.ts
 import { NextResponse } from 'next/server';
+import { isAdminRequest } from '@/lib/adminAuth';
 
 export async function GET(request: Request) {
   console.log('Futures API route called');
@@ -50,13 +51,13 @@ export async function GET(request: Request) {
     const requestsUsed = response.headers.get('x-requests-used');
     console.log('API Rate Limit - Remaining:', requestsRemaining, 'Used:', requestsUsed);
     
-    // Create a new response with the data and pass through the headers
+    // Create a new response with the data; quota headers are admin-only
     const nextResponse = NextResponse.json(data);
-    
-    // Add rate limit headers to our response
-    if (requestsRemaining) nextResponse.headers.set('x-requests-remaining', requestsRemaining);
-    if (requestsUsed) nextResponse.headers.set('x-requests-used', requestsUsed);
-    
+    if (await isAdminRequest(request)) {
+      if (requestsRemaining) nextResponse.headers.set('x-requests-remaining', requestsRemaining);
+      if (requestsUsed) nextResponse.headers.set('x-requests-used', requestsUsed);
+    }
+
     return nextResponse;
   } catch (error) {
     console.error('Error fetching futures:', error);

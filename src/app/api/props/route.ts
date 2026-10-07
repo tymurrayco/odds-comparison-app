@@ -1,5 +1,6 @@
 // src/app/api/props/route.ts
 import { NextResponse } from 'next/server';
+import { isAdminRequest } from '@/lib/adminAuth';
 
 // Player prop markets by sport
 const PROP_MARKETS: { [key: string]: string[] } = {
@@ -161,9 +162,11 @@ export async function GET(request: Request) {
       console.log('API Rate Limit - Remaining:', requestsRemaining, 'Used:', requestsUsed);
       
       const nextResponse = NextResponse.json(data);
-      if (requestsRemaining) nextResponse.headers.set('x-requests-remaining', requestsRemaining);
-      if (requestsUsed) nextResponse.headers.set('x-requests-used', requestsUsed);
-      
+      if (await isAdminRequest(request)) { // quota headers are admin-only
+        if (requestsRemaining) nextResponse.headers.set('x-requests-remaining', requestsRemaining);
+        if (requestsUsed) nextResponse.headers.set('x-requests-used', requestsUsed);
+      }
+
       return nextResponse;
     } catch (error) {
       console.error('Error fetching props:', error);
@@ -192,9 +195,11 @@ export async function GET(request: Request) {
     console.log('API Rate Limit - Remaining:', requestsRemaining, 'Used:', requestsUsed);
     
     const nextResponse = NextResponse.json(data);
-    if (requestsRemaining) nextResponse.headers.set('x-requests-remaining', requestsRemaining);
-    if (requestsUsed) nextResponse.headers.set('x-requests-used', requestsUsed);
-    
+    if (await isAdminRequest(request)) { // quota headers are admin-only
+      if (requestsRemaining) nextResponse.headers.set('x-requests-remaining', requestsRemaining);
+      if (requestsUsed) nextResponse.headers.set('x-requests-used', requestsUsed);
+    }
+
     return nextResponse;
   } catch (error) {
     console.error('Error fetching events:', error);

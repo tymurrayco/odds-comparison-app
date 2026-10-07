@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { recordCreditSnapshot } from '@/lib/creditUsage';
 import { ODDS_API_BOOKMAKERS, dropJuicedNovigSpreads } from '@/lib/api';
 import { captureLineOpeners } from '@/lib/lineOpeners';
+import { isAdminRequest } from '@/lib/adminAuth';
 
 // Whitelist of sport keys we proxy to the Odds API. Anything else is rejected
 // before it hits the paid API to prevent quota abuse via arbitrary sport keys.
@@ -69,13 +70,15 @@ export async function GET(request: Request) {
     // line-move token. Throttled, never throws.
     await captureLineOpeners(sport, data);
 
-    // Create a new response with the data and pass through the headers
+    // Create a new response with the data. The Odds API quota headers pass
+    // through only for an admin (they feed the ?admin=true readout) — a
+    // public visitor doesn't get to see how many credits are left.
     const nextResponse = NextResponse.json(data);
-    
-    // Add rate limit headers to our response
-    if (requestsRemaining) nextResponse.headers.set('x-requests-remaining', requestsRemaining);
-    if (requestsUsed) nextResponse.headers.set('x-requests-used', requestsUsed);
-    
+    if (await isAdminRequest(request)) {
+      if (requestsRemaining) nextResponse.headers.set('x-requests-remaining', requestsRemaining);
+      if (requestsUsed) nextResponse.headers.set('x-requests-used', requestsUsed);
+    }
+
     return nextResponse;
   } catch (error) {
     console.error('Error fetching from odds API:', error);
