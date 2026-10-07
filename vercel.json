@@ -19,6 +19,10 @@
     {
       "path": "/api/line-openers/capture",
       "schedule": "0 11 * * *"
+    },
+    {
+      "path": "/api/bets/settle",
+      "schedule": "30 5,8 * * *"
     }
   ]
 }

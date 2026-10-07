@@ -23,6 +23,7 @@ const CRON_PATHS = new Set([
   '/api/fbs/snapshot',
   '/api/nfl/snapshot',
   '/api/line-openers/capture',
+  '/api/bets/settle',
 ]);
 
 // GET routes that only admin tools call and that cost credits or reveal them.
