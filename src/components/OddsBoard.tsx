@@ -1011,16 +1011,14 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
               favoritesCount={favoritedGamesFromCache.length}
             />
 
-            {/* Page heading — the one h1, so /nfl ranks for "NFL odds" and a
-                visitor landing from search knows where they are */}
+            {/* Page heading for search engines only — the one h1 so /nfl can
+                rank for "NFL odds". Visually hidden (Tyler's call 2026-10-07):
+                the active league pill already says where you are. */}
             {activeLeague !== 'favorites' && (
-              <div className="mb-3 flex flex-wrap items-baseline gap-x-2">
-                <h1 className="text-[16px] font-semibold tracking-[-0.3px] text-gray-800">
-                  {(LEAGUES.find(l => l.id === activeLeague)?.name ?? '')}{' '}
-                  {effectiveView === 'futures' ? 'Futures Odds' : effectiveView === 'props' ? 'Player Props' : 'Odds Today'}
-                </h1>
-                <p className="text-[12px] text-gray-400">Best price on every line, every book</p>
-              </div>
+              <h1 className="sr-only">
+                {(LEAGUES.find(l => l.id === activeLeague)?.name ?? '')}{' '}
+                {effectiveView === 'futures' ? 'Futures Odds' : effectiveView === 'props' ? 'Player Props' : 'Odds Today'}
+              </h1>
             )}
 
             {/* Team filter for Games view */}
