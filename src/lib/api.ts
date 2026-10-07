@@ -683,6 +683,10 @@ export async function fetchPropsEvents(sport: string): Promise<ApiResponse<Props
 export async function fetchProps(sport: string, eventId: string): Promise<ApiResponse<ProcessedPropsMarket[]>> {
   try {
     const response = await fetch(`/api/props?sport=${sport}&eventId=${eventId}`);
+    if (response.status === 429) {
+      // Per-IP cap on the paid props call (see api/props/route.ts)
+      throw new Error('Too many props requests — wait a few minutes and try again.');
+    }
     if (!response.ok) {
       throw new Error(`Error fetching props: ${response.statusText}`);
     }

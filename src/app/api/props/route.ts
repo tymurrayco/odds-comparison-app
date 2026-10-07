@@ -1,6 +1,13 @@
 // src/app/api/props/route.ts
 import { NextResponse } from 'next/server';
 import { isAdminRequest } from '@/lib/adminAuth';
+import { clientIp, rateLimit } from '@/lib/rateLimit';
+
+// Per-IP allowance for the paid per-event props call: 30 events per 10 min.
+// A person browsing props opens a handful; a loop over a 60-game NCAAF slate
+// hits this on its first pass.
+const PROPS_LIMIT = 30;
+const PROPS_WINDOW_MS = 10 * 60 * 1000;
 
 // Player prop markets by sport
 const PROP_MARKETS: { [key: string]: string[] } = {
@@ -130,6 +137,21 @@ export async function GET(request: Request) {
 
   // If eventId is provided, fetch props for that specific event
   if (eventId) {
+    // Paid path (5–17 credits per event, cached 2 min per event): cap each
+    // IP so a script can't loop every game. Admin (cookie) is exempt. The
+    // events list below is free and uncapped.
+    if (!(await isAdminRequest(request))) {
+      const ip = clientIp(request.headers);
+      const rl = rateLimit(`props:${ip}`, PROPS_LIMIT, PROPS_WINDOW_MS);
+      if (!rl.allowed) {
+        console.warn(`[props] rate limit hit for ${ip}`);
+        return NextResponse.json(
+          { error: 'Too many props requests. Try again in a few minutes.' },
+          { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec), 'Cache-Control': 'no-store' } },
+        );
+      }
+    }
+
     const markets = marketsOverride
       ? marketsOverride.split(',').map((m) => m.trim()).filter(Boolean)
       : marketsForSport(sport);
