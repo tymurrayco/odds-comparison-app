@@ -61,6 +61,12 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
     });
   };
   
+  // Date/time text is in the VIEWER's zone, which the server can't know, so
+  // it's rendered only after mount — the sport pages server-render the cards
+  // and a UTC time in the HTML would mismatch the browser's on hydration.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
   // Format the date and time
   const gameDate = new Date(game.commence_time);
   const formattedDate = gameDate.toLocaleDateString(undefined, {month: 'short', day: 'numeric'});
@@ -514,7 +520,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
               {/* Only show game time if not live/completed */}
               {!isLive && !isCompleted && (
                 <p className="text-xs md:text-sm text-gray-500">
-                  {formattedDate} at {formattedTime} {timeZoneAbbr}
+                  {mounted ? `${formattedDate} at ${formattedTime} ${timeZoneAbbr}` : ' '}
                 </p>
               )}
 

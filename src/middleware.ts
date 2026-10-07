@@ -38,11 +38,28 @@ const PUBLIC_WRITE_PATHS = new Set<string>([
 
 const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
+// /nfl used to be the NFL Ledger page (moved to /nfl/ratings on 2026-10-06
+// when /nfl became the server-rendered odds board). Old shared links carry
+// one of these ?view= values; the board's own views (games/futures/props)
+// are not in the list.
+const NFL_LEDGER_VIEWS = new Set(['ratings', 'upcoming', 'ledger', 'totals', 'sos', 'history', 'survivor']);
+
 export async function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl;
+
+  if (pathname === '/nfl') {
+    const view = req.nextUrl.searchParams.get('view');
+    if (view && NFL_LEDGER_VIEWS.has(view)) {
+      const url = req.nextUrl.clone();
+      url.pathname = '/nfl/ratings';
+      return NextResponse.redirect(url, 308);
+    }
+    return NextResponse.next();
+  }
+
   if (!process.env.ADMIN_SECRET) return NextResponse.next();
   if (process.env.NODE_ENV === 'development') return NextResponse.next();
 
-  const { pathname } = req.nextUrl;
   const method = req.method.toUpperCase();
 
   // Admin pages: send strangers to the login page, remember where they were going
@@ -75,5 +92,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/admin/:path*', '/api/:path*'],
+  matcher: ['/admin/:path*', '/api/:path*', '/nfl'],
 };

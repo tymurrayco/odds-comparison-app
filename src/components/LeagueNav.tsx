@@ -1,6 +1,7 @@
 // src/components/LeagueNav.tsx
 import { useState, useEffect } from 'react';
 import { LEAGUES } from '@/lib/api';
+import { urlForSportKey } from '@/lib/sportSlugs';
 
 interface LeagueNavProps {
   activeLeague: string;
@@ -89,18 +90,25 @@ export default function LeagueNav({
 
               <span className="flex-none w-px my-1 bg-gray-200" aria-hidden="true" />
 
+              {/* Real links (crawlers follow /nfl, /nba, ...) that switch
+                  tabs in place for people — no full page load */}
               {LEAGUES.filter(league => league.isActive).map(league => (
-                <button
+                <a
                   key={league.id}
+                  href={urlForSportKey(league.id)}
+                  aria-current={activeLeague === league.id ? 'page' : undefined}
                   className={`${pillBase} ${
                     activeLeague === league.id
                       ? 'bg-blue-600 text-white shadow-sm'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
-                  onClick={() => setActiveLeague(league.id)}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setActiveLeague(league.id);
+                  }}
                 >
                   {league.name}
-                </button>
+                </a>
               ))}
             </div>
             {/* edge fade cue that more leagues exist */}

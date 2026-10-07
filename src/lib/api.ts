@@ -327,7 +327,7 @@ function findKalshiMatch(games: Game[], awayTeam: string, homeTeam: string, comm
  * Matches games by fuzzy team name comparison.
  * Handles swapped home/away for tournament neutral-site games.
  */
-function mergeKalshiOdds(
+export function mergeKalshiOdds(
   games: Game[],
   kalshiGames: KalshiGameOdds[],
   kalshiSpreads: KalshiSpreadOdds[],

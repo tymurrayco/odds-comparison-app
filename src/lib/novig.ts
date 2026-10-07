@@ -197,7 +197,11 @@ export async function fetchNovigOdds(sportKey: string): Promise<NovigGameOdds[]>
       },
     }),
     signal: AbortSignal.timeout(10_000),
-    cache: 'no-store',
+    // Shared Next data cache (60s) rather than no-store: `no-store` here
+    // forced the server-rendered sport pages (/nfl, ...) to render on every
+    // request instead of being cached for a minute. The module cache above
+    // still dedupes within an instance.
+    next: { revalidate: 60 },
   });
   if (!res.ok) throw new Error(`Novig GraphQL HTTP ${res.status}`);
   const json = await res.json();
