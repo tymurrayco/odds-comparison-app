@@ -10,6 +10,7 @@
 // badges, and the 11px gray-400 meta text the league nav uses for "Updated".
 
 import Link from 'next/link';
+import AuthLink from '@/components/AuthLink';
 
 const YEAR = new Date().getFullYear();
 
@@ -66,6 +67,7 @@ export default function SiteFooter() {
           <Link href="/privacy" className="hover:text-gray-700 hover:underline">
             Privacy
           </Link>
+          <AuthLink />
         </div>
       </div>
     </footer>
