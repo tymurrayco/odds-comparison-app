@@ -790,6 +790,30 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
 
   // Filter games based on team name AND conferences
   const [showLiveGames, setShowLiveGames] = useState(false);
+  // Remembered per device; read after mount so server and first client render agree
+  useEffect(() => {
+    try {
+      if (localStorage.getItem('showLiveGames') === '1') setShowLiveGames(true);
+    } catch {
+      /* storage unavailable */
+    }
+  }, []);
+  const toggleLiveGames = () => {
+    const next = !showLiveGames;
+    setShowLiveGames(next);
+    try {
+      localStorage.setItem('showLiveGames', next ? '1' : '0');
+    } catch {
+      /* not remembered */
+    }
+  };
+  // Games under way (kicked off, not final) — the number on the Live chip
+  const liveCount = useMemo(() => {
+    const now = Date.now();
+    return games.filter(
+      (game) => new Date(game.commence_time).getTime() <= now && matchGameToScore(game, espnScores)?.state !== 'post'
+    ).length;
+  }, [games, espnScores]);
   const filteredGames = useMemo(() => {
     // A game that has gone final (per the ESPN scores feed) has nothing left
     // to price — drop its card. Games the feed can't match stay, so an empty
@@ -1084,7 +1108,7 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
                   </div>
                 )}
 
-                {(!searchShown || supportsConferenceFilter) && (
+                {(!searchShown || supportsConferenceFilter || liveCount > 0) && (
                   <div className={`flex items-center gap-2 ${supportsConferenceFilter ? 'sm:justify-end' : ''}`}>
                     {!searchShown && (
                       <button
@@ -1096,6 +1120,24 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                         </svg>
+                      </button>
+                    )}
+                    {/* Live chip: only while games are under way. Off (outlined)
+                        hides them; on (red) shows them. The count says how many. */}
+                    {liveCount > 0 && (
+                      <button
+                        type="button"
+                        aria-pressed={showLiveGames}
+                        title={showLiveGames ? 'Hide games in progress' : 'Show games in progress'}
+                        onClick={toggleLiveGames}
+                        className={`flex-none inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border text-base font-semibold shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-red-400 ${
+                          showLiveGames
+                            ? 'bg-red-600 border-red-600 text-white'
+                            : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        <span className={`h-2 w-2 rounded-full ${showLiveGames ? 'bg-white' : 'bg-red-500'}`} />
+                        Live {liveCount}
                       </button>
                     )}
                     {supportsConferenceFilter && (
@@ -1304,26 +1346,6 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
                   </svg>
                   {user ? 'Click odds to bet or track' : 'Click FanDuel, DraftKings, or Caesars odds to directly create betslip'}
                 </p>
-                {/* Live games switch (iOS style) — off hides games already under way */}
-                <label className="inline-flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none shrink-0">
-                  <span>Live</span>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={showLiveGames}
-                    aria-label="Show live games"
-                    onClick={() => setShowLiveGames((v) => !v)}
-                    className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500/40 ${
-                      showLiveGames ? 'bg-green-500' : 'bg-gray-300'
-                    }`}
-                  >
-                    <span
-                      className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ${
-                        showLiveGames ? 'translate-x-4' : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
-                </label>
               </div>
             )}
             
@@ -1412,7 +1434,7 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
                     {teamFilter || selectedConferences.length > 0 
                       ? 'No games match your filters.' 
                       : !showLiveGames && games.length > 0
-                        ? 'Only live games right now — switch on Live to see them.'
+                        ? 'Only live games right now — tap Live above to see them.'
                         : 'No games available for this league right now.'}
                   </div>
                 ) : (
