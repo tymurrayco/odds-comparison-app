@@ -32,9 +32,10 @@ const ADMIN_GET_PATHS = new Set([
   '/api/credit-usage',            // Bet Admin fuel gauge
 ]);
 
-// Writes that must stay public (none yet; the /go beacon lives outside /api).
+// Writes that skip the admin gate (the /go beacon lives outside /api).
 const PUBLIC_WRITE_PATHS = new Set<string>([
   '/api/admin/login',
+  '/api/bets', // any signed-in visitor; the route checks their Supabase token itself
 ]);
 
 const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);

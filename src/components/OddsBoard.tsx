@@ -1323,7 +1323,21 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
         )}
 
         {/* Main Content */}
-        {activeView === 'mybets' ? (
+        {activeView === 'mybets' && !user ? (
+          // Bets are private to their owner; a shared bet link lands here signed out
+          authReady && (
+            <div className="rounded-xl bg-white p-8 text-center shadow-sm">
+              <p className="text-sm text-gray-600">Sign in to track your own bets.</p>
+              <button
+                type="button"
+                onClick={() => signInWithGoogle()}
+                className="mt-4 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700"
+              >
+                Sign in with Google
+              </button>
+            </div>
+          )
+        ) : activeView === 'mybets' ? (
           <MyBets yearFilter={betYear} onYearsLoaded={setBetYears} />
         ) : loading || (activeLeague === 'favorites' && favoritesLoading) ? (
           <BoardLoading variant={effectiveView === 'futures' ? 'futures' : 'games'} />

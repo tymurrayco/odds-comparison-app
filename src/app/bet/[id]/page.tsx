@@ -4,6 +4,7 @@
 // instead of a generic odds.day card. Redirects humans to the bets view.
 import { Metadata } from 'next';
 import { redirect } from 'next/navigation';
+import { createClient } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { wageredTeam, getTeamAssets, buildBetOgUrl, formatOdds } from '@/lib/betShare';
 import { propPlayerName, resolvePlayerTeam } from '@/lib/playerTeam';
@@ -39,9 +40,16 @@ interface BetRow {
 // team/logo/color + OG URL helpers live in lib/betShare so this page and the
 // direct Discord post can never drift apart.
 
+// Bets are private to their owner (RLS), so this server-side read uses the
+// service-role key: whoever holds a bet's link can see that one bet's card.
+function shareClient() {
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  return serviceKey ? createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, serviceKey) : supabase;
+}
+
 async function getBet(id: string): Promise<BetRow | null> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await shareClient()
       .from('bets')
       .select('*')
       .eq('id', id)

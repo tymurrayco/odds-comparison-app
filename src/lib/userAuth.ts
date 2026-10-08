@@ -47,6 +47,8 @@ export function signInWithGoogle() {
   });
 }
 
-export function signOut() {
-  return supabase.auth.signOut();
+/** Signs out, then reloads so nothing of the old user's (cached bets, badges) stays on screen. */
+export async function signOut() {
+  await supabase.auth.signOut();
+  window.location.reload();
 }

@@ -1,20 +1,27 @@
 // src/lib/betService.ts
 //
-// Bets: reads go straight to Supabase (public, anon key); writes go through
-// POST/PATCH/DELETE /api/bets, which the admin cookie gates (src/middleware.ts)
-// and which writes with the service-role key. Column mapping lives in
-// betTypes.ts so the route and this file agree.
+// Bets belong to the signed-in visitor (src/lib/userAuth.ts). Reads go
+// straight to Supabase with the visitor's session, so RLS returns only their
+// own rows; signed out there is nothing to read. Writes go through
+// POST/PATCH/DELETE /api/bets, which checks the same session's access token
+// and writes with the service-role key. Column mapping lives in betTypes.ts
+// so the route and this file agree.
 
 import { supabase } from './supabase';
 import { rowToBet, type Bet, type BetStatus, type BetType, type DbBetRow } from './betTypes';
 
 export type { Bet, BetStatus, BetType };
 
-// Fetch all bets from Supabase
+// Fetch the signed-in visitor's bets (empty when signed out)
 export async function fetchBets(): Promise<Bet[]> {
+  const { data: auth } = await supabase.auth.getSession();
+  const userId = auth.session?.user.id;
+  if (!userId) return [];
+
   const { data, error } = await supabase
     .from('bets')
     .select('*')
+    .eq('user_id', userId)
     .eq('deleted', false)
     .order('event_date', { ascending: false });
 
@@ -26,17 +33,18 @@ export async function fetchBets(): Promise<Bet[]> {
   return (data as DbBetRow[]).map(rowToBet);
 }
 
-// One place to turn a failed write into a readable error. The middleware
-// answers 404 to anyone without the admin cookie, so that case says so.
+// One place to send a write with the visitor's access token and turn a
+// failure into a readable error.
 async function writeBets(method: 'POST' | 'PATCH' | 'DELETE', body: unknown): Promise<{ bet?: DbBetRow }> {
+  const { data: auth } = await supabase.auth.getSession();
+  const token = auth.session?.access_token;
+  if (!token) throw new Error('Sign in to save bets.');
+
   const res = await fetch('/api/bets', {
     method,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify(body),
   });
-  if (res.status === 404) {
-    throw new Error('Not logged in as admin — open /login on this device first.');
-  }
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new Error(json.error ?? `Bet write failed (${res.status})`);
