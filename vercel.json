@@ -22,7 +22,7 @@
     },
     {
       "path": "/api/bets/settle",
-      "schedule": "30 5,8 * * *"
+      "schedule": "0 10 * * *"
     }
   ]
 }
