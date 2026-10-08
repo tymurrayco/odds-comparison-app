@@ -38,6 +38,7 @@ import BookmakerSelector from '@/components/BookmakerSelector';
 import MyBets, { BetYearFilter } from '@/components/MyBets';
 import AccountButton from '@/components/AccountButton';
 import { signInWithGoogle, useUser } from '@/lib/userAuth';
+import { usePrefs, zoneOption } from '@/lib/prefs';
 import { getTeamConference } from '@/lib/conferences';
 
 interface CacheItem<T> {
@@ -68,6 +69,7 @@ export interface OddsBoardProps {
 function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoardProps) {
   const router = useRouter();
   const { user, ready: authReady } = useUser();
+  const prefs = usePrefs();
   const pressTimer = useRef<NodeJS.Timeout | null>(null);
   const [isHolding, setIsHolding] = useState(false);
   const crossNavSearchRef = useRef(false);
@@ -852,7 +854,8 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
       month: 'short', 
       day: 'numeric',
       hour: 'numeric',
-      minute: '2-digit'
+      minute: '2-digit',
+      ...zoneOption(prefs.timeZone),
     });
   };
 
@@ -1292,14 +1295,14 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
                   <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                   </svg>
-                  Tap odds to open in sportsbook app
+                  {user ? 'Tap odds to bet or track' : 'Tap odds to open in sportsbook app'}
                 </p>
                 {/* Desktop: full message */}
                 <p className="hidden md:flex text-xs text-gray-500 text-center items-center justify-center gap-1">
                   <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                   </svg>
-                  Click FanDuel, DraftKings, or Caesars odds to directly create betslip
+                  {user ? 'Click odds to bet or track' : 'Click FanDuel, DraftKings, or Caesars odds to directly create betslip'}
                 </p>
                 {/* Live games switch (iOS style) — off hides games already under way */}
                 <label className="inline-flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none shrink-0">

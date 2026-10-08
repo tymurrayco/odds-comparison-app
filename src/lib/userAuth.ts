@@ -9,33 +9,42 @@
 // need to know the user get the access token in an Authorization header.
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 
+interface AuthState {
+  user: User | null;
+  ready: boolean; // false until the stored session has been read
+}
+
+// One shared subscription for the whole page — every game card reads the
+// user (for preferences), so each hook call must not open its own listener.
+const SIGNED_OUT_PENDING: AuthState = { user: null, ready: false };
+let state: AuthState = SIGNED_OUT_PENDING;
+let started = false;
+const listeners = new Set<() => void>();
+
+function set(user: User | null) {
+  state = { user, ready: true };
+  listeners.forEach((l) => l());
+}
+
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  if (!started) {
+    started = true;
+    supabase.auth.getSession().then(({ data }) => set(data.session?.user ?? null));
+    supabase.auth.onAuthStateChange((_event, session) => set(session?.user ?? null));
+  }
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
 /** The signed-in user, or null. `ready` is false until the stored session has been read. */
-export function useUser(): { user: User | null; ready: boolean } {
-  const [user, setUser] = useState<User | null>(null);
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    supabase.auth.getSession().then(({ data }) => {
-      if (cancelled) return;
-      setUser(data.session?.user ?? null);
-      setReady(true);
-    });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      setReady(true);
-    });
-    return () => {
-      cancelled = true;
-      sub.subscription.unsubscribe();
-    };
-  }, []);
-
-  return { user, ready };
+export function useUser(): AuthState {
+  return useSyncExternalStore(subscribe, () => state, () => SIGNED_OUT_PENDING);
 }
 
 /** Sends the browser to Google; it comes back to the page it left. */

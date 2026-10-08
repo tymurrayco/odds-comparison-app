@@ -10,6 +10,7 @@ import { GameRestData } from '@/lib/nhlRest';
 import { Bet } from '@/lib/betService';
 import { usePendingBetsForGame, useTeamColorMap, teamInfoFromMap, wageredTeamColor, MyBetBadge } from '@/lib/myGameBets';
 import { NeutralGame, fetchNeutralGames, findNeutralGame, venueLocation } from '@/lib/neutralSites';
+import { usePrefs, zoneOption } from '@/lib/prefs';
 
 interface GameCardProps {
   game: Game;
@@ -66,18 +67,21 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
   // and a UTC time in the HTML would mismatch the browser's on hydration.
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
+  const prefs = usePrefs();
 
   // Format the date and time
   const gameDate = new Date(game.commence_time);
-  const formattedDate = gameDate.toLocaleDateString(undefined, {month: 'short', day: 'numeric'});
-  
+  // Device zone unless the account menu pins one (src/lib/prefs.ts)
+  const zone = zoneOption(prefs.timeZone);
+  const formattedDate = gameDate.toLocaleDateString(undefined, {month: 'short', day: 'numeric', ...zone});
+
   // Get the user's timezone abbreviation
-  const timeZoneAbbr = new Intl.DateTimeFormat('en', { timeZoneName: 'short' })
+  const timeZoneAbbr = new Intl.DateTimeFormat('en', { timeZoneName: 'short', ...zone })
     .formatToParts(gameDate)
     .find(part => part.type === 'timeZoneName')?.value || '';
-  
+
   // 'numeric' hour so it reads 9:00 AM, not 09:00 AM
-  const formattedTime = gameDate.toLocaleTimeString([], {hour: 'numeric', minute:'2-digit'});
+  const formattedTime = gameDate.toLocaleTimeString([], {hour: 'numeric', minute:'2-digit', ...zone});
   
   // Check if game is live (started but not completed)
   const now = new Date();
@@ -397,7 +401,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
       );
     });
 
-  const renderLedgerChip = (placement: string) => (isNCAAF || isNFL) && ledgerChip && (
+  const renderLedgerChip = (placement: string) => (isNCAAF || isNFL) && ledgerChip && prefs.showProjections && (
     <button
       className={`${placement} items-center gap-1 px-1.5 md:px-2 py-1 text-xs md:text-sm font-semibold rounded-md tabular-nums ${
         LEDGER_TIER_CLASSES[ledgerChip.tier][
