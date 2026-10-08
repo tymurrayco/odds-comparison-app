@@ -1,11 +1,12 @@
 // src/components/OddsTable.tsx
 'use client';
 
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { Game, BOOKMAKERS } from '@/lib/api';
 import { formatOdds } from '@/lib/utils';
-import { createBet } from '@/lib/betService';
+import BetTicket, { type TicketPick } from '@/components/BetTicket';
+import { useUser } from '@/lib/userAuth';
 import { GameRestData, TeamRestInfo } from '@/lib/nhlRest';
 import { resolveDeepLink, fillLinkTemplate, promptForState, openBetLink, appLinkHref, logClickBeacon } from '@/lib/betLinks';
 import { goUrl } from '@/lib/books';
@@ -35,17 +36,6 @@ interface OddsTableProps {
 interface OddsItem {
   bookmaker: string;
   price: number;
-}
-
-// Helper function to calculate stake for 1 unit to-win
-function calculateStakeForOneUnit(odds: number): number {
-  if (odds > 0) {
-    // Underdog: stake = 100 / odds to win 1 unit
-    return 100 / odds;
-  } else {
-    // Favorite: stake = |odds| / 100 to win 1 unit
-    return Math.abs(odds) / 100;
-  }
 }
 
 // Helper function to map league ID to sport name
@@ -160,13 +150,11 @@ function getTeamRestBadges(teamRest: TeamRestInfo, hasAdvantage: boolean, advant
 }
 
 export default function OddsTable({ games, view = 'moneyline', league = 'basketball_nba', selectedBookmakers, awayLogo, homeLogo, restData, isLive = false, openLine = null }: OddsTableProps) {
-  const pressTimer = useRef<NodeJS.Timeout | null>(null);
-  // A completed press-and-hold still fires a click on release — swallow that
-  // one so logging a bet doesn't also open the book.
-  const holdCompleted = useRef(false);
-  const [isHolding, setIsHolding] = useState(false);
+  // Signed-in visitors get a bet ticket on tap (open the book and/or track
+  // the bet); signed out, a tap goes straight to the book.
+  const { user } = useUser();
+  const [ticket, setTicket] = useState<TicketPick | null>(null);
   const [showOpenedOn, setShowOpenedOn] = useState(false);
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   // ESPN logos for every team in the league — local /team-logos files use
   // abbreviated names ("northdakotastbison") that the odds-API names never
   // match, and FCS teams have no file at all.
@@ -181,14 +169,16 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
     return <div className="p-4">No games available</div>;
   }
 
-  // Show toast notification
-  const showToast = (message: string, type: 'success' | 'error') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  };
-
   // What a click on a book cell is about — carried on the /go URL for logging.
   type ClickContext = { game: Game; market: string; outcome: string };
+  // The priced selection in the cell, for the bet ticket.
+  type CellPick = {
+    team: string;
+    odds: number;
+    betType: 'spread' | 'total' | 'moneyline';
+    point?: number;
+    totalType?: 'Over' | 'Under';
+  };
   const goParams = (book: string, ctx: ClickContext) => ({
     book,
     sport: ctx.game.sport_key,
@@ -197,18 +187,58 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
     outcome: ctx.outcome,
   });
 
-  // Click on any priced book cell → /go/[book] click-out (logged, 302). With a
-  // deep link it lands on the betslip; without one (BetOnline, or a book that
-  // sent no link) on the book's home/affiliate page. BetMGM/BetRivers links
-  // are templates needing the user's state — resolved from localStorage,
-  // prompted once on first use; cancelling the prompt does nothing.
-  const handleBookClick = (book: string, link: string | undefined, e: React.MouseEvent, ctx: ClickContext) => {
+  // The ticket for a cell: display lines + the bet row it would save.
+  const buildTicket = (book: string, link: string | undefined, ctx: ClickContext, pick: CellPick): TicketPick => {
+    const { game } = ctx;
+    const title =
+      pick.betType === 'spread'
+        ? `${pick.team} ${pick.point! > 0 ? '+' : ''}${pick.point}`
+        : pick.betType === 'total'
+          ? `${pick.totalType} ${pick.point}`
+          : `${pick.team} ML`;
+    const matchup = `${game.away_team} @ ${game.home_team}`;
+    // Event date in local time (toISOString would shift late games a day)
+    const d = new Date(game.commence_time);
+    const eventDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return {
+      title,
+      subtitle: matchup,
+      odds: pick.odds,
+      book,
+      bookLogo: bookmakerLogos[book],
+      link,
+      buildGo: (to) => goUrl({ ...goParams(book, ctx), to }),
+      draft: {
+        date: new Date().toISOString().split('T')[0],
+        eventDate,
+        sport: getSportFromLeague(league),
+        league: getLeagueDisplayName(league),
+        description: matchup,
+        awayTeam: game.away_team,
+        homeTeam: game.home_team,
+        team: pick.betType === 'total' ? undefined : pick.team,
+        betType: pick.betType,
+        bet: title,
+        odds: pick.odds,
+        status: 'pending',
+        book,
+      },
+    };
+  };
+
+  // Click on any priced book cell. Signed in → the bet ticket. Signed out →
+  // /go/[book] click-out (logged, 302): with a deep link it lands on the
+  // betslip; without one (BetOnline, or a book that sent no link) on the
+  // book's home/affiliate page. BetMGM/BetRivers links are templates needing
+  // the user's state — resolved from localStorage, prompted once on first
+  // use; cancelling the prompt does nothing.
+  const handleBookClick = (book: string, link: string | undefined, e: React.MouseEvent, ctx: ClickContext, pick: CellPick) => {
     // Tap landed on the app-link overlay: let the native anchor navigate
     if ((e.target as HTMLElement).closest?.('a[data-app-link]')) return;
     e.preventDefault();
     e.stopPropagation();
-    if (holdCompleted.current) {
-      holdCompleted.current = false;
+    if (user) {
+      setTicket(buildTicket(book, link, ctx, pick));
       return;
     }
     let resolved: string | undefined;
@@ -226,12 +256,14 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
   };
 
   // App-link books (ProphetX) on phones: an invisible real <a> over the cell,
-  // since iOS only opens the app from a genuine link tap. Callout off so the
-  // press-and-hold bet logger still works.
+  // since iOS only opens the app from a genuine link tap.
   // The anchor points STRAIGHT at the app link (iOS won't open the app from a
   // 302 landing on a universal link), so the click is logged with a beacon
   // POST to /go instead of going through the redirect.
+  // Signed in there is no overlay: the tap opens the ticket, whose own
+  // "Open in" button is the real anchor.
   const renderAppLink = (book: string, link: string | undefined, ctx: ClickContext) => {
+    if (user) return null;
     const href = appLinkHref(link);
     return href ? (
       <a
@@ -243,82 +275,6 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
         style={{ WebkitTouchCallout: 'none' }}
       />
     ) : null;
-  };
-
-  // Handle press-and-hold to create bet
-  const handlePressStart = (
-    game: Game,
-    team: string,
-    odds: number,
-    bookmaker: string,
-    betType: 'spread' | 'total' | 'moneyline',
-    point?: number,
-    totalType?: 'Over' | 'Under'
-  ) => {
-    setIsHolding(true);
-    pressTimer.current = setTimeout(async () => {
-      holdCompleted.current = true;
-      // Calculate stake for 1 unit to-win
-      const stake = calculateStakeForOneUnit(odds);
-      
-      // Create bet description
-      let betDescription = '';
-      if (betType === 'spread') {
-        const sign = point! > 0 ? '+' : '';
-        betDescription = `${team} ${sign}${point}`;
-      } else if (betType === 'total') {
-        betDescription = `${totalType} ${point}`;
-      } else {
-        // Moneyline
-        betDescription = `${team} ML`;
-      }
-      
-      // Create full description
-      const fullDescription = `${game.away_team} @ ${game.home_team}`;
-      
-      try {
-        // Format date in local timezone to avoid UTC conversion issues
-        const eventDate = new Date(game.commence_time);
-        const eventDateString = `${eventDate.getFullYear()}-${String(eventDate.getMonth() + 1).padStart(2, '0')}-${String(eventDate.getDate()).padStart(2, '0')}`;
-        
-        await createBet({
-          date: new Date().toISOString().split('T')[0],
-          eventDate: eventDateString,
-          sport: getSportFromLeague(league),
-          league: getLeagueDisplayName(league),
-          description: fullDescription,
-          awayTeam: game.away_team,
-          homeTeam: game.home_team,
-          team: betType === 'spread' || betType === 'moneyline' ? team : undefined,
-          betType: betType,
-          bet: betDescription,
-          odds: odds,
-          stake: parseFloat(stake.toFixed(2)),
-          status: 'pending',
-          book: bookmaker
-        });
-        
-        showToast(`Bet added: ${betDescription} (${formatOdds(odds)})`, 'success');
-      } catch (error) {
-        console.error('Error creating bet:', error);
-        showToast('Failed to add bet', 'error');
-      }
-      
-      setIsHolding(false);
-    }, 1500); // 1.5 second hold
-  };
-
-  const handlePressEnd = () => {
-    if (pressTimer.current) {
-      clearTimeout(pressTimer.current);
-    }
-    setIsHolding(false);
-    // Desktop: the release after a completed hold fires a click within a few
-    // ms, which handleBookClick swallows. Touch: a long press fires NO click,
-    // so clear the guard shortly after release or the next tap would be eaten.
-    if (holdCompleted.current) {
-      setTimeout(() => { holdCompleted.current = false; }, 400);
-    }
   };
 
   // Bookmaker logos mapping with type annotation
@@ -346,16 +302,7 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
 
   return (
     <div className="overflow-x-auto">
-      {/* Toast Notification */}
-      {toast && (
-        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-300 ease-in-out">
-          <div className={`px-6 py-3 rounded-lg shadow-lg ${
-            toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'
-          } text-white font-medium`}>
-            {toast.message}
-          </div>
-        </div>
-      )}
+      {ticket && <BetTicket pick={ticket} onClose={() => setTicket(null)} />}
 
       {games.map(game => {
         // Only show bookmakers that actually price this game's current market —
@@ -661,21 +608,13 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                           <td
                             key={book}
                             className={`relative px-2 md:px-4 py-3 whitespace-nowrap text-center cursor-pointer select-none ${index === 0 ? 'border-b border-gray-200' : ''} ${outcomeData ? 'hover:bg-blue-50' : ''}`}
-                            onTouchStart={() => outcomeData &&
-                              handlePressStart(game, team, outcomeData.price, book, 'moneyline')}
-                            onTouchEnd={handlePressEnd}
-                            onTouchMove={handlePressEnd}
-                            onMouseDown={() => outcomeData &&
-                              handlePressStart(game, team, outcomeData.price, book, 'moneyline')}
-                            onMouseUp={handlePressEnd}
-                            onMouseLeave={handlePressEnd}
-                            onClick={(e) => outcomeData && handleBookClick(book, deepLink, e, ctx)}
+                            onClick={(e) => outcomeData && handleBookClick(book, deepLink, e, ctx, { team, odds: outcomeData.price, betType: 'moneyline' })}
                           >
                             {outcomeData && renderAppLink(book, deepLink, ctx)}
                             {outcomeData ? (
                               <div className={`text-xs md:text-sm font-medium ${
                                 isBest ? 'text-green-600 font-bold' : 'text-gray-900'
-                              } ${isHolding ? 'opacity-50' : ''}`}>
+                              }`}>
                                 {formatOdds(outcomeData.price)}
                                 {isBest && (
                                   // Tucked into the cell's bottom padding (td is relative) — no extra row height
@@ -706,21 +645,13 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                           <td
                             key={book}
                             className={`relative px-2 md:px-4 py-3 whitespace-nowrap text-center cursor-pointer select-none ${index === 0 ? 'border-b border-gray-200' : ''} ${priced ? 'hover:bg-blue-50' : ''}`}
-                            onTouchStart={() => outcomeData && typeof outcomeData.point !== 'undefined' &&
-                              handlePressStart(game, team, outcomeData.price, book, 'spread', outcomeData.point)}
-                            onTouchEnd={handlePressEnd}
-                            onTouchMove={handlePressEnd}
-                            onMouseDown={() => outcomeData && typeof outcomeData.point !== 'undefined' &&
-                              handlePressStart(game, team, outcomeData.price, book, 'spread', outcomeData.point)}
-                            onMouseUp={handlePressEnd}
-                            onMouseLeave={handlePressEnd}
-                            onClick={(e) => priced && handleBookClick(book, deepLink, e, ctx)}
+                            onClick={(e) => priced && handleBookClick(book, deepLink, e, ctx, { team, odds: outcomeData!.price, betType: 'spread', point: outcomeData!.point })}
                           >
                             {priced && renderAppLink(book, deepLink, ctx)}
                             {outcomeData && typeof outcomeData.point !== 'undefined' ? (
                               <div className={`text-xs md:text-sm ${
                                 isBest ? 'text-green-600 font-bold' : 'text-gray-900'
-                              } ${isHolding ? 'opacity-50' : ''}`}>
+                              }`}>
                                 {outcomeData.point > 0 ? '+' : ''}{outcomeData.point} ({formatOdds(outcomeData.price)})
                                 {isBest && (
                                   // Tucked into the cell's bottom padding (td is relative) — no extra row height
@@ -754,21 +685,13 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                           <td
                             key={book}
                             className={`relative px-2 md:px-4 py-3 whitespace-nowrap text-center cursor-pointer select-none ${index === 0 ? 'border-b border-gray-200' : ''} ${priced ? 'hover:bg-blue-50' : ''}`}
-                            onTouchStart={() => outcomeData && typeof outcomeData.point !== 'undefined' &&
-                              handlePressStart(game, team, outcomeData.price, book, 'total', outcomeData.point, totalType)}
-                            onTouchEnd={handlePressEnd}
-                            onTouchMove={handlePressEnd}
-                            onMouseDown={() => outcomeData && typeof outcomeData.point !== 'undefined' &&
-                              handlePressStart(game, team, outcomeData.price, book, 'total', outcomeData.point, totalType)}
-                            onMouseUp={handlePressEnd}
-                            onMouseLeave={handlePressEnd}
-                            onClick={(e) => priced && handleBookClick(book, deepLink, e, ctx)}
+                            onClick={(e) => priced && handleBookClick(book, deepLink, e, ctx, { team, odds: outcomeData!.price, betType: 'total', point: outcomeData!.point, totalType })}
                           >
                             {priced && renderAppLink(book, deepLink, ctx)}
                             {outcomeData && typeof outcomeData.point !== 'undefined' ? (
                               <div className={`text-xs md:text-sm ${
                                 isBest ? 'text-green-600 font-bold' : 'text-gray-900'
-                              } ${isHolding ? 'opacity-50' : ''}`}>
+                              }`}>
                                 {index === 0 ? 'O' : 'U'} {outcomeData.point} ({formatOdds(outcomeData.price)})
                                 {isBest && (
                                   // Tucked into the cell's bottom padding (td is relative) — no extra row height
