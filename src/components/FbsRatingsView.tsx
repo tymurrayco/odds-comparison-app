@@ -233,6 +233,24 @@ function TeamChip({
 // (the board's Ratings tab mounts it on every visit) paints at once and
 // refreshes behind.
 let lastRatings: RatingsResponse | null = null;
+let ratingsPreload: Promise<void> | null = null;
+
+/** Fetch the ratings ahead of time, so the view opens with its table already there. */
+export function preloadRatings(): Promise<void> {
+  if (lastRatings) return Promise.resolve();
+  if (!ratingsPreload) {
+    ratingsPreload = fetch('/api/fbs/ratings')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json: RatingsResponse | null) => {
+        if (json?.success) lastRatings = json;
+      })
+      .catch(() => {})
+      .finally(() => {
+        ratingsPreload = null;
+      });
+  }
+  return ratingsPreload;
+}
 
 export default function FbsRatingsView({ admin = false, embedded = false }: { admin?: boolean; embedded?: boolean }) {
   const [data, setData] = useState<RatingsResponse | null>(lastRatings);

@@ -90,13 +90,13 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
   const [activeView, setActiveView] = useState<'games' | 'futures' | 'props' | 'ratings' | 'mybets'>('games');
   // NCAAF Ratings view: which division's Ledger ratings are showing
   const [ratingsDivision, setRatingsDivision] = useState<'fbs' | 'fcs'>('fbs');
-  // Fetch the Ratings views' code shortly after NCAAF opens, so the tab
-  // switches without a blank beat.
+  // Fetch the Ratings views' code and their ratings shortly after NCAAF
+  // opens, so the tab opens straight onto the table.
   useEffect(() => {
     if (activeLeague !== RATINGS_LEAGUE) return;
     const t = setTimeout(() => {
-      loadFbsRatingsView().catch(() => {});
-      loadFcsRatingsView().catch(() => {});
+      loadFbsRatingsView().then((m) => m.preloadRatings()).catch(() => {});
+      loadFcsRatingsView().then((m) => m.preloadRatings()).catch(() => {});
     }, 1500);
     return () => clearTimeout(t);
   }, [activeLeague]);
