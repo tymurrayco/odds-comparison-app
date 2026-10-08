@@ -36,6 +36,8 @@ import PropsTable from '@/components/PropsTable';
 import ConferenceFilter from '@/components/ConferenceFilter';
 import BookmakerSelector from '@/components/BookmakerSelector';
 import MyBets, { BetYearFilter } from '@/components/MyBets';
+import AccountButton from '@/components/AccountButton';
+import { signInWithGoogle, useUser } from '@/lib/userAuth';
 import { getTeamConference } from '@/lib/conferences';
 
 interface CacheItem<T> {
@@ -65,6 +67,7 @@ export interface OddsBoardProps {
 
 function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoardProps) {
   const router = useRouter();
+  const { user, ready: authReady } = useUser();
   const pressTimer = useRef<NodeJS.Timeout | null>(null);
   const [isHolding, setIsHolding] = useState(false);
   const crossNavSearchRef = useRef(false);
@@ -921,7 +924,21 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
                   📈 Ratings
                 </button>
               )}
-              
+
+              {/* Signed out: Sign in takes the Bets slot (held invisible until the
+                  stored session is read, so the header doesn't jump). Signed in:
+                  Bets + the account button. */}
+              {!user && (
+                <button
+                  type="button"
+                  onClick={() => signInWithGoogle()}
+                  className={`px-2 sm:px-3 py-2 rounded-xl text-sm font-medium transition-all select-none border border-gray-200 shadow-sm whitespace-nowrap bg-blue-600 text-white hover:bg-blue-700 ${authReady ? '' : 'invisible'}`}
+                >
+                  Sign in
+                </button>
+              )}
+
+              {user && (
               <button
                 onMouseDown={(e) => {
                   e.preventDefault();
@@ -971,6 +988,9 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
               >
                 📊 Bets {isHolding && '...'}
               </button>
+              )}
+
+              {user && <AccountButton user={user} />}
             </div>
           </div>
         </div>
