@@ -91,8 +91,13 @@ export async function captureLineOpeners(sport: string, games: OddsGame[], force
         const { error } = await db.from('game_line_openers').upsert(
           rows.map(({ row, total }) => {
             const p = prev.get(row.event_id);
+            // Every row must carry captured_at: a bulk upsert sends one column
+            // list, so a batch mixing known and new games would send NULL for
+            // the new ones and the NOT NULL column rejects the whole batch
+            // (NCAAF stopped gaining openers after the first few, 2026-10-04).
             return {
               ...row,
+              captured_at: seenAt,
               ...(p ? { home_spread: p.home_spread, books: p.books, captured_at: p.captured_at } : {}),
               close_home_spread: row.home_spread,
               close_seen_at: seenAt,
