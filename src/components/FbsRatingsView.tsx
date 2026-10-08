@@ -18,6 +18,7 @@ import {
 import { hfaForGame, projectFbsSpread } from '@/lib/fbs/engine';
 import { useTeamColorMap } from '@/lib/myGameBets';
 import { createBet, fetchBets } from '@/lib/betService';
+import { useIsPremium } from '@/lib/userAuth';
 import FbsFuturesPanel from './FbsFuturesPanel';
 import SosPanel from './SosPanel';
 import FbsG5PlayoffPanel from './FbsG5PlayoffPanel';
@@ -228,7 +229,7 @@ function TeamChip({
   );
 }
 
-export default function FbsRatingsView({ admin = false }: { admin?: boolean }) {
+export default function FbsRatingsView({ admin = false, embedded = false }: { admin?: boolean; embedded?: boolean }) {
   const [data, setData] = useState<RatingsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
@@ -240,7 +241,13 @@ export default function FbsRatingsView({ admin = false }: { admin?: boolean }) {
   const [sortDesc, setSortDesc] = useState(true);
   const [manualSpreads, setManualSpreads] = useState<Record<string, string>>({});
   const [savingLine, setSavingLine] = useState<string | null>(null);
-  const [view, setView] = useState<'ratings' | 'upcoming' | 'futures' | 'sos' | 'g5' | 'history'>(admin ? 'ratings' : 'upcoming');
+  const [rawView, setView] = useState<'ratings' | 'upcoming' | 'futures' | 'sos' | 'g5' | 'history'>(admin ? 'ratings' : 'upcoming');
+  // The tabs beyond Ratings are for the admin page and premium accounts
+  // (useIsPremium); everyone else, and the board's embedded Ratings view,
+  // gets the ratings table alone.
+  const premium = useIsPremium();
+  const fullTabs = admin || (premium && !embedded);
+  const view = fullTabs ? rawView : 'ratings';
   const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
   const [manualDelta, setManualDelta] = useState('');
   const [manualDate, setManualDate] = useState(() => localYmd(new Date()));
@@ -267,14 +274,16 @@ export default function FbsRatingsView({ admin = false }: { admin?: boolean }) {
 
   // Shared tab link: ?view=ratings|upcoming|futures|sos|g5|history (read once; mirrored below)
   useEffect(() => {
+    if (embedded) return;
     const v = new URLSearchParams(window.location.search).get('view');
     if (v === 'ratings' || v === 'upcoming' || v === 'futures' || v === 'sos' || v === 'g5' || v === 'history') setView(v);
-  }, []);
+  }, [embedded]);
   useEffect(() => {
+    if (embedded) return;
     const params = new URLSearchParams(window.location.search);
     params.set('view', view);
     window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
-  }, [view]);
+  }, [view, embedded]);
 
   const colorMap = useTeamColorMap('americanfootball_ncaaf');
 
@@ -831,8 +840,9 @@ ${line}` : line);
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 p-3 sm:p-6">
+    <div className={embedded ? '' : 'min-h-screen bg-slate-50 p-3 sm:p-6'}>
       <div className="max-w-4xl mx-auto space-y-4 sm:space-y-6">
+        {!embedded && (
         <div className="space-y-3">
           <div>
             {/* Same back control as the other admin pages \u2014 previously the public
@@ -914,6 +924,7 @@ ${line}` : line);
           </div>
           )}
         </div>
+        )}
 
         {error && (
           <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
@@ -933,6 +944,7 @@ ${line}` : line);
           </div>
         )}
 
+        {fullTabs && (
         <div className="flex overflow-x-auto bg-slate-200/70 rounded-full p-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {(['ratings', 'upcoming', 'futures', 'sos', 'g5', 'history'] as const).map((v) => (
             <button
@@ -946,6 +958,12 @@ ${line}` : line);
             </button>
           ))}
         </div>
+        )}
+        {embedded && premium && (
+          <div className="text-right">
+            <Link href="/fbs" className="text-xs font-medium text-blue-600 hover:underline">Full FBS Ledger →</Link>
+          </div>
+        )}
 
         {view === 'upcoming' && (
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">

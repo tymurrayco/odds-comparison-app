@@ -37,6 +37,7 @@ import ConferenceFilter from '@/components/ConferenceFilter';
 import BookmakerSelector from '@/components/BookmakerSelector';
 import MyBets, { BetYearFilter } from '@/components/MyBets';
 import AccountButton from '@/components/AccountButton';
+import dynamic from 'next/dynamic';
 import { signInWithGoogle, useUser } from '@/lib/userAuth';
 import { usePrefs, zoneOption } from '@/lib/prefs';
 import { getTeamConference } from '@/lib/conferences';
@@ -48,6 +49,12 @@ interface CacheItem<T> {
 }
 
 // Cache time in milliseconds (e.g., 5 minutes)
+// Ledger ratings load in the page for this league's "Ratings" tab. The views
+// are large, so they are fetched only when that tab is opened.
+const RATINGS_LEAGUE = 'americanfootball_ncaaf';
+const FbsRatingsView = dynamic(() => import('@/components/FbsRatingsView'));
+const FcsRatingsView = dynamic(() => import('@/components/FcsRatingsView'));
+
 const CACHE_TIME = 5 * 60 * 1000;
 
 // Check if data is in cache and still valid - moved outside component
@@ -75,7 +82,9 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
   const crossNavSearchRef = useRef(false);
 
   const [activeLeague, setActiveLeague] = useState(initialLeague ?? 'basketball_nba');
-  const [activeView, setActiveView] = useState<'games' | 'futures' | 'props' | 'mybets'>('games');
+  const [activeView, setActiveView] = useState<'games' | 'futures' | 'props' | 'ratings' | 'mybets'>('games');
+  // NCAAF Ratings view: which division's Ledger ratings are showing
+  const [ratingsDivision, setRatingsDivision] = useState<'fbs' | 'fcs'>('fbs');
   // My Bets year filter (header dropdown next to "Back to Odds"); years come from the loaded bets
   const [betYear, setBetYear] = useState<BetYearFilter>(new Date().getFullYear());
   const [betYears, setBetYears] = useState<number[]>([]);
@@ -217,7 +226,7 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
     } else if (leagueId || view) {
       // Any shared tab: /?league=<id>&view=<games|futures|props>[&event=<id>]
       if (leagueId) setActiveLeague(leagueId);
-      if (view === 'games' || view === 'futures' || view === 'props') {
+      if (view === 'games' || view === 'futures' || view === 'props' || view === 'ratings') {
         setActiveView(view);
       }
       const eventId = searchParams.get('event');
@@ -335,6 +344,10 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
     }
     // If switching to a league that doesn't support props while on props view, switch to games
     if (activeView === 'props' && !PROPS_SUPPORTED_LEAGUES.includes(activeLeague)) {
+      setActiveView('games');
+    }
+    // The in-page Ratings view exists for NCAAF only
+    if (activeView === 'ratings' && activeLeague !== RATINGS_LEAGUE) {
       setActiveView('games');
     }
     if (crossNavSearchRef.current) {
@@ -548,7 +561,7 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
   const loadData = useCallback(async function() {
     const seq = ++loadSeqRef.current;
     const stale = () => loadSeqRef.current !== seq;
-    if (activeView === 'mybets') {
+    if (activeView === 'mybets' || activeView === 'ratings') {
       setLoading(false);
       return;
     }
@@ -786,7 +799,7 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
   }, [isClient, loadData, activeView, activeLeague]);
 
   // Force the effective view for rendering
-  const effectiveView: 'games' | 'futures' | 'props' | 'mybets' = isFuturesOnly(activeLeague) ? 'futures' : activeView;
+  const effectiveView: 'games' | 'futures' | 'props' | 'ratings' | 'mybets' = isFuturesOnly(activeLeague) ? 'futures' : activeView;
 
   // Filter games based on team name AND conferences
   const [showLiveGames, setShowLiveGames] = useState(false);
@@ -1071,7 +1084,7 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
             {activeLeague !== 'favorites' && (
               <h1 className="sr-only">
                 {(LEAGUES.find(l => l.id === activeLeague)?.name ?? '')}{' '}
-                {effectiveView === 'futures' ? 'Futures Odds' : effectiveView === 'props' ? 'Player Props' : 'Odds Today'}
+                {effectiveView === 'futures' ? 'Futures Odds' : effectiveView === 'props' ? 'Player Props' : effectiveView === 'ratings' ? 'Power Ratings' : 'Odds Today'}
               </h1>
             )}
 
@@ -1297,23 +1310,22 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
                         Props
                       </button>
                     )}
-                    {activeLeague === 'americanfootball_ncaaf' && (
-                      <>
-                        <button
-                          type="button"
-                          className="px-4 py-2 text-sm font-medium bg-white text-gray-700 hover:bg-gray-50 border border-gray-200 border-l-0"
-                          onClick={() => router.push('/fbs')}
-                        >
-                          FBS
-                        </button>
-                        <button
-                          type="button"
-                          className="px-4 py-2 text-sm font-medium rounded-r-lg bg-white text-gray-700 hover:bg-gray-50 border border-gray-200 border-l-0"
-                          onClick={() => router.push('/fcs')}
-                        >
-                          FCS
-                        </button>
-                      </>
+                    {activeLeague === RATINGS_LEAGUE && (
+                      <button
+                        type="button"
+                        className={`px-4 py-2 text-sm font-medium rounded-r-lg ${
+                          activeView === 'ratings' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
+                        } border border-gray-200 border-l-0`}
+                        onClick={() => {
+                          setActiveView('ratings');
+                          setTeamFilter('');
+                          setSelectedConferences([]);
+                          setSelectedPropsEvent(null);
+                          setPlayerFilter('');
+                        }}
+                      >
+                        Ratings
+                      </button>
                     )}
                     {activeLeague === 'americanfootball_nfl' && (
                       <button
@@ -1391,6 +1403,27 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
           )
         ) : activeView === 'mybets' ? (
           <MyBets yearFilter={betYear} onYearsLoaded={setBetYears} />
+        ) : effectiveView === 'ratings' ? (
+          // Ledger ratings in the page (like Futures), one division at a time
+          <div className="space-y-4">
+            <div className="flex justify-center">
+              <div className="inline-flex rounded-lg bg-gray-200/80 p-0.5">
+                {(['fbs', 'fcs'] as const).map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => setRatingsDivision(d)}
+                    className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
+                      ratingsDivision === d ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+                    }`}
+                  >
+                    {d === 'fbs' ? 'FBS Ratings' : 'FCS Ratings'}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {ratingsDivision === 'fbs' ? <FbsRatingsView embedded /> : <FcsRatingsView embedded />}
+          </div>
         ) : loading || (activeLeague === 'favorites' && favoritesLoading) ? (
           <BoardLoading variant={effectiveView === 'futures' ? 'futures' : 'games'} />
         ) : (

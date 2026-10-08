@@ -47,6 +47,18 @@ export function useUser(): AuthState {
   return useSyncExternalStore(subscribe, () => state, () => SIGNED_OUT_PENDING);
 }
 
+/**
+ * Premium accounts see the parts of the site that are not public yet (the
+ * Ledger tabs beyond Ratings, for a start). The flag is `app_metadata.premium`
+ * on the Supabase Auth user — only the service role / SQL editor can set it,
+ * a visitor cannot grant it to themselves (see sql/premium_user.sql).
+ * This hides UI; it does not lock the data routes behind it.
+ */
+export function useIsPremium(): boolean {
+  const { user } = useUser();
+  return user?.app_metadata?.premium === true;
+}
+
 /** Sends the browser to Google; it comes back to the page it left. */
 export function signInWithGoogle() {
   const { origin, pathname, search } = window.location;
