@@ -229,9 +229,14 @@ function TeamChip({
   );
 }
 
+// Last ratings response, kept for the life of the page: re-opening the view
+// (the board's Ratings tab mounts it on every visit) paints at once and
+// refreshes behind.
+let lastRatings: RatingsResponse | null = null;
+
 export default function FbsRatingsView({ admin = false, embedded = false }: { admin?: boolean; embedded?: boolean }) {
-  const [data, setData] = useState<RatingsResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<RatingsResponse | null>(lastRatings);
+  const [loading, setLoading] = useState(lastRatings === null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -295,12 +300,13 @@ export default function FbsRatingsView({ admin = false, embedded = false }: { ad
   );
 
   const load = useCallback(async () => {
-    setLoading(true);
+    setLoading(lastRatings === null);
     setError(null);
     try {
       const res = await fetch('/api/fbs/ratings');
       const json: RatingsResponse = await res.json();
       if (!res.ok || !json.success) throw new Error(json.error || `HTTP ${res.status}`);
+      lastRatings = json;
       setData(json);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load');
@@ -1404,7 +1410,17 @@ ${line}` : line);
             <div className="text-right">G</div>
           </div>
           {loading ? (
-            <div className="px-4 py-6 text-sm text-slate-500">Loading…</div>
+            // Row-shaped placeholders hold the table's height while it loads
+            <div className="divide-y divide-slate-100" role="status" aria-label="Loading ratings">
+              {Array.from({ length: 12 }, (_, i) => (
+                <div key={i} className="flex items-center gap-3 px-3 py-3">
+                  <div className="skeleton h-4 w-4" />
+                  <div className="skeleton h-7 w-7 rounded-full" />
+                  <div className="skeleton h-4 w-32" />
+                  <div className="skeleton ml-auto h-4 w-12" />
+                </div>
+              ))}
+            </div>
           ) : rows.length === 0 ? (
             <div className="px-4 py-6 text-sm text-slate-500">
               No ratings yet — run &quot;Seed Brad Powers&quot; (import the set at /admin/power-ratings first).

@@ -52,8 +52,13 @@ interface CacheItem<T> {
 // Ledger ratings load in the page for this league's "Ratings" tab. The views
 // are large, so they are fetched only when that tab is opened.
 const RATINGS_LEAGUE = 'americanfootball_ncaaf';
-const FbsRatingsView = dynamic(() => import('@/components/FbsRatingsView'));
-const FcsRatingsView = dynamic(() => import('@/components/FcsRatingsView'));
+const loadFbsRatingsView = () => import('@/components/FbsRatingsView');
+const loadFcsRatingsView = () => import('@/components/FcsRatingsView');
+// Stand-in while a view's code arrives: tall enough that the page (and the
+// footer under it) doesn't jump.
+const RatingsViewLoading = () => <div className="min-h-[70vh]"><OddsLoader label="Loading ratings" /></div>;
+const FbsRatingsView = dynamic(loadFbsRatingsView, { loading: RatingsViewLoading });
+const FcsRatingsView = dynamic(loadFcsRatingsView, { loading: RatingsViewLoading });
 
 const CACHE_TIME = 5 * 60 * 1000;
 
@@ -85,6 +90,16 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
   const [activeView, setActiveView] = useState<'games' | 'futures' | 'props' | 'ratings' | 'mybets'>('games');
   // NCAAF Ratings view: which division's Ledger ratings are showing
   const [ratingsDivision, setRatingsDivision] = useState<'fbs' | 'fcs'>('fbs');
+  // Fetch the Ratings views' code shortly after NCAAF opens, so the tab
+  // switches without a blank beat.
+  useEffect(() => {
+    if (activeLeague !== RATINGS_LEAGUE) return;
+    const t = setTimeout(() => {
+      loadFbsRatingsView().catch(() => {});
+      loadFcsRatingsView().catch(() => {});
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [activeLeague]);
   // My Bets year filter (header dropdown next to "Back to Odds"); years come from the loaded bets
   const [betYear, setBetYear] = useState<BetYearFilter>(new Date().getFullYear());
   const [betYears, setBetYears] = useState<number[]>([]);
@@ -1249,6 +1264,27 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
               </div>
             )}
 
+            {/* Ratings view: the division switch sits in the same slot as the
+                other views' filters, so the tab bar below doesn't move. */}
+            {effectiveView === 'ratings' && (
+              <div className="mb-6 flex h-[42px] items-center">
+                <div className="inline-flex rounded-lg bg-gray-200/80 p-0.5">
+                  {(['fbs', 'fcs'] as const).map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setRatingsDivision(d)}
+                      className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
+                        ratingsDivision === d ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+                      }`}
+                    >
+                      {d === 'fbs' ? 'FBS Ratings' : 'FCS Ratings'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* View Toggle Tabs - Only show when not in favorites */}
             {activeLeague !== 'favorites' && (
               isFuturesOnly(activeLeague) ? (
@@ -1405,23 +1441,7 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
           <MyBets yearFilter={betYear} onYearsLoaded={setBetYears} />
         ) : effectiveView === 'ratings' ? (
           // Ledger ratings in the page (like Futures), one division at a time
-          <div className="space-y-4">
-            <div className="flex justify-center">
-              <div className="inline-flex rounded-lg bg-gray-200/80 p-0.5">
-                {(['fbs', 'fcs'] as const).map((d) => (
-                  <button
-                    key={d}
-                    type="button"
-                    onClick={() => setRatingsDivision(d)}
-                    className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
-                      ratingsDivision === d ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
-                    }`}
-                  >
-                    {d === 'fbs' ? 'FBS Ratings' : 'FCS Ratings'}
-                  </button>
-                ))}
-              </div>
-            </div>
+          <div className="min-h-[80vh]">
             {ratingsDivision === 'fbs' ? <FbsRatingsView embedded /> : <FcsRatingsView embedded />}
           </div>
         ) : loading || (activeLeague === 'favorites' && favoritesLoading) ? (
