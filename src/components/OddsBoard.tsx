@@ -85,6 +85,13 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
   const [isClient, setIsClient] = useState(false);
   const [apiRequestsRemaining, setApiRequestsRemaining] = useState<string | null>(null);
   const [teamFilter, setTeamFilter] = useState('');
+  // Games view: the search bar hides behind an icon until opened (or while a filter is typed)
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchShown = searchOpen || !!teamFilter;
+  const closeSearch = () => {
+    setTeamFilter('');
+    setSearchOpen(false);
+  };
   const [selectedConferences, setSelectedConferences] = useState<string[]>([]);
   const [selectedBookmakers, setSelectedBookmakers] = useState<string[]>([...BOOKMAKERS]);
   const [favoriteGames, setFavoriteGames] = useState<string[]>([]);
@@ -1044,42 +1051,62 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
             {/* Team filter for Games view */}
             {effectiveView === 'games' && activeLeague !== 'favorites' && (
               <div className="mb-6 space-y-4">
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <div className="flex-1">
-                    <div className="relative">
-                      <input
-                        type="text"
-                        placeholder="Filter by team name..."
-                        value={teamFilter}
-                        onChange={(e) => setTeamFilter(e.target.value)}
-                        className="w-full px-4 py-2 pl-10 pr-4 text-gray-700 bg-white border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                      />
-                      <div className="absolute inset-y-0 left-0 flex items-center pl-3">
-                        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {/* Search is tucked behind an icon beside the conference filter;
+                    tapping it opens the bar on its own row above the filter. */}
+                {searchShown && (
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Filter by team name..."
+                      value={teamFilter}
+                      onChange={(e) => setTeamFilter(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Escape' && closeSearch()}
+                      autoFocus={searchOpen}
+                      className="w-full px-4 py-2 pl-10 pr-10 text-gray-700 bg-white border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    />
+                    <div className="absolute inset-y-0 left-0 flex items-center pl-3">
+                      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                    </div>
+                    <button
+                      onClick={closeSearch}
+                      aria-label="Close search"
+                      className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+
+                {(!searchShown || supportsConferenceFilter) && (
+                  <div className={`flex items-center gap-2 ${supportsConferenceFilter ? 'sm:justify-end' : ''}`}>
+                    {!searchShown && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchOpen(true)}
+                        aria-label="Search teams"
+                        className="flex-none p-2 bg-white border border-gray-300 rounded-lg shadow-sm text-gray-500 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                         </svg>
+                      </button>
+                    )}
+                    {supportsConferenceFilter && (
+                      // Full width on phones so the filter's dropdown (right-aligned) stays on screen
+                      <div className="flex-1 sm:flex-none">
+                        <ConferenceFilter
+                          activeLeague={activeLeague}
+                          selectedConferences={selectedConferences}
+                          onConferencesChange={setSelectedConferences}
+                        />
                       </div>
-                      {teamFilter && (
-                        <button
-                          onClick={() => setTeamFilter('')}
-                          className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
-                        >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      )}
-                    </div>
+                    )}
                   </div>
-                  
-                  {supportsConferenceFilter && (
-                    <ConferenceFilter
-                      activeLeague={activeLeague}
-                      selectedConferences={selectedConferences}
-                      onConferencesChange={setSelectedConferences}
-                    />
-                  )}
-                </div>
+                )}
 
                 {(teamFilter || selectedConferences.length > 0) && (
                   <div className="flex flex-wrap gap-2 items-center">
