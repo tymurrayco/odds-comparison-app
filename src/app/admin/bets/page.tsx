@@ -4,6 +4,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { fetchBets, createBet, updateBet, deleteBet, Bet, BetStatus, BetType } from '@/lib/betService';
+import { signInWithGoogle, useUser } from '@/lib/userAuth';
 import CreditGauge from '@/components/CreditGauge';
 
 interface BetTeamInfo {
@@ -80,6 +81,7 @@ function StatusSelect({ bet, onChange }: { bet: Bet; onChange: (s: BetStatus) =>
 }
 
 export default function BetAdminPage() {
+  const { user, ready: authReady } = useUser();
   const router = useRouter();
   const [bets, setBets] = useState<Bet[]>([]);
   const [loading, setLoading] = useState(false);
@@ -356,7 +358,7 @@ export default function BetAdminPage() {
       setShowForm(false);
     } catch (error) {
       console.error('Error saving bet:', error);
-      alert('Error saving bet. Check console for details.');
+      alert(error instanceof Error ? error.message : 'Error saving bet. Check console for details.');
     } finally {
       setLoading(false);
     }
@@ -661,6 +663,22 @@ export default function BetAdminPage() {
       </div>
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+        {/* Bets belong to a Google sign-in now; the admin login alone shows none
+            and can't save. Say so instead of an empty, failing page. */}
+        {authReady && !user && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <p className="text-sm text-amber-800">
+              You are not signed in on this device, so your bets are hidden and can&apos;t be added or edited here.
+            </p>
+            <button
+              type="button"
+              onClick={() => signInWithGoogle()}
+              className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700"
+            >
+              Sign in with Google
+            </button>
+          </div>
+        )}
         {/* Odds API fuel gauge */}
         <CreditGauge />
 

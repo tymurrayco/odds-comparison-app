@@ -42,7 +42,13 @@ function cmp(diff: number): 'won' | 'lost' | 'push' {
   return 'push';
 }
 
+// Half / quarter bets ("Florida International Panthers -3 1H") settle on a
+// score this module never sees — leave them for hand-grading rather than
+// grade them against the final.
+const PARTIAL_GAME = /\b(?:[12]H|[1-4]Q|(?:1st|2nd|first|second)\s+half|(?:1st|2nd|3rd|4th)\s+quarter)\b/i;
+
 export function gradeBet(bet: Bet, score: FinalScore): Grade | null {
+  if (PARTIAL_GAME.test(bet.bet)) return null;
   const result = `Final: ${bet.awayTeam ?? 'Away'} ${score.away}, ${bet.homeTeam ?? 'Home'} ${score.home}`;
   const done = (status: Grade['status']): Grade => ({ status, result });
 

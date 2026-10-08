@@ -6,6 +6,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { fetchBets, getBetStats, calculateProfit, Bet, BetStatus, BetType } from '@/lib/betService';
+import BetEditSheet from '@/components/BetEditSheet';
 
 // Bookmaker logos mapping - KEPT FROM YOUR ORIGINAL
 const bookmakerLogos: { [key: string]: string } = {
@@ -113,6 +114,8 @@ export default function MyBets({ yearFilter = 'all', onYearsLoaded }: MyBetsProp
   const [statusFilter, setStatusFilter] = useState<BetStatus | 'all' | 'settled'>('pending');
   const [expandedBetId, setExpandedBetId] = useState<string | null>(null);
   const [copiedBetId, setCopiedBetId] = useState<string | null>(null);
+  // Bet open in the edit sheet (text / odds / stake / result / delete)
+  const [editingBet, setEditingBet] = useState<Bet | null>(null);
   const [viewType, setViewType] = useState<'games' | 'futures'>('games');
 
   // Team logo/color maps per league (lazy-loaded, same as Bet Admin)
@@ -668,6 +671,14 @@ export default function MyBets({ yearFilter = 'all', onYearsLoaded }: MyBetsProp
   // KEPT: Your entire render logic exactly as it was with updates for teasers
   return (
     <div className="space-y-4">
+      {editingBet && (
+        <BetEditSheet
+          bet={editingBet}
+          onClose={() => setEditingBet(null)}
+          onSaved={(updated) => setMyBets((list) => list.map((b) => (b.id === updated.id ? updated : b)))}
+          onDeleted={(id) => setMyBets((list) => list.filter((b) => b.id !== id))}
+        />
+      )}
       {/* View Toggle - Updated label to include Teasers */}
       <div className="bg-white rounded-lg shadow p-2">
         <div className="flex gap-2 justify-center">
@@ -1156,6 +1167,16 @@ export default function MyBets({ yearFilter = 'all', onYearsLoaded }: MyBetsProp
                         <div className="flex justify-between">
                           <span className="text-gray-500">Odds:</span>
                           <span>{formatOdds(bet.odds)}</span>
+                        </div>
+                        <div className="flex justify-between items-center pt-1">
+                          <span className="text-gray-500">Edit:</span>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setEditingBet(bet); }}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>
+                            Edit / grade
+                          </button>
                         </div>
                         <div className="flex justify-between items-center pt-1">
                           <span className="text-gray-500">Share:</span>
