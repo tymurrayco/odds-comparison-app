@@ -1,9 +1,9 @@
 // src/components/BetTicket.tsx
 //
 // The ticket a signed-in visitor gets when they tap a price: the bet already
-// filled in, a stake, and two actions — open the sportsbook, or track the bet
-// in their own list. Opening the book leaves the ticket up, so they can come
-// back and track what they just placed. Bottom sheet on phones, centred card
+// filled in, an amount (Risk / To win), and three actions — track the bet and
+// open the sportsbook in one tap, or either on its own. "Open only" leaves
+// the ticket up, so they can come back and track what they placed. Bottom sheet on phones, centred card
 // on desktop. Signed-out visitors never see it (a tap goes straight to the book).
 'use client';
 
@@ -35,13 +35,28 @@ export interface TicketPick {
   buildGo: (to?: string) => string;
 }
 
-// Default stake: risk enough to win 1 unit (the site's unit convention)
-function stakeToWinOne(odds: number): number {
-  return odds > 0 ? 100 / odds : Math.abs(odds) / 100;
+// The amount field is either what you risk or what you want to win; the
+// choice is remembered on this device. Either way the bet saves its stake (risk).
+type AmountMode = 'risk' | 'towin';
+const MODE_KEY = 'betTicketAmountMode';
+const MODES: { id: AmountMode; label: string }[] = [
+  { id: 'risk', label: 'Risk' },
+  { id: 'towin', label: 'To win' },
+];
+
+function storedMode(): AmountMode {
+  try {
+    return localStorage.getItem(MODE_KEY) === 'risk' ? 'risk' : 'towin';
+  } catch {
+    return 'towin';
+  }
 }
 
 export default function BetTicket({ pick, onClose }: { pick: TicketPick; onClose: () => void }) {
-  const [stakeText, setStakeText] = useState(() => stakeToWinOne(pick.odds).toFixed(2));
+  const winPerUnit = calculateProfit(1, pick.odds); // profit for each unit risked
+  const [mode, setMode] = useState<AmountMode>(storedMode);
+  // Default bet: to win 1 unit (the site's unit convention)
+  const [amountText, setAmountText] = useState(() => (storedMode() === 'towin' ? '1.00' : (1 / winPerUnit).toFixed(2)));
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,8 +67,22 @@ export default function BetTicket({ pick, onClose }: { pick: TicketPick; onClose
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const stake = Number(stakeText);
-  const stakeOk = stakeText.trim() !== '' && Number.isFinite(stake) && stake > 0;
+  const amount = Number(amountText);
+  const stakeOk = amountText.trim() !== '' && Number.isFinite(amount) && amount > 0;
+  const stake = mode === 'risk' ? amount : amount / winPerUnit;
+  const toWin = mode === 'risk' ? amount * winPerUnit : amount;
+
+  // Switching keeps the same bet: the field shows it from the other side
+  const switchMode = (next: AmountMode) => {
+    if (next === mode) return;
+    if (stakeOk) setAmountText((next === 'risk' ? stake : toWin).toFixed(2));
+    setMode(next);
+    try {
+      localStorage.setItem(MODE_KEY, next);
+    } catch {
+      /* not remembered */
+    }
+  };
 
   // Where "Open in <book>" goes. App-link books on phones need a real same-tab
   // anchor straight at the app link (see betLinks.ts); everything else opens
@@ -75,8 +104,14 @@ export default function BetTicket({ pick, onClose }: { pick: TicketPick; onClose
     }
   };
 
+  const openProps = appHref
+    ? { href: openHref }
+    : { href: openHref, target: '_blank', rel: 'noopener noreferrer' };
+  const secondary =
+    'rounded-xl border border-gray-200 bg-white px-3 py-2 text-center text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50';
+
   const onTrack = async () => {
-    if (!stakeOk || saving) return;
+    if (!stakeOk || saving || saved) return;
     setSaving(true);
     setError(null);
     try {
@@ -120,43 +155,68 @@ export default function BetTicket({ pick, onClose }: { pick: TicketPick; onClose
           </button>
         </div>
 
-        <label className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2">
-          <span className="text-sm font-medium text-gray-700">Stake (units)</span>
-          <input
-            type="text"
-            inputMode="decimal"
-            value={stakeText}
-            onChange={(e) => setStakeText(e.target.value)}
-            onFocus={(e) => e.target.select()}
-            className="w-24 rounded-lg border border-gray-200 bg-white px-2 py-1 text-right text-sm font-semibold text-gray-900"
-            aria-label="Stake in units"
-          />
-        </label>
+        <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2">
+          {/* iOS-style segmented switch: is the amount what you risk or what you win? */}
+          <div className="flex rounded-lg bg-gray-200/80 p-0.5" role="radiogroup" aria-label="Amount is">
+            {MODES.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                role="radio"
+                aria-checked={mode === m.id}
+                onClick={() => switchMode(m.id)}
+                className={`rounded-md px-3 py-1 text-sm font-medium transition-colors ${
+                  mode === m.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+                }`}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1.5">
+            <input
+              type="text"
+              inputMode="decimal"
+              value={amountText}
+              onChange={(e) => setAmountText(e.target.value)}
+              onFocus={(e) => e.target.select()}
+              className="w-20 rounded-lg border border-gray-200 bg-white px-2 py-1 text-right text-sm font-semibold text-gray-900"
+              aria-label={mode === 'risk' ? 'Units to risk' : 'Units to win'}
+            />
+            <span className="text-sm text-gray-500">u</span>
+          </div>
+        </div>
         <div className="mt-1 h-4 text-right text-[11px] text-gray-400">
-          {stakeOk && `To win ${calculateProfit(stake, pick.odds).toFixed(2)}u`}
+          {stakeOk && (mode === 'risk' ? `To win ${toWin.toFixed(2)}u` : `Risk ${stake.toFixed(2)}u`)}
         </div>
 
+        {/* Both at once on top; each on its own underneath. The two "open"
+            actions are real anchors so phones hand app links to the app. */}
+        <a
+          {...openProps}
+          onClick={(e) => {
+            if (!stakeOk || saving || saved) {
+              e.preventDefault();
+              return;
+            }
+            onOpen(e);
+            onTrack();
+          }}
+          aria-disabled={!stakeOk || saving}
+          className={`mt-2 block rounded-xl px-3 py-2.5 text-center text-sm font-semibold shadow-sm ${
+            saved
+              ? 'bg-emerald-50 text-emerald-700'
+              : `bg-blue-600 text-white hover:bg-blue-700 ${!stakeOk || saving ? 'opacity-50' : ''}`
+          }`}
+        >
+          {saved ? 'Tracked ✓' : saving ? 'Saving…' : `Track + open ${pick.book}`}
+        </a>
         <div className="mt-2 grid grid-cols-2 gap-2">
-          <a
-            href={openHref}
-            target={appHref ? undefined : '_blank'}
-            rel={appHref ? undefined : 'noopener noreferrer'}
-            onClick={onOpen}
-            className="rounded-xl bg-blue-600 px-3 py-2.5 text-center text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
-          >
-            Open in {pick.book}
+          <a {...openProps} onClick={onOpen} className={secondary}>
+            Open only
           </a>
-          <button
-            type="button"
-            onClick={onTrack}
-            disabled={!stakeOk || saving}
-            className={`rounded-xl border px-3 py-2.5 text-sm font-semibold shadow-sm ${
-              saved
-                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                : 'border-gray-200 bg-white text-gray-800 hover:bg-gray-50 disabled:opacity-50'
-            }`}
-          >
-            {saved ? 'Tracked ✓' : saving ? 'Saving…' : 'Track bet'}
+          <button type="button" onClick={onTrack} disabled={!stakeOk || saving || saved} className={`${secondary} disabled:opacity-50`}>
+            Track only
           </button>
         </div>
         {error && <div className="mt-2 text-xs text-rose-600">{error}</div>}

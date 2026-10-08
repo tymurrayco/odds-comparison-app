@@ -44,6 +44,7 @@ async function writeBets(method: 'POST' | 'PATCH' | 'DELETE', body: unknown): Pr
     method,
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify(body),
+    keepalive: true, // "Track + open" may leave the page for the book's app mid-save
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
