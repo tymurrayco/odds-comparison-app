@@ -1150,33 +1150,33 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
                         </svg>
                       </button>
                     )}
-                    {/* Live chip: only while games are under way. Off (outlined)
-                        hides them; on (red) shows them. The count says how many. */}
-                    {liveCount > 0 && (
-                      <button
-                        type="button"
-                        aria-pressed={showLiveGames}
-                        title={showLiveGames ? 'Hide games in progress' : 'Show games in progress'}
-                        onClick={toggleLiveGames}
-                        className={`flex-none inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border text-base font-semibold shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-red-400 ${
-                          showLiveGames
-                            ? 'bg-red-600 border-red-600 text-white'
-                            : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
-                        }`}
-                      >
-                        <span className={`h-2 w-2 rounded-full ${showLiveGames ? 'bg-white' : 'bg-red-500'}`} />
-                        Live {liveCount}
-                      </button>
-                    )}
                     {supportsConferenceFilter && (
-                      // Full width on phones so the filter's dropdown (right-aligned) stays on screen
-                      <div className="flex-1 sm:flex-none">
+                      <div className="flex-none">
                         <ConferenceFilter
                           activeLeague={activeLeague}
                           selectedConferences={selectedConferences}
                           onConferencesChange={setSelectedConferences}
                         />
                       </div>
+                    )}
+                    {/* Live chip, last in the row: only while games are under way. Off
+                        (plain) hides them; on (light red tint) shows them. The
+                        count says how many. */}
+                    {liveCount > 0 && (
+                      <button
+                        type="button"
+                        aria-pressed={showLiveGames}
+                        title={showLiveGames ? 'Hide games in progress' : 'Show games in progress'}
+                        onClick={toggleLiveGames}
+                        className={`flex-none inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border text-base font-semibold shadow-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-300 ${
+                          showLiveGames
+                            ? 'bg-red-50 border-red-200 text-red-700'
+                            : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        <span className="h-2 w-2 rounded-full bg-red-500" />
+                        Live {liveCount}
+                      </button>
                     )}
                   </div>
                 )}

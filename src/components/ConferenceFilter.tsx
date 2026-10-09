@@ -76,7 +76,7 @@ export default function ConferenceFilter({
           />
           
           {/* Dropdown */}
-          <div className="absolute right-0 mt-2 w-72 bg-white rounded-lg shadow-lg border border-gray-200 z-20">
+          <div className="absolute left-0 sm:left-auto sm:right-0 mt-2 w-72 bg-white rounded-lg shadow-lg border border-gray-200 z-20">
             <div className="p-3 border-b border-gray-200">
               <input
                 type="text"
