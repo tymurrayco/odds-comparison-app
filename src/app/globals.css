@@ -70,24 +70,45 @@ body {
 }
 
 /* Slide-up sheets (bet ticket, bet editor). Phones: the panel rises from the
-   bottom edge and drops back on close. Desktop, where it is a centred card:
-   a short fade + lift. The dimmed backdrop fades with it. The exit lasts
-   180ms — keep in step with EXIT_MS in src/lib/useSheetClose.ts. */
-@keyframes sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+   bottom edge, overshoots a little and settles (a soft bounce), then drops
+   back on close. Desktop, where it is a centred card: a fade with a slight
+   pop. The dimmed backdrop fades with it. The exit lasts 220ms — keep in
+   step with EXIT_MS in src/lib/useSheetClose.ts. */
+@keyframes sheet-up {
+  0%   { transform: translateY(100%); animation-timing-function: cubic-bezier(0.22, 0.8, 0.3, 1); }
+  62%  { transform: translateY(-14px); animation-timing-function: ease-in-out; }
+  83%  { transform: translateY(5px); animation-timing-function: ease-in-out; }
+  100% { transform: translateY(0); }
+}
 @keyframes sheet-down { from { transform: translateY(0); } to { transform: translateY(100%); } }
-@keyframes sheet-pop { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: none; } }
+@keyframes sheet-pop {
+  0%   { opacity: 0; transform: translateY(12px) scale(0.96); }
+  65%  { opacity: 1; transform: translateY(-2px) scale(1.015); }
+  100% { opacity: 1; transform: none; }
+}
 @keyframes sheet-unpop { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(10px) scale(0.98); } }
 @keyframes sheet-fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes sheet-fade-out { from { opacity: 1; } to { opacity: 0; } }
 
-.sheet-backdrop { animation: sheet-fade-in 220ms ease-out both; }
-.sheet-panel { animation: sheet-up 300ms cubic-bezier(0.32, 0.72, 0, 1) both; }
-[data-closing] .sheet-backdrop { animation: sheet-fade-out 180ms ease-in both; }
-[data-closing] .sheet-panel { animation: sheet-down 180ms ease-in both; }
+.sheet-backdrop { animation: sheet-fade-in 320ms ease-out both; }
+.sheet-panel { animation: sheet-up 520ms both; }
+/* White continues below the panel, so the overshoot never shows the page under it */
+.sheet-panel::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  height: 40px;
+  background: inherit;
+}
+[data-closing] .sheet-backdrop { animation: sheet-fade-out 220ms ease-in both; }
+[data-closing] .sheet-panel { animation: sheet-down 220ms ease-in both; }
 
 @media (min-width: 640px) {
-  .sheet-panel { animation: sheet-pop 180ms ease-out both; }
-  [data-closing] .sheet-panel { animation: sheet-unpop 180ms ease-in both; }
+  .sheet-panel { animation: sheet-pop 300ms ease-out both; }
+  .sheet-panel::after { display: none; }
+  [data-closing] .sheet-panel { animation: sheet-unpop 220ms ease-in both; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -8,7 +8,7 @@
 import { useCallback, useState } from 'react';
 
 // Matches the exit animations' duration in globals.css
-const EXIT_MS = 180;
+const EXIT_MS = 220;
 
 export function useSheetClose(onClose: () => void): { closing: boolean; close: () => void } {
   const [closing, setClosing] = useState(false);
