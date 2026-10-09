@@ -70,14 +70,59 @@ body {
 }
 
 /* Slide-up sheets (bet ticket, bet editor). Phones: the panel rises from the
-   bottom edge, overshoots a little and settles (a soft bounce), then drops
-   back on close. Desktop, where it is a centred card: a fade with a slight
-   pop. The dimmed backdrop fades with it. The exit lasts 220ms — keep in
-   step with EXIT_MS in src/lib/useSheetClose.ts. */
+   bottom edge on a damped spring — it passes its resting place by about 5%
+   of its height, then settles — and drops back on close. Desktop, where it
+   is a centred card: a fade with a slight pop. The dimmed backdrop fades
+   with it. The exit lasts 220ms — keep in step with EXIT_MS in
+   src/lib/useSheetClose.ts.
+
+   sheet-up is that spring sampled every 20ms (damping ratio 0.68) and played
+   linearly, so the motion has no corners; regenerate rather than hand-edit. */
 @keyframes sheet-up {
-  0%   { transform: translateY(100%); animation-timing-function: cubic-bezier(0.22, 0.8, 0.3, 1); }
-  62%  { transform: translateY(-14px); animation-timing-function: ease-in-out; }
-  83%  { transform: translateY(5px); animation-timing-function: ease-in-out; }
+  0% { transform: translateY(100.00%); }
+  2.27% { transform: translateY(97.61%); }
+  4.55% { transform: translateY(91.42%); }
+  6.82% { transform: translateY(82.74%); }
+  9.09% { transform: translateY(72.64%); }
+  11.36% { transform: translateY(61.95%); }
+  13.64% { transform: translateY(51.33%); }
+  15.91% { transform: translateY(41.23%); }
+  18.18% { transform: translateY(31.97%); }
+  20.45% { transform: translateY(23.76%); }
+  22.73% { transform: translateY(16.67%); }
+  25% { transform: translateY(10.74%); }
+  27.27% { transform: translateY(5.91%); }
+  29.55% { transform: translateY(2.12%); }
+  31.82% { transform: translateY(-0.75%); }
+  34.09% { transform: translateY(-2.81%); }
+  36.36% { transform: translateY(-4.19%); }
+  38.64% { transform: translateY(-5.01%); }
+  40.91% { transform: translateY(-5.38%); }
+  43.18% { transform: translateY(-5.40%); }
+  45.45% { transform: translateY(-5.18%); }
+  47.73% { transform: translateY(-4.77%); }
+  50% { transform: translateY(-4.26%); }
+  52.27% { transform: translateY(-3.70%); }
+  54.55% { transform: translateY(-3.12%); }
+  56.82% { transform: translateY(-2.55%); }
+  59.09% { transform: translateY(-2.02%); }
+  61.36% { transform: translateY(-1.54%); }
+  63.64% { transform: translateY(-1.12%); }
+  65.91% { transform: translateY(-0.76%); }
+  68.18% { transform: translateY(-0.46%); }
+  70.45% { transform: translateY(-0.23%); }
+  72.73% { transform: translateY(-0.04%); }
+  75% { transform: translateY(0.09%); }
+  77.27% { transform: translateY(0.19%); }
+  79.55% { transform: translateY(0.25%); }
+  81.82% { transform: translateY(0.28%); }
+  84.09% { transform: translateY(0.29%); }
+  86.36% { transform: translateY(0.29%); }
+  88.64% { transform: translateY(0.27%); }
+  90.91% { transform: translateY(0.25%); }
+  93.18% { transform: translateY(0.22%); }
+  95.45% { transform: translateY(0.19%); }
+  97.73% { transform: translateY(0.16%); }
   100% { transform: translateY(0); }
 }
 @keyframes sheet-down { from { transform: translateY(0); } to { transform: translateY(100%); } }
@@ -90,8 +135,8 @@ body {
 @keyframes sheet-fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes sheet-fade-out { from { opacity: 1; } to { opacity: 0; } }
 
-.sheet-backdrop { animation: sheet-fade-in 320ms ease-out both; }
-.sheet-panel { animation: sheet-up 520ms both; }
+.sheet-backdrop { animation: sheet-fade-in 380ms ease-out both; }
+.sheet-panel { animation: sheet-up 880ms linear both; will-change: transform; }
 /* White continues below the panel, so the overshoot never shows the page under it */
 .sheet-panel::after {
   content: "";
@@ -106,7 +151,7 @@ body {
 [data-closing] .sheet-panel { animation: sheet-down 220ms ease-in both; }
 
 @media (min-width: 640px) {
-  .sheet-panel { animation: sheet-pop 300ms ease-out both; }
+  .sheet-panel { animation: sheet-pop 340ms ease-out both; }
   .sheet-panel::after { display: none; }
   [data-closing] .sheet-panel { animation: sheet-unpop 220ms ease-in both; }
 }
