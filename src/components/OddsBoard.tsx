@@ -1137,15 +1137,15 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
                 )}
 
                 {(!searchShown || supportsConferenceFilter || liveCount > 0) && (
-                  <div className={`flex items-center gap-2 ${supportsConferenceFilter ? 'sm:justify-end' : ''}`}>
+                  <div className={`flex min-h-[42px] items-center gap-2 ${supportsConferenceFilter ? 'sm:justify-end' : ''}`}>
                     {!searchShown && (
                       <button
                         type="button"
                         onClick={() => setSearchOpen(true)}
                         aria-label="Search teams"
-                        className="flex-none p-2 bg-white border border-gray-300 rounded-lg shadow-sm text-gray-500 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="flex-none inline-flex h-9 w-9 items-center justify-center bg-white border border-gray-300 rounded-lg shadow-sm text-gray-500 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                         </svg>
                       </button>
@@ -1168,7 +1168,7 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
                         aria-pressed={showLiveGames}
                         title={showLiveGames ? 'Hide games in progress' : 'Show games in progress'}
                         onClick={toggleLiveGames}
-                        className={`flex-none inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border text-base font-semibold shadow-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-300 ${
+                        className={`flex-none inline-flex h-9 items-center gap-1.5 px-2.5 rounded-lg border text-sm font-semibold shadow-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-300 ${
                           showLiveGames
                             ? 'bg-red-50 border-red-200 text-red-700'
                             : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
