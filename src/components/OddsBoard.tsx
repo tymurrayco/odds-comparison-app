@@ -1387,22 +1387,21 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
               </div>
             )}
 
-            {/* Tap hint - games view, and only until this device has tapped a price once */}
+            {/* Tap hint - games view, and only until this device has tapped a price once.
+                Shown once, so it can afford to say what a tap does. */}
             {showTapHint && activeView === 'games' && activeLeague !== 'favorites' && (
-              <div className="flex items-center justify-center gap-3 mb-4">
-                {/* Mobile: shorter message */}
-                <p className="md:hidden text-xs text-gray-500 text-center flex items-center justify-center gap-1">
-                  <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                  </svg>
-                  {user ? 'Tap odds to bet or track' : 'Tap odds to open in sportsbook app'}
-                </p>
-                {/* Desktop: full message */}
-                <p className="hidden md:flex text-xs text-gray-500 text-center items-center justify-center gap-1">
-                  <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                  </svg>
-                  {user ? 'Click odds to bet or track' : 'Click FanDuel, DraftKings, or Caesars odds to directly create betslip'}
+              <div className="mb-4 flex items-start justify-center gap-2 rounded-lg bg-white/70 px-3 py-2 text-xs leading-snug text-gray-600">
+                <svg className="mt-px h-4 w-4 flex-none text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                </svg>
+                <p>
+                  <span className="font-semibold text-gray-800">
+                    <span className="md:hidden">Tap</span>
+                    <span className="hidden md:inline">Click</span> any price.
+                  </span>{' '}
+                  {user
+                    ? 'A ticket opens where you can send the bet to that sportsbook, track it in your bets, or both.'
+                    : 'It opens that bet at the sportsbook, with the selection loaded where the book supports it. Sign in to track your bets here too.'}
                 </p>
               </div>
             )}
