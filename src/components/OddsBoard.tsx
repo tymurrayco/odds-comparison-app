@@ -166,6 +166,13 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
 
   // Check if current league supports props
   const supportsProps = PROPS_SUPPORTED_LEAGUES.includes(activeLeague);
+  // The last tab (NCAAF "Ratings", NFL "Ledger") is odds.day's own ratings, so
+  // it goes away when the account menu's "odds.day projections" is off.
+  const hasRatingsTab =
+    prefs.showProjections && (activeLeague === RATINGS_LEAGUE || activeLeague === 'americanfootball_nfl');
+  useEffect(() => {
+    if (!prefs.showProjections && activeView === 'ratings') setActiveView('games');
+  }, [prefs.showProjections, activeView]);
 
   // Set isClient to true when component mounts on client side
   useEffect(() => {
@@ -1254,7 +1261,7 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
                       <button
                         type="button"
                         className={`px-4 py-2 text-sm font-medium ${
-                          activeLeague === 'americanfootball_ncaaf' || activeLeague === 'americanfootball_nfl' ? '' : 'rounded-r-lg '
+                          hasRatingsTab ? '' : 'rounded-r-lg '
                         }${
                           activeView === 'props' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
                         } border border-gray-200 border-l-0`}
@@ -1268,7 +1275,7 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
                         Props
                       </button>
                     )}
-                    {activeLeague === RATINGS_LEAGUE && (
+                    {hasRatingsTab && activeLeague === RATINGS_LEAGUE && (
                       <button
                         type="button"
                         className={`px-4 py-2 text-sm font-medium rounded-r-lg ${
@@ -1285,7 +1292,7 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
                         Ratings
                       </button>
                     )}
-                    {activeLeague === 'americanfootball_nfl' && (
+                    {hasRatingsTab && activeLeague === 'americanfootball_nfl' && (
                       <button
                         type="button"
                         className="px-4 py-2 text-sm font-medium rounded-r-lg bg-white text-gray-700 hover:bg-gray-50 border border-gray-200 border-l-0"

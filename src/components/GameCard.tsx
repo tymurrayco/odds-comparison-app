@@ -68,6 +68,14 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
   const prefs = usePrefs();
+  // "odds.day projections" off: the NCAAF analysis panel (Summary / FEI /
+  // Ledger) and the NFL Ledger panel are projections, so close them and hide
+  // their buttons. The NFL injury report stays.
+  useEffect(() => {
+    if (prefs.showProjections) return;
+    if (game.sport_key === 'americanfootball_ncaaf') setExpandedMarket((m) => (m === 'analysis' ? 'spread' : m));
+    setNflPanel('injuries');
+  }, [prefs.showProjections, game.sport_key]);
 
   // Format the date and time
   const gameDate = new Date(game.commence_time);
@@ -769,7 +777,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
               O/U
             </button>
             {/* Analysis button - only for NCAAF */}
-            {isNCAAF && (
+            {isNCAAF && prefs.showProjections && (
               <button 
                 className={`px-2 md:px-3 py-1 text-xs md:text-sm rounded-md ${
                   expandedMarket === 'analysis' 
@@ -810,7 +818,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
       {expandedMarket === 'analysis' && isNFL ? (
         <div>
           <div className="flex gap-1 border-b border-gray-200 px-3 pt-1">
-            {(['injuries', 'ledger'] as const).map((p) => (
+            {(['injuries', 'ledger'] as const).filter((p) => p !== 'ledger' || prefs.showProjections).map((p) => (
               <button
                 key={p}
                 onClick={() => setNflPanel(p)}
