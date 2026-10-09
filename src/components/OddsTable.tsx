@@ -497,6 +497,15 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
           });
         }
         
+        // Column order: best prices first. The book(s) with the best price on
+        // the top row lead, then the book(s) best on the bottom row (so when
+        // the two rows' best prices sit at different books, those columns end
+        // up side by side), then every other book in its usual order.
+        const bestFirst = Array.from(
+          new Set([...(bestBookmakersByTeam[game.away_team] ?? []), ...(bestBookmakersByTeam[game.home_team] ?? [])])
+        );
+        const orderedBookmakers = [...bestFirst, ...activeBookmakers.filter((book) => !bestFirst.includes(book))];
+
         return (
           // border-separate: Safari drops sticky table cells under border-collapse.
           // Key includes the market so switching tabs remounts the table —
@@ -518,7 +527,7 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                     {openLine.kind === 'close' ? 'Close' : 'Open'}
                   </th>
                 )}
-                {activeBookmakers.map(book => (
+                {orderedBookmakers.map(book => (
                   <th key={book} className="px-2 md:px-4 py-2 md:py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-100">
                     <img src={bookmakerLogos[book]} alt={book} className="h-6 mx-auto" />
                   </th>
@@ -594,7 +603,7 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                       );
                     })()}
 
-                    {activeBookmakers.map(book => {
+                    {orderedBookmakers.map(book => {
                       const bookieData = game.bookmakers.find(b => b.title === book);
                       
                       // Check if this is one of the best bookmakers for this team
