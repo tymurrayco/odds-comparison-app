@@ -1,7 +1,7 @@
 // src/app/api/odds/route.ts
 import { NextResponse } from 'next/server';
 import { recordCreditSnapshot } from '@/lib/creditUsage';
-import { ODDS_API_BOOKMAKERS, dropJuicedNovigSpreads } from '@/lib/api';
+import { ODDS_API_BOOKMAKERS, dropOffMarketExchangeLines } from '@/lib/api';
 import { captureLineOpeners } from '@/lib/lineOpeners';
 import { isAdminRequest } from '@/lib/adminAuth';
 
@@ -54,7 +54,7 @@ export async function GET(request: Request) {
       return NextResponse.json([], { status: 200 });
     }
 
-    const data = dropJuicedNovigSpreads(await response.json());
+    const data = dropOffMarketExchangeLines(await response.json());
 
     // Extract rate limit headers
     const requestsRemaining = response.headers.get('x-requests-remaining');

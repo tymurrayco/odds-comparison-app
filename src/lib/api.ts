@@ -134,24 +134,48 @@ export const ODDS_API_BOOKMAKERS = [
   'draftkings', 'fanduel', 'betmgm', 'betrivers', 'williamhill_us', 'betonlineag', 'novig', 'prophetx', 'polymarket',
 ];
 
-// Novig posts spreads at whatever point has liquidity, so a side can sit at
-// -250 on a number nowhere near the market. Those aren't real spread lines —
-// drop Novig's spread market for a game when either side is juiced past -200,
-// before it reaches the cards, "Best", consensus averages or line openers.
-export const NOVIG_MAX_SPREAD_JUICE = -200;
+// Exchange books (Novig, ProphetX, Polymarket) quote whatever their order
+// books hold, and the feed passes it through as if it were a line:
+//   - a "spread" at a point nowhere near the market, with one side at -250
+//     (Novig), or
+//   - an empty / one-sided book rendered as both sides heavily favoured
+//     (Polymarket: "San Jose State +20.5 -9900 / Wyoming -20.5 -4900" on a
+//     game the books had at -4.5; 34 of 53 NCAAF spreads on 2026-10-09).
+// Neither is a price anyone can bet, and both wreck "Best", the implied score
+// and the line-opener consensus. So, per exchange book and per market:
+//   1. drop it when the two sides' implied probabilities don't add up to
+//      roughly 100% (any market) — both sides can't be favourites;
+//   2. drop a spread or total when either side is juiced past -200 — that is
+//      an alternate line, not the game's line.
+// Sportsbooks are left alone, and so is Kalshi (own feed, own line picker).
+export const EXCHANGE_BOOK_KEYS = new Set(['novig', 'prophetx', 'polymarket']);
+export const EXCHANGE_MAX_LINE_JUICE = -200;
+// Fair two-sided prices sum to 1; a little over is vig, a little under is a wide book
+const IMPLIED_SUM_MIN = 0.9;
+const IMPLIED_SUM_MAX = 1.12;
 
 type OddsFeedGame = {
   bookmakers?: Array<{ key: string; markets: Array<{ key: string; outcomes: Array<{ price: number }> }> }>;
 };
 
-export function dropJuicedNovigSpreads<T>(games: T): T {
+const impliedProb = (american: number) => (american < 0 ? -american / (-american + 100) : 100 / (american + 100));
+
+export function isPlausibleExchangeMarket(key: string, outcomes: Array<{ price: number }>): boolean {
+  const isLine = key.startsWith('spreads') || key.startsWith('totals');
+  if (isLine && outcomes.some((o) => o.price < EXCHANGE_MAX_LINE_JUICE)) return false;
+  if (outcomes.length === 2) {
+    const sum = impliedProb(outcomes[0].price) + impliedProb(outcomes[1].price);
+    if (sum < IMPLIED_SUM_MIN || sum > IMPLIED_SUM_MAX) return false;
+  }
+  return true;
+}
+
+export function dropOffMarketExchangeLines<T>(games: T): T {
   if (!Array.isArray(games)) return games;
   for (const g of games as OddsFeedGame[]) {
     for (const b of g.bookmakers ?? []) {
-      if (b.key !== 'novig') continue;
-      b.markets = b.markets.filter(
-        (m) => !m.key.startsWith('spreads') || m.outcomes.every((o) => o.price >= NOVIG_MAX_SPREAD_JUICE)
-      );
+      if (!EXCHANGE_BOOK_KEYS.has(b.key)) continue;
+      b.markets = b.markets.filter((m) => isPlausibleExchangeMarket(m.key, m.outcomes));
     }
   }
   return games;

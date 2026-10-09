@@ -9,7 +9,7 @@
 
 import {
   ODDS_API_BOOKMAKERS,
-  dropJuicedNovigSpreads,
+  dropOffMarketExchangeLines,
   mergeKalshiOdds,
   mergeNovigOdds,
   type Game,
@@ -34,7 +34,7 @@ export async function getBoardGames(sportKey: string): Promise<Game[]> {
     return [];
   }
 
-  const games = dropJuicedNovigSpreads((await oddsRes.json()) as Game[]);
+  const games = dropOffMarketExchangeLines((await oddsRes.json()) as Game[]);
   if (kalshi) mergeKalshiOdds(games, kalshi.moneyline, kalshi.spreads, kalshi.totals);
   mergeNovigOdds(games, Array.isArray(novig) ? novig : []);
   return games;

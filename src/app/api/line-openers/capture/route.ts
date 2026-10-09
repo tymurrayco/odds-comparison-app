@@ -5,7 +5,7 @@
 // posted while nobody is looking. Spreads + totals: 2 credits per sport.
 
 import { NextResponse } from 'next/server';
-import { ODDS_API_BOOKMAKERS, dropJuicedNovigSpreads } from '@/lib/api';
+import { ODDS_API_BOOKMAKERS, dropOffMarketExchangeLines } from '@/lib/api';
 import { recordCreditSnapshot } from '@/lib/creditUsage';
 import { captureLineOpeners, LINE_OPENER_SPORTS } from '@/lib/lineOpeners';
 
@@ -24,7 +24,7 @@ export async function GET() {
       );
       if (!res.ok) { report[sport] = `HTTP ${res.status}`; continue; }
       await recordCreditSnapshot(res.headers.get('x-requests-remaining'), res.headers.get('x-requests-used'), 'line-openers');
-      report[sport] = await captureLineOpeners(sport, dropJuicedNovigSpreads(await res.json()), true);
+      report[sport] = await captureLineOpeners(sport, dropOffMarketExchangeLines(await res.json()), true);
     } catch (e) {
       report[sport] = e instanceof Error ? e.message : String(e);
     }
