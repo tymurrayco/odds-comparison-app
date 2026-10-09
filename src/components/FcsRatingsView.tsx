@@ -1379,8 +1379,17 @@ ${line}` : line);
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <div className="hidden sm:grid grid-cols-[2.5rem_1fr_5.5rem_5rem_5rem_3.5rem_3rem] items-center px-3 py-2 text-[11px] font-semibold text-slate-400 uppercase tracking-wide border-b border-slate-100">
+        {/* In the board this table matches the odds / futures tables: shadowed
+            card, gray header band, the same header type. Standalone it keeps
+            the Ledger page's bordered slate look. */}
+        <div className={`bg-white overflow-hidden ${embedded ? 'rounded-lg shadow-md' : 'rounded-xl border border-slate-200'}`}>
+          <div
+            className={`hidden sm:grid grid-cols-[2.5rem_1fr_5.5rem_5rem_5rem_3.5rem_3rem] items-center px-3 uppercase ${
+              embedded
+                ? 'bg-gray-50 py-3 text-xs font-medium text-gray-500 tracking-wider border-b border-gray-100'
+                : 'py-2 text-[11px] font-semibold text-slate-400 tracking-wide border-b border-slate-100'
+            }`}
+          >
             <div>#</div>
             <div>Team</div>
             <div className="text-right">Rating</div>
