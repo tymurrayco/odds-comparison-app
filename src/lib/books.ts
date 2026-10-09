@@ -159,8 +159,9 @@ export const BOOKS: BookConfig[] = [
     homeUrl: 'https://www.prophetx.co/',
     affiliateUrl: null,
     affiliateParams: {},
-    // app.prophetx.co/... universal links (see APP_LINK_HOSTS in betLinks.ts)
-    domains: ['prophetx.co'],
+    // Universal links (see APP_LINK_HOSTS in betLinks.ts). Phones use the
+    // OneLink host, which is what opens the app on a bet (prophetxAppLink).
+    domains: ['prophetx.co', 'prophetx.onelink.me'],
     // Sweepstakes-model exchange; Prophet Exchange's real-money licence was NJ.
     // Roughly ten states per Tyler's notes — list below is a guess, verify.
     states: ['AZ', 'CA', 'CO', 'FL', 'IL', 'NJ', 'NY', 'PA', 'TX', 'VA'],

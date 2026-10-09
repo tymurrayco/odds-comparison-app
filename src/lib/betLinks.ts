@@ -39,12 +39,37 @@ export function fillLinkTemplate(link: string, state: string): string {
     .replaceAll('{wager}', '');
 }
 
+// ProphetX: the feed's bet link (www.prophetx.co/?action=addtobetslip&lineID=…)
+// loads the website and never reaches the app's bet slip. The app listens on
+// ProphetX's AppsFlyer OneLink instead — same line id, passed as
+// deep_link_sub2 — which opens the app with the selection in the slip
+// (format confirmed from a working partner link, 2026-10-09). sub1 is the
+// partner label. Phones only: on desktop the website link is the right one.
+const PROPHETX_ONELINK = 'https://prophetx.onelink.me/E5Yi/autofill';
+const PROPHETX_PARTNER = 'OddsDay';
+
+export function prophetxAppLink(url: string): string {
+  let u: URL;
+  try { u = new URL(url); } catch { return url; }
+  const lineId = u.searchParams.get('lineID');
+  const isProphetX = u.hostname === 'prophetx.co' || u.hostname.endsWith('.prophetx.co');
+  if (!isProphetX || u.searchParams.get('action') !== 'addtobetslip' || !lineId) return url;
+  const q = new URLSearchParams({ deep_link_value: 'addtobetslip', deep_link_sub1: PROPHETX_PARTNER, deep_link_sub2: lineId });
+  return `${PROPHETX_ONELINK}?${q.toString()}`;
+}
+
 // Resolve a clickable URL. Returns null when the template needs a state and
 // none is stored yet — caller should prompt.
 export function resolveDeepLink(link: string): string | null {
-  if (!linkNeedsState(link)) return fillLinkTemplate(link, '');
-  const state = getBetState();
-  return state ? fillLinkTemplate(link, state) : null;
+  let url: string;
+  if (!linkNeedsState(link)) {
+    url = fillLinkTemplate(link, '');
+  } else {
+    const state = getBetState();
+    if (!state) return null;
+    url = fillLinkTemplate(link, state);
+  }
+  return isMobileDevice() ? prophetxAppLink(url) : url;
 }
 
 // Prompt-and-store fallback for the first click on a templated link.
@@ -61,7 +86,7 @@ export function promptForState(): string | null {
 // apple-app-site-association + assetlinks.json claim every path). iOS only
 // hands those to the app on a same-tab navigation from a tap — a
 // window.open(_blank) new tab just loads the website.
-const APP_LINK_HOSTS = ['prophetx.co'];
+const APP_LINK_HOSTS = ['prophetx.co', 'prophetx.onelink.me'];
 
 export function isAppLinkUrl(url: string): boolean {
   let host = '';
