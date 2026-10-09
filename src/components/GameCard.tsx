@@ -73,7 +73,21 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
   const gameDate = new Date(game.commence_time);
   // Device zone unless the account menu pins one (src/lib/prefs.ts)
   const zone = zoneOption(prefs.timeZone);
-  const formattedDate = gameDate.toLocaleDateString(undefined, {month: 'short', day: 'numeric', ...zone});
+  // Games from today through six days out read as the weekday ("Sat"); a week
+  // or more away (where the weekday alone is ambiguous) keeps "Oct 17".
+  // Calendar days are counted in the display zone.
+  const calendarDay = (d: Date) => {
+    const [y, m, day] = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', ...zone })
+      .format(d)
+      .split('-')
+      .map(Number);
+    return Date.UTC(y, m - 1, day) / 86_400_000;
+  };
+  const daysOut = calendarDay(gameDate) - calendarDay(new Date());
+  const formattedDate = gameDate.toLocaleDateString(
+    undefined,
+    daysOut >= 0 && daysOut <= 6 ? { weekday: 'short', ...zone } : { month: 'short', day: 'numeric', ...zone }
+  );
 
   // Get the user's timezone abbreviation
   const timeZoneAbbr = new Intl.DateTimeFormat('en', { timeZoneName: 'short', ...zone })
@@ -541,7 +555,14 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
               {/* Only show game time if not live/completed */}
               {!isLive && !isCompleted && (
                 <p className="text-xs md:text-sm text-gray-500">
-                  {mounted ? `${formattedDate} at ${formattedTime} ${timeZoneAbbr}` : ' '}
+                  {/* date • time zone — a light dot, not the word "at" */}
+                  {mounted ? (
+                    <>
+                      {formattedDate}
+                      <span className="mx-1.5 text-gray-300" aria-hidden="true">•</span>
+                      {formattedTime} {timeZoneAbbr}
+                    </>
+                  ) : ' '}
                 </p>
               )}
 
