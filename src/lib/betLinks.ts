@@ -58,6 +58,19 @@ export function prophetxAppLink(url: string): string {
   return `${PROPHETX_ONELINK}?${q.toString()}`;
 }
 
+// Polymarket: the feed links to polymarket.com, which blocks trading for US
+// visitors ("It looks like you're in the US"). Polymarket US lists the same
+// games under the same codes at polymarket.us/sports/<league>/<code>, where
+// the league is the code's prefix (nfl-phi-jax-2026-10-11 → nfl), so send
+// people there instead. Anything that isn't a game page is left alone.
+export function polymarketUsLink(url: string): string {
+  let u: URL;
+  try { u = new URL(url); } catch { return url; }
+  if (u.hostname !== 'polymarket.com' && u.hostname !== 'www.polymarket.com') return url;
+  const m = u.pathname.match(/^\/event\/(([a-z0-9]+)-[a-z0-9-]+)\/?$/);
+  return m ? `https://polymarket.us/sports/${m[2]}/${m[1]}` : url;
+}
+
 // Resolve a clickable URL. Returns null when the template needs a state and
 // none is stored yet — caller should prompt.
 export function resolveDeepLink(link: string): string | null {
@@ -69,6 +82,7 @@ export function resolveDeepLink(link: string): string | null {
     if (!state) return null;
     url = fillLinkTemplate(link, state);
   }
+  url = polymarketUsLink(url);
   return isMobileDevice() ? prophetxAppLink(url) : url;
 }
 

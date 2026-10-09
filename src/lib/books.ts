@@ -171,13 +171,15 @@ export const BOOKS: BookConfig[] = [
     slug: 'polymarket',
     title: 'Polymarket',
     oddsApiKey: 'polymarket',
-    homeUrl: 'https://polymarket.com/',
+    homeUrl: 'https://polymarket.us/',
     affiliateUrl: null,
     affiliateParams: {},
-    // Feed links are event pages: polymarket.com/event/<slug>
-    domains: ['polymarket.com'],
-    // The feed is the international exchange, which does not take US
-    // customers; Polymarket US is a separate regulated venue. Unverified.
+    // Feed links are polymarket.com/event/<slug>; clicks are rewritten to the
+    // same game on polymarket.us (polymarketUsLink in betLinks.ts).
+    domains: ['polymarket.us', 'polymarket.com'],
+    // PRICES are the international exchange (polymarket.com), which blocks US
+    // trading; the click-out goes to Polymarket US, a separate regulated venue
+    // whose price can differ slightly. State availability unverified.
     states: [],
     logo: 'polymarket.png',
   },
