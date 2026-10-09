@@ -922,6 +922,79 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
     });
   };
 
+  // Games-view filter controls, built once and placed twice: in a row under
+  // the tabs on phones/tablets, and at the right end of the tab bar on wide
+  // screens (only one of the two is ever displayed).
+  const searchButton = (
+    <button
+      type="button"
+      onClick={() => setSearchOpen(true)}
+      aria-label="Search teams"
+      className="flex-none inline-flex h-9 w-9 items-center justify-center bg-white border border-gray-300 rounded-lg shadow-sm text-gray-500 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+    >
+      <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+      </svg>
+    </button>
+  );
+  // compact = the 36px, fixed-width version that fits inside the tab bar
+  const searchInput = (compact: boolean) => (
+    <div className={`relative ${compact ? 'w-64' : ''}`}>
+      <input
+        type="text"
+        placeholder="Filter by team name..."
+        value={teamFilter}
+        onChange={(e) => setTeamFilter(e.target.value)}
+        onKeyDown={(e) => e.key === 'Escape' && closeSearch()}
+        autoFocus={searchOpen}
+        className={`w-full pl-10 pr-10 text-gray-700 bg-white border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 ${
+          compact ? 'h-9 text-sm' : 'px-4 py-2'
+        }`}
+      />
+      <div className="absolute inset-y-0 left-0 flex items-center pl-3">
+        <svg className={`${compact ? 'w-4 h-4' : 'w-5 h-5'} text-gray-400`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+      </div>
+      <button
+        onClick={closeSearch}
+        aria-label="Close search"
+        className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
+      >
+        <svg className={compact ? 'w-4 h-4' : 'w-5 h-5'} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+  );
+  const conferenceControl = supportsConferenceFilter && (
+    <div className="flex-none">
+      <ConferenceFilter
+        activeLeague={activeLeague}
+        selectedConferences={selectedConferences}
+        onConferencesChange={setSelectedConferences}
+      />
+    </div>
+  );
+  // Live chip: only while games are under way. Off (plain) hides them; on
+  // (light red tint) shows them. The count says how many.
+  const liveChip = liveCount > 0 && (
+    <button
+      type="button"
+      aria-pressed={showLiveGames}
+      title={showLiveGames ? 'Hide games in progress' : 'Show games in progress'}
+      onClick={toggleLiveGames}
+      className={`flex-none inline-flex h-9 items-center gap-1.5 px-2.5 rounded-lg border text-sm font-semibold shadow-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-300 ${
+        showLiveGames
+          ? 'bg-red-50 border-red-200 text-red-700'
+          : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+      }`}
+    >
+      <span className="h-2 w-2 rounded-full bg-red-500" />
+      Live {liveCount}
+    </button>
+  );
+
   return (
     <main className="min-h-screen bg-blue-50">
       {/* Sticky: logo, book selector and Bets stay reachable while scrolling */}
@@ -1114,86 +1187,128 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
               </h1>
             )}
 
-            {/* Team filter for Games view */}
-            {effectiveView === 'games' && activeLeague !== 'favorites' && (
-              <div className="mb-6 space-y-4">
-                {/* Search is tucked behind an icon beside the conference filter;
-                    tapping it opens the bar on its own row above the filter. */}
-                {searchShown && (
-                  <div className="relative">
-                    <input
-                      type="text"
-                      placeholder="Filter by team name..."
-                      value={teamFilter}
-                      onChange={(e) => setTeamFilter(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Escape' && closeSearch()}
-                      autoFocus={searchOpen}
-                      className="w-full px-4 py-2 pl-10 pr-10 text-gray-700 bg-white border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                    />
-                    <div className="absolute inset-y-0 left-0 flex items-center pl-3">
-                      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                      </svg>
-                    </div>
-                    <button
-                      onClick={closeSearch}
-                      aria-label="Close search"
-                      className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
+            {/* View tabs — first under the league row on every view, so they never
+                move when the view changes. Not shown for favorites. */}
+            {activeLeague !== 'favorites' && (
+              isFuturesOnly(activeLeague) ? (
+                <div className="bg-white rounded-lg shadow p-2 mb-6 flex justify-center">
+                  <div className="inline-flex rounded-md shadow-sm">
+                    <button type="button" className="px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white border border-gray-200">
+                      Futures
                     </button>
                   </div>
-                )}
+                </div>
+              ) : (
+                // Wide screens: three columns — spacer, tabs (centred), Games filters (right)
+                <div className="bg-white rounded-lg shadow p-2 mb-6 flex justify-center lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-center">
+                  <div className="hidden lg:block" />
+                  <div className="inline-flex rounded-md shadow-sm">
+                    <button
+                      type="button"
+                      className={`px-4 py-2 text-sm font-medium rounded-l-lg ${
+                        activeView === 'games' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
+                      } border border-gray-200`}
+                      onClick={() => {
+                        setActiveView('games');
+                        setTeamFilter('');
+                        setSelectedConferences([]);
+                        setSelectedPropsEvent(null);
+                        setPlayerFilter('');
+                      }}
+                    >
+                      Games
+                    </button>
+                    <button
+                      type="button"
+                      className={`px-4 py-2 text-sm font-medium ${
+                        activeView === 'futures' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
+                      } border border-gray-200 border-l-0`}
+                      onClick={() => {
+                        setActiveView('futures');
+                        setTeamFilter('');
+                        setSelectedConferences([]);
+                        setSelectedPropsEvent(null);
+                        setPlayerFilter('');
+                      }}
+                    >
+                      Futures
+                    </button>
+                    {supportsProps && (
+                      <button
+                        type="button"
+                        className={`px-4 py-2 text-sm font-medium ${
+                          activeLeague === 'americanfootball_ncaaf' || activeLeague === 'americanfootball_nfl' ? '' : 'rounded-r-lg '
+                        }${
+                          activeView === 'props' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
+                        } border border-gray-200 border-l-0`}
+                        onClick={() => {
+                          setActiveView('props');
+                          setTeamFilter('');
+                          setSelectedConferences([]);
+                          setPlayerFilter('');
+                        }}
+                      >
+                        Props
+                      </button>
+                    )}
+                    {activeLeague === RATINGS_LEAGUE && (
+                      <button
+                        type="button"
+                        className={`px-4 py-2 text-sm font-medium rounded-r-lg ${
+                          activeView === 'ratings' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
+                        } border border-gray-200 border-l-0`}
+                        onClick={() => {
+                          setActiveView('ratings');
+                          setTeamFilter('');
+                          setSelectedConferences([]);
+                          setSelectedPropsEvent(null);
+                          setPlayerFilter('');
+                        }}
+                      >
+                        Ratings
+                      </button>
+                    )}
+                    {activeLeague === 'americanfootball_nfl' && (
+                      <button
+                        type="button"
+                        className="px-4 py-2 text-sm font-medium rounded-r-lg bg-white text-gray-700 hover:bg-gray-50 border border-gray-200 border-l-0"
+                        onClick={() => router.push('/nfl/ratings')}
+                      >
+                        Ledger
+                      </button>
+                    )}
+                  </div>
+                  <div className="hidden lg:flex items-center justify-end gap-2">
+                    {effectiveView === 'games' && (
+                      <>
+                        {searchShown ? searchInput(true) : searchButton}
+                        {conferenceControl}
+                        {liveChip}
+                      </>
+                    )}
+                  </div>
+                </div>
+              )
+            )}
+            
+            {/* Games filters. Phones and tablets: a row under the tabs (search opens
+                on its own row above it). Wide screens: the same controls sit at
+                the right end of the tab bar, so this block is only the
+                active-filter chips there. */}
+            {effectiveView === 'games' && activeLeague !== 'favorites' && (
+              <div className="mb-6 space-y-4 lg:mb-0 lg:space-y-0">
+                {searchShown && <div className="lg:hidden">{searchInput(false)}</div>}
 
                 {(!searchShown || supportsConferenceFilter || liveCount > 0) && (
-                  <div className={`flex min-h-[42px] items-center gap-2 ${supportsConferenceFilter ? 'sm:justify-end' : ''}`}>
-                    {!searchShown && (
-                      <button
-                        type="button"
-                        onClick={() => setSearchOpen(true)}
-                        aria-label="Search teams"
-                        className="flex-none inline-flex h-9 w-9 items-center justify-center bg-white border border-gray-300 rounded-lg shadow-sm text-gray-500 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                        </svg>
-                      </button>
-                    )}
-                    {supportsConferenceFilter && (
-                      <div className="flex-none">
-                        <ConferenceFilter
-                          activeLeague={activeLeague}
-                          selectedConferences={selectedConferences}
-                          onConferencesChange={setSelectedConferences}
-                        />
-                      </div>
-                    )}
-                    {/* Live chip, last in the row: only while games are under way. Off
-                        (plain) hides them; on (light red tint) shows them. The
-                        count says how many. */}
-                    {liveCount > 0 && (
-                      <button
-                        type="button"
-                        aria-pressed={showLiveGames}
-                        title={showLiveGames ? 'Hide games in progress' : 'Show games in progress'}
-                        onClick={toggleLiveGames}
-                        className={`flex-none inline-flex h-9 items-center gap-1.5 px-2.5 rounded-lg border text-sm font-semibold shadow-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-300 ${
-                          showLiveGames
-                            ? 'bg-red-50 border-red-200 text-red-700'
-                            : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
-                        }`}
-                      >
-                        <span className="h-2 w-2 rounded-full bg-red-500" />
-                        Live {liveCount}
-                      </button>
-                    )}
+                  <div className="flex min-h-[42px] items-center gap-2 lg:hidden">
+                    {!searchShown && searchButton}
+                    {conferenceControl}
+                    {liveChip}
                   </div>
                 )}
 
                 {(teamFilter || selectedConferences.length > 0) && (
-                  <div className="flex flex-wrap gap-2 items-center">
+                  <div className="flex flex-wrap gap-2 items-center lg:mb-6">
                     {teamFilter && (
                       <span className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
                         Team: {teamFilter}
@@ -1275,98 +1390,6 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
               </div>
             )}
 
-            {/* View Toggle Tabs - Only show when not in favorites */}
-            {activeLeague !== 'favorites' && (
-              isFuturesOnly(activeLeague) ? (
-                <div className="bg-white rounded-lg shadow p-2 mb-6 flex justify-center">
-                  <div className="inline-flex rounded-md shadow-sm">
-                    <button type="button" className="px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white border border-gray-200">
-                      Futures
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="bg-white rounded-lg shadow p-2 mb-6 flex justify-center">
-                  <div className="inline-flex rounded-md shadow-sm">
-                    <button
-                      type="button"
-                      className={`px-4 py-2 text-sm font-medium rounded-l-lg ${
-                        activeView === 'games' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
-                      } border border-gray-200`}
-                      onClick={() => {
-                        setActiveView('games');
-                        setTeamFilter('');
-                        setSelectedConferences([]);
-                        setSelectedPropsEvent(null);
-                        setPlayerFilter('');
-                      }}
-                    >
-                      Games
-                    </button>
-                    <button
-                      type="button"
-                      className={`px-4 py-2 text-sm font-medium ${
-                        activeView === 'futures' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
-                      } border border-gray-200 border-l-0`}
-                      onClick={() => {
-                        setActiveView('futures');
-                        setTeamFilter('');
-                        setSelectedConferences([]);
-                        setSelectedPropsEvent(null);
-                        setPlayerFilter('');
-                      }}
-                    >
-                      Futures
-                    </button>
-                    {supportsProps && (
-                      <button
-                        type="button"
-                        className={`px-4 py-2 text-sm font-medium ${
-                          activeLeague === 'americanfootball_ncaaf' || activeLeague === 'americanfootball_nfl' ? '' : 'rounded-r-lg '
-                        }${
-                          activeView === 'props' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
-                        } border border-gray-200 border-l-0`}
-                        onClick={() => {
-                          setActiveView('props');
-                          setTeamFilter('');
-                          setSelectedConferences([]);
-                          setPlayerFilter('');
-                        }}
-                      >
-                        Props
-                      </button>
-                    )}
-                    {activeLeague === RATINGS_LEAGUE && (
-                      <button
-                        type="button"
-                        className={`px-4 py-2 text-sm font-medium rounded-r-lg ${
-                          activeView === 'ratings' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
-                        } border border-gray-200 border-l-0`}
-                        onClick={() => {
-                          setActiveView('ratings');
-                          setTeamFilter('');
-                          setSelectedConferences([]);
-                          setSelectedPropsEvent(null);
-                          setPlayerFilter('');
-                        }}
-                      >
-                        Ratings
-                      </button>
-                    )}
-                    {activeLeague === 'americanfootball_nfl' && (
-                      <button
-                        type="button"
-                        className="px-4 py-2 text-sm font-medium rounded-r-lg bg-white text-gray-700 hover:bg-gray-50 border border-gray-200 border-l-0"
-                        onClick={() => router.push('/nfl/ratings')}
-                      >
-                        Ledger
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )
-            )}
-            
             {/* Ratings view: which division, directly under the tabs */}
             {effectiveView === 'ratings' && (
               <div className="mb-4 flex justify-center">
