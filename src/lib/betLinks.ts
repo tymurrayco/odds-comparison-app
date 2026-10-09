@@ -7,6 +7,29 @@
 
 const STATE_KEY = 'betLinkState';
 
+// The board's "tap odds to …" hint is for people who have never tapped a
+// price. The first tap on this device retires it for good.
+const PRICE_TAPPED_KEY = 'oddsTapHintDone';
+export const PRICE_TAPPED_EVENT = 'oddsday:price-tapped';
+
+export function hasTappedPrice(): boolean {
+  try {
+    return localStorage.getItem(PRICE_TAPPED_KEY) === '1';
+  } catch {
+    return true; // storage blocked: never nag
+  }
+}
+
+export function markPriceTapped(): void {
+  try {
+    if (localStorage.getItem(PRICE_TAPPED_KEY) === '1') return;
+    localStorage.setItem(PRICE_TAPPED_KEY, '1');
+  } catch {
+    /* not remembered */
+  }
+  window.dispatchEvent(new Event(PRICE_TAPPED_EVENT));
+}
+
 // States where BetMGM and/or BetRivers operate online sportsbooks.
 export const BET_LINK_STATES = [
   'AZ', 'CO', 'CT', 'DC', 'IA', 'IL', 'IN', 'KS', 'KY', 'LA', 'MA', 'MD',

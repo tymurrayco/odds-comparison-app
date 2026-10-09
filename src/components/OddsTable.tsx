@@ -8,7 +8,7 @@ import { formatOdds } from '@/lib/utils';
 import BetTicket, { type TicketPick } from '@/components/BetTicket';
 import { useUser } from '@/lib/userAuth';
 import { GameRestData, TeamRestInfo } from '@/lib/nhlRest';
-import { resolveDeepLink, fillLinkTemplate, promptForState, openBetLink, appLinkHref, logClickBeacon } from '@/lib/betLinks';
+import { resolveDeepLink, fillLinkTemplate, promptForState, openBetLink, appLinkHref, logClickBeacon, markPriceTapped } from '@/lib/betLinks';
 import { goUrl } from '@/lib/books';
 import { useTeamColorMap, teamInfoFromMap } from '@/lib/myGameBets';
 
@@ -233,6 +233,7 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
   // the user's state — resolved from localStorage, prompted once on first
   // use; cancelling the prompt does nothing.
   const handleBookClick = (book: string, link: string | undefined, e: React.MouseEvent, ctx: ClickContext, pick: CellPick) => {
+    markPriceTapped(); // retires the board's tap hint on this device
     // Tap landed on the app-link overlay: let the native anchor navigate
     if ((e.target as HTMLElement).closest?.('a[data-app-link]')) return;
     e.preventDefault();

@@ -40,6 +40,7 @@ import AccountButton from '@/components/AccountButton';
 import dynamic from 'next/dynamic';
 import { signInWithGoogle, useUser } from '@/lib/userAuth';
 import { usePrefs, zoneOption } from '@/lib/prefs';
+import { hasTappedPrice, PRICE_TAPPED_EVENT } from '@/lib/betLinks';
 import { getTeamConference } from '@/lib/conferences';
 
 interface CacheItem<T> {
@@ -82,6 +83,16 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
   const router = useRouter();
   const { user, ready: authReady } = useUser();
   const prefs = usePrefs();
+  // The "tap odds to …" line teaches one thing once: shown only on a device
+  // that has never tapped a price (decided after mount — the server can't know).
+  const [showTapHint, setShowTapHint] = useState(false);
+  useEffect(() => {
+    if (hasTappedPrice()) return;
+    setShowTapHint(true);
+    const done = () => setShowTapHint(false);
+    window.addEventListener(PRICE_TAPPED_EVENT, done);
+    return () => window.removeEventListener(PRICE_TAPPED_EVENT, done);
+  }, []);
   const pressTimer = useRef<NodeJS.Timeout | null>(null);
   const [isHolding, setIsHolding] = useState(false);
   const crossNavSearchRef = useRef(false);
@@ -1376,8 +1387,8 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
               </div>
             )}
 
-            {/* Deep link tip - only show for games view */}
-            {activeView === 'games' && activeLeague !== 'favorites' && (
+            {/* Tap hint - games view, and only until this device has tapped a price once */}
+            {showTapHint && activeView === 'games' && activeLeague !== 'favorites' && (
               <div className="flex items-center justify-center gap-3 mb-4">
                 {/* Mobile: shorter message */}
                 <p className="md:hidden text-xs text-gray-500 text-center flex items-center justify-center gap-1">
