@@ -401,6 +401,23 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
       );
     });
 
+  // Wager badges for this game — strong team-color border + light fill; full
+  // text on desktop, abbreviated on phones.
+  const betBadges = myPendingBets.map(bet => {
+    const accent = wageredTeamColor(bet, teamColorMap, game.away_team, game.home_team);
+    return (
+      <MyBetBadge
+        key={bet.id}
+        accent={accent}
+        status={bet.status}
+        title={`Your bet: ${bet.bet}${bet.book ? ` (${bet.book})` : ''}${bet.status !== 'pending' ? ` — ${bet.status}` : ''}`}
+      >
+        <span className="hidden md:inline whitespace-nowrap">{badgeBetText(bet, false)}</span>
+        <span className="md:hidden whitespace-nowrap">{badgeBetText(bet, true)}</span>
+      </MyBetBadge>
+    );
+  });
+
   const renderLedgerChip = (placement: string) => (isNCAAF || isNFL) && ledgerChip && prefs.showProjections && (
     <button
       className={`${placement} items-center gap-1 px-1.5 md:px-2 py-1 text-xs md:text-sm font-semibold rounded-md tabular-nums ${
@@ -554,25 +571,9 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                 </button>
               )}
 
-              {/* My pending wager badge(s) — strong team-color border + light fill.
-                  order-last on mobile keeps the implied score glued to the date/time
-                  (stable position) and lets the badge wrap to its own line alone. */}
-              <span className="order-last md:order-none flex items-center gap-1.5 flex-wrap empty:hidden">
-                {myPendingBets.map(bet => {
-                  const accent = wageredTeamColor(bet, teamColorMap, game.away_team, game.home_team);
-                  return (
-                    <MyBetBadge
-                      key={bet.id}
-                      accent={accent}
-                      status={bet.status}
-                      title={`Your bet: ${bet.bet}${bet.book ? ` (${bet.book})` : ''}${bet.status !== 'pending' ? ` — ${bet.status}` : ''}`}
-                    >
-                      <span className="hidden md:inline whitespace-nowrap">{badgeBetText(bet, false)}</span>
-                      <span className="md:hidden whitespace-nowrap">{badgeBetText(bet, true)}</span>
-                    </MyBetBadge>
-                  );
-                })}
-              </span>
+              {/* My wager badge(s). Desktop: here on the date line. Phones: beside the
+                  Spread / ML / O/U buttons below, so they never take a line of their own. */}
+              <span className="hidden md:flex items-center gap-1.5 flex-wrap empty:hidden">{betBadges}</span>
               
               {/* Mobile only: Live/Final scores */}
               <div className="md:hidden flex items-center">
@@ -778,6 +779,8 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
             )}
             {/* Starting QB out/doubtful — sits right of the injury icon it opens */}
             {renderQbOut()}
+            {/* Phones: my wager badge(s), last in the row (the row wraps if it runs long) */}
+            <span className="md:hidden flex items-center gap-1.5 flex-wrap empty:hidden">{betBadges}</span>
           </div>
         </div>
       </div>
