@@ -9,6 +9,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { updateBet, deleteBet, type Bet, type BetStatus } from '@/lib/betService';
+import { useSheetClose } from '@/lib/useSheetClose';
 
 const STATUSES: { id: BetStatus; label: string; on: string }[] = [
   { id: 'pending', label: 'Pending', on: 'bg-white text-gray-900 shadow-sm' },
@@ -37,12 +38,13 @@ export default function BetEditSheet({
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { closing, close } = useSheetClose(onClose);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close();
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [close]);
 
   const odds = Number(oddsText);
   const stake = Number(stakeText);
@@ -59,7 +61,7 @@ export default function BetEditSheet({
     try {
       await updateBet(bet.id, updates);
       onSaved({ ...bet, ...updates });
-      onClose();
+      close();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save the bet');
       setBusy(false);
@@ -73,7 +75,7 @@ export default function BetEditSheet({
     try {
       await deleteBet(bet.id);
       onDeleted(bet.id);
-      onClose();
+      close();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not delete the bet');
       setBusy(false);
@@ -86,11 +88,12 @@ export default function BetEditSheet({
       className="fixed inset-0 z-50 flex items-end justify-center sm:items-center"
       role="dialog"
       aria-modal="true"
+      data-closing={closing || undefined}
       aria-label="Edit bet"
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative w-full rounded-t-2xl bg-white p-4 pb-6 shadow-xl sm:w-[380px] sm:rounded-2xl sm:pb-4">
+      <div className="sheet-backdrop absolute inset-0 bg-black/40" onClick={close} />
+      <div className="sheet-panel relative w-full rounded-t-2xl bg-white p-4 pb-6 shadow-xl sm:w-[380px] sm:rounded-2xl sm:pb-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="text-[16px] font-semibold tracking-[-0.3px] text-gray-900">Edit bet</div>
@@ -98,7 +101,7 @@ export default function BetEditSheet({
               {bet.description}{bet.book ? ` · ${bet.book}` : ''}
             </div>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="-mr-1 -mt-1 flex-none rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+          <button type="button" onClick={close} aria-label="Close" className="-mr-1 -mt-1 flex-none rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
               <path d="M6 6l12 12M18 6L6 18" />
             </svg>

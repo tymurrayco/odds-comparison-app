@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { createBet, calculateProfit, type Bet } from '@/lib/betService';
 import { formatOdds } from '@/lib/utils';
+import { useSheetClose } from '@/lib/useSheetClose';
 import {
   resolveDeepLink,
   fillLinkTemplate,
@@ -60,12 +61,13 @@ export default function BetTicket({ pick, onClose }: { pick: TicketPick; onClose
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { closing, close } = useSheetClose(onClose);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close();
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [close]);
 
   const amount = Number(amountText);
   const stakeOk = amountText.trim() !== '' && Number.isFinite(amount) && amount > 0;
@@ -117,7 +119,7 @@ export default function BetTicket({ pick, onClose }: { pick: TicketPick; onClose
     try {
       await createBet({ ...pick.draft, stake: parseFloat(stake.toFixed(2)) });
       setSaved(true);
-      setTimeout(onClose, 900);
+      setTimeout(close, 900);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save the bet');
       setSaving(false);
@@ -130,11 +132,12 @@ export default function BetTicket({ pick, onClose }: { pick: TicketPick; onClose
       className="fixed inset-0 z-50 flex items-end justify-center sm:items-center"
       role="dialog"
       aria-modal="true"
+      data-closing={closing || undefined}
       aria-label="Bet ticket"
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative w-full rounded-t-2xl bg-white p-4 pb-6 shadow-xl sm:w-[360px] sm:rounded-2xl sm:pb-4">
+      <div className="sheet-backdrop absolute inset-0 bg-black/40" onClick={close} />
+      <div className="sheet-panel relative w-full rounded-t-2xl bg-white p-4 pb-6 shadow-xl sm:w-[360px] sm:rounded-2xl sm:pb-4">
         <div className="flex items-start gap-3">
           {pick.bookLogo && (
             // eslint-disable-next-line @next/next/no-img-element
@@ -148,7 +151,7 @@ export default function BetTicket({ pick, onClose }: { pick: TicketPick; onClose
               {pick.subtitle} &middot; {pick.book}
             </div>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="-mr-1 -mt-1 flex-none rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+          <button type="button" onClick={close} aria-label="Close" className="-mr-1 -mt-1 flex-none rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
               <path d="M6 6l12 12M18 6L6 18" />
             </svg>
