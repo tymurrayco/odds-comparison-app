@@ -831,7 +831,8 @@ ${line}` : line);
 
   return (
     <div className={embedded ? '' : 'min-h-screen bg-slate-50 p-3 sm:p-6'}>
-      <div className="max-w-4xl mx-auto space-y-4 sm:space-y-6">
+      {/* Embedded in the board: use the board's full width, not this page's narrow column */}
+      <div className={`${embedded ? '' : 'max-w-4xl mx-auto'} space-y-4 sm:space-y-6`}>
         {!embedded && (
         <div className="space-y-3">
           <div>
@@ -1348,8 +1349,9 @@ ${line}` : line);
         )}
 
         {view === 'ratings' && (<>
-        <div className="space-y-2">
-          <div className="flex gap-2">
+        {/* Embedded + wide screen: search, conference and sort share one line */}
+        <div className={embedded ? 'space-y-2 lg:flex lg:items-center lg:gap-3 lg:space-y-0' : 'space-y-2'}>
+          <div className={embedded ? 'flex gap-2 lg:w-[30rem] lg:flex-none' : 'flex gap-2'}>
             <input
               className="flex-1 min-w-0 px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0052ff]/25"
               placeholder="Search team…"

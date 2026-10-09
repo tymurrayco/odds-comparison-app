@@ -976,6 +976,23 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
       />
     </div>
   );
+  // Ratings view: FBS / FCS division switch (also placed twice, like the filters)
+  const ratingsSwitch = (
+    <div className="inline-flex rounded-lg bg-gray-200/80 p-0.5">
+      {(['fbs', 'fcs'] as const).map((d) => (
+        <button
+          key={d}
+          type="button"
+          onClick={() => setRatingsDivision(d)}
+          className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
+            ratingsDivision === d ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+          }`}
+        >
+          {d === 'fbs' ? 'FBS Ratings' : 'FCS Ratings'}
+        </button>
+      ))}
+    </div>
+  );
   // Live chip: only while games are under way. Off (plain) hides them; on
   // (light red tint) shows them. The count says how many.
   const liveChip = liveCount > 0 && (
@@ -1286,6 +1303,7 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
                         {liveChip}
                       </>
                     )}
+                    {effectiveView === 'ratings' && ratingsSwitch}
                   </div>
                 </div>
               )
@@ -1390,25 +1408,9 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
               </div>
             )}
 
-            {/* Ratings view: which division, directly under the tabs */}
-            {effectiveView === 'ratings' && (
-              <div className="mb-4 flex justify-center">
-                <div className="inline-flex rounded-lg bg-gray-200/80 p-0.5">
-                  {(['fbs', 'fcs'] as const).map((d) => (
-                    <button
-                      key={d}
-                      type="button"
-                      onClick={() => setRatingsDivision(d)}
-                      className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
-                        ratingsDivision === d ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
-                      }`}
-                    >
-                      {d === 'fbs' ? 'FBS Ratings' : 'FCS Ratings'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+            {/* Ratings view: which division. Under the tabs on phones/tablets; on
+                wide screens it sits at the right end of the tab bar instead. */}
+            {effectiveView === 'ratings' && <div className="mb-4 flex justify-center lg:hidden">{ratingsSwitch}</div>}
 
             {/* Tap hint - games view, and only until this device has tapped a price once.
                 Shown once, so it can afford to say what a tap does. */}
