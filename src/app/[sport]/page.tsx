@@ -28,7 +28,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   if (!s) return { title: 'Not found | odds.day' };
   const long = sportLongName(s.slug);
   const title = `${long} Odds Today — Compare Spreads, Moneylines & Totals | odds.day`;
-  const description = `Live ${long} betting odds compared across DraftKings, FanDuel, BetMGM, Caesars, BetRivers, Kalshi, Novig and ProphetX. Best spread, moneyline and total price on every game, updated every minute.`;
+  const description = `Live ${long} betting odds compared across DraftKings, FanDuel, BetMGM, Caesars, BetRivers, Kalshi, Novig, ProphetX and Polymarket. Best spread, moneyline and total price on every game, updated every minute.`;
   const url = `https://www.odds.day/${s.slug}`;
   return {
     title,

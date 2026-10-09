@@ -287,7 +287,8 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
   'BetOnline.ag': '/bookmaker-logos/betonline.png',
   'Kalshi': '/bookmaker-logos/kalshi.png',
   'Novig': '/bookmaker-logos/novig.png',
-  'ProphetX': '/bookmaker-logos/prophetx.png'
+  'ProphetX': '/bookmaker-logos/prophetx.png',
+    'Polymarket': '/bookmaker-logos/polymarket.png'
   };
   
   // Map market keys
@@ -601,7 +602,7 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                       if (marketKey === 'h2h') {
                         const marketData = bookieData?.markets.find(m => m.key === 'h2h');
                         const outcomeData = marketData?.outcomes.find(o => o.name === team);
-                        const deepLink = outcomeData?.link;
+                        const deepLink = outcomeData?.link ?? marketData?.link ?? bookieData?.link;
                         const ctx: ClickContext = { game, market: marketKey, outcome: team };
 
                         return (
@@ -633,7 +634,7 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                       if (marketKey === 'spreads' || marketKey === 'spreads_h1') {
                         const marketData = bookieData?.markets.find(m => m.key === marketKey);
                         const outcomeData = marketData?.outcomes.find(o => o.name === team);
-                        const deepLink = outcomeData?.link;
+                        const deepLink = outcomeData?.link ?? marketData?.link ?? bookieData?.link;
                         const priced = !!outcomeData && typeof outcomeData.point !== 'undefined';
                         const ctx: ClickContext = {
                           game,
@@ -673,7 +674,7 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                         const outcomeData = marketData?.outcomes.find(o => 
                           (index === 0 && o.name === 'Over') || (index === 1 && o.name === 'Under')
                         );
-                        const deepLink = outcomeData?.link;
+                        const deepLink = outcomeData?.link ?? marketData?.link ?? bookieData?.link;
                         const priced = !!outcomeData && typeof outcomeData.point !== 'undefined';
                         const ctx: ClickContext = {
                           game,

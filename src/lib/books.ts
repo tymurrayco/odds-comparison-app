@@ -166,6 +166,20 @@ export const BOOKS: BookConfig[] = [
     states: ['AZ', 'CA', 'CO', 'FL', 'IL', 'NJ', 'NY', 'PA', 'TX', 'VA'],
     logo: 'prophetx.png',
   },
+  {
+    slug: 'polymarket',
+    title: 'Polymarket',
+    oddsApiKey: 'polymarket',
+    homeUrl: 'https://polymarket.com/',
+    affiliateUrl: null,
+    affiliateParams: {},
+    // Feed links are event pages: polymarket.com/event/<slug>
+    domains: ['polymarket.com'],
+    // The feed is the international exchange, which does not take US
+    // customers; Polymarket US is a separate regulated venue. Unverified.
+    states: [],
+    logo: 'polymarket.png',
+  },
 ];
 
 const BY_SLUG = new Map(BOOKS.map((b) => [b.slug, b]));

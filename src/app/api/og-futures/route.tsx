@@ -68,6 +68,7 @@ const BOOK_LOGOS: Record<string, string> = {
   'Kalshi': 'kalshi.png',
   'Novig': 'novig.png',
   'ProphetX': 'prophetx.png',
+  'Polymarket': 'polymarket.png',
 };
 
 export async function GET(request: NextRequest) {

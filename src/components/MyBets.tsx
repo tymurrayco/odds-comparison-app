@@ -18,7 +18,8 @@ const bookmakerLogos: { [key: string]: string } = {
   'BetOnline.ag': '/bookmaker-logos/betonline.png',
   'Kalshi': '/bookmaker-logos/kalshi.png',
   'Novig': '/bookmaker-logos/novig.png',
-  'ProphetX': '/bookmaker-logos/prophetx.png'
+  'ProphetX': '/bookmaker-logos/prophetx.png',
+    'Polymarket': '/bookmaker-logos/polymarket.png'
 };
 
 // Team logo/color data from ESPN — same source and card treatment as the Bet Admin view.

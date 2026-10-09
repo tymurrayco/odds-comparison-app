@@ -178,7 +178,8 @@ export default function PropsTable({
     'BetOnline.ag': '/bookmaker-logos/betonline.png',
     'Kalshi': '/bookmaker-logos/kalshi.png',
     'Novig': '/bookmaker-logos/novig.png',
-    'ProphetX': '/bookmaker-logos/prophetx.png'
+    'ProphetX': '/bookmaker-logos/prophetx.png',
+    'Polymarket': '/bookmaker-logos/polymarket.png'
   };
 
   // Toggle market expansion
