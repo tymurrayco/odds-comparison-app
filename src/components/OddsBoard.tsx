@@ -1264,27 +1264,6 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
               </div>
             )}
 
-            {/* Ratings view: the division switch sits in the same slot as the
-                other views' filters, so the tab bar below doesn't move. */}
-            {effectiveView === 'ratings' && (
-              <div className="mb-6 flex h-[42px] items-center">
-                <div className="inline-flex rounded-lg bg-gray-200/80 p-0.5">
-                  {(['fbs', 'fcs'] as const).map((d) => (
-                    <button
-                      key={d}
-                      type="button"
-                      onClick={() => setRatingsDivision(d)}
-                      className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
-                        ratingsDivision === d ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
-                      }`}
-                    >
-                      {d === 'fbs' ? 'FBS Ratings' : 'FCS Ratings'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {/* View Toggle Tabs - Only show when not in favorites */}
             {activeLeague !== 'favorites' && (
               isFuturesOnly(activeLeague) ? (
@@ -1377,6 +1356,26 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
               )
             )}
             
+            {/* Ratings view: which division, directly under the tabs */}
+            {effectiveView === 'ratings' && (
+              <div className="mb-4 flex justify-center">
+                <div className="inline-flex rounded-lg bg-gray-200/80 p-0.5">
+                  {(['fbs', 'fcs'] as const).map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setRatingsDivision(d)}
+                      className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
+                        ratingsDivision === d ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+                      }`}
+                    >
+                      {d === 'fbs' ? 'FBS Ratings' : 'FCS Ratings'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Deep link tip - only show for games view */}
             {activeView === 'games' && activeLeague !== 'favorites' && (
               <div className="flex items-center justify-center gap-3 mb-4">
