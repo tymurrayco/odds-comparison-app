@@ -14,7 +14,7 @@ import { usePrefs, zoneOption } from '@/lib/prefs';
 import { useGameNote } from '@/lib/gameNotes';
 import { matchGameByTeams } from '@/lib/api';
 import type { GameWeather } from '@/lib/weather';
-import { shortSchool } from '@/lib/teamNames';
+import { cardTitleName, hasShortCardTitle } from '@/lib/teamNames';
 import { WeatherIcons, weatherFacts, weatherHeadline } from './WeatherIcons';
 import GameNoteSheet from './GameNoteSheet';
 import { useFriendBetsForGame, betGroupKey, type FriendBet } from '@/lib/friendBets';
@@ -22,14 +22,6 @@ import { FriendAvatar, FriendBetsPanel } from './FriendBets';
 import BetTicket, { type TicketPick } from './BetTicket';
 import LiveTag from './LiveTag';
 import { betTrend, TREND_COLORS, type BetTrend } from '@/lib/betTrend';
-
-// First word of the two-word college mascots (Yellow Jackets, Sun Devils, Red
-// Raiders, Fighting Irish, …) — only used when ESPN's team list has no match.
-const TWO_WORD_MASCOT_STARTS = new Set([
-  'yellow', 'green', 'thundering', 'sun', 'wolf', 'red', 'scarlet', 'fighting', "fightin'", 'blue', 'golden',
-  "ragin'", 'mean', 'rainbow', 'crimson', 'big', 'nittany', 'demon', 'horned', 'mountain', 'black', 'great',
-  'purple', 'tar', 'river', 'screaming', 'delta', "runnin'", 'white', 'maple', 'trail',
-]);
 
 interface GameCardProps {
   game: Game;
@@ -51,9 +43,9 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
   // NFL (incl. preseason) gets the injury-report toggle
   const isNFL = game.sport_key === 'americanfootball_nfl'
     || game.sport_key === 'americanfootball_nfl_preseason';
-  // Pro leagues whose phone card title is logo + mascot
-  const isMascotTitle = isNFL || ['baseball_mlb', 'baseball_mlb_preseason', 'americanfootball_cfl', 'basketball_wnba', 'icehockey_nhl', 'basketball_nba'].includes(game.sport_key);
-  
+  // Leagues whose phone card title is logo + short name (see cardTitleName)
+  const shortTitle = hasShortCardTitle(game.sport_key);
+
   // Default to moneyline for soccer, spread for everything else
   // NFL analysis panel: injury report or the Ledger projection
   const [nflPanel, setNflPanel] = useState<'injuries' | 'ledger'>('injuries');
@@ -327,31 +319,8 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
     </>
   );
 
-  // College team without its mascot ("West Virginia Mountaineers" → "West
-  // Virginia"): ESPN's school name when the team is in the league map, else
-  // the name minus its last word — or last two for the common two-word
-  // mascots ("Yellow Jackets", "Sun Devils", …). Long schools then take their
-  // short form ("Arizona State" → "Arizona St", "Florida International" → "FIU").
-  const schoolName = (teamName: string): string => {
-    const school = teamInfoFromMap(teamColorMap, teamName)?.school;
-    if (school) return shortSchool(school);
-    const words = teamName.trim().split(/\s+/);
-    if (words.length < 2) return teamName;
-    const drop = words.length > 2 && TWO_WORD_MASCOT_STARTS.has(words[words.length - 2].toLowerCase()) ? 2 : 1;
-    return shortSchool(words.slice(0, -drop).join(' '));
-  };
-  // Pro team without its city ("Boston Red Sox" → "Red Sox"): the name minus
-  // ESPN's location when the team is in the league map, else the last word —
-  // or last two for the two-word mascots ("Blue Jays", "Maple Leafs").
-  const mascotName = (teamName: string): string => {
-    const city = teamInfoFromMap(teamColorMap, teamName)?.school;
-    if (city && teamName.startsWith(city + ' ')) return teamName.slice(city.length + 1);
-    const words = teamName.trim().split(/ +/);
-    if (words.length < 2) return teamName;
-    const keep = words.length > 2 && TWO_WORD_MASCOT_STARTS.has(words[words.length - 2].toLowerCase()) ? 2 : 1;
-    return words.slice(-keep).join(' ');
-  };
-  const titleName = (teamName: string) => (isNCAAF ? schoolName(teamName) : mascotName(teamName));
+  // Phone title name: school for college, mascot for the pro leagues (see cardTitleName)
+  const titleName = (teamName: string) => cardTitleName(game.sport_key, teamName, teamInfoFromMap(teamColorMap, teamName));
   // The live clock, short: "10:29 - 4th" → "10:29 4Q" (quarters), "2P" in
   // hockey, "2H" for halves. Baseball innings ("Top 5th"), "Halftime", "Final"
   // and anything else the feed says are left as they are.
@@ -704,7 +673,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                 icons onto their own line; icons right edge on mobile, inline on sm+ */}
             <div className="flex items-center">
               <h3 className="text-[15px] md:text-[18px] font-semibold tracking-[-0.3px] md:tracking-[-0.45px] text-gray-900 truncate min-w-0">
-                {isNCAAF || isMascotTitle ? (
+                {shortTitle ? (
                   // Phones: logo + short name only — college = school, "State" shortened
                   // ("Arizona St @ West Virginia"); the pro leagues = mascot ("Bills @ Chiefs").
                   // The full names are what overflowed the line

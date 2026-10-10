@@ -32,14 +32,14 @@ import LeagueNav from '@/components/LeagueNav';
 import GameCard from '@/components/GameCard';
 import FuturesTable from '@/components/FuturesTable';
 import { BoardLoading, OddsLoader } from '@/components/Loading';
-import PropsTable from '@/components/PropsTable';
+import PropsTable, { PropsEventHeader } from '@/components/PropsTable';
 import ConferenceFilter from '@/components/ConferenceFilter';
 import BookmakerSelector from '@/components/BookmakerSelector';
 import MyBets, { BetYearFilter } from '@/components/MyBets';
 import AccountButton from '@/components/AccountButton';
 import dynamic from 'next/dynamic';
 import { signInWithGoogle, useUser } from '@/lib/userAuth';
-import { usePrefs, zoneOption } from '@/lib/prefs';
+import { usePrefs } from '@/lib/prefs';
 import { hasTappedPrice, PRICE_TAPPED_EVENT } from '@/lib/betLinks';
 import { favoritesWhenSignedOut, saveFavorite, syncFavorites } from '@/lib/favorites';
 import { getTeamConference } from '@/lib/conferences';
@@ -134,11 +134,15 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt, leagueOrde
     (team: string, search: string) => teamMatchesSearch(team, search, teamInfoFromMap(searchTeamMap, team)),
     [searchTeamMap]
   );
-  // Games view: the search bar hides behind an icon until opened (or while a filter is typed)
+  // Games and Props views: the search bar hides behind an icon until opened
+  // (or while a filter is typed). Props searches teams in the game list and
+  // players once a game is open.
+  const [playerFilter, setPlayerFilter] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
-  const searchShown = searchOpen || !!teamFilter;
+  const searchShown = searchOpen || !!teamFilter || !!playerFilter;
   const closeSearch = () => {
     setTeamFilter('');
+    setPlayerFilter('');
     setSearchOpen(false);
   };
   const [selectedConferences, setSelectedConferences] = useState<string[]>([]);
@@ -152,7 +156,6 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt, leagueOrde
   const [selectedPropsEvent, setSelectedPropsEvent] = useState<PropsEvent | null>(null);
   const [propsData, setPropsData] = useState<ProcessedPropsMarket[]>([]);
   const [propsLoading, setPropsLoading] = useState(false);
-  const [playerFilter, setPlayerFilter] = useState('');
   
   // ESPN live scores state
   const [espnScores, setEspnScores] = useState<ESPNGameScore[]>([]);
@@ -980,19 +983,6 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt, leagueOrde
   // Check if current sport supports conference filtering
   const supportsConferenceFilter = ['americanfootball_ncaaf', 'basketball_ncaab'].includes(activeLeague);
 
-  // Format date/time for props events
-  const formatEventTime = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-      weekday: 'short', 
-      month: 'short', 
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      ...zoneOption(prefs.timeZone),
-    });
-  };
-
   // Games-view filter controls, built once and placed twice: in a row under
   // the tabs on phones/tablets, and at the right end of the tab bar on wide
   // screens (only one of the two is ever displayed).
@@ -1014,7 +1004,7 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt, leagueOrde
     <button
       type="button"
       onClick={() => (searchShown ? closeSearch() : setSearchOpen(true))}
-      aria-label={searchShown ? 'Close search' : 'Search teams'}
+      aria-label={searchShown ? 'Close search' : 'Search'}
       aria-expanded={searchShown}
       className={`inline-flex h-[38px] w-9 items-center justify-center rounded-lg border shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
         searchShown ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
@@ -1027,13 +1017,15 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt, leagueOrde
   );
   // compact = the 36px version that sits beside other controls: fixed width
   // inside the wide-screen tab bar, or `width` when the caller sets one
+  // In an open props game the box filters that game's players, else teams
+  const searchingPlayers = effectiveView === 'props' && !!selectedPropsEvent;
   const searchInput = (compact: boolean, width = 'w-64') => (
     <div className={`relative ${compact ? width : ''}`}>
       <input
         type="text"
-        placeholder="Filter by team name..."
-        value={teamFilter}
-        onChange={(e) => setTeamFilter(e.target.value)}
+        placeholder={searchingPlayers ? 'Filter by player name...' : 'Filter by team name...'}
+        value={searchingPlayers ? playerFilter : teamFilter}
+        onChange={(e) => (searchingPlayers ? setPlayerFilter(e.target.value) : setTeamFilter(e.target.value))}
         onKeyDown={(e) => e.key === 'Escape' && closeSearch()}
         autoFocus={searchOpen}
         className={`w-full pl-10 pr-10 text-gray-700 bg-white border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 ${
@@ -1401,8 +1393,8 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt, leagueOrde
                     )}
                   </div>
                   </div>
-                  {/* kept (invisible) off the Games view so the tabs never shift */}
-                  <div className={`flex-none lg:hidden ${effectiveView === 'games' ? '' : 'invisible'}`}>{searchToggle}</div>
+                  {/* kept (invisible) off the Games and Props views so the tabs never shift */}
+                  <div className={`flex-none lg:hidden ${effectiveView === 'games' || effectiveView === 'props' ? '' : 'invisible'}`}>{searchToggle}</div>
                   <div className="hidden lg:flex items-center justify-end gap-2">
                     {effectiveView === 'games' && (
                       <>
@@ -1411,10 +1403,11 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt, leagueOrde
                         {liveChip}
                       </>
                     )}
+                    {effectiveView === 'props' && (searchShown ? searchInput(true) : searchButton)}
                     {effectiveView === 'ratings' && ratingsSwitch}
                   </div>
                   {/* leagues with a conference filter open the box beside it instead (row below) */}
-                  {effectiveView === 'games' && searchShown && !supportsConferenceFilter && (
+                  {searchShown && ((effectiveView === 'games' && !supportsConferenceFilter) || effectiveView === 'props') && (
                     <div className="mt-2 basis-full lg:hidden">{searchInput(false)}</div>
                   )}
                 </div>
@@ -1478,37 +1471,6 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt, leagueOrde
                   {teamFilter && (
                     <button
                       onClick={() => setTeamFilter('')}
-                      className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Props view filters */}
-            {effectiveView === 'props' && (
-              <div className="mb-6 space-y-4">
-                {/* Game filter (when no event selected) or Player filter (when event selected) */}
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder={selectedPropsEvent ? "Filter by player name..." : "Filter by team name..."}
-                    value={selectedPropsEvent ? playerFilter : teamFilter}
-                    onChange={(e) => selectedPropsEvent ? setPlayerFilter(e.target.value) : setTeamFilter(e.target.value)}
-                    className="w-full px-4 py-2 pl-10 pr-4 text-gray-700 bg-white border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                  />
-                  <div className="absolute inset-y-0 left-0 flex items-center pl-3">
-                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                  </div>
-                  {(selectedPropsEvent ? playerFilter : teamFilter) && (
-                    <button
-                      onClick={() => selectedPropsEvent ? setPlayerFilter('') : setTeamFilter('')}
                       className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1658,73 +1620,19 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt, leagueOrde
                 {propsLoading ? (
                   <OddsLoader label="Loading props" />
                 ) : selectedPropsEvent ? (
-                  // Show props for selected game
-                  <div>
-                    {/* Clickable game header - click to collapse/go back to game list */}
-                    <div 
-                      className="bg-white rounded-lg shadow p-4 mb-4 cursor-pointer hover:bg-gray-50 transition-colors"
-                      onClick={() => {
-                        setSelectedPropsEvent(null);
-                        setPropsData([]);
-                        setPlayerFilter('');
-                      }}
-                    >
-                      <div className="flex items-center justify-between">
-                        {/* Mobile: logos only */}
-                        <div className="flex md:hidden items-center gap-2">
-                          <img 
-                            src={`/team-logos/${selectedPropsEvent.away_team.toLowerCase().replace(/\s+/g, '')}.png`}
-                            alt={selectedPropsEvent.away_team}
-                            className="h-8 w-8"
-                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                          />
-                          <span className="text-gray-400">@</span>
-                          <img 
-                            src={`/team-logos/${selectedPropsEvent.home_team.toLowerCase().replace(/\s+/g, '')}.png`}
-                            alt={selectedPropsEvent.home_team}
-                            className="h-8 w-8"
-                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                          />
-                        </div>
-                        {/* Desktop: logos + names */}
-                        <div className="hidden md:flex items-center gap-3">
-                          <img 
-                            src={`/team-logos/${selectedPropsEvent.away_team.toLowerCase().replace(/\s+/g, '')}.png`}
-                            alt=""
-                            className="h-8 w-8"
-                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                          />
-                          <span className="font-medium">{selectedPropsEvent.away_team}</span>
-                          <span className="text-gray-400">@</span>
-                          <span className="font-medium">{selectedPropsEvent.home_team}</span>
-                          <img 
-                            src={`/team-logos/${selectedPropsEvent.home_team.toLowerCase().replace(/\s+/g, '')}.png`}
-                            alt=""
-                            className="h-8 w-8"
-                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                          />
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs md:text-sm text-gray-500">{formatEventTime(selectedPropsEvent.commence_time)}</span>
-                          <svg 
-                            className="w-5 h-5 text-gray-400"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                          </svg>
-                        </div>
-                      </div>
-                    </div>
-                    <PropsTable 
-                      markets={propsData} 
-                      selectedBookmakers={selectedBookmakers}
-                      playerFilter={playerFilter}
-                      event={selectedPropsEvent}
-                      league={activeLeague}
-                    />
-                  </div>
+                  // Props for the chosen game: one card, built like a game card
+                  <PropsTable
+                    markets={propsData}
+                    selectedBookmakers={selectedBookmakers}
+                    playerFilter={playerFilter}
+                    event={selectedPropsEvent}
+                    league={activeLeague}
+                    onBack={() => {
+                      setSelectedPropsEvent(null);
+                      setPropsData([]);
+                      setPlayerFilter('');
+                    }}
+                  />
                 ) : (
                   // Show game selector
                   <div>
@@ -1736,57 +1644,17 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt, leagueOrde
                       </div>
                     ) : (
                       <div className="space-y-3">
-                        <p className="text-sm text-gray-600 mb-4">
-                          Select a game to view player props ({filteredPropsEvents.length} game{filteredPropsEvents.length !== 1 ? 's' : ''} available)
-                        </p>
                         {filteredPropsEvents.map(event => (
                           <button
                             key={event.id}
+                            type="button"
                             onClick={() => loadPropsForEvent(event)}
-                            className="w-full bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow text-left"
+                            className="flex w-full items-center justify-between gap-2 bg-white rounded-lg shadow-md p-3 md:p-4 text-left hover:bg-gray-50 transition-colors"
                           >
-                            <div className="flex items-center justify-between">
-                              {/* Mobile: logos only */}
-                              <div className="flex md:hidden items-center gap-2">
-                                <img 
-                                  src={`/team-logos/${event.away_team.toLowerCase().replace(/\s+/g, '')}.png`}
-                                  alt={event.away_team}
-                                  className="h-8 w-8"
-                                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                                />
-                                <span className="text-gray-400">@</span>
-                                <img 
-                                  src={`/team-logos/${event.home_team.toLowerCase().replace(/\s+/g, '')}.png`}
-                                  alt={event.home_team}
-                                  className="h-8 w-8"
-                                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                                />
-                              </div>
-                              {/* Desktop: logos + names */}
-                              <div className="hidden md:flex items-center gap-3">
-                                <img 
-                                  src={`/team-logos/${event.away_team.toLowerCase().replace(/\s+/g, '')}.png`}
-                                  alt=""
-                                  className="h-8 w-8"
-                                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                                />
-                                <span className="font-medium">{event.away_team}</span>
-                                <span className="text-gray-400">@</span>
-                                <span className="font-medium">{event.home_team}</span>
-                                <img 
-                                  src={`/team-logos/${event.home_team.toLowerCase().replace(/\s+/g, '')}.png`}
-                                  alt=""
-                                  className="h-8 w-8"
-                                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                                />
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs md:text-sm text-gray-500">{formatEventTime(event.commence_time)}</span>
-                                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                </svg>
-                              </div>
-                            </div>
+                            <PropsEventHeader event={event} league={activeLeague} />
+                            <svg className="w-5 h-5 flex-none text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
                           </button>
                         ))}
                       </div>

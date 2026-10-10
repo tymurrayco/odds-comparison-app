@@ -1,403 +1,331 @@
 // src/components/PropsTable.tsx
+//
+// Player props for one game, drawn as a game card: the same title and time
+// line as GameCard, the prop markets as chips (like Spread / ML / O/U) with
+// one market's table open at a time, and the same price cells as OddsTable —
+// tap a price for the bet ticket (signed in) or the sportsbook (signed out).
 'use client';
 
-import React, { useState, useRef } from 'react';
+import { Fragment, useRef, useState } from 'react';
 import { ProcessedPropsMarket, ProcessedProp, PropsEvent, BOOKMAKERS } from '@/lib/api';
-import { createBet } from '@/lib/betService';
+import { formatOdds } from '@/lib/utils';
+import BetTicket, { type TicketPick } from '@/components/BetTicket';
+import { getSportFromLeague, getLeagueDisplayName } from '@/components/OddsTable';
+import { useUser } from '@/lib/userAuth';
+import { usePrefs, zoneOption } from '@/lib/prefs';
+import { openBetLink, markPriceTapped } from '@/lib/betLinks';
+import { goUrl } from '@/lib/books';
+import { useTeamColorMap, teamInfoFromMap, TeamLogoImg } from '@/lib/myGameBets';
+import { cardTitleName, hasShortCardTitle } from '@/lib/teamNames';
+
+const BOOKMAKER_LOGOS: { [key: string]: string } = {
+  'DraftKings': '/bookmaker-logos/draftkings.png',
+  'FanDuel': '/bookmaker-logos/fd.png',
+  'BetMGM': '/bookmaker-logos/betmgm.png',
+  'BetRivers': '/bookmaker-logos/betrivers.png',
+  'Caesars': '/bookmaker-logos/caesars.png',
+  'BetOnline.ag': '/bookmaker-logos/betonline.png',
+  'Kalshi': '/bookmaker-logos/kalshi.png',
+  'Novig': '/bookmaker-logos/novig.png',
+  'ProphetX': '/bookmaker-logos/prophetx.png',
+  'Polymarket': '/bookmaker-logos/polymarket.png',
+};
+
+const localLogo = (team: string) => `/team-logos/${team.toLowerCase().replace(/\s+/g, '')}.png`;
+
+/**
+ * A game's title and start time, the way a game card shows them: on phones
+ * logo + short name ("Eagles @ Jaguars"), full names on wide screens, then
+ * "Sun • 6:30 AM MST". Used by the props game list and the open game's card.
+ */
+export function PropsEventHeader({ event, league }: { event: PropsEvent; league: string }) {
+  const prefs = usePrefs();
+  const teamMap = useTeamColorMap(league);
+  const zone = zoneOption(prefs.timeZone);
+
+  // Same date rule as GameCard: the weekday through six days out, "Oct 17" beyond
+  const start = new Date(event.commence_time);
+  const calendarDay = (d: Date) => {
+    const [y, m, day] = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', ...zone })
+      .format(d)
+      .split('-')
+      .map(Number);
+    return Date.UTC(y, m - 1, day) / 86_400_000;
+  };
+  const daysOut = calendarDay(start) - calendarDay(new Date());
+  const date = start.toLocaleDateString(
+    undefined,
+    daysOut >= 0 && daysOut <= 6 ? { weekday: 'short', ...zone } : { month: 'short', day: 'numeric', ...zone }
+  );
+  const time = start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', ...zone });
+  const zoneAbbr = new Intl.DateTimeFormat('en', { timeZoneName: 'short', ...zone })
+    .formatToParts(start)
+    .find((part) => part.type === 'timeZoneName')?.value || '';
+
+  const side = (team: string) => {
+    const info = teamInfoFromMap(teamMap, team);
+    return (
+      <>
+        <TeamLogoImg srcs={[info?.logo, localLogo(team)]} className="h-5 w-5 flex-none object-contain" />
+        <span className="truncate">{cardTitleName(league, team, info)}</span>
+      </>
+    );
+  };
+
+  return (
+    <div className="min-w-0">
+      <h3 className="text-[15px] md:text-[18px] font-semibold tracking-[-0.3px] md:tracking-[-0.45px] text-gray-900 truncate min-w-0">
+        {hasShortCardTitle(league) ? (
+          <>
+            <span className="md:hidden flex items-center gap-1.5 min-w-0">
+              {side(event.away_team)}
+              <span className="flex-none text-gray-400">@</span>
+              {side(event.home_team)}
+            </span>
+            <span className="hidden md:inline">{event.away_team} @ {event.home_team}</span>
+          </>
+        ) : (
+          <>{event.away_team} @ {event.home_team}</>
+        )}
+      </h3>
+      <p className="mt-1 text-xs md:text-sm text-gray-500">
+        {date}
+        <span className="mx-1.5 text-gray-300" aria-hidden="true">•</span>
+        {time} {zoneAbbr}
+      </p>
+    </div>
+  );
+}
 
 interface PropsTableProps {
   markets: ProcessedPropsMarket[];
   selectedBookmakers?: string[];
   playerFilter?: string;
-  event?: PropsEvent; // The selected game/event for context
-  league?: string; // The active league
+  event: PropsEvent; // the game these props belong to
+  league: string;
+  onBack: () => void; // back to the game list
 }
 
-// Helper function to calculate stake for 1 unit to-win
-function calculateStakeForOneUnit(odds: number): number {
-  if (odds > 0) {
-    // Underdog: stake = 100 / odds to win 1 unit
-    return 100 / odds;
-  } else {
-    // Favorite: stake = |odds| / 100 to win 1 unit
-    return Math.abs(odds) / 100;
-  }
-}
+type Side = 'Over' | 'Under';
 
-// Helper function to map league ID to sport name
-function getSportFromLeague(league: string): string {
-  if (league.includes('nba') || league.includes('basketball')) return 'Basketball';
-  if (league.includes('nfl') || league.includes('americanfootball_nfl')) return 'Football';
-  if (league.includes('ncaaf') || league.includes('americanfootball_ncaaf')) return 'Football';
-  if (league.includes('nhl') || league.includes('icehockey')) return 'Hockey';
-  if (league.includes('mlb') || league.includes('baseball')) return 'Baseball';
-  if (league.includes('mls') || league.includes('soccer')) return 'Soccer';
-  if (league.includes('epl') || league.includes('soccer')) return 'Soccer';
-  if (league.includes('wnba')) return 'Basketball';
-  return 'Other';
-}
+export default function PropsTable({ markets, selectedBookmakers, playerFilter = '', event, league, onBack }: PropsTableProps) {
+  // Signed-in visitors get the bet ticket on tap; signed out, a tap goes to the book
+  const { user } = useUser();
+  const [ticket, setTicket] = useState<TicketPick | null>(null);
+  const ticketSeq = useRef(0);
+  const [marketKey, setMarketKey] = useState<string | null>(null);
 
-// Helper function to get league display name
-function getLeagueDisplayName(league: string): string {
-  const leagueMap: { [key: string]: string } = {
-    'basketball_nba': 'NBA',
-    'americanfootball_nfl': 'NFL',
-    'americanfootball_ncaaf': 'NCAAF',
-    'icehockey_nhl': 'NHL',
-    'baseball_mlb': 'MLB',
-    'soccer_usa_mls': 'MLS',
-    'soccer_epl': 'EPL',
-    'basketball_wnba': 'WNBA'
-  };
-  return leagueMap[league] || league.toUpperCase();
-}
+  // Markets that still have a player after the search filter
+  const term = playerFilter.toLowerCase().trim();
+  const shownMarkets = markets
+    .map((m) => ({ ...m, props: term ? m.props.filter((p) => p.playerName.toLowerCase().includes(term)) : m.props }))
+    .filter((m) => m.props.length > 0);
+  // The open market: the chosen chip, or the first while none is chosen (or
+  // the chosen one has no matching player)
+  const market = shownMarkets.find((m) => m.marketKey === marketKey) ?? shownMarkets[0];
 
-export default function PropsTable({ 
-  markets, 
-  selectedBookmakers,
-  playerFilter = '',
-  event,
-  league = 'basketball_nba'
-}: PropsTableProps) {
-  const [expandedMarkets, setExpandedMarkets] = useState<{ [key: string]: boolean }>({});
-  const pressTimer = useRef<NodeJS.Timeout | null>(null);
-  const [holdingKey, setHoldingKey] = useState<string | null>(null); // Track which cell is being held
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-  
-  // Use selected bookmakers or default to all. Books with no prop prices for
-  // this event (e.g. Novig / ProphetX — the props feed is regions=us) would
-  // only add empty columns, so drop them.
-  const pricesSomething = (book: string) =>
-    markets.some(m => m.props.some(p => {
-      const o = p.odds[book];
-      return !!o && (o.over !== null || o.under !== null);
-    }));
-  const displayBookmakers = (selectedBookmakers && selectedBookmakers.length > 0
-    ? BOOKMAKERS.filter(b => selectedBookmakers.includes(b))
-    : BOOKMAKERS).filter(pricesSomething);
+  // Chosen books that price this market. Books with no prop prices (Novig /
+  // ProphetX: the props feed is regions=us) would only add empty columns.
+  const books = market
+    ? (selectedBookmakers && selectedBookmakers.length > 0 ? BOOKMAKERS.filter((b) => selectedBookmakers.includes(b)) : BOOKMAKERS).filter(
+        (book) => market.props.some((p) => p.odds[book] && (p.odds[book].over !== null || p.odds[book].under !== null))
+      )
+    : [];
 
-  const formatOdds = (odds: number | null): string => {
-    if (odds === null) return '-';
-    if (odds > 0) return `+${odds}`;
-    return odds.toString();
-  };
+  const lineOf = (prop: ProcessedProp, book: string) => prop.odds[book]?.line ?? prop.line;
+  const priceOf = (prop: ProcessedProp, book: string, side: Side) =>
+    (side === 'Over' ? prop.odds[book]?.over : prop.odds[book]?.under) ?? null;
 
-  // Show toast notification
-  const showToast = (message: string, type: 'success' | 'error') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  };
-
-  // Handle press-and-hold to create prop bet
-  const handlePressStart = (
-    prop: ProcessedProp,
-    bookmaker: string,
-    line: number,
-    odds: number,
-    overUnder: 'Over' | 'Under',
-    cellKey: string
-  ) => {
-    if (!event) return; // Need event context to create bet
-    
-    setHoldingKey(cellKey);
-    
-    pressTimer.current = setTimeout(async () => {
-      // Calculate stake for 1 unit to-win
-      const stake = calculateStakeForOneUnit(odds);
-      
-      // Create bet description: "Player Name Over/Under Line (Market)"
-      // e.g., "Anthony Davis Over 24.5 Points"
-      const betDescription = `${prop.playerName} ${overUnder} ${line} ${prop.marketName}`;
-      
-      // Create full description (game matchup)
-      const fullDescription = `${event.away_team} @ ${event.home_team}`;
-      
-      // The player's team (badge accent on the card, theme on the share page):
-      // one roster lookup, best effort, capped so the hold never feels stuck.
-      let playerTeam: string | undefined;
-      try {
-        const ctrl = new AbortController();
-        const cap = setTimeout(() => ctrl.abort(), 3000);
-        const r = await fetch(
-          `/api/player-team?league=${encodeURIComponent(league)}&player=${encodeURIComponent(prop.playerName)}&teams=${encodeURIComponent(`${event.away_team},${event.home_team}`)}`,
-          { signal: ctrl.signal }
-        );
-        clearTimeout(cap);
-        const j = await r.json();
-        if (j?.team) playerTeam = j.team;
-      } catch {
-        /* unresolved — the bet still saves, just without a side */
+  // Best book(s) for one side of a prop. Books post different lines for the
+  // same prop, so the LINE wins first (lower is better for Over, higher for
+  // Under — the rule the spreads table uses), and the price breaks ties.
+  const bestBooks = (prop: ProcessedProp, side: Side): string[] => {
+    let best: string[] = [];
+    let bestLine = 0;
+    let bestPrice = 0;
+    for (const book of books) {
+      const price = priceOf(prop, book, side);
+      if (price === null) continue;
+      const line = lineOf(prop, book);
+      const lineBetter = side === 'Over' ? line < bestLine : line > bestLine;
+      if (best.length === 0 || lineBetter || (line === bestLine && price > bestPrice)) {
+        best = [book];
+        bestLine = line;
+        bestPrice = price;
+      } else if (line === bestLine && price === bestPrice) {
+        best.push(book);
       }
-
-      try {
-        // Format date in local timezone to avoid UTC conversion issues
-        const eventDate = new Date(event.commence_time);
-        const eventDateString = `${eventDate.getFullYear()}-${String(eventDate.getMonth() + 1).padStart(2, '0')}-${String(eventDate.getDate()).padStart(2, '0')}`;
-        
-        await createBet({
-          date: new Date().toISOString().split('T')[0],
-          eventDate: eventDateString,
-          sport: getSportFromLeague(league),
-          league: getLeagueDisplayName(league),
-          description: fullDescription,
-          awayTeam: event.away_team,
-          homeTeam: event.home_team,
-          team: playerTeam, // the player's team when the roster lookup finds them
-          betType: 'prop',
-          bet: betDescription,
-          odds: odds,
-          stake: parseFloat(stake.toFixed(2)),
-          status: 'pending',
-          book: bookmaker
-        });
-        
-        showToast(`Bet added: ${betDescription} (${formatOdds(odds)})`, 'success');
-      } catch (error) {
-        console.error('Error creating bet:', error);
-        showToast('Failed to add bet', 'error');
-      }
-      
-      setHoldingKey(null);
-    }, 1500); // 1.5 second hold
-  };
-
-  const handlePressEnd = () => {
-    if (pressTimer.current) {
-      clearTimeout(pressTimer.current);
     }
-    setHoldingKey(null);
+    return best;
   };
 
-  // Bookmaker logos mapping
-  const bookmakerLogos: { [key: string]: string } = {
-    'DraftKings': '/bookmaker-logos/draftkings.png',
-    'FanDuel': '/bookmaker-logos/fd.png',
-    'BetMGM': '/bookmaker-logos/betmgm.png',
-    'BetRivers': '/bookmaker-logos/betrivers.png',
-    'Caesars': '/bookmaker-logos/caesars.png',
-    'BetOnline.ag': '/bookmaker-logos/betonline.png',
-    'Kalshi': '/bookmaker-logos/kalshi.png',
-    'Novig': '/bookmaker-logos/novig.png',
-    'ProphetX': '/bookmaker-logos/prophetx.png',
-    'Polymarket': '/bookmaker-logos/polymarket.png'
-  };
-
-  // Toggle market expansion
-  const toggleMarket = (marketKey: string) => {
-    setExpandedMarkets(prev => ({
-      ...prev,
-      [marketKey]: !prev[marketKey]
-    }));
-  };
-
-  // Filter props by player name
-  const filterProps = (props: ProcessedProp[]): ProcessedProp[] => {
-    if (!playerFilter.trim()) return props;
-    const searchTerm = playerFilter.toLowerCase().trim();
-    return props.filter(prop => 
-      prop.playerName.toLowerCase().includes(searchTerm)
-    );
-  };
-
-  // Find the best Over and best Under across bookmakers. Books may post
-  // different lines for the same prop, so the LINE wins first (lower is
-  // better for Over, higher is better for Under — same rule the spreads
-  // table uses: best point, then best price), and odds only break ties.
-  const findBestOdds = (prop: ProcessedProp): { bestOver: string[], bestUnder: string[] } => {
-    let bestOverLine = Infinity;
-    let bestOverValue = -Infinity;
-    let bestUnderLine = -Infinity;
-    let bestUnderValue = -Infinity;
-    let bestOver: string[] = [];
-    let bestUnder: string[] = [];
-
-    displayBookmakers.forEach(book => {
-      const odds = prop.odds[book];
-      if (!odds) return;
-      const line = odds.line ?? prop.line;
-
-      if (odds.over !== null) {
-        if (line < bestOverLine || (line === bestOverLine && odds.over > bestOverValue)) {
-          bestOverLine = line;
-          bestOverValue = odds.over;
-          bestOver = [book];
-        } else if (line === bestOverLine && odds.over === bestOverValue) {
-          bestOver.push(book);
-        }
-      }
-      if (odds.under !== null) {
-        if (line > bestUnderLine || (line === bestUnderLine && odds.under > bestUnderValue)) {
-          bestUnderLine = line;
-          bestUnderValue = odds.under;
-          bestUnder = [book];
-        } else if (line === bestUnderLine && odds.under === bestUnderValue) {
-          bestUnder.push(book);
-        }
-      }
+  // Tap on a price
+  const openPick = (prop: ProcessedProp, book: string, side: Side, line: number, price: number) => {
+    markPriceTapped(); // retires the board's tap hint on this device
+    const title = `${prop.playerName} ${side} ${line} ${prop.marketName}`; // "Jalen Hurts Over 189.5 Pass Yards"
+    // The props feed carries no betslip links, so the book opens on its own page
+    const buildGo = (to?: string) => goUrl({ book, sport: league, game: event.id, market: prop.marketKey, outcome: title, to });
+    if (!user) {
+      openBetLink(buildGo());
+      return;
+    }
+    const matchup = `${event.away_team} @ ${event.home_team}`;
+    // Event date in local time (toISOString would shift late games a day)
+    const d = new Date(event.commence_time);
+    const eventDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const seq = ++ticketSeq.current;
+    setTicket({
+      title,
+      subtitle: matchup,
+      odds: price,
+      book,
+      bookLogo: BOOKMAKER_LOGOS[book],
+      buildGo,
+      commenceTime: event.commence_time,
+      draft: {
+        date: new Date().toISOString().split('T')[0],
+        eventDate,
+        sport: getSportFromLeague(league),
+        league: getLeagueDisplayName(league),
+        description: matchup,
+        awayTeam: event.away_team,
+        homeTeam: event.home_team,
+        betType: 'prop',
+        bet: title,
+        odds: price,
+        status: 'pending',
+        book,
+      },
     });
-
-    return { bestOver, bestUnder };
+    // The player's team (badge accent on the game card, theme on the share
+    // page): one roster lookup, best effort, added to the open ticket when it
+    // comes back. A bet tracked before then still saves, without a side.
+    fetch(
+      `/api/player-team?league=${encodeURIComponent(league)}&player=${encodeURIComponent(prop.playerName)}&teams=${encodeURIComponent(`${event.away_team},${event.home_team}`)}`
+    )
+      .then((r) => r.json())
+      .then((j) => {
+        if (!j?.team || ticketSeq.current !== seq) return;
+        setTicket((t) => (t ? { ...t, draft: { ...t.draft, team: j.team } } : t));
+      })
+      .catch(() => {
+        /* unresolved — no side on the bet */
+      });
   };
 
-  if (!markets || markets.length === 0) {
+  const chip = (active: boolean) =>
+    `flex-none whitespace-nowrap px-2 md:px-3 py-1 text-xs md:text-sm rounded-md ${
+      active ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+    }`;
+
+  // One price cell, the same build as OddsTable's: "O 189.5 (-113)", green with
+  // a Best tag when it is the best number for that side.
+  const cell = (prop: ProcessedProp, book: string, side: Side, isBest: boolean, border: string) => {
+    const price = priceOf(prop, book, side);
+    const line = lineOf(prop, book);
     return (
-      <div className="bg-white rounded-lg shadow p-6 text-center text-gray-500">
-        No player props available for this game.
-      </div>
-    );
-  }
-
-  // Filter markets to only show those with matching props
-  const filteredMarkets = markets.map(market => ({
-    ...market,
-    props: filterProps(market.props)
-  })).filter(market => market.props.length > 0);
-
-  if (filteredMarkets.length === 0) {
-    return (
-      <div className="bg-white rounded-lg shadow p-6 text-center text-gray-500">
-        No props found matching &quot;{playerFilter}&quot;
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      {/* Toast Notification */}
-      {toast && (
-        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-300 ease-in-out">
-          <div className={`px-6 py-3 rounded-lg shadow-lg ${
-            toast.type === 'success' 
-              ? 'bg-green-500 text-white' 
-              : 'bg-red-500 text-white'
-          }`}>
-            {toast.message}
-          </div>
-        </div>
-      )}
-
-      {filteredMarkets.map((market) => {
-        // Default to collapsed (false) if not set, otherwise use the stored value
-        const isExpanded = expandedMarkets[market.marketKey] ?? false;
-        
-        return (
-          <div key={market.marketKey} className="bg-white rounded-lg shadow-md overflow-hidden">
-            {/* Market Header - Click to toggle */}
-            <div 
-              className="p-3 md:p-4 border-b border-blue-400 bg-blue-500 cursor-pointer flex items-center justify-between hover:bg-blue-600 transition-colors"
-              onClick={() => toggleMarket(market.marketKey)}
-            >
-              <h3 className="text-sm md:text-lg font-semibold text-white">
-                {market.marketName}
-                <span className="ml-2 text-xs md:text-sm font-normal text-blue-100">
-                  ({market.props.length} player{market.props.length !== 1 ? 's' : ''})
-                </span>
-              </h3>
-              <svg 
-                className={`w-5 h-5 text-white transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
-            
-            {/* Props Table - Only show when expanded */}
-            {isExpanded && (
-              <div className="overflow-x-auto">
-                <table className="min-w-full">
-                  <thead className="bg-blue-50">
-                    <tr>
-                      <th className="px-2 md:px-4 py-2 md:py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider min-w-[140px]">
-                        Player
-                      </th>
-                      {displayBookmakers.map(book => (
-                        <th key={book} className="px-1 md:px-3 py-2 md:py-3 text-center min-w-[80px]">
-                          <img src={bookmakerLogos[book]} alt={book} className="h-5 md:h-6 mx-auto" />
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {market.props.map((prop, index) => {
-                      const { bestOver, bestUnder } = findBestOdds(prop);
-                      
-                      return (
-                        <tr key={`${prop.playerName}-${index}`} className="hover:bg-gray-50">
-                          <td className="px-2 md:px-4 py-2 md:py-3 whitespace-nowrap text-xs md:text-sm font-medium text-gray-900">
-                            <span className="truncate max-w-[120px] md:max-w-none">
-                              {prop.playerName}
-                            </span>
-                          </td>
-                          {displayBookmakers.map(book => {
-                            const odds = prop.odds[book];
-                            const isOverBest = bestOver.includes(book);
-                            const isUnderBest = bestUnder.includes(book);
-                            const hasData = odds && (odds.over !== null || odds.under !== null);
-                            const cellKey = `${prop.playerName}-${book}-${market.marketKey}`;
-                            const isThisCellHolding = holdingKey === cellKey || holdingKey === `${cellKey}-over` || holdingKey === `${cellKey}-under`;
-                            
-                            return (
-                              <td 
-                                key={`${book}-${prop.playerName}`}
-                                className="px-1 md:px-3 py-2 md:py-3 whitespace-nowrap text-center border-r border-gray-100 last:border-r-0"
-                              >
-                                {hasData ? (
-                                  <div className={`flex flex-col items-center gap-0.5 ${isThisCellHolding ? 'opacity-50' : ''}`}>
-                                    {/* Line */}
-                                    <span className="text-[10px] md:text-xs font-semibold text-gray-700">
-                                      {odds.line}
-                                    </span>
-                                    {/* Over/Under odds - each clickable separately */}
-                                    <div className="flex gap-1 text-[10px] md:text-xs">
-                                      {/* Over button */}
-                                      <span 
-                                        className={`cursor-pointer select-none ${isOverBest ? 'text-green-600 font-bold' : 'text-gray-600'} ${holdingKey === `${cellKey}-over` ? 'ring-2 ring-blue-400 rounded' : ''}`}
-                                        onTouchStart={() => odds.over !== null && odds.line !== undefined && 
-                                          handlePressStart(prop, book, odds.line!, odds.over, 'Over', `${cellKey}-over`)}
-                                        onTouchEnd={handlePressEnd}
-                                        onTouchMove={handlePressEnd}
-                                        onMouseDown={() => odds.over !== null && odds.line !== undefined && 
-                                          handlePressStart(prop, book, odds.line!, odds.over, 'Over', `${cellKey}-over`)}
-                                        onMouseUp={handlePressEnd}
-                                        onMouseLeave={handlePressEnd}
-                                      >
-                                        o{formatOdds(odds.over)}
-                                      </span>
-                                      <span className="text-gray-300">/</span>
-                                      {/* Under button */}
-                                      <span 
-                                        className={`cursor-pointer select-none ${isUnderBest ? 'text-green-600 font-bold' : 'text-gray-600'} ${holdingKey === `${cellKey}-under` ? 'ring-2 ring-blue-400 rounded' : ''}`}
-                                        onTouchStart={() => odds.under !== null && odds.line !== undefined && 
-                                          handlePressStart(prop, book, odds.line!, odds.under, 'Under', `${cellKey}-under`)}
-                                        onTouchEnd={handlePressEnd}
-                                        onTouchMove={handlePressEnd}
-                                        onMouseDown={() => odds.under !== null && odds.line !== undefined && 
-                                          handlePressStart(prop, book, odds.line!, odds.under, 'Under', `${cellKey}-under`)}
-                                        onMouseUp={handlePressEnd}
-                                        onMouseLeave={handlePressEnd}
-                                      >
-                                        u{formatOdds(odds.under)}
-                                      </span>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <span className="text-[11px] md:text-sm text-gray-400">-</span>
-                                )}
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+      <td
+        key={`${book}-${side}`}
+        className={`relative px-2 md:px-4 py-3 whitespace-nowrap text-center select-none ${border} ${
+          price !== null ? 'cursor-pointer hover:bg-blue-50' : ''
+        }`}
+        onClick={() => price !== null && openPick(prop, book, side, line, price)}
+      >
+        {price !== null ? (
+          <div className={`text-xs md:text-sm tabular-nums ${isBest ? 'text-green-600 font-bold' : 'text-gray-900'}`}>
+            {side === 'Over' ? 'O' : 'U'} {line} ({formatOdds(price)})
+            {isBest && (
+              // Tucked into the cell's bottom padding (td is relative) — no extra row height
+              <span className="absolute bottom-[6px] left-1/2 -translate-x-1/2 px-1 rounded-full text-[8px] leading-[11px] font-semibold uppercase tracking-wide bg-green-100 text-green-800 pointer-events-none">
+                Best
+              </span>
             )}
           </div>
-        );
-      })}
+        ) : (
+          <span className="text-xs md:text-sm text-gray-500">-</span>
+        )}
+      </td>
+    );
+  };
+
+  return (
+    <div className="bg-white rounded-lg shadow-md overflow-hidden">
+      {ticket && <BetTicket pick={ticket} onClose={() => setTicket(null)} />}
+
+      <div className="p-3 md:p-4 border-b border-gray-200">
+        <div className="flex items-start justify-between gap-2">
+          <PropsEventHeader event={event} league={league} />
+          <button
+            type="button"
+            onClick={onBack}
+            className="flex-none inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-1 text-xs md:text-sm text-gray-700 hover:bg-gray-200"
+          >
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            All games
+          </button>
+        </div>
+
+        {/* Markets: one row that scrolls sideways on phones, wraps on wide screens */}
+        {shownMarkets.length > 0 && (
+          <div className="scrollbar-none -mx-3 mt-3 flex gap-1 overflow-x-auto px-3 md:mx-0 md:flex-wrap md:gap-2 md:overflow-visible md:px-0">
+            {shownMarkets.map((m) => (
+              <button key={m.marketKey} type="button" className={chip(m.marketKey === market?.marketKey)} onClick={() => setMarketKey(m.marketKey)}>
+                {m.marketName}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {!market ? (
+        <div className="p-6 text-center text-sm text-gray-500">
+          {term ? <>No players found matching &quot;{playerFilter}&quot;.</> : 'No player props available for this game yet.'}
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          {/* border-separate: Safari drops sticky table cells under border-collapse.
+              Keyed by market so switching chips remounts the table (see OddsTable). */}
+          <table key={market.marketKey} className="min-w-full border-separate border-spacing-0">
+            <thead className="bg-gray-50">
+              <tr>
+                {/* Frozen while horizontally scrolling the book columns */}
+                <th className="px-2 md:px-4 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-0 z-20 bg-gray-50 border-r border-b border-gray-100">
+                  Player
+                </th>
+                {books.map((book) => (
+                  <th key={book} className="px-2 md:px-4 py-2 md:py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-100">
+                    <img src={BOOKMAKER_LOGOS[book]} alt={book} className="h-6 mx-auto" />
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {market.props.map((prop, i) => {
+                const bestOver = bestBooks(prop, 'Over');
+                const bestUnder = bestBooks(prop, 'Under');
+                // a full line under each player, none after the last
+                const playerBorder = i < market.props.length - 1 ? 'border-b border-b-gray-200' : '';
+                return (
+                  <Fragment key={prop.playerName}>
+                    <tr>
+                      <td
+                        rowSpan={2}
+                        className={`px-2 md:px-4 py-2 text-xs md:text-sm font-medium leading-tight text-gray-900 sticky left-0 z-10 bg-white border-r border-gray-100 max-w-[104px] md:max-w-none ${playerBorder}`}
+                      >
+                        {prop.playerName}
+                      </td>
+                      {books.map((book) => cell(prop, book, 'Over', bestOver.includes(book), 'border-b border-b-gray-100'))}
+                    </tr>
+                    <tr>{books.map((book) => cell(prop, book, 'Under', bestUnder.includes(book), playerBorder))}</tr>
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
