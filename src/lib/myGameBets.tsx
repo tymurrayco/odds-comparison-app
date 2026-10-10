@@ -47,6 +47,7 @@ const SPORT_KEY_TO_LEAGUE: Record<string, string> = {
   americanfootball_ncaaf: 'NCAAF',
   americanfootball_cfl: 'CFL',
   basketball_nba: 'NBA',
+  basketball_wnba: 'WNBA',
   basketball_ncaab: 'NCAAB',
   baseball_mlb: 'MLB',
   icehockey_nhl: 'NHL',

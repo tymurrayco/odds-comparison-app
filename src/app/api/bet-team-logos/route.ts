@@ -19,6 +19,7 @@ const LEAGUE_MAP: Record<string, LeagueConfig> = {
   // football teams — a 400 limit truncated the list and dropped teams (e.g. TCU).
   NCAAF: { sport: 'football', league: 'college-football', limit: 1000, groups: '80' },
   NBA: { sport: 'basketball', league: 'nba' },
+  WNBA: { sport: 'basketball', league: 'wnba' },
   NCAAB: { sport: 'basketball', league: 'mens-college-basketball', limit: 1000, groups: '50' },
   MLB: { sport: 'baseball', league: 'mlb' },
   NHL: { sport: 'hockey', league: 'nhl' },

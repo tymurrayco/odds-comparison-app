@@ -22,7 +22,7 @@ import GameNoteSheet from './GameNoteSheet';
 const TWO_WORD_MASCOT_STARTS = new Set([
   'yellow', 'green', 'thundering', 'sun', 'wolf', 'red', 'scarlet', 'fighting', "fightin'", 'blue', 'golden',
   "ragin'", 'mean', 'rainbow', 'crimson', 'big', 'nittany', 'demon', 'horned', 'mountain', 'black', 'great',
-  'purple', 'tar', 'river', 'screaming', 'delta', "runnin'", 'white',
+  'purple', 'tar', 'river', 'screaming', 'delta', "runnin'", 'white', 'maple', 'trail',
 ]);
 
 // Schools whose name is still too long for the phone card title after
@@ -62,7 +62,8 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
   // NFL (incl. preseason) gets the injury-report toggle
   const isNFL = game.sport_key === 'americanfootball_nfl'
     || game.sport_key === 'americanfootball_nfl_preseason';
-  const isMLB = game.sport_key === 'baseball_mlb' || game.sport_key === 'baseball_mlb_preseason';
+  // Pro leagues whose phone card title is logo + mascot
+  const isMascotTitle = isNFL || ['baseball_mlb', 'baseball_mlb_preseason', 'americanfootball_cfl', 'basketball_wnba', 'icehockey_nhl', 'basketball_nba'].includes(game.sport_key);
   
   // Default to moneyline for soccer, spread for everything else
   // NFL analysis panel: injury report or the Ledger projection
@@ -347,7 +348,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
   };
   // Pro team without its city ("Boston Red Sox" → "Red Sox"): the name minus
   // ESPN's location when the team is in the league map, else the last word —
-  // or last two for the two-word mascots ("Blue Jays", "White Sox").
+  // or last two for the two-word mascots ("Blue Jays", "Maple Leafs").
   const mascotName = (teamName: string): string => {
     const city = teamInfoFromMap(teamColorMap, teamName)?.school;
     if (city && teamName.startsWith(city + ' ')) return teamName.slice(city.length + 1);
@@ -613,9 +614,9 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                 icons onto their own line; icons right edge on mobile, inline on sm+ */}
             <div className="flex items-center">
               <h3 className="text-[15px] md:text-[18px] font-semibold tracking-[-0.3px] md:tracking-[-0.45px] text-gray-900 truncate min-w-0">
-                {isNCAAF || isNFL || isMLB ? (
+                {isNCAAF || isMascotTitle ? (
                   // Phones: logo + short name only — college = school, "State" shortened
-                  // ("Arizona St @ West Virginia"); NFL and MLB = mascot ("Bills @ Chiefs").
+                  // ("Arizona St @ West Virginia"); the pro leagues = mascot ("Bills @ Chiefs").
                   // The full names are what overflowed the line
                   <>
                     <span className="md:hidden flex items-center gap-1.5 min-w-0">
