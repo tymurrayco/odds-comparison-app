@@ -981,9 +981,10 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
       </svg>
     </button>
   );
-  // compact = the 36px, fixed-width version that fits inside the tab bar
-  const searchInput = (compact: boolean) => (
-    <div className={`relative ${compact ? 'w-64' : ''}`}>
+  // compact = the 36px version that sits beside other controls: fixed width
+  // inside the wide-screen tab bar, or `width` when the caller sets one
+  const searchInput = (compact: boolean, width = 'w-64') => (
+    <div className={`relative ${compact ? width : ''}`}>
       <input
         type="text"
         placeholder="Filter by team name..."
@@ -1355,7 +1356,8 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
                     )}
                     {effectiveView === 'ratings' && ratingsSwitch}
                   </div>
-                  {effectiveView === 'games' && searchShown && (
+                  {/* leagues with a conference filter open the box beside it instead (row below) */}
+                  {effectiveView === 'games' && searchShown && !supportsConferenceFilter && (
                     <div className="mt-2 basis-full lg:hidden">{searchInput(false)}</div>
                   )}
                 </div>
@@ -1363,16 +1365,18 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
             )}
             
             {/* Games filters. Phones and tablets: conference filter and Live chip on
-                a row under the tabs — only when the league has one of them (search
-                lives in the tab card). Wide screens: the same controls sit at the
+                a row under the tabs — only when the league has one of them. Search
+                opens inside the tab card, or on this row when it has a conference
+                filter to sit beside. Wide screens: the same controls sit at the
                 right end of the tab bar, so this block is only the active-filter
                 chips there. */}
             {effectiveView === 'games' && activeLeague !== 'favorites' && (
               <div className={`space-y-4 lg:mb-0 lg:space-y-0 ${supportsConferenceFilter || liveCount > 0 || teamFilter || selectedConferences.length > 0 ? 'mb-6' : ''}`}>
                 {(supportsConferenceFilter || liveCount > 0) && (
-                  <div className="flex min-h-[42px] items-center gap-2 lg:hidden">
+                  <div className="flex min-h-[42px] flex-wrap items-center gap-2 lg:hidden">
                     {conferenceControl}
                     {liveChip}
+                    {searchShown && supportsConferenceFilter && searchInput(true, 'min-w-36 flex-1')}
                   </div>
                 )}
 
