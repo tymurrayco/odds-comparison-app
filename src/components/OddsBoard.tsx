@@ -41,6 +41,7 @@ import dynamic from 'next/dynamic';
 import { signInWithGoogle, useUser } from '@/lib/userAuth';
 import { usePrefs, zoneOption } from '@/lib/prefs';
 import { hasTappedPrice, PRICE_TAPPED_EVENT } from '@/lib/betLinks';
+import { favoritesWhenSignedOut, saveFavorite, syncFavorites } from '@/lib/favorites';
 import { getTeamConference } from '@/lib/conferences';
 
 interface CacheItem<T> {
@@ -442,13 +443,32 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
     return () => clearInterval(interval);
   }, [activeView, activeLeague, games]);
 
-  // Toggle favorite game
+  // Starred games live on the account when signed in (src/lib/favorites.ts):
+  // once the session is known, swap the device's list for the account's
+  // (stars made while signed out are carried over); signed out, drop a list
+  // that belonged to an account.
+  useEffect(() => {
+    if (!authReady) return;
+    if (!user) {
+      setFavoriteGames(favoritesWhenSignedOut());
+      return;
+    }
+    let alive = true;
+    syncFavorites(user.id).then((list) => {
+      if (alive && list) setFavoriteGames(list);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [authReady, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Toggle favorite game (and save the change to the account when signed in)
   const toggleFavoriteGame = (gameId: string) => {
-    setFavoriteGames(prev => 
-      prev.includes(gameId) 
-        ? prev.filter(id => id !== gameId)
-        : [...prev, gameId]
+    const starred = !favoriteGames.includes(gameId);
+    setFavoriteGames(prev =>
+      starred ? (prev.includes(gameId) ? prev : [...prev, gameId]) : prev.filter(id => id !== gameId)
     );
+    if (user) saveFavorite(user.id, gameId, starred);
   };
 
   // Get all favorited games from cache
