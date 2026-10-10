@@ -21,6 +21,7 @@ import { useFriendBetsForGame, betGroupKey, type FriendBet } from '@/lib/friendB
 import { FriendAvatar, FriendBetsPanel } from './FriendBets';
 import BetTicket, { type TicketPick } from './BetTicket';
 import LiveTag from './LiveTag';
+import { betTrend, TREND_COLORS, type BetTrend } from '@/lib/betTrend';
 
 // First word of the two-word college mascots (Yellow Jackets, Sun Devils, Red
 // Raiders, Fighting Irish, …) — only used when ESPN's team list has no match.
@@ -548,6 +549,13 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
     setFriendPanel((open) => (open === key ? null : key));
   };
 
+  // Once the game is on, the ticket icon says how the bet is doing
+  const TREND_WORDS: Record<BetTrend, string> = { ahead: 'covering', behind: 'not covering', even: 'level' };
+  const trendOf = (bet: Bet) => {
+    const trend = betTrend(bet, game, liveScore);
+    return trend ? { color: TREND_COLORS[trend], words: ` · ${TREND_WORDS[trend]} now` } : null;
+  };
+
   const myKeysShown = new Set<string>();
   const myBadges = myPendingBets.map(bet => {
     const accent = wageredTeamColor(bet, teamColorMap, game.away_team, game.home_team);
@@ -555,12 +563,14 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
     const key = groupKey(bet);
     const shared = friendGroups.has(key) && !myKeysShown.has(key) ? chipFriends(key) : null;
     myKeysShown.add(key);
+    const trend = trendOf(bet);
     return (
       <MyBetBadge
         key={bet.id}
         accent={accent}
+        iconColor={trend?.color}
         status={bet.status}
-        title={`Your bet: ${bet.bet}${bet.live ? ' · live' : ''}${bet.book ? ` (${bet.book})` : ''}${bet.status !== 'pending' ? ` — ${bet.status}` : ''}${shared ? ` · also ${shared.names}` : ''}`}
+        title={`Your bet: ${bet.bet}${bet.live ? ' · live' : ''}${bet.book ? ` (${bet.book})` : ''}${bet.status !== 'pending' ? ` — ${bet.status}` : ''}${trend?.words ?? ''}${shared ? ` · also ${shared.names}` : ''}`}
         avatars={shared?.avatars}
         avatarCount={shared?.count}
         onClick={shared ? togglePanel(key) : undefined}
@@ -577,12 +587,14 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
   const friendBadges = friendOnlyKeys.slice(0, 2).map((key) => {
     const bet = friendGroups.get(key)![0].bet;
     const who = chipFriends(key);
+    const trend = trendOf(bet);
     return (
       <MyBetBadge
         key={key}
         friend
         accent={wageredTeamColor(bet, teamColorMap, game.away_team, game.home_team)}
-        title={`${who.names}: ${bet.bet}`}
+        iconColor={trend?.color}
+        title={`${who.names}: ${bet.bet}${trend?.words ?? ''}`}
         avatars={who.avatars}
         avatarCount={who.count}
         onClick={togglePanel(key)}

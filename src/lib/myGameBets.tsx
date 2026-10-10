@@ -229,8 +229,10 @@ export function TicketIcon({ className, color }: { className?: string; color?: s
 // `avatars` are the small photos of the people on this bet, hung on the
 // top-right corner and stacking outward so the badge itself never grows;
 // `onClick` makes the badge a button (it opens the who-bet-what list).
-export function MyBetBadge({ accent, title, status, friend, avatars, avatarCount = 0, onClick, pressed, children }: {
+export function MyBetBadge({ accent, iconColor, title, status, friend, avatars, avatarCount = 0, onClick, pressed, children }: {
   accent: string | null;
+  /** Ticket icon colour once the game is on: green covering, red not, gray level (src/lib/betTrend.ts) */
+  iconColor?: string | null;
   title?: string;
   status?: Bet['status']; // graded wagers get a ✓ / ✗ / = mark and tint
   friend?: boolean;
@@ -257,7 +259,7 @@ export function MyBetBadge({ accent, title, status, friend, avatars, avatarCount
   };
   const content = (
     <>
-      <TicketIcon color={accent} />
+      <TicketIcon color={iconColor ?? accent} className={iconColor ? 'h-3 w-3 flex-shrink-0' : undefined} />
       {graded && <span className={`font-bold ${accent ? gradedCls : ''}`}>{graded}</span>}
       {children}
       {avatars && (
