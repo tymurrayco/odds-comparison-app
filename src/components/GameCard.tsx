@@ -1024,14 +1024,21 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
             {/* Analysis button - only for NCAAF */}
             {isNCAAF && prefs.showProjections && (
               <button 
-                className={`px-2 md:px-3 py-1 text-xs md:text-sm rounded-md ${
-                  expandedMarket === 'analysis' 
-                    ? 'bg-purple-600 text-white' 
-                    : 'bg-purple-50 text-purple-700 hover:bg-purple-100'
+                className={`inline-flex items-center px-2 md:px-3 py-1 rounded-md ${
+                  expandedMarket === 'analysis'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
                 }`}
                 onClick={() => openAnalysis('Summary')}
+                title="Analysis"
+                aria-label="Analysis"
               >
-                📊
+                {/* Bar chart in the site blue (16px / 20px = the text buttons' line height) */}
+                <svg className="h-4 w-4 md:h-5 md:w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <rect x="3.5" y="13" width="4.5" height="7.5" rx="1" />
+                  <rect x="9.75" y="4" width="4.5" height="16.5" rx="1" />
+                  <rect x="16" y="9" width="4.5" height="11.5" rx="1" />
+                </svg>
               </button>
             )}
             {/* Injury report button - only for NFL */}
