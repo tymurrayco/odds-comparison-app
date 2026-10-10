@@ -26,10 +26,12 @@ const CRON_PATHS = new Set([
   '/api/bets/settle',
 ]);
 
-// GET routes that only admin tools call and that cost credits or reveal them.
+// GET routes that only admin tools call: they cost credits, reveal them, or
+// return private data.
 const ADMIN_GET_PATHS = new Set([
   '/api/ratings/historical-odds', // 10+ credits per hit, caller-chosen date
   '/api/credit-usage',            // Bet Admin fuel gauge
+  '/api/nfl/survivor',            // Tyler's survivor picks + plan (the panel is admin-only)
 ]);
 
 // Writes that skip the admin gate (the /go beacon lives outside /api).
