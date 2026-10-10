@@ -1,6 +1,6 @@
 // src/components/PeopleSheet.tsx
 //
-// "Profile & people", opened from the account menu: edit your own name,
+// "Friends & profile" ("Find friends" in the account menu), opened from the account menu: edit your own name,
 // handle and private switch; find people by name; see who you follow and who
 // follows you (approving requests when your account is private). Same sheet
 // styling and motion as BetTicket. Data and rules: src/lib/social.ts.
@@ -160,14 +160,14 @@ export default function PeopleSheet({ onClose }: { onClose: () => void }) {
       className="fixed inset-0 z-50 flex items-end justify-center sm:items-center"
       role="dialog"
       aria-modal="true"
-      aria-label="Profile and people"
+      aria-label="Friends and profile"
       data-closing={closing || undefined}
       onClick={(e) => e.stopPropagation()}
     >
       <div className="sheet-backdrop absolute inset-0 bg-black/40" onClick={close} />
       <div className="sheet-panel relative flex max-h-[85vh] w-full flex-col rounded-t-2xl bg-white shadow-xl sm:w-[420px] sm:rounded-2xl">
         <div className="flex items-center justify-between gap-3 px-4 pt-4">
-          <div className="text-[16px] font-semibold tracking-[-0.3px] text-gray-900">Profile &amp; people</div>
+          <div className="text-[16px] font-semibold tracking-[-0.3px] text-gray-900">Friends &amp; profile</div>
           <button type="button" onClick={close} aria-label="Close" className="-mr-1 flex-none rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
               <path d="M6 6l12 12M18 6L6 18" />

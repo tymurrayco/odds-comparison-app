@@ -156,7 +156,7 @@ export default function AccountButton({ user }: { user: User }) {
             }}
             className="w-full rounded-lg px-2 py-1.5 text-left text-sm font-medium text-gray-700 hover:bg-gray-100"
           >
-            Profile &amp; people
+            Find friends
           </button>
 
           {/* Shortcuts to the admin pages, on premium accounts only. This is a
