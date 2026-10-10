@@ -39,7 +39,7 @@ interface OddsItem {
 }
 
 // Helper function to map league ID to sport name
-function getSportFromLeague(league: string): string {
+export function getSportFromLeague(league: string): string {
   if (league.includes('nba') || league.includes('basketball')) return 'Basketball';
   if (league.includes('nfl') || league.includes('americanfootball_nfl')) return 'Football';
   if (league.includes('ncaaf') || league.includes('americanfootball_ncaaf')) return 'Football';
@@ -53,7 +53,7 @@ function getSportFromLeague(league: string): string {
 }
 
 // Helper function to get league display name
-function getLeagueDisplayName(league: string): string {
+export function getLeagueDisplayName(league: string): string {
   const leagueMap: { [key: string]: string } = {
     'basketball_nba': 'NBA',
     'americanfootball_nfl': 'NFL',

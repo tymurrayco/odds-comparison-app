@@ -17,6 +17,9 @@ import type { GameWeather } from '@/lib/weather';
 import { shortSchool } from '@/lib/teamNames';
 import { WeatherIcons, weatherFacts, weatherHeadline } from './WeatherIcons';
 import GameNoteSheet from './GameNoteSheet';
+import { useFriendBetsForGame, betGroupKey, type FriendBet } from '@/lib/friendBets';
+import { FriendAvatar, FriendBetsPanel } from './FriendBets';
+import BetTicket, { type TicketPick } from './BetTicket';
 
 // First word of the two-word college mascots (Yellow Jackets, Sun Devils, Red
 // Raiders, Fighting Irish, …) — only used when ESPN's team list has no match.
@@ -161,6 +164,12 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
 
   // Pending wagers on this game → header badge
   const myPendingBets = usePendingBetsForGame(game.away_team, game.home_team, game.commence_time);
+  // Pending bets of people I follow → their photos on my badge when it is the
+  // same bet, else a white badge of their own. A badge with photos opens the
+  // who-bet-what list (friendPanel = that badge's group, or 'all' for "+N").
+  const friendBets = useFriendBetsForGame(game.away_team, game.home_team, game.commence_time);
+  const [friendPanel, setFriendPanel] = useState<string | null>(null);
+  const [tailTicket, setTailTicket] = useState<TicketPick | null>(null);
   const teamColorMap = useTeamColorMap(game.sport_key);
 
   // Neutral-site lookup (NCAAF only). The fetch is memoized module-side, so
@@ -512,20 +521,93 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
 
   // Wager badges for this game — strong team-color border + light fill; full
   // text on desktop, abbreviated on phones.
-  const betBadges = myPendingBets.map(bet => {
+  const groupKey = (bet: Bet) => betGroupKey(bet, game.away_team, game.home_team);
+  // Friends' bets by chip: same side of the same market shares one chip
+  const friendGroups = new Map<string, FriendBet[]>();
+  for (const f of friendBets) {
+    const key = groupKey(f.bet);
+    friendGroups.set(key, [...(friendGroups.get(key) ?? []), f]);
+  }
+  // The photos for a chip: one per person, three at most
+  const chipFriends = (key: string) => {
+    const people = Array.from(new Map((friendGroups.get(key) ?? []).map((f) => [f.owner.id, f.owner])).values()).slice(0, 3);
+    return {
+      count: people.length,
+      names: people.map((p) => p.displayName || `@${p.handle}`).join(', '),
+      avatars: people.map((p, i) => (
+        <FriendAvatar key={p.id} profile={p} className={`h-4 w-4 flex-none text-[8px] ring-2 ring-white ${i > 0 ? '-ml-1.5' : ''}`} />
+      )),
+    };
+  };
+  const togglePanel = (key: string) => (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setFriendPanel((open) => (open === key ? null : key));
+  };
+
+  const myKeysShown = new Set<string>();
+  const myBadges = myPendingBets.map(bet => {
     const accent = wageredTeamColor(bet, teamColorMap, game.away_team, game.home_team);
+    // A friend on the same bet as mine rides on my badge (the first, if I have two)
+    const key = groupKey(bet);
+    const shared = friendGroups.has(key) && !myKeysShown.has(key) ? chipFriends(key) : null;
+    myKeysShown.add(key);
     return (
       <MyBetBadge
         key={bet.id}
         accent={accent}
         status={bet.status}
-        title={`Your bet: ${bet.bet}${bet.book ? ` (${bet.book})` : ''}${bet.status !== 'pending' ? ` — ${bet.status}` : ''}`}
+        title={`Your bet: ${bet.bet}${bet.book ? ` (${bet.book})` : ''}${bet.status !== 'pending' ? ` — ${bet.status}` : ''}${shared ? ` · also ${shared.names}` : ''}`}
+        avatars={shared?.avatars}
+        avatarCount={shared?.count}
+        onClick={shared ? togglePanel(key) : undefined}
+        pressed={shared ? friendPanel === key : undefined}
       >
         <span className="hidden md:inline whitespace-nowrap">{badgeBetText(bet, false)}</span>
         <span className="md:hidden whitespace-nowrap">{badgeBetText(bet, true)}</span>
       </MyBetBadge>
     );
   });
+  // Bets only friends have: two chips at most, the rest behind "+N"
+  const friendOnlyKeys = Array.from(friendGroups.keys()).filter((key) => !myKeysShown.has(key));
+  const friendBadges = friendOnlyKeys.slice(0, 2).map((key) => {
+    const bet = friendGroups.get(key)![0].bet;
+    const who = chipFriends(key);
+    return (
+      <MyBetBadge
+        key={key}
+        friend
+        accent={wageredTeamColor(bet, teamColorMap, game.away_team, game.home_team)}
+        title={`${who.names}: ${bet.bet}`}
+        avatars={who.avatars}
+        avatarCount={who.count}
+        onClick={togglePanel(key)}
+        pressed={friendPanel === key}
+      >
+        <span className="hidden md:inline whitespace-nowrap">{badgeBetText(bet, false)}</span>
+        <span className="md:hidden whitespace-nowrap">{badgeBetText(bet, true)}</span>
+      </MyBetBadge>
+    );
+  });
+  const hiddenFriendChips = friendOnlyKeys.length - friendBadges.length;
+  const betBadges = [
+    ...myBadges,
+    ...friendBadges,
+    ...(hiddenFriendChips > 0
+      ? [
+          <button
+            key="more-friends"
+            type="button"
+            onClick={togglePanel('all')}
+            aria-expanded={friendPanel === 'all'}
+            title="More bets from people you follow"
+            className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] md:text-xs font-semibold text-slate-600 hover:bg-slate-200"
+          >
+            +{hiddenFriendChips}
+          </button>,
+        ]
+      : []),
+  ];
+  const friendPanelBets = friendPanel === 'all' ? friendBets : friendPanel ? friendGroups.get(friendPanel) ?? [] : [];
 
   const renderLedgerChip = (placement: string) => (isNCAAF || isNFL) && ledgerChip && prefs.showProjections && (
     <button
@@ -582,6 +664,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
           onClose={() => setNoteOpen(false)}
         />
       )}
+      {tailTicket && <BetTicket pick={tailTicket} onClose={() => setTailTicket(null)} />}
       {showLinkCopied && (
         <div className="absolute top-2 left-1/2 transform -translate-x-1/2 z-50 px-3 py-1 bg-gray-800 text-white text-xs rounded-full">
           Link copied!
@@ -878,6 +961,10 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                   Forecast for {game.sport_key === 'baseball_mlb' ? 'first pitch' : 'kickoff'} and the three hours after{badWeather.venue ? ` · ${badWeather.venue}` : ''}{badWeather.city ? `, ${badWeather.city}` : ''}
                 </span>
               </div>
+            )}
+            {/* Who bet what, opened from a badge that carries friends' photos */}
+            {friendPanelBets.length > 0 && (
+              <FriendBetsPanel entries={friendPanelBets} game={game} selectedBookmakers={selectedBookmakers} onTail={setTailTicket} />
             )}
             {/* My note, when there is one: a single quiet line; tap to edit */}
             {note && (

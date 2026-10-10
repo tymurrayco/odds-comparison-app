@@ -132,8 +132,23 @@ export function wageredTeamColor(
   return null;
 }
 
-// Pending game bets matching this game: same local event date AND a team-name
-// match (away/home/team fields or a parlay/teaser leg), with a description fallback.
+// Is this bet on this game? Same local event date AND a team-name match
+// (away/home/team fields or a parlay/teaser leg), with a description fallback.
+export function betMatchesGame(b: Bet, awayTeam: string, homeTeam: string, commenceTime: string): boolean {
+  const d = new Date(commenceTime);
+  const gameDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  if (b.eventDate !== gameDate) return false;
+  const away = norm(awayTeam);
+  const home = norm(homeTeam);
+  const names = [b.awayTeam, b.homeTeam, b.team, ...(b.parlayTeams ?? [])]
+    .filter((n): n is string => !!n)
+    .map(norm);
+  if (names.some(n => n === away || n === home)) return true;
+  const desc = norm(b.description || '');
+  return desc.includes(away) || desc.includes(home);
+}
+
+// The visitor's game bets matching this game (see betMatchesGame).
 export function usePendingBetsForGame(awayTeam: string, homeTeam: string, commenceTime: string): Bet[] {
   const [matched, setMatched] = useState<Bet[]>([]);
 
@@ -141,20 +156,7 @@ export function usePendingBetsForGame(awayTeam: string, homeTeam: string, commen
     let cancelled = false;
     loadAllBets().then(bets => {
       if (cancelled) return;
-      const d = new Date(commenceTime);
-      const gameDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      const away = norm(awayTeam);
-      const home = norm(homeTeam);
-      setMatched(bets.filter(b => {
-        if (b.betType === 'future') return false;
-        if (b.eventDate !== gameDate) return false;
-        const names = [b.awayTeam, b.homeTeam, b.team, ...(b.parlayTeams ?? [])]
-          .filter((n): n is string => !!n)
-          .map(norm);
-        if (names.some(n => n === away || n === home)) return true;
-        const desc = norm(b.description || '');
-        return desc.includes(away) || desc.includes(home);
-      }));
+      setMatched(bets.filter(b => b.betType !== 'future' && betMatchesGame(b, awayTeam, homeTeam, commenceTime)));
     });
     return () => { cancelled = true; };
   }, [awayTeam, homeTeam, commenceTime]);
@@ -200,29 +202,56 @@ export function TicketIcon({ className, color }: { className?: string; color?: s
 
 // Shared my-bet badge: strong team-color border with a light team-color fill;
 // solid indigo fallback when no team color is available.
-export function MyBetBadge({ accent, title, status, children }: {
+//
+// Friends: `friend` makes it someone else's bet (white fill, same size);
+// `avatars` are the small photos of the people on this bet, hung on the
+// top-right corner and stacking outward so the badge itself never grows;
+// `onClick` makes the badge a button (it opens the who-bet-what list).
+export function MyBetBadge({ accent, title, status, friend, avatars, avatarCount = 0, onClick, pressed, children }: {
   accent: string | null;
   title?: string;
   status?: Bet['status']; // graded wagers get a ✓ / ✗ / = mark and tint
+  friend?: boolean;
+  avatars?: React.ReactNode;
+  avatarCount?: number;
+  onClick?: (e: React.MouseEvent) => void;
+  pressed?: boolean;
   children: React.ReactNode;
 }) {
   const graded = status === 'won' ? '✓' : status === 'lost' ? '✗' : status === 'push' ? '=' : null;
   const gradedCls =
     status === 'won' ? 'text-emerald-700' : status === 'lost' ? 'text-rose-700' : status === 'push' ? 'text-gray-500' : '';
-  return (
-    <span
-      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] md:text-xs font-semibold shadow-sm ${
-        accent ? 'border-2 text-gray-900' : 'bg-indigo-600 text-white'
-      } ${status === 'lost' ? 'opacity-70' : ''}`}
-      style={accent ? {
-        borderColor: accent,
-        backgroundColor: hexToRgba(accent, 0.12),
-      } : undefined}
-      title={title}
-    >
+  const className = `relative inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] md:text-xs font-semibold shadow-sm ${
+    accent
+      ? 'border-2 text-gray-900'
+      : friend
+        ? 'border-2 border-indigo-600 bg-white text-indigo-700'
+        : 'bg-indigo-600 text-white'
+  } ${status === 'lost' ? 'opacity-70' : ''}`;
+  const style: React.CSSProperties = {
+    ...(accent ? { borderColor: accent, backgroundColor: friend ? '#ffffff' : hexToRgba(accent, 0.12) } : {}),
+    // room for the photos that hang past the right edge (7px, then 10px each)
+    ...(avatarCount > 0 ? { marginRight: 7 + (avatarCount - 1) * 10 } : {}),
+  };
+  const content = (
+    <>
       <TicketIcon color={accent} />
       {graded && <span className={`font-bold ${accent ? gradedCls : ''}`}>{graded}</span>}
       {children}
+      {avatars && (
+        <span className="pointer-events-none absolute -top-2 flex" style={{ left: 'calc(100% - 9px)' }}>
+          {avatars}
+        </span>
+      )}
+    </>
+  );
+  return onClick ? (
+    <button type="button" className={className} style={style} title={title} onClick={onClick} aria-expanded={pressed}>
+      {content}
+    </button>
+  ) : (
+    <span className={className} style={style} title={title}>
+      {content}
     </span>
   );
 }
