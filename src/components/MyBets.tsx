@@ -124,6 +124,54 @@ export default function MyBets({ yearFilter = 'all', onYearsLoaded }: MyBetsProp
   const [editingBet, setEditingBet] = useState<Bet | null>(null);
   const [viewType, setViewType] = useState<'games' | 'futures'>('games');
 
+  // Kickoff times for pending bets. A bet stores the DAY of its game only, so
+  // the hour comes from /api/kickoffs (the league's upcoming games), matched
+  // on the two teams and the day. Key: bet id → kickoff in ms.
+  const [kickoffs, setKickoffs] = useState<Record<string, number>>({});
+  useEffect(() => {
+    const pending = myBets.filter((b) => b.status === 'pending' && b.betType !== 'future');
+    const leagues = Array.from(new Set(pending.map((b) => b.league)));
+    if (leagues.length === 0) return;
+    let cancelled = false;
+    const localDay = (ms: number) => {
+      const d = new Date(ms);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    };
+    Promise.all(
+      leagues.map(async (lg) => {
+        try {
+          const resp = await fetch(`/api/kickoffs?league=${encodeURIComponent(lg)}`);
+          const data = resp.ok ? await resp.json() : { games: [] };
+          return [lg, (data.games ?? []) as { home: string; away: string; commence: string }[]] as const;
+        } catch {
+          return [lg, [] as { home: string; away: string; commence: string }[]] as const;
+        }
+      })
+    ).then((results) => {
+      if (cancelled) return;
+      const byLeague = new Map(results);
+      const found: Record<string, number> = {};
+      for (const bet of pending) {
+        const names = [bet.homeTeam, bet.awayTeam, bet.team].filter((n): n is string => !!n).map(normalizeTeamKey);
+        if (names.length === 0) continue;
+        const game = (byLeague.get(bet.league) ?? []).find((g) => {
+          const at = new Date(g.commence).getTime();
+          if (localDay(at) !== bet.eventDate) return false;
+          const teams = [normalizeTeamKey(g.home), normalizeTeamKey(g.away)];
+          return names.every((n) => teams.includes(n));
+        });
+        if (game) found[bet.id] = new Date(game.commence).getTime();
+      }
+      setKickoffs(found);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [myBets]);
+  // When a bet's game starts: the real kickoff when known, else the end of its
+  // day — so on a shared day the bets with a known time come first, in order
+  const startsAt = (bet: Bet): number => kickoffs[bet.id] ?? new Date(bet.eventDate + 'T23:59:00').getTime();
+
   // Team logo/color maps per league (lazy-loaded, same as Bet Admin)
   const [teamMaps, setTeamMaps] = useState<Record<string, Record<string, BetTeamInfo>>>({});
 
@@ -267,9 +315,9 @@ export default function MyBets({ yearFilter = 'all', onYearsLoaded }: MyBetsProp
       const dateA = new Date(a.eventDate).getTime();
       const dateB = new Date(b.eventDate).getTime();
       
-      // Both pending: earlier event first
+      // Both pending: earlier kickoff first
       if (a.status === 'pending' && b.status === 'pending') {
-        return dateA - dateB;
+        return startsAt(a) - startsAt(b);
       }
       
       // One pending, one not: pending first
@@ -279,7 +327,8 @@ export default function MyBets({ yearFilter = 'all', onYearsLoaded }: MyBetsProp
       // Both completed: more recent first
       return dateB - dateA;
     });
-  }, [currentBets, statusFilter]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentBets, statusFilter, kickoffs]);
 
   // KEPT: All your helper functions exactly as they were
   const getStatusColor = (status: BetStatus): string => {
@@ -371,7 +420,9 @@ export default function MyBets({ yearFilter = 'all', onYearsLoaded }: MyBetsProp
     }
   };
 
-  const formatTimeRemaining = (eventDate: string): string | null => {
+  // Time to go: counted to the real kickoff when it is known (see kickoffs),
+  // else to the start of the game's day as before
+  const formatTimeRemaining = (eventDate: string, kickoff?: number): string | null => {
     // Parse as local date by adding time component
     const event = new Date(eventDate + 'T00:00:00');
     const now = new Date();
@@ -380,7 +431,7 @@ export default function MyBets({ yearFilter = 'all', onYearsLoaded }: MyBetsProp
     const eventStart = new Date(event.getFullYear(), event.getMonth(), event.getDate());
     const nowTime = now.getTime();
     
-    const diff = eventStart.getTime() - nowTime;
+    const diff = (kickoff ?? eventStart.getTime()) - nowTime;
     
     if (diff < 0) return null; // Event has passed
     
@@ -388,7 +439,8 @@ export default function MyBets({ yearFilter = 'all', onYearsLoaded }: MyBetsProp
     const days = Math.floor(hours / 24);
     
     if (hours < 1) {
-      return 'Soon';
+      // under an hour to a known kickoff: say how long
+      return kickoff ? `${Math.max(1, Math.round(diff / 60000))}m` : 'Soon';
     } else if (hours < 24) {
       return `${hours}h`;
     } else if (days === 1) {
@@ -964,7 +1016,7 @@ export default function MyBets({ yearFilter = 'all', onYearsLoaded }: MyBetsProp
                 <div className={`bg-white rounded-lg shadow border-l-4 transition-all duration-200 ${
                   accent ? '' : getStatusColor(bet.status).split(' ')[2]
                 } ${
-                  bet.status === 'pending' && formatTimeRemaining(bet.eventDate) === 'Soon'
+                  bet.status === 'pending' && /^(Soon|\d+m)$/.test(formatTimeRemaining(bet.eventDate, kickoffs[bet.id]) ?? '')
                     ? 'ring-2 ring-blue-400' : ''
                 }`}
                 style={cardStyle}>
@@ -986,9 +1038,9 @@ export default function MyBets({ yearFilter = 'all', onYearsLoaded }: MyBetsProp
                         <span className="text-xs font-medium text-gray-700">
                           {formatDate(bet.eventDate)}
                         </span>
-                        {bet.status === 'pending' && formatTimeRemaining(bet.eventDate) && (
+                        {bet.status === 'pending' && formatTimeRemaining(bet.eventDate, kickoffs[bet.id]) && (
                           <span className="text-xs text-blue-500 font-medium">
-                            {formatTimeRemaining(bet.eventDate)}
+                            {formatTimeRemaining(bet.eventDate, kickoffs[bet.id])}
                           </span>
                         )}
                       </div>

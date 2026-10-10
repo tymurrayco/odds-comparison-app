@@ -17,18 +17,31 @@ const DAYS = 7;
 // kickoff still belongs to the day it started on.
 const dayKey = (ms: number) => new Date(ms - 4 * 3_600_000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 
-async function gameTimes(sportKey: string, apiKey: string): Promise<number[]> {
+export interface LeagueEvent {
+  commence_time: string;
+  home_team: string;
+  away_team: string;
+}
+
+/** A league's games that have not finished (the free "events" list), or [] on any failure. */
+export async function leagueEvents(sportKey: string): Promise<LeagueEvent[]> {
+  const apiKey = process.env.ODDS_API_KEY;
+  if (!apiKey) return [];
   try {
     const res = await fetch(`https://api.the-odds-api.com/v4/sports/${sportKey}/events?apiKey=${apiKey}`, {
       next: { revalidate: 600 },
       signal: AbortSignal.timeout(8_000),
     });
     if (!res.ok) return [];
-    return ((await res.json()) as { commence_time: string }[]).map((e) => new Date(e.commence_time).getTime());
+    const events = await res.json();
+    return Array.isArray(events) ? (events as LeagueEvent[]) : [];
   } catch {
     return [];
   }
 }
+
+const gameTimes = async (sportKey: string): Promise<number[]> =>
+  (await leagueEvents(sportKey)).map((e) => new Date(e.commence_time).getTime());
 
 /** Active league ids, busiest day first (see the file header). */
 export async function getLeagueOrder(): Promise<string[]> {
@@ -42,7 +55,7 @@ export async function getLeagueOrder(): Promise<string[]> {
   const nextGame = new Map<string, number>();
   await Promise.all(
     active.map(async (id) => {
-      const times = await gameTimes(id, apiKey);
+      const times = await gameTimes(id);
       counts.set(id, days.map((day) => times.filter((t) => dayKey(t) === day).length));
       nextGame.set(id, times.length ? Math.min(...times) : Infinity);
     })

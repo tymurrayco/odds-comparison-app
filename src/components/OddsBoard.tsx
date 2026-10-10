@@ -296,6 +296,12 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt, leagueOrde
   // highlights once and should not stick to copied links.
   useEffect(() => {
     if (!isClient) return;
+    // The Bets view has one address whatever league it was opened from
+    // (src/app/bets/page.tsx sends /bets back here with the view open)
+    if (activeView === 'mybets') {
+      window.history.replaceState(null, '', '/bets');
+      return;
+    }
     const params = new URLSearchParams(window.location.search);
     // Leagues with a server-rendered page live at /<slug> (the crawlable
     // URL); favorites and anything without a page keep /?league=
