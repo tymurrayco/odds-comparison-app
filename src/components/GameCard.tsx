@@ -167,7 +167,9 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
   // Pending bets of people I follow → their photos on my badge when it is the
   // same bet, else a white badge of their own. A badge with photos opens the
   // who-bet-what list (friendPanel = that badge's group, or 'all' for "+N").
-  const friendBets = useFriendBetsForGame(game.away_team, game.home_team, game.commence_time);
+  // Off with the account menu's "Friends' bets on cards" switch.
+  const followedBets = useFriendBetsForGame(game.away_team, game.home_team, game.commence_time);
+  const friendBets = prefs.showFriendBets ? followedBets : [];
   const [friendPanel, setFriendPanel] = useState<string | null>(null);
   const [tailTicket, setTailTicket] = useState<TicketPick | null>(null);
   const teamColorMap = useTeamColorMap(game.sport_key);
