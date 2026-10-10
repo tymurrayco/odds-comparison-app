@@ -6,9 +6,13 @@
 // three and a half hours from kickoff. A game is flagged only when the
 // weather is bad enough to matter — most games return no flags.
 //
-// Source: Open-Meteo (forecast + geocoding, no API key). Its free tier is for
-// NON-COMMERCIAL use; a commercial odds.day needs their paid plan or a swap
-// to another source. Everything that talks to it is in this file.
+// Sources, both read for every US game; a flag from either one counts:
+//   - National Weather Service (api.weather.gov): the official US forecast —
+//     chance of rain, sustained wind, and its wording. Public domain.
+//   - Open-Meteo: gusts and amounts, venues abroad, and the geocoding. Its
+//     free tier is for NON-COMMERCIAL use; a commercial odds.day needs their
+//     paid plan or a replacement for those parts.
+// Everything that talks to either is in this file.
 
 export type WeatherFlag = 'storm' | 'snow' | 'rain' | 'wind';
 
@@ -25,14 +29,21 @@ export interface GameWeather {
   precipChance: number; // highest hourly chance, %
   precipIn: number; // total over the game window
   snowIn: number;
+  summary?: string; // the NWS's own words for the wettest hour ("Showers And Thunderstorms")
+  source: 'nws' | 'open-meteo'; // whose forecast leads (the NWS wherever it covers the venue)
 }
 
 // What counts as "bad enough to show"
-export const WIND_SUSTAINED_MPH = 15;
+// 15 mph sustained flagged a third of a breezy Saturday (many at exactly 15
+// with weak gusts); 18 keeps the games where wind really affects kicks and throws
+export const WIND_SUSTAINED_MPH = 18;
 export const WIND_GUST_MPH = 35;
 export const RAIN_CHANCE_PCT = 50;
 export const RAIN_MIN_INCHES = 0.1;
 export const SNOW_MIN_INCHES = 0.1;
+// NWS wording: "likely" starts at 60%; storms and snow are flagged from 50%
+export const NWS_RAIN_CHANCE_PCT = 60;
+export const NWS_STORM_SNOW_CHANCE_PCT = 50;
 const GAME_HOURS = 4; // kickoff hour + the next three
 
 const ESPN_PATH: Record<string, { path: string; queries: string[] }> = {
@@ -164,7 +175,10 @@ async function forecasts(points: { lat: number; lon: number }[]): Promise<(Hourl
 }
 
 /** The game-window summary and its flags, or null when the forecast doesn't reach kickoff. */
-export function summarize(hourly: Hourly, kickoffIso: string): Omit<GameWeather, 'homeTeam' | 'awayTeam' | 'kickoff' | 'venue' | 'city'> | null {
+export function summarize(
+  hourly: Hourly,
+  kickoffIso: string
+): Omit<GameWeather, 'homeTeam' | 'awayTeam' | 'kickoff' | 'venue' | 'city' | 'summary' | 'source'> | null {
   const hour = kickoffIso.substring(0, 13) + ':00'; // "2026-10-11T17:00", the feed's UTC format
   const start = hourly.time.indexOf(hour);
   if (start === -1) return null;
@@ -200,6 +214,83 @@ export function summarize(hourly: Hourly, kickoffIso: string): Omit<GameWeather,
   };
 }
 
+// ---------------------------------------------------- National Weather Service
+// The official US forecast, and the one to believe for US venues: on
+// 2026-10-10 Open-Meteo had Duke at Georgia Tech dry (38%, wind 12 mph) while
+// the NWS had showers and thunderstorms at 80%+ with 15-20 mph wind. Public
+// domain, no key; it asks for a User-Agent naming the app.
+const NWS_HEADERS = { 'User-Agent': 'odds.day game weather (https://www.odds.day)', Accept: 'application/geo+json' };
+
+interface NwsHour {
+  startTime: string;
+  temperature: number;
+  windSpeed: string; // "20 mph" or "10 to 15 mph"
+  probabilityOfPrecipitation?: { value: number | null };
+  shortForecast: string;
+}
+
+async function nwsHours(lat: number, lon: number): Promise<NwsHour[] | null> {
+  try {
+    // Which forecast grid the stadium is in — fixed, so kept for a month
+    const point = await fetch(`https://api.weather.gov/points/${lat.toFixed(4)},${lon.toFixed(4)}`, {
+      headers: NWS_HEADERS,
+      next: { revalidate: 60 * 60 * 24 * 30 },
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (!point.ok) return null;
+    const url = ((await point.json()) as { properties?: { forecastHourly?: string } }).properties?.forecastHourly;
+    if (!url) return null;
+    const res = await fetch(url, { headers: NWS_HEADERS, next: { revalidate: 1800 }, signal: AbortSignal.timeout(10_000) });
+    if (!res.ok) return null;
+    return ((await res.json()) as { properties?: { periods?: NwsHour[] } }).properties?.periods ?? null;
+  } catch {
+    return null;
+  }
+}
+
+interface NwsSummary {
+  flags: WeatherFlag[];
+  tempF: number;
+  windMph: number;
+  precipChance: number;
+  summary: string;
+}
+
+/** The NWS view of the game window, or null when its forecast doesn't reach kickoff. */
+function summarizeNws(hours: NwsHour[], kickoffIso: string): NwsSummary | null {
+  const start = new Date(kickoffIso.substring(0, 13) + ':00:00Z').getTime();
+  const end = start + GAME_HOURS * 3_600_000;
+  const span = hours.filter((h) => {
+    const t = new Date(h.startTime).getTime();
+    return t >= start && t < end;
+  });
+  if (span.length === 0) return null;
+
+  const chance = (h: NwsHour) => h.probabilityOfPrecipitation?.value ?? 0;
+  const wind = (h: NwsHour) => Math.max(0, ...(h.windSpeed.match(/\d+/g) ?? []).map(Number)); // top of a "10 to 15 mph" range
+  const windMph = Math.max(...span.map(wind));
+  const precipChance = Math.max(...span.map(chance));
+  // Wording for the detail line: the wettest hour that actually talks about
+  // precipitation (a 99% hour can read "Patchy Fog"), else just the wettest
+  const wetWords = span.filter((h) => /thunder|rain|shower|drizzle|snow|sleet|wintry/i.test(h.shortForecast));
+  const wettest = (wetWords.length ? wetWords : span).reduce((a, b) => (chance(b) > chance(a) ? b : a));
+
+  const flags: WeatherFlag[] = [];
+  const any = (re: RegExp, minChance: number) => span.some((h) => re.test(h.shortForecast) && chance(h) >= minChance);
+  if (any(/thunder/i, NWS_STORM_SNOW_CHANCE_PCT)) flags.push('storm');
+  else if (any(/snow|sleet|wintry|flurr|freezing/i, NWS_STORM_SNOW_CHANCE_PCT)) flags.push('snow');
+  else if (any(/rain|shower|drizzle/i, NWS_RAIN_CHANCE_PCT)) flags.push('rain');
+  if (windMph >= WIND_SUSTAINED_MPH) flags.push('wind');
+
+  return {
+    flags,
+    tempF: Math.round(span.reduce((a, h) => a + h.temperature, 0) / span.length),
+    windMph,
+    precipChance,
+    summary: wettest.shortForecast,
+  };
+}
+
 /** Weather for every outdoor, not-yet-finished game ESPN lists this week. Flagged or not. */
 export async function gameWeather(sport: string): Promise<GameWeather[]> {
   if (!WEATHER_SPORTS.has(sport)) return [];
@@ -219,13 +310,55 @@ export async function gameWeather(sport: string): Promise<GameWeather[]> {
     if (p) located.push({ game: g, ...p });
   }
 
+  // Open-Meteo for every venue (it has gusts and amounts, and covers games
+  // abroad); the NWS on top for US venues, one request per distinct city.
   const hourly = await forecasts(located);
+  const nwsByCity = new Map<string, NwsHour[] | null>();
+  const usKeys = Array.from(new Set(located.filter((l) => STATE_NAMES[l.game.state.toUpperCase()]).map((l) => `${l.game.city}|${l.game.state}`)));
+  for (let i = 0; i < usKeys.length; i += 10) {
+    const batch = usKeys.slice(i, i + 10);
+    const found = await Promise.all(
+      batch.map((k) => {
+        const p = coords.get(k)!;
+        return nwsHours(p.lat, p.lon);
+      })
+    );
+    batch.forEach((k, j) => nwsByCity.set(k, found[j]));
+  }
+
   const out: GameWeather[] = [];
   located.forEach(({ game }, i) => {
     const h = hourly[i];
-    const s = h ? summarize(h, game.kickoff) : null;
-    if (!s) return;
-    out.push({ homeTeam: game.homeTeam, awayTeam: game.awayTeam, kickoff: game.kickoff, venue: game.venue, city: game.state ? `${game.city}, ${game.state}` : game.city, ...s });
+    const om = h ? summarize(h, game.kickoff) : null;
+    const nwsHoursHere = nwsByCity.get(`${game.city}|${game.state}`);
+    const nws = nwsHoursHere ? summarizeNws(nwsHoursHere, game.kickoff) : null;
+    if (!om && !nws) return;
+
+    // A game is flagged when EITHER forecast says so — missing a bad-weather
+    // game is the worse mistake. One precipitation icon (the worst), plus wind.
+    const has = (f: WeatherFlag) => !!om?.flags.includes(f) || !!nws?.flags.includes(f);
+    const flags: WeatherFlag[] = [];
+    if (has('storm')) flags.push('storm');
+    else if (has('snow')) flags.push('snow');
+    else if (has('rain')) flags.push('rain');
+    if (has('wind')) flags.push('wind');
+
+    out.push({
+      homeTeam: game.homeTeam,
+      awayTeam: game.awayTeam,
+      kickoff: game.kickoff,
+      venue: game.venue,
+      city: game.state ? `${game.city}, ${game.state}` : game.city,
+      flags,
+      tempF: nws?.tempF ?? om!.tempF,
+      windMph: Math.max(nws?.windMph ?? 0, om?.windMph ?? 0),
+      gustMph: om?.gustMph ?? 0,
+      precipChance: Math.max(nws?.precipChance ?? 0, om?.precipChance ?? 0),
+      precipIn: om?.precipIn ?? 0,
+      snowIn: om?.snowIn ?? 0,
+      summary: nws?.summary,
+      source: nws ? 'nws' : 'open-meteo',
+    });
   });
   return out;
 }

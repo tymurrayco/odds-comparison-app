@@ -40,7 +40,10 @@ export function weatherHeadline(flags: WeatherFlag[]): string {
 
 /** The facts behind the icons, in order of what matters for the game. */
 export function weatherFacts(w: GameWeather): string[] {
-  const facts: string[] = [`${w.tempF}°F`, `wind ${w.windMph} mph, gusts ${w.gustMph}`];
+  const facts: string[] = [];
+  // The forecaster's own words first ("Showers and thunderstorms likely")
+  if (w.summary) facts.push(w.summary.charAt(0) + w.summary.slice(1).toLowerCase());
+  facts.push(`${w.tempF}°F`, w.gustMph > w.windMph ? `wind ${w.windMph} mph, gusts ${w.gustMph}` : `wind ${w.windMph} mph`);
   if (w.snowIn > 0) facts.push(`${w.snowIn} in of snow`);
   if (w.precipChance >= 20 || w.precipIn > 0) facts.push(`${w.precipChance}% chance of rain${w.precipIn > 0 ? `, ${w.precipIn} in` : ''}`);
   return facts;

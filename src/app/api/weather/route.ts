@@ -10,7 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { gameWeather, WEATHER_SPORTS } from '@/lib/weather';
 
-export const maxDuration = 30;
+export const maxDuration = 60; // a cold start reads ~80 venues from two forecast services
 
 export async function GET(req: NextRequest) {
   const league = req.nextUrl.searchParams.get('league') ?? '';
