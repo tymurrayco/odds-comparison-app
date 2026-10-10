@@ -35,6 +35,19 @@ export default function AccountButton({ user }: { user: User }) {
   }, [user.id]);
   const wrapRef = useRef<HTMLDivElement>(null);
 
+  // One-time pointer for a new account: a pulse on the picture and a small
+  // bubble saying what is behind it. Shown once per account (saved in prefs),
+  // a moment after the page settles; opening the menu also retires it.
+  const [tipReady, setTipReady] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setTipReady(true), 1200);
+    return () => clearTimeout(t);
+  }, []);
+  const showTip = tipReady && !prefs.accountTipSeen && !open && !showPeople;
+  const retireTip = () => {
+    if (!prefs.accountTipSeen) savePrefs({ accountTipSeen: true });
+  };
+
   // Close on a tap/click anywhere outside the menu
   useEffect(() => {
     if (!open) return;
@@ -57,7 +70,10 @@ export default function AccountButton({ user }: { user: User }) {
     <div ref={wrapRef} className="relative">
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => {
+          retireTip();
+          setOpen((o) => !o);
+        }}
         aria-label="Account"
         aria-expanded={open}
         className={`flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-gray-200 text-sm font-semibold shadow-sm ${
@@ -79,6 +95,34 @@ export default function AccountButton({ user }: { user: User }) {
           initial
         )}
       </button>
+      {showTip && (
+        <>
+          <span className="pointer-events-none absolute inset-0 rounded-full ring-2 ring-blue-500 motion-safe:animate-ping" />
+          <div role="status" className="account-tip absolute right-0 top-full z-50 mt-3 w-60 rounded-xl bg-gray-900 p-3 text-white shadow-lg">
+            {/* little arrow up at the picture */}
+            <span className="absolute -top-1.5 right-3 h-3 w-3 rotate-45 bg-gray-900" />
+            <div className="text-sm font-semibold">Your account lives here</div>
+            <p className="mt-1 text-xs leading-snug text-gray-300">
+              Tap your picture for settings, your time zone, and <span className="font-semibold text-white">Find friends</span> to follow other bettors.
+            </p>
+            <div className="mt-2.5 flex justify-end gap-2">
+              <button type="button" onClick={retireTip} className="rounded-md px-2.5 py-1 text-xs font-medium text-gray-300 hover:text-white">
+                Got it
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  retireTip();
+                  setOpen(true);
+                }}
+                className="rounded-md bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-blue-500"
+              >
+                Show me
+              </button>
+            </div>
+          </div>
+        </>
+      )}
       {open && (
         <div className="absolute right-0 top-full z-50 mt-2 w-64 rounded-xl border border-gray-200 bg-white p-2 shadow-lg">
           <div className="truncate px-2 py-1.5 text-xs text-gray-500" title={user.email ?? undefined}>

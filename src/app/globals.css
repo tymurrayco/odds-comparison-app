@@ -132,6 +132,11 @@ body {
   100% { opacity: 1; transform: none; }
 }
 @keyframes sheet-unpop { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(10px) scale(0.98); } }
+/* One-time account pointer (AccountButton): drops in under the picture */
+@keyframes account-tip-in { from { opacity: 0; transform: translateY(-6px) scale(0.96); } to { opacity: 1; transform: none; } }
+.account-tip { animation: account-tip-in 260ms ease-out both; transform-origin: top right; }
+@media (prefers-reduced-motion: reduce) { .account-tip { animation: none; } }
+
 @keyframes sheet-fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes sheet-fade-out { from { opacity: 1; } to { opacity: 0; } }
 
