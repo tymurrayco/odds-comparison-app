@@ -354,8 +354,8 @@ html[data-theme="dark"] [role="switch"] .bg-white { background-color: #fff; }
 
 /* A card's live score, Proj / Implied scores and Ledger chip (data-thin-logos in
    GameCard): their 14-16px logos take a lighter edge, the full white line reads heavy
-   there. Lighter = same 1px line at half strength: iPhone Safari rounds these offsets
+   there. Lighter = same 1px line at 75% strength: iPhone Safari rounds these offsets
    to whole pixels, so 0.6px drew as 1px and 0.4px drew nothing at all. */
 html[data-theme="dark"] [data-thin-logos] img {
-  filter: drop-shadow(1px 0 0 rgb(255 255 255 / 0.5)) drop-shadow(-1px 0 0 rgb(255 255 255 / 0.5)) drop-shadow(0 1px 0 rgb(255 255 255 / 0.5)) drop-shadow(0 -1px 0 rgb(255 255 255 / 0.5));
+  filter: drop-shadow(1px 0 0 rgb(255 255 255 / 0.75)) drop-shadow(-1px 0 0 rgb(255 255 255 / 0.75)) drop-shadow(0 1px 0 rgb(255 255 255 / 0.75)) drop-shadow(0 -1px 0 rgb(255 255 255 / 0.75));
 }
