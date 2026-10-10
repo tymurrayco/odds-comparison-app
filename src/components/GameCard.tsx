@@ -352,6 +352,15 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
     return words.slice(-keep).join(' ');
   };
   const titleName = (teamName: string) => (isNCAAF ? schoolName(teamName) : mascotName(teamName));
+  // The live clock, short: "10:29 - 4th" → "10:29 4Q" (quarters), "2P" in
+  // hockey, "2H" for halves. Baseball innings ("Top 5th"), "Halftime", "Final"
+  // and anything else the feed says are left as they are.
+  const liveClock = (detail: string): string => {
+    const text = detail.replace(/\s+-\s+/, ' ').replace(/\b(\d)(?:st|nd|rd|th) Half\b/i, '$1H');
+    if (game.sport_key.startsWith('baseball')) return text;
+    const unit = game.sport_key.startsWith('icehockey') ? 'P' : 'Q';
+    return text.replace(/\b(\d)(?:st|nd|rd|th)\b/, `$1${unit}`);
+  };
   // Logo beside each team in that title: ESPN's from the league map, then
   // the live-score feed's, then the local file.
   const titleLogos = (teamName: string, side: 'away' | 'home') => [
@@ -752,7 +761,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                       className="h-4 w-4 ml-0.5"
                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
                     />
-                    <span className="ml-1.5 text-green-600">{liveScore.statusDetail}</span>
+                    <span className="ml-1.5 text-green-600">{liveClock(liveScore.statusDetail)}</span>
                   </span>
                 )}
                 {/* Final score */}
@@ -853,7 +862,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                       className="h-4 w-4 ml-0.5"
                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
                     />
-                    <span className="ml-1 text-green-600">{liveScore.statusDetail}</span>
+                    <span className="ml-1 text-green-600">{liveClock(liveScore.statusDetail)}</span>
                   </span>
                 )}
                 {/* Final score */}
@@ -892,7 +901,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                   {!isLive && !isCompleted && <span className="text-gray-400 hidden md:inline">•</span>}
                   {(isLive || isCompleted) && liveScore && <span className="text-gray-400">•</span>}
                   <span className="text-gray-600 flex items-center gap-0.5">
-                    <span className="text-gray-500">{gameStarted ? 'Proj:' : 'Implied:'}</span>
+                    <span className="text-gray-500">{gameStarted ? 'Proj' : 'Implied:'}</span>
                     {impliedScores.awayWinning ? (
                       <>
                         <img 
