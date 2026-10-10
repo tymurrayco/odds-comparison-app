@@ -891,6 +891,42 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt, leagueOrde
       (game) => new Date(game.commence_time).getTime() <= now && matchGameToScore(game, espnScores)?.state !== 'post'
     ).length;
   }, [games, espnScores]);
+
+  // Live games need fresh prices. A live card drops any book whose line is
+  // more than 2 minutes older than the freshest one (OddsTable), and odds
+  // loaded before kickoff are all old next to Kalshi's, which is stamped at
+  // load — so a board left open into a game showed Kalshi alone until a
+  // manual refresh. While live games are on show: reload at once if what we
+  // hold is over a minute old, then every 2 minutes (not while the tab is
+  // hidden). Quiet — no spinner. The server shares one paid call per minute
+  // per league across all visitors.
+  const gamesFetchedAtRef = useRef(0);
+  gamesFetchedAtRef.current = gamesCache[activeLeague]?.timestamp ?? 0;
+  const liveShown = showLiveGames && liveCount > 0 && effectiveView === 'games' && activeLeague !== 'favorites';
+  useEffect(() => {
+    if (!liveShown) return;
+    let cancelled = false;
+    const league = activeLeague;
+    const refresh = async () => {
+      if (document.hidden) return;
+      try {
+        const response = await fetchOdds(league);
+        if (cancelled || response.data.length === 0) return;
+        setGames(response.data);
+        setGamesCache((prev) => ({ ...prev, [league]: { data: response.data, timestamp: Date.now(), league } }));
+        setLastUpdated(new Date());
+      } catch (error) {
+        console.error('Error refreshing live odds:', error);
+      }
+    };
+    if (Date.now() - gamesFetchedAtRef.current > 60_000) refresh();
+    const interval = setInterval(refresh, 120_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [liveShown, activeLeague]);
+
   const filteredGames = useMemo(() => {
     // A game that has gone final (per the ESPN scores feed) has nothing left
     // to price — drop its card. Games the feed can't match stay, so an empty
