@@ -256,7 +256,8 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
       side.logo ??
       (side.espnId && !isNFL ? `https://a.espncdn.com/i/teamlogos/ncaa/500/${side.espnId}.png` : null);
     // Lines from the shown team's perspective, signed ("+3.0", "-10.4", "PK").
-    const fmt = (v: number) => (v === 0 ? 'PK' : `${v > 0 ? '+' : ''}${v.toFixed(1)}`);
+    // one decimal, and none when it is a whole number (-12, not -12.0)
+    const fmt = (v: number) => (v === 0 ? 'PK' : `${v > 0 ? '+' : ''}${Number(v.toFixed(1))}`);
     const sideLedger = showHome ? homeSpread : -homeSpread;
     const sideMarket = marketHome === null ? null : showHome ? marketHome : -marketHome;
     return {
