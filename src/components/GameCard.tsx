@@ -1037,18 +1037,22 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
             {/* Injury report button - only for NFL */}
             {isNFL && (
               <button
-                className={`px-2 md:px-3 py-1 text-xs md:text-sm rounded-md ${
+                className={`inline-flex items-center px-2 md:px-3 py-1 rounded-md ${
                   expandedMarket === 'analysis' && nflPanel === 'injuries'
-                    ? 'bg-purple-600 text-white'
-                    : 'bg-purple-50 text-purple-700 hover:bg-purple-100'
+                    ? 'bg-red-600 text-white'
+                    : 'bg-red-50 text-red-600 hover:bg-red-100'
                 }`}
                 onClick={() => {
                   setNflPanel('injuries');
                   setExpandedMarket('analysis');
                 }}
                 title="Injury report"
+                aria-label="Injury report"
               >
-                🏥
+                {/* Medical cross, in the red of the QB-out chip beside it (16px / 20px = the text buttons' line height) */}
+                <svg className="h-4 w-4 md:h-5 md:w-5 p-px" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M9.5 3h5a1 1 0 0 1 1 1v4.5H20a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1h-4.5V20a1 1 0 0 1-1 1h-5a1 1 0 0 1-1-1v-4.5H4a1 1 0 0 1-1-1v-5a1 1 0 0 1 1-1h4.5V4a1 1 0 0 1 1-1z" />
+                </svg>
               </button>
             )}
             {/* Starting QB out/doubtful — sits right of the injury icon it opens */}
