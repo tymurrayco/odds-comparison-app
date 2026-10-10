@@ -344,7 +344,8 @@ html[data-theme="dark"] :is(.bg-gray-700, .bg-gray-800, .bg-gray-900, .bg-slate-
    Sportsbook logos get a hairline. */
 html[data-theme="dark"] img[src*="teamlogos"],
 html[data-theme="dark"] img[src*="/team-logos/"] {
-  filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 1.5px rgb(255 255 255 / 0.8));
+  /* four hard 1px offsets = a crisp edge with no glow */
+  filter: drop-shadow(1px 0 0 #fff) drop-shadow(-1px 0 0 #fff) drop-shadow(0 1px 0 #fff) drop-shadow(0 -1px 0 #fff);
 }
 html[data-theme="dark"] img[src*="/bookmaker-logos/"] { filter: drop-shadow(0 0 0.6px rgb(255 255 255 / 0.75)); }
 
