@@ -964,6 +964,23 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
       </svg>
     </button>
   );
+  // Phones and tablets: the same icon at the end of the tab row; it opens the
+  // search box under the tabs and closes (and clears) it again.
+  const searchToggle = (
+    <button
+      type="button"
+      onClick={() => (searchShown ? closeSearch() : setSearchOpen(true))}
+      aria-label={searchShown ? 'Close search' : 'Search teams'}
+      aria-expanded={searchShown}
+      className={`inline-flex h-[38px] w-9 items-center justify-center rounded-lg border shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+        searchShown ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+      }`}
+    >
+      <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+      </svg>
+    </button>
+  );
   // compact = the 36px, fixed-width version that fits inside the tab bar
   const searchInput = (compact: boolean) => (
     <div className={`relative ${compact ? 'w-64' : ''}`}>
@@ -1243,13 +1260,16 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
                   </div>
                 </div>
               ) : (
-                // Wide screens: three columns — spacer, tabs (centred), Games filters (right)
-                <div className="bg-white rounded-lg shadow p-2 mb-6 flex justify-center lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-center">
+                // Wide screens: three columns — spacer, tabs (centred), Games filters (right).
+                // Phones and tablets: tabs, then the search icon at the right end; the
+                // search box opens on a second line inside the same card.
+                <div className="bg-white rounded-lg shadow p-2 mb-6 flex flex-wrap items-center gap-x-2 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:gap-x-0">
                   <div className="hidden lg:block" />
+                  <div className="flex flex-1 justify-center lg:block">
                   <div className="inline-flex rounded-md shadow-sm">
                     <button
                       type="button"
-                      className={`px-4 py-2 text-sm font-medium rounded-l-lg ${
+                      className={`px-2.5 min-[400px]:px-4 py-2 text-sm font-medium rounded-l-lg ${
                         activeView === 'games' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
                       } border border-gray-200`}
                       onClick={() => {
@@ -1264,7 +1284,7 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
                     </button>
                     <button
                       type="button"
-                      className={`px-4 py-2 text-sm font-medium ${
+                      className={`px-2.5 min-[400px]:px-4 py-2 text-sm font-medium ${
                         activeView === 'futures' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
                       } border border-gray-200 border-l-0`}
                       onClick={() => {
@@ -1280,7 +1300,7 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
                     {supportsProps && (
                       <button
                         type="button"
-                        className={`px-4 py-2 text-sm font-medium ${
+                        className={`px-2.5 min-[400px]:px-4 py-2 text-sm font-medium ${
                           hasRatingsTab ? '' : 'rounded-r-lg '
                         }${
                           activeView === 'props' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
@@ -1298,7 +1318,7 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
                     {hasRatingsTab && activeLeague === RATINGS_LEAGUE && (
                       <button
                         type="button"
-                        className={`px-4 py-2 text-sm font-medium rounded-r-lg ${
+                        className={`px-2.5 min-[400px]:px-4 py-2 text-sm font-medium rounded-r-lg ${
                           activeView === 'ratings' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
                         } border border-gray-200 border-l-0`}
                         onClick={() => {
@@ -1315,13 +1335,16 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
                     {hasRatingsTab && activeLeague === 'americanfootball_nfl' && (
                       <button
                         type="button"
-                        className="px-4 py-2 text-sm font-medium rounded-r-lg bg-white text-gray-700 hover:bg-gray-50 border border-gray-200 border-l-0"
+                        className="px-2.5 min-[400px]:px-4 py-2 text-sm font-medium rounded-r-lg bg-white text-gray-700 hover:bg-gray-50 border border-gray-200 border-l-0"
                         onClick={() => router.push('/nfl/ratings')}
                       >
                         Ledger
                       </button>
                     )}
                   </div>
+                  </div>
+                  {/* kept (invisible) off the Games view so the tabs never shift */}
+                  <div className={`flex-none lg:hidden ${effectiveView === 'games' ? '' : 'invisible'}`}>{searchToggle}</div>
                   <div className="hidden lg:flex items-center justify-end gap-2">
                     {effectiveView === 'games' && (
                       <>
@@ -1332,21 +1355,22 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
                     )}
                     {effectiveView === 'ratings' && ratingsSwitch}
                   </div>
+                  {effectiveView === 'games' && searchShown && (
+                    <div className="mt-2 basis-full lg:hidden">{searchInput(false)}</div>
+                  )}
                 </div>
               )
             )}
             
-            {/* Games filters. Phones and tablets: a row under the tabs (search opens
-                on its own row above it). Wide screens: the same controls sit at
-                the right end of the tab bar, so this block is only the
-                active-filter chips there. */}
+            {/* Games filters. Phones and tablets: conference filter and Live chip on
+                a row under the tabs — only when the league has one of them (search
+                lives in the tab card). Wide screens: the same controls sit at the
+                right end of the tab bar, so this block is only the active-filter
+                chips there. */}
             {effectiveView === 'games' && activeLeague !== 'favorites' && (
-              <div className="mb-6 space-y-4 lg:mb-0 lg:space-y-0">
-                {searchShown && <div className="lg:hidden">{searchInput(false)}</div>}
-
-                {(!searchShown || supportsConferenceFilter || liveCount > 0) && (
+              <div className={`space-y-4 lg:mb-0 lg:space-y-0 ${supportsConferenceFilter || liveCount > 0 || teamFilter || selectedConferences.length > 0 ? 'mb-6' : ''}`}>
+                {(supportsConferenceFilter || liveCount > 0) && (
                   <div className="flex min-h-[42px] items-center gap-2 lg:hidden">
-                    {!searchShown && searchButton}
                     {conferenceControl}
                     {liveChip}
                   </div>
