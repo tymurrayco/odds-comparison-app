@@ -5,7 +5,8 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { fetchBets, getBetStats, calculateProfit, Bet, BetStatus, BetType } from '@/lib/betService';
+import { fetchBets, fetchBetsOf, getBetStats, calculateProfit, Bet, BetStatus, BetType } from '@/lib/betService';
+import { listFollowing, type Profile } from '@/lib/social';
 import BetEditSheet from '@/components/BetEditSheet';
 
 // Bookmaker logos mapping - KEPT FROM YOUR ORIGINAL
@@ -147,16 +148,25 @@ export default function MyBets({ yearFilter = 'all', onYearsLoaded }: MyBetsProp
     return () => { cancelled = true; };
   }, [myBets, teamMaps]);
 
-  // NEW: Fetch bets from Supabase on mount
+  // Whose bets are showing: null = mine, else someone I follow (read-only)
+  const [viewing, setViewing] = useState<Profile | null>(null);
+  const [followed, setFollowed] = useState<Profile[]>([]);
+  useEffect(() => {
+    listFollowing().then((edges) => setFollowed(edges.filter((e) => e.status === 'accepted').map((e) => e.profile)));
+  }, []);
+
+  // Fetch bets on mount and whenever the person being viewed changes
   useEffect(() => {
     loadBets();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewing?.id]);
 
   const loadBets = async () => {
     try {
       setLoading(true);
       setError(null);
-      const fetchedBets = await fetchBets();
+      setExpandedBetId(null);
+      const fetchedBets = viewing ? await fetchBetsOf(viewing.id) : await fetchBets();
       setMyBets(fetchedBets);
     } catch (err) {
       console.error('Error loading bets:', err);
@@ -645,11 +655,37 @@ export default function MyBets({ yearFilter = 'all', onYearsLoaded }: MyBetsProp
     setExpandedBetId(expandedBetId === betId ? null : betId);
   };
 
+  // Whose bets: me, or anyone I follow. Only shown once I follow someone; it
+  // stays on screen while a person's bets load so it doesn't blink.
+  const personChip = (active: boolean) =>
+    `flex-none inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
+      active ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+    }`;
+  const picker = followed.length > 0 && (
+    <div className="scrollbar-none -mx-4 flex gap-2 overflow-x-auto px-4 sm:mx-0 sm:px-0" role="tablist" aria-label="Whose bets">
+      <button type="button" role="tab" aria-selected={!viewing} className={personChip(!viewing)} onClick={() => setViewing(null)}>
+        My bets
+      </button>
+      {followed.map((p) => (
+        <button key={p.id} type="button" role="tab" aria-selected={viewing?.id === p.id} className={personChip(viewing?.id === p.id)} onClick={() => setViewing(p)}>
+          {p.avatarUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={p.avatarUrl} alt="" referrerPolicy="no-referrer" className="h-5 w-5 rounded-full object-cover" />
+          )}
+          {p.displayName}
+        </button>
+      ))}
+    </div>
+  );
+
   // NEW: Loading state
   if (loading) {
     return (
-      <div className="flex justify-center items-center min-h-[400px]">
-        <div className="text-gray-500">Loading bets...</div>
+      <div className="space-y-4">
+        {picker}
+        <div className="flex justify-center items-center min-h-[400px]">
+          <div className="text-gray-500">Loading bets...</div>
+        </div>
       </div>
     );
   }
@@ -679,6 +715,12 @@ export default function MyBets({ yearFilter = 'all', onYearsLoaded }: MyBetsProp
           onSaved={(updated) => setMyBets((list) => list.map((b) => (b.id === updated.id ? updated : b)))}
           onDeleted={(id) => setMyBets((list) => list.filter((b) => b.id !== id))}
         />
+      )}
+      {picker}
+      {viewing && (
+        <p className="text-xs text-gray-500">
+          Viewing <span className="font-semibold text-gray-700">{viewing.displayName}</span>&apos;s bets (@{viewing.handle}). Read-only.
+        </p>
       )}
       {/* View Toggle - Updated label to include Teasers */}
       <div className="bg-white rounded-lg shadow p-2">
@@ -1169,6 +1211,7 @@ export default function MyBets({ yearFilter = 'all', onYearsLoaded }: MyBetsProp
                           <span className="text-gray-500">Odds:</span>
                           <span>{formatOdds(bet.odds)}</span>
                         </div>
+                        {!viewing && (
                         <div className="flex justify-between items-center pt-1">
                           <span className="text-gray-500">Edit:</span>
                           <button
@@ -1179,6 +1222,7 @@ export default function MyBets({ yearFilter = 'all', onYearsLoaded }: MyBetsProp
                             Edit / grade
                           </button>
                         </div>
+                        )}
                         <div className="flex justify-between items-center pt-1">
                           <span className="text-gray-500">Share:</span>
                           <button

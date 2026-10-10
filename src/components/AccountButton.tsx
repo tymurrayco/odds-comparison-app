@@ -11,6 +11,8 @@ import Link from 'next/link';
 import type { User } from '@supabase/supabase-js';
 import { signOut, useIsPremium } from '@/lib/userAuth';
 import { savePrefs, usePrefs, TIME_ZONES } from '@/lib/prefs';
+import { ensureProfile } from '@/lib/social';
+import PeopleSheet from '@/components/PeopleSheet';
 
 // Bet Admin, and the three Ledger admin pages (Sync Games lives on each)
 const ADMIN_LINKS = [
@@ -25,6 +27,12 @@ export default function AccountButton({ user }: { user: User }) {
   const [failedPhoto, setFailedPhoto] = useState<string | null>(null);
   const prefs = usePrefs();
   const premium = useIsPremium();
+  const [showPeople, setShowPeople] = useState(false);
+  // Make sure this account has a profile (name + picture from Google) so
+  // other people can find and follow it. No-op once it exists.
+  useEffect(() => {
+    ensureProfile();
+  }, [user.id]);
   const wrapRef = useRef<HTMLDivElement>(null);
 
   // Close on a tap/click anywhere outside the menu
@@ -117,6 +125,18 @@ export default function AccountButton({ user }: { user: User }) {
             </select>
           </label>
 
+          <div className="my-1 border-t border-gray-100" />
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              setShowPeople(true);
+            }}
+            className="w-full rounded-lg px-2 py-1.5 text-left text-sm font-medium text-gray-700 hover:bg-gray-100"
+          >
+            Profile &amp; people
+          </button>
+
           {/* Shortcuts to the admin pages, on premium accounts only. This is a
               way in, not a lock: the pages still ask for the admin password
               (src/middleware.ts) on a device that hasn't entered it. */}
@@ -154,6 +174,7 @@ export default function AccountButton({ user }: { user: User }) {
           </button>
         </div>
       )}
+      {showPeople && <PeopleSheet onClose={() => setShowPeople(false)} />}
     </div>
   );
 }

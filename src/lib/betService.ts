@@ -33,6 +33,24 @@ export async function fetchBets(): Promise<Bet[]> {
   return (data as DbBetRow[]).map(rowToBet);
 }
 
+// Someone else's bets — only returns rows when the caller follows them (and,
+// for a private account, has been approved); the database enforces that.
+export async function fetchBetsOf(userId: string): Promise<Bet[]> {
+  const { data, error } = await supabase
+    .from('bets')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('deleted', false)
+    .order('event_date', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching bets:', error);
+    return [];
+  }
+
+  return (data as DbBetRow[]).map(rowToBet);
+}
+
 // One place to send a write with the visitor's access token and turn a
 // failure into a readable error.
 async function writeBets(method: 'POST' | 'PATCH' | 'DELETE', body: unknown): Promise<{ bet?: DbBetRow }> {
