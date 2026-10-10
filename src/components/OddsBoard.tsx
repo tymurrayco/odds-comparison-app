@@ -1082,22 +1082,32 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt, leagueOrde
       ))}
     </div>
   );
-  // Live chip: only while games are under way. Off (plain) hides them; on
-  // (light red tint) shows them. The count says how many.
+  // Live switch: only while games are under way. iOS-style, same as the
+  // account menu's: off hides games in progress, on shows them.
   const liveChip = liveCount > 0 && (
     <button
       type="button"
-      aria-pressed={showLiveGames}
+      role="switch"
+      aria-checked={showLiveGames}
       title={showLiveGames ? 'Hide games in progress' : 'Show games in progress'}
       onClick={toggleLiveGames}
-      className={`flex-none inline-flex h-9 items-center gap-1.5 px-2.5 rounded-lg border text-sm font-semibold shadow-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-300 ${
-        showLiveGames
-          ? 'bg-red-50 border-red-200 text-red-700'
-          : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
-      }`}
+      className="flex-none inline-flex h-9 items-center gap-2 rounded-lg text-sm font-medium text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
     >
-      <span className="h-2 w-2 rounded-full bg-red-500" />
-      Live {liveCount}
+      <span className="inline-flex items-center gap-1.5">
+        <span className="h-2 w-2 rounded-full bg-red-500" />
+        Live games
+      </span>
+      <span
+        className={`relative h-6 w-10 flex-none rounded-full transition-colors ${
+          showLiveGames ? 'bg-green-500' : 'bg-gray-300'
+        }`}
+      >
+        <span
+          className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${
+            showLiveGames ? 'left-[18px]' : 'left-0.5'
+          }`}
+        />
+      </span>
     </button>
   );
 
