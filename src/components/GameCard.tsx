@@ -38,6 +38,8 @@ const SHORT_SCHOOL_NAMES: Record<string, string> = {
   'Middle Tennessee': 'MTSU',
   'Middle Tennessee St': 'MTSU',
   'Jacksonville St': 'Jax St',
+  'California': 'Cal',
+  'Mississippi St': 'Miss St',
 };
 
 interface GameCardProps {
