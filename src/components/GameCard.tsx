@@ -22,7 +22,7 @@ import GameNoteSheet from './GameNoteSheet';
 const TWO_WORD_MASCOT_STARTS = new Set([
   'yellow', 'green', 'thundering', 'sun', 'wolf', 'red', 'scarlet', 'fighting', "fightin'", 'blue', 'golden',
   "ragin'", 'mean', 'rainbow', 'crimson', 'big', 'nittany', 'demon', 'horned', 'mountain', 'black', 'great',
-  'purple', 'tar', 'river', 'screaming', 'delta', "runnin'",
+  'purple', 'tar', 'river', 'screaming', 'delta', "runnin'", 'white',
 ]);
 
 // Schools whose name is still too long for the phone card title after
@@ -62,6 +62,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
   // NFL (incl. preseason) gets the injury-report toggle
   const isNFL = game.sport_key === 'americanfootball_nfl'
     || game.sport_key === 'americanfootball_nfl_preseason';
+  const isMLB = game.sport_key === 'baseball_mlb' || game.sport_key === 'baseball_mlb_preseason';
   
   // Default to moneyline for soccer, spread for everything else
   // NFL analysis panel: injury report or the Ledger projection
@@ -344,7 +345,19 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
     const drop = words.length > 2 && TWO_WORD_MASCOT_STARTS.has(words[words.length - 2].toLowerCase()) ? 2 : 1;
     return shortState(words.slice(0, -drop).join(' '));
   };
-  // Logo beside each school in that title: ESPN's from the league map, then
+  // Pro team without its city ("Boston Red Sox" → "Red Sox"): the name minus
+  // ESPN's location when the team is in the league map, else the last word —
+  // or last two for the two-word mascots ("Blue Jays", "White Sox").
+  const mascotName = (teamName: string): string => {
+    const city = teamInfoFromMap(teamColorMap, teamName)?.school;
+    if (city && teamName.startsWith(city + ' ')) return teamName.slice(city.length + 1);
+    const words = teamName.trim().split(/ +/);
+    if (words.length < 2) return teamName;
+    const keep = words.length > 2 && TWO_WORD_MASCOT_STARTS.has(words[words.length - 2].toLowerCase()) ? 2 : 1;
+    return words.slice(-keep).join(' ');
+  };
+  const titleName = (teamName: string) => (isNCAAF ? schoolName(teamName) : mascotName(teamName));
+  // Logo beside each team in that title: ESPN's from the league map, then
   // the live-score feed's, then the local file.
   const titleLogos = (teamName: string, side: 'away' | 'home') => [
     teamInfoFromMap(teamColorMap, teamName)?.logo,
@@ -600,16 +613,17 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                 icons onto their own line; icons right edge on mobile, inline on sm+ */}
             <div className="flex items-center">
               <h3 className="text-[15px] md:text-[18px] font-semibold tracking-[-0.3px] md:tracking-[-0.45px] text-gray-900 truncate min-w-0">
-                {isNCAAF ? (
-                  // Phones: logo + school only, "State" shortened ("Arizona St @ West Virginia");
-                  // the mascots are what overflowed the line
+                {isNCAAF || isNFL || isMLB ? (
+                  // Phones: logo + short name only — college = school, "State" shortened
+                  // ("Arizona St @ West Virginia"); NFL and MLB = mascot ("Bills @ Chiefs").
+                  // The full names are what overflowed the line
                   <>
                     <span className="md:hidden flex items-center gap-1.5 min-w-0">
                       <TeamLogoImg srcs={titleLogos(game.away_team, 'away')} className="h-5 w-5 flex-none object-contain" />
-                      <span className="truncate">{schoolName(game.away_team)}</span>
+                      <span className="truncate">{titleName(game.away_team)}</span>
                       <span className="flex-none text-gray-400">@</span>
                       <TeamLogoImg srcs={titleLogos(game.home_team, 'home')} className="h-5 w-5 flex-none object-contain" />
-                      <span className="truncate">{schoolName(game.home_team)}</span>
+                      <span className="truncate">{titleName(game.home_team)}</span>
                     </span>
                     <span className="hidden md:inline">{game.away_team} @ {game.home_team}</span>
                   </>
