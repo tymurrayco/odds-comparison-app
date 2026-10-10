@@ -69,14 +69,14 @@ export default function ConferenceFilter({
       
       {isOpen && (
         <>
-          {/* Backdrop */}
+          {/* Backdrop — above the game tables' sticky Team column (z-20), below the site header */}
           <div 
-            className="fixed inset-0 z-10" 
+            className="fixed inset-0 z-30" 
             onClick={() => setIsOpen(false)}
           />
           
           {/* Dropdown */}
-          <div className="absolute left-0 sm:left-auto sm:right-0 mt-2 w-72 bg-white rounded-lg shadow-lg border border-gray-200 z-20">
+          <div className="absolute left-0 sm:left-auto sm:right-0 mt-2 w-72 bg-white rounded-lg shadow-lg border border-gray-200 z-[31]">
             <div className="p-3 border-b border-gray-200">
               <input
                 type="text"
