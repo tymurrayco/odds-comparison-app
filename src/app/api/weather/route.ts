@@ -2,7 +2,7 @@
 //
 // GET /api/weather?league=<sport_key>
 //   → { games: GameWeather[] } — game-time weather for this week's outdoor
-//     NFL / college football games (src/lib/weather.ts). Each game carries
+//     NFL / college football / MLB / CFL games (src/lib/weather.ts). Each game carries
 //     `flags`; the card shows an icon only when that list isn't empty.
 // Public and read-only. Cached at the edge for 10 minutes; the forecasts
 // behind it refresh every 30.

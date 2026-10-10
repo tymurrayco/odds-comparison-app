@@ -1,10 +1,12 @@
 // src/lib/weather.ts
 //
-// Game-time weather for outdoor football, for the warning icons on game cards.
-// Server-side only. For each upcoming game ESPN lists (venue city + an
-// "indoor" flag), the city is geocoded and the hourly forecast read for the
-// three and a half hours from kickoff. A game is flagged only when the
+// Game-time weather for outdoor football and baseball, for the warning icons
+// on game cards. Server-side only. For each upcoming game ESPN lists (venue
+// city + an "indoor" flag), the city is geocoded and the hourly forecast read
+// for the three and a half hours from kickoff. A game is flagged only when the
 // weather is bad enough to matter — most games return no flags.
+// The CFL is the exception: ESPN has no CFL schedule, so its games come from
+// the odds board and its stadiums from a fixed list (CFL_VENUES).
 //
 // Sources, both read for every US game; a flag from either one counts:
 //   - National Weather Service (api.weather.gov): the official US forecast —
@@ -14,7 +16,9 @@
 //     paid plan or a replacement for those parts.
 // Everything that talks to either is in this file.
 
-export type WeatherFlag = 'storm' | 'snow' | 'rain' | 'wind';
+import { getBoardGames } from '@/lib/server/boardOdds';
+
+export type WeatherFlag ='storm' | 'snow' | 'rain' | 'wind';
 
 export interface GameWeather {
   homeTeam: string; // ESPN display names, matched to the odds feed by the card
@@ -46,12 +50,37 @@ export const NWS_RAIN_CHANCE_PCT = 60;
 export const NWS_STORM_SNOW_CHANCE_PCT = 50;
 const GAME_HOURS = 4; // kickoff hour + the next three
 
-const ESPN_PATH: Record<string, { path: string; queries: string[] }> = {
-  americanfootball_nfl: { path: 'football/nfl', queries: [''] },
-  americanfootball_ncaaf: { path: 'football/college-football', queries: ['?limit=300&groups=80', '?limit=300&groups=81'] },
+// ESPN's baseball scoreboard serves one day per request (date ranges come back
+// empty), so MLB asks for yesterday through four days out, US Eastern dates.
+const mlbDays = (): string[] =>
+  [-1, 0, 1, 2, 3, 4].map((d) => {
+    const day = new Date(Date.now() + d * 86_400_000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    return `?dates=${day.replace(/-/g, '')}`;
+  });
+
+const ESPN_PATH: Record<string, { path: string; queries: () => string[] }> = {
+  americanfootball_nfl: { path: 'football/nfl', queries: () => [''] },
+  americanfootball_ncaaf: { path: 'football/college-football', queries: () => ['?limit=300&groups=80', '?limit=300&groups=81'] },
+  baseball_mlb: { path: 'baseball/mlb', queries: mlbDays },
 };
 
-export const WEATHER_SPORTS = new Set(Object.keys(ESPN_PATH));
+const CFL = 'americanfootball_cfl';
+
+export const WEATHER_SPORTS = new Set([...Object.keys(ESPN_PATH), CFL]);
+
+// CFL home stadiums, keyed by the odds feed's team name (letters only). BC
+// Place has a roof, so the Lions have no entry. Neutral-site games (the Grey
+// Cup) would read the listed home team's stadium.
+const CFL_VENUES: Record<string, { venue: string; city: string; lat: number; lon: number }> = {
+  calgarystampeders: { venue: 'McMahon Stadium', city: 'Calgary, AB', lat: 51.0704, lon: -114.1215 },
+  edmontonelks: { venue: 'Commonwealth Stadium', city: 'Edmonton, AB', lat: 53.5597, lon: -113.4761 },
+  saskatchewanroughriders: { venue: 'Mosaic Stadium', city: 'Regina, SK', lat: 50.4513, lon: -104.6336 },
+  winnipegbluebombers: { venue: 'Princess Auto Stadium', city: 'Winnipeg, MB', lat: 49.8078, lon: -97.1432 },
+  hamiltontigercats: { venue: 'Hamilton Stadium', city: 'Hamilton, ON', lat: 43.2523, lon: -79.83 },
+  torontoargonauts: { venue: 'BMO Field', city: 'Toronto, ON', lat: 43.6332, lon: -79.4186 },
+  ottawaredblacks: { venue: 'TD Place Stadium', city: 'Ottawa, ON', lat: 45.3981, lon: -75.6835 },
+  montrealalouettes: { venue: 'Percival Molson Stadium', city: 'Montreal, QC', lat: 45.5101, lon: -73.5808 },
+};
 
 const STATE_NAMES: Record<string, string> = {
   AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California', CO: 'Colorado', CT: 'Connecticut',
@@ -64,6 +93,10 @@ const STATE_NAMES: Record<string, string> = {
   VT: 'Vermont', VA: 'Virginia', WA: 'Washington', WV: 'West Virginia', WI: 'Wisconsin', WY: 'Wyoming',
 };
 
+// ESPN gives football states as "OH" and baseball states as "Ohio"
+const STATE_ABBR = new Map(Object.entries(STATE_NAMES).map(([abbr, name]) => [name.toLowerCase(), abbr]));
+const stateAbbr = (state: string): string => STATE_ABBR.get(state.trim().toLowerCase()) ?? state;
+
 interface Venue {
   homeTeam: string;
   awayTeam: string;
@@ -71,6 +104,8 @@ interface Venue {
   venue: string;
   city: string;
   state: string; // US state abbreviation, or '' abroad
+  lat?: number; // set when the stadium is already known (CFL) — no geocoding
+  lon?: number;
 }
 
 interface EspnEvent {
@@ -85,7 +120,7 @@ interface EspnEvent {
 async function outdoorGames(sport: string): Promise<Venue[]> {
   const cfg = ESPN_PATH[sport];
   const pages = await Promise.all(
-    cfg.queries.map(async (q) => {
+    cfg.queries().map(async (q) => {
       const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/${cfg.path}/scoreboard${q}`, {
         next: { revalidate: 600 },
         signal: AbortSignal.timeout(10_000),
@@ -104,13 +139,28 @@ async function outdoorGames(sport: string): Promise<Venue[]> {
       if (!ev.date || !home || !away || !city) continue;
       if (c?.venue?.indoor) continue; // a roof: weather doesn't reach the field
       if (c?.status?.type?.state === 'post') continue;
-      const key = `${away}@${home}`;
+      const key = `${away}@${home}@${ev.date}`; // the date keeps each game of a baseball series
       if (seen.has(key)) continue;
       seen.add(key);
       // ESPN names some college venues "Memorial Stadium (Lincoln, NE)"; the city is shown separately
       const venue = (c?.venue?.fullName ?? '').replace(/\s*\([^)]*\)\s*$/, '');
-      out.push({ homeTeam: home, awayTeam: away, kickoff: ev.date, venue, city, state: c?.venue?.address?.state ?? '' });
+      out.push({ homeTeam: home, awayTeam: away, kickoff: ev.date, venue, city, state: stateAbbr(c?.venue?.address?.state ?? '') });
     }
+  }
+  return out;
+}
+
+// CFL: upcoming games from the odds board (the same cached Odds API call the
+// board itself makes), each placed at its home team's stadium.
+async function cflGames(): Promise<Venue[]> {
+  const games = await getBoardGames(CFL);
+  const now = Date.now();
+  const out: Venue[] = [];
+  for (const g of games) {
+    const v = CFL_VENUES[g.home_team.replace(/[^a-zA-Z]/g, '').toLowerCase()];
+    if (!v) continue; // BC Place, or a name the list doesn't know
+    if (new Date(g.commence_time).getTime() < now - GAME_HOURS * 3_600_000) continue;
+    out.push({ homeTeam: g.home_team, awayTeam: g.away_team, kickoff: g.commence_time, venue: v.venue, city: v.city, state: '', lat: v.lat, lon: v.lon });
   }
   return out;
 }
@@ -294,10 +344,10 @@ function summarizeNws(hours: NwsHour[], kickoffIso: string): NwsSummary | null {
 /** Weather for every outdoor, not-yet-finished game ESPN lists this week. Flagged or not. */
 export async function gameWeather(sport: string): Promise<GameWeather[]> {
   if (!WEATHER_SPORTS.has(sport)) return [];
-  const games = await outdoorGames(sport);
+  const games = sport === CFL ? await cflGames() : await outdoorGames(sport);
 
   // one lookup per distinct city, eight at a time
-  const keys = Array.from(new Set(games.map((g) => `${g.city}|${g.state}`)));
+  const keys = Array.from(new Set(games.filter((g) => g.lat === undefined).map((g) => `${g.city}|${g.state}`)));
   const coords = new Map<string, { lat: number; lon: number } | null>();
   for (let i = 0; i < keys.length; i += 8) {
     const batch = keys.slice(i, i + 8);
@@ -306,8 +356,8 @@ export async function gameWeather(sport: string): Promise<GameWeather[]> {
   }
   const located: { game: Venue; lat: number; lon: number }[] = [];
   for (const g of games) {
-    const p = coords.get(`${g.city}|${g.state}`);
-    if (p) located.push({ game: g, ...p });
+    const p = g.lat !== undefined && g.lon !== undefined ? { lat: g.lat, lon: g.lon } : coords.get(`${g.city}|${g.state}`);
+    if (p) located.push({ game: g, lat: p.lat, lon: p.lon });
   }
 
   // Open-Meteo for every venue (it has gusts and amounts, and covers games

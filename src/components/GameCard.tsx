@@ -105,12 +105,12 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
   // date line.
   const { note, canNote } = useGameNote(game.id);
   const [noteOpen, setNoteOpen] = useState(false);
-  // Game-time weather (outdoor NFL / college football, this week's games).
+  // Game-time weather (outdoor NFL / college football / MLB / CFL, upcoming games).
   // Only games with a flag — rain, snow, storms, real wind — show anything.
   const [weather, setWeather] = useState<GameWeather | null>(null);
   const [showWeather, setShowWeather] = useState(false);
   useEffect(() => {
-    if (game.sport_key !== 'americanfootball_nfl' && game.sport_key !== 'americanfootball_ncaaf') return;
+    if (!['americanfootball_nfl', 'americanfootball_ncaaf', 'americanfootball_cfl', 'baseball_mlb'].includes(game.sport_key)) return;
     let alive = true;
     cachedJson<{ games?: GameWeather[] }>(`/api/weather?league=${game.sport_key}`)
       .then((d) => {
@@ -895,7 +895,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                 <span className="font-semibold text-slate-800">{weatherHeadline(badWeather.flags)} expected.</span>{' '}
                 {weatherFacts(badWeather).join(' · ')}
                 <span className="block text-[11px] text-slate-400">
-                  Forecast for kickoff and the three hours after{badWeather.venue ? ` · ${badWeather.venue}` : ''}{badWeather.city ? `, ${badWeather.city}` : ''}
+                  Forecast for {game.sport_key === 'baseball_mlb' ? 'first pitch' : 'kickoff'} and the three hours after{badWeather.venue ? ` · ${badWeather.venue}` : ''}{badWeather.city ? `, ${badWeather.city}` : ''}
                 </span>
               </div>
             )}
