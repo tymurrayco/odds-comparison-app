@@ -226,7 +226,7 @@ export default function PropsTable({ markets, selectedBookmakers, playerFilter =
     return (
       <td
         key={`${book}-${side}`}
-        className={`relative px-2 md:px-4 py-3 whitespace-nowrap text-center select-none ${border} ${
+        className={`relative px-2 md:px-4 pt-3 pb-4 whitespace-nowrap text-center select-none ${border} ${
           price !== null ? 'cursor-pointer hover:bg-blue-50' : ''
         }`}
         onClick={() => price !== null && openPick(prop, book, side, line, price)}
@@ -235,8 +235,9 @@ export default function PropsTable({ markets, selectedBookmakers, playerFilter =
           <div className={`text-xs md:text-sm tabular-nums ${isBest ? 'text-green-600 font-bold' : 'text-gray-900'}`}>
             {side === 'Over' ? 'O' : 'U'} {line} ({formatOdds(price)})
             {isBest && (
-              // Tucked into the cell's bottom padding (td is relative) — no extra row height
-              <span className="absolute bottom-[6px] left-1/2 -translate-x-1/2 px-1 rounded-full text-[8px] leading-[11px] font-semibold uppercase tracking-wide bg-green-100 text-green-800 pointer-events-none">
+              // Sits in the cell's bottom padding (td is relative). These rows hold
+              // text only, so the padding is a touch deeper than OddsTable's
+              <span className="absolute bottom-[3px] left-1/2 -translate-x-1/2 px-1 rounded-full text-[8px] leading-[11px] font-semibold uppercase tracking-wide bg-green-100 text-green-800 pointer-events-none">
                 Best
               </span>
             )}
