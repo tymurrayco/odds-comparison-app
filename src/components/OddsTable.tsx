@@ -95,19 +95,27 @@ function TeamLogoOrName({ srcs, name, restBadge }: { srcs: (string | undefined)[
     // name sits beside it, so the group goes back to left-aligned.
     <div className={`flex items-center ${src && loaded ? 'justify-center sm:justify-start' : ''}`}>
       {src && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={src}
-          alt=""
-          className="h-7 w-7 sm:h-6 sm:w-6 sm:mr-1.5 flex-shrink-0 object-contain"
-          onLoad={() => setLoadedSrc(src)}
-          onError={() => setIdx(i => i + 1)}
-        />
+        <span className="relative flex-shrink-0 sm:mr-1.5">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={src}
+            alt=""
+            className="h-7 w-7 sm:h-6 sm:w-6 object-contain"
+            onLoad={() => setLoadedSrc(src)}
+            onError={() => setIdx(i => i + 1)}
+          />
+          {/* NHL rest badge: centred under the logo, overlapping its bottom
+              edge, so it uses the cell's padding and the row gets no taller */}
+          {restBadge && (
+            <span className="absolute left-1/2 top-full -mt-1.5 -translate-x-1/2 whitespace-nowrap leading-none">{restBadge}</span>
+          )}
+        </span>
       )}
       {/* Name hides on mobile only once a logo has actually rendered — a broken
           image must never leave the cell empty */}
       <span className={src && loaded ? 'hidden sm:inline truncate' : 'inline truncate'}>{name}</span>
-      {restBadge}
+      {/* no logo to sit under: the badge follows the name */}
+      {!src && restBadge && <span className="ml-1.5">{restBadge}</span>}
     </div>
   );
 }
@@ -121,7 +129,7 @@ function RestBadge({ label, type }: { label: string; type: 'fatigue' | 'advantag
   };
   
   return (
-    <span className={`ml-1.5 px-1.5 py-0.5 text-[10px] font-medium rounded ${colorClasses[type]}`}>
+    <span className={`inline-block px-1 py-px text-[9px] font-semibold leading-tight rounded ring-1 ring-white ${colorClasses[type]}`}>
       {label}
     </span>
   );
@@ -555,7 +563,7 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
                 
                 return (
                   <tr key={team}>
-                    <td className={`px-2 md:px-4 py-3 text-xs md:text-sm font-medium text-gray-900 sticky left-0 z-10 bg-white border-r border-gray-100 ${index === 0 ? 'border-b border-b-gray-200' : ''} ${restData ? 'min-w-[70px]' : 'max-w-[120px] whitespace-nowrap'}`}>
+                    <td className={`px-2 md:px-4 py-3 text-xs md:text-sm font-medium text-gray-900 sticky left-0 z-10 bg-white border-r border-gray-100 ${index === 0 ? 'border-b border-b-gray-200' : ''} max-w-[120px] whitespace-nowrap`}>
                       {/* Logo only on mobile / name on desktop — name shows on mobile too when the logo is missing */}
                       {TEAM_PAGE_LEAGUES[game.sport_key] ? (
                         // Football team cells link to the team page (logo is the tap target on mobile)
