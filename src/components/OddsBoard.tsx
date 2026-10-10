@@ -43,6 +43,8 @@ import { usePrefs, zoneOption } from '@/lib/prefs';
 import { hasTappedPrice, PRICE_TAPPED_EVENT } from '@/lib/betLinks';
 import { favoritesWhenSignedOut, saveFavorite, syncFavorites } from '@/lib/favorites';
 import { getTeamConference } from '@/lib/conferences';
+import { teamMatchesSearch } from '@/lib/teamNames';
+import { useTeamColorMap, teamInfoFromMap } from '@/lib/myGameBets';
 
 interface CacheItem<T> {
   data: T;
@@ -123,6 +125,13 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
   const [isClient, setIsClient] = useState(false);
   const [apiRequestsRemaining, setApiRequestsRemaining] = useState<string | null>(null);
   const [teamFilter, setTeamFilter] = useState('');
+  // ESPN team list for the league, so search also finds short names and
+  // abbreviations ("JMU", "Sac St")
+  const searchTeamMap = useTeamColorMap(activeLeague);
+  const teamMatches = useCallback(
+    (team: string, search: string) => teamMatchesSearch(team, search, teamInfoFromMap(searchTeamMap, team)),
+    [searchTeamMap]
+  );
   // Games view: the search bar hides behind an icon until opened (or while a filter is typed)
   const [searchOpen, setSearchOpen] = useState(false);
   const searchShown = searchOpen || !!teamFilter;
@@ -893,11 +902,7 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
     }
 
     if (teamFilter.trim()) {
-      const searchTerm = teamFilter.toLowerCase().trim();
-      filtered = filtered.filter(game => 
-        game.home_team.toLowerCase().includes(searchTerm) || 
-        game.away_team.toLowerCase().includes(searchTerm)
-      );
+      filtered = filtered.filter(game => teamMatches(game.home_team, teamFilter) || teamMatches(game.away_team, teamFilter));
     }
 
     if (selectedConferences.length > 0) {
@@ -911,27 +916,22 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
     }
 
     return filtered;
-  }, [games, teamFilter, selectedConferences, activeLeague, espnScores, showLiveGames]);
+  }, [games, teamFilter, teamMatches, selectedConferences, activeLeague, espnScores, showLiveGames]);
 
   // Filter futures based on team/player name
   const filteredFutures = futures.map(market => ({
     ...market,
     teams: market.teams.filter(team => {
       if (!teamFilter.trim()) return true;
-      const searchTerm = teamFilter.toLowerCase().trim();
-      return team.team.toLowerCase().includes(searchTerm);
+      return teamMatches(team.team, teamFilter);
     })
   })).filter(market => market.teams.length > 0);
 
   // Filter props events based on team name
   const filteredPropsEvents = useMemo(() => {
     if (!teamFilter.trim()) return propsEvents;
-    const searchTerm = teamFilter.toLowerCase().trim();
-    return propsEvents.filter(event => 
-      event.home_team.toLowerCase().includes(searchTerm) || 
-      event.away_team.toLowerCase().includes(searchTerm)
-    );
-  }, [propsEvents, teamFilter]);
+    return propsEvents.filter(event => teamMatches(event.home_team, teamFilter) || teamMatches(event.away_team, teamFilter));
+  }, [propsEvents, teamFilter, teamMatches]);
 
   // Check if current sport supports conference filtering
   const supportsConferenceFilter = ['americanfootball_ncaaf', 'basketball_ncaab'].includes(activeLeague);

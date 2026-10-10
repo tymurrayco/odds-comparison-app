@@ -14,6 +14,7 @@ import { usePrefs, zoneOption } from '@/lib/prefs';
 import { useGameNote } from '@/lib/gameNotes';
 import { matchGameByTeams } from '@/lib/api';
 import type { GameWeather } from '@/lib/weather';
+import { shortSchool } from '@/lib/teamNames';
 import { WeatherIcons, weatherFacts, weatherHeadline } from './WeatherIcons';
 import GameNoteSheet from './GameNoteSheet';
 
@@ -24,23 +25,6 @@ const TWO_WORD_MASCOT_STARTS = new Set([
   "ragin'", 'mean', 'rainbow', 'crimson', 'big', 'nittany', 'demon', 'horned', 'mountain', 'black', 'great',
   'purple', 'tar', 'river', 'screaming', 'delta', "runnin'", 'white', 'maple', 'trail',
 ]);
-
-// Schools whose name is still too long for the phone card title after
-// "State" → "St"; keyed by that already-shortened name.
-const SHORT_SCHOOL_NAMES: Record<string, string> = {
-  'Sacramento St': 'Sac St',
-  'Florida International': 'FIU',
-  'Pittsburgh': 'Pitt',
-  'Appalachian St': 'App St',
-  'Coastal Carolina': 'Coastal',
-  'James Madison': 'JMU',
-  'Georgia Southern': 'Ga Southern',
-  'Middle Tennessee': 'MTSU',
-  'Middle Tennessee St': 'MTSU',
-  'Jacksonville St': 'Jax St',
-  'California': 'Cal',
-  'Mississippi St': 'Miss St',
-};
 
 interface GameCardProps {
   game: Game;
@@ -333,18 +317,14 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
   // Virginia"): ESPN's school name when the team is in the league map, else
   // the name minus its last word — or last two for the common two-word
   // mascots ("Yellow Jackets", "Sun Devils", …). Long schools then take their
-// short form ("Florida International" → "FIU").
+  // short form ("Arizona State" → "Arizona St", "Florida International" → "FIU").
   const schoolName = (teamName: string): string => {
-    const shortState = (name: string) => {
-      const short = name.replace(/\bState\b/g, 'St'); // "Arizona State" → "Arizona St"
-      return SHORT_SCHOOL_NAMES[short] ?? short;
-    };
     const school = teamInfoFromMap(teamColorMap, teamName)?.school;
-    if (school) return shortState(school);
+    if (school) return shortSchool(school);
     const words = teamName.trim().split(/\s+/);
     if (words.length < 2) return teamName;
     const drop = words.length > 2 && TWO_WORD_MASCOT_STARTS.has(words[words.length - 2].toLowerCase()) ? 2 : 1;
-    return shortState(words.slice(0, -drop).join(' '));
+    return shortSchool(words.slice(0, -drop).join(' '));
   };
   // Pro team without its city ("Boston Red Sox" → "Red Sox"): the name minus
   // ESPN's location when the team is in the league map, else the last word —
