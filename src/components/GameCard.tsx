@@ -25,6 +25,21 @@ const TWO_WORD_MASCOT_STARTS = new Set([
   'purple', 'tar', 'river', 'screaming', 'delta', "runnin'",
 ]);
 
+// Schools whose name is still too long for the phone card title after
+// "State" → "St"; keyed by that already-shortened name.
+const SHORT_SCHOOL_NAMES: Record<string, string> = {
+  'Sacramento St': 'Sac St',
+  'Florida International': 'FIU',
+  'Pittsburgh': 'Pitt',
+  'Appalachian St': 'App St',
+  'Coastal Carolina': 'Coastal',
+  'James Madison': 'JMU',
+  'Georgia Southern': 'Ga Southern',
+  'Middle Tennessee': 'MTSU',
+  'Middle Tennessee St': 'MTSU',
+  'Jacksonville St': 'Jax St',
+};
+
 interface GameCardProps {
   game: Game;
   selectedBookmakers?: string[];
@@ -313,9 +328,13 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
   // College team without its mascot ("West Virginia Mountaineers" → "West
   // Virginia"): ESPN's school name when the team is in the league map, else
   // the name minus its last word — or last two for the common two-word
-  // mascots ("Yellow Jackets", "Sun Devils", …).
+  // mascots ("Yellow Jackets", "Sun Devils", …). Long schools then take their
+// short form ("Florida International" → "FIU").
   const schoolName = (teamName: string): string => {
-    const shortState = (name: string) => name.replace(/\bState\b/g, 'St'); // "Arizona State" → "Arizona St"
+    const shortState = (name: string) => {
+      const short = name.replace(/\bState\b/g, 'St'); // "Arizona State" → "Arizona St"
+      return SHORT_SCHOOL_NAMES[short] ?? short;
+    };
     const school = teamInfoFromMap(teamColorMap, teamName)?.school;
     if (school) return shortState(school);
     const words = teamName.trim().split(/\s+/);
