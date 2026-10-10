@@ -7,14 +7,24 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import type { User } from '@supabase/supabase-js';
-import { signOut } from '@/lib/userAuth';
+import { signOut, useIsPremium } from '@/lib/userAuth';
 import { savePrefs, usePrefs, TIME_ZONES } from '@/lib/prefs';
+
+// Bet Admin, and the three Ledger admin pages (Sync Games lives on each)
+const ADMIN_LINKS = [
+  { label: 'Bets', href: '/admin/bets', title: 'Bet Admin' },
+  { label: 'FBS', href: '/admin/fbs-ratings', title: 'FBS Ledger admin: sync games' },
+  { label: 'FCS', href: '/admin/fcs-ratings', title: 'FCS Ledger admin: sync games' },
+  { label: 'NFL', href: '/admin/nfl-ratings', title: 'NFL Ledger admin: sync games' },
+];
 
 export default function AccountButton({ user }: { user: User }) {
   const [open, setOpen] = useState(false);
   const [failedPhoto, setFailedPhoto] = useState<string | null>(null);
   const prefs = usePrefs();
+  const premium = useIsPremium();
   const wrapRef = useRef<HTMLDivElement>(null);
 
   // Close on a tap/click anywhere outside the menu
@@ -106,6 +116,30 @@ export default function AccountButton({ user }: { user: User }) {
               ))}
             </select>
           </label>
+
+          {/* Shortcuts to the admin pages, on premium accounts only. This is a
+              way in, not a lock: the pages still ask for the admin password
+              (src/middleware.ts) on a device that hasn't entered it. */}
+          {premium && (
+            <>
+              <div className="my-1 border-t border-gray-100" />
+              <div className="flex items-center justify-between gap-2 px-2 py-1.5 text-sm font-medium text-gray-700">
+                <span>Admin</span>
+                <span className="flex items-center gap-1">
+                  {ADMIN_LINKS.map((l) => (
+                    <Link
+                      key={l.href}
+                      href={l.href}
+                      title={l.title}
+                      className="rounded-md bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200"
+                    >
+                      {l.label}
+                    </Link>
+                  ))}
+                </span>
+              </div>
+            </>
+          )}
 
           <div className="my-1 border-t border-gray-100" />
           <button
