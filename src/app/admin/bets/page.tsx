@@ -153,7 +153,8 @@ export default function BetAdminPage() {
     status: 'pending' as BetStatus,
     result: '',
     book: 'FanDuel',
-    notes: ''
+    notes: '',
+    live: false
   });
 
   const [formData, setFormData] = useState(getInitialFormState());
@@ -346,6 +347,7 @@ export default function BetAdminPage() {
         team: propTeam || undefined,
         result: formData.result || undefined,
         notes: formData.notes || undefined,
+        live: formData.live,
         parlayTeams: formData.betType === 'parlay' && filledParlayTeams.length > 0 ? filledParlayTeams : undefined
       };
 
@@ -390,7 +392,8 @@ export default function BetAdminPage() {
       status: bet.status,
       result: bet.result || '',
       book: bet.book || 'FanDuel',
-      notes: bet.notes || ''
+      notes: bet.notes || '',
+      live: bet.live === true
     });
     setOddsInput(String(bet.odds));
 
@@ -1164,6 +1167,16 @@ export default function BetAdminPage() {
                   </select>
                 </div>
               </div>
+
+              <label className="flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={formData.live}
+                  onChange={(e) => setFormData({ ...formData, live: e.target.checked })}
+                  className="h-4 w-4 rounded border-slate-300"
+                />
+                Live bet (placed after the game started)
+              </label>
 
               <div>
                 <label className={labelCls}>Notes (optional)</label>

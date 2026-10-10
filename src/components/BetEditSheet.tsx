@@ -35,6 +35,7 @@ export default function BetEditSheet({
   const [oddsText, setOddsText] = useState(String(bet.odds));
   const [stakeText, setStakeText] = useState(String(bet.stake));
   const [status, setStatus] = useState<BetStatus>(bet.status);
+  const [live, setLive] = useState(bet.live === true);
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,6 +59,8 @@ export default function BetEditSheet({
     setBusy(true);
     setError(null);
     const updates: Partial<Bet> = { bet: text.trim(), odds, stake, status };
+    // sent only when changed, so an edit never depends on the live column existing
+    if (live !== (bet.live === true)) updates.live = live;
     try {
       await updateBet(bet.id, updates);
       onSaved({ ...bet, ...updates });
@@ -142,6 +145,23 @@ export default function BetEditSheet({
             ))}
           </div>
         </div>
+
+        {/* Placed after the game started? The ticket sets this itself; this is
+            for bets entered late or by hand */}
+        {bet.betType !== 'future' && (
+          <button
+            type="button"
+            role="switch"
+            aria-checked={live}
+            onClick={() => setLive((v) => !v)}
+            className="mt-3 flex w-full items-center justify-between gap-3 text-left text-sm font-medium text-gray-700"
+          >
+            <span>Live bet <span className="font-normal text-gray-400">(placed after the game started)</span></span>
+            <span className={`relative h-6 w-10 flex-none rounded-full transition-colors ${live ? 'bg-green-500' : 'bg-gray-300'}`}>
+              <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${live ? 'left-[18px]' : 'left-0.5'}`} />
+            </span>
+          </button>
+        )}
 
         {error && <div className="mt-3 text-xs text-rose-600">{error}</div>}
 

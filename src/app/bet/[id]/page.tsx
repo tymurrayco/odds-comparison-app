@@ -35,6 +35,7 @@ interface BetRow {
   status: string;
   book?: string | null;
   parlay_teams?: string[] | null;
+  live?: boolean | null;
 }
 
 // team/logo/color + OG URL helpers live in lib/betShare so this page and the

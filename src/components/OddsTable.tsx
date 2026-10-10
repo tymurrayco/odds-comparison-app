@@ -216,6 +216,7 @@ export default function OddsTable({ games, view = 'moneyline', league = 'basketb
       bookLogo: bookmakerLogos[book],
       link,
       buildGo: (to) => goUrl({ ...goParams(book, ctx), to }),
+      commenceTime: game.commence_time,
       draft: {
         date: new Date().toISOString().split('T')[0],
         eventDate,

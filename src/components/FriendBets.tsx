@@ -14,6 +14,7 @@ import type { Profile } from '@/lib/social';
 import { gameSide, type FriendBet } from '@/lib/friendBets';
 import type { TicketPick } from './BetTicket';
 import { getLeagueDisplayName, getSportFromLeague } from './OddsTable';
+import LiveTag from './LiveTag';
 
 const AVATAR_COLORS = ['#ea580c', '#7c3aed', '#0891b2', '#db2777', '#059669', '#ca8a04'];
 
@@ -90,6 +91,7 @@ export function tailPick(friend: FriendBet, game: Game, selectedBookmakers?: str
     bookLogo: logo ? `/bookmaker-logos/${logo}` : undefined,
     link,
     buildGo: (to) => goUrl({ book, sport: game.sport_key, game: game.id, market: marketKey, outcome: outcomeName, to }),
+    commenceTime: game.commence_time,
     draft: {
       date: new Date().toISOString().split('T')[0],
       eventDate,
@@ -133,6 +135,7 @@ export function FriendBetsPanel({
                 <span className="font-semibold text-slate-800">{f.owner.displayName || `@${f.owner.handle}`}</span> · {f.bet.bet} ({formatOdds(f.bet.odds)})
               </div>
               <div className="truncate text-[11px] text-slate-400">
+                {f.bet.live && <LiveTag className="mr-1 align-middle" />}
                 {[f.bet.book, `${+f.bet.stake.toFixed(2)}u`].filter(Boolean).join(' · ')}
               </div>
             </div>

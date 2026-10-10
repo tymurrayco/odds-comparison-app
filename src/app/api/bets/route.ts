@@ -55,6 +55,16 @@ async function readJson(req: NextRequest): Promise<Record<string, unknown> | nul
   }
 }
 
+// Until sql/bets_live.sql has been run the table has no `live` column and
+// PostgREST refuses any write that names it. Such a write is repeated without
+// the column, so saving bets never depends on that script.
+const liveColumnMissing = (message: string) => /'live' column|column "?live"? /i.test(message);
+function withoutLive<T extends { live?: unknown }>(row: T): Omit<T, 'live'> {
+  const { live: _live, ...rest } = row;
+  void _live;
+  return rest;
+}
+
 const REQUIRED: (keyof Omit<Bet, 'id'>)[] = ['date', 'eventDate', 'sport', 'league', 'betType', 'bet', 'odds', 'stake', 'status'];
 
 export async function POST(req: NextRequest) {
@@ -71,11 +81,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Missing: ${missing.join(', ')}` }, { status: 400 });
   }
 
-  const { data, error } = await serverClient()
-    .from('bets')
-    .insert([{ ...betToInsertRow(bet), user_id: userId }])
-    .select()
-    .single();
+  const row = { ...betToInsertRow(bet), user_id: userId };
+  const db = serverClient();
+  let { data, error } = await db.from('bets').insert([row]).select().single();
+  if (error && liveColumnMissing(error.message)) {
+    ({ data, error } = await db.from('bets').insert([withoutLive(row)]).select().single());
+  }
   if (error) {
     console.error('[bets] insert failed:', error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -99,13 +110,17 @@ export async function PATCH(req: NextRequest) {
   }
 
   // Someone else's bet matches no row → PGRST116 → 404, same as a bad id
-  const { data, error } = await serverClient()
-    .from('bets')
-    .update(row)
-    .eq('id', id)
-    .eq('user_id', userId)
-    .select()
-    .single();
+  const db = serverClient();
+  const save = (values: Partial<typeof row>) => db.from('bets').update(values).eq('id', id).eq('user_id', userId).select().single();
+  let { data, error } = await save(row);
+  if (error && liveColumnMissing(error.message)) {
+    const rest = withoutLive(row);
+    // only the Live switch changed: nothing else to save, and nowhere to put it yet
+    if (Object.keys(rest).length === 0) {
+      return NextResponse.json({ error: 'Run sql/bets_live.sql first: the bets table has no live column yet' }, { status: 409 });
+    }
+    ({ data, error } = await save(rest));
+  }
   if (error) {
     console.error('[bets] update failed:', error.message);
     return NextResponse.json({ error: error.message }, { status: error.code === 'PGRST116' ? 404 : 500 });

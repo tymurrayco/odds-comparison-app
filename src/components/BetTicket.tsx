@@ -34,6 +34,8 @@ export interface TicketPick {
   link?: string;
   /** /go/[book] click-out URL for a resolved destination. */
   buildGo: (to?: string) => string;
+  /** The game's start time: a bet tracked after it is saved as a live bet. */
+  commenceTime?: string;
 }
 
 // The amount field is either what you risk or what you want to win; the
@@ -117,7 +119,9 @@ export default function BetTicket({ pick, onClose }: { pick: TicketPick; onClose
     setSaving(true);
     setError(null);
     try {
-      await createBet({ ...pick.draft, stake: parseFloat(stake.toFixed(2)) });
+      // Decided at the moment of saving, not when the ticket opened
+      const live = !!pick.commenceTime && Date.now() >= new Date(pick.commenceTime).getTime();
+      await createBet({ ...pick.draft, stake: parseFloat(stake.toFixed(2)), live });
       setSaved(true);
       setTimeout(close, 900);
     } catch (err) {

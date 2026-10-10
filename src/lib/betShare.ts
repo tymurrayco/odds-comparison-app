@@ -20,6 +20,7 @@ export interface ShareBet {
   odds: number;
   stake: number;
   status: string;
+  live?: boolean | null; // placed after the game started
   book?: string | null;
   parlay_teams?: string[] | null;
   parlayTeams?: string[] | null;
@@ -120,6 +121,7 @@ export function buildBetOgUrl(bet: ShareBet, logo: string | null, color: string 
   });
   if (type !== 'future' && bet.description) p.set('matchup', bet.description);
   if (bet.book) p.set('book', bet.book);
+  if (bet.live) p.set('live', '1');
   if (logo) p.set('logo', logo);
   if (color) p.set('color', color);
   if (eventDate) {

@@ -20,6 +20,7 @@ import GameNoteSheet from './GameNoteSheet';
 import { useFriendBetsForGame, betGroupKey, type FriendBet } from '@/lib/friendBets';
 import { FriendAvatar, FriendBetsPanel } from './FriendBets';
 import BetTicket, { type TicketPick } from './BetTicket';
+import LiveTag from './LiveTag';
 
 // First word of the two-word college mascots (Yellow Jackets, Sun Devils, Red
 // Raiders, Fighting Irish, …) — only used when ESPN's team list has no match.
@@ -559,7 +560,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
         key={bet.id}
         accent={accent}
         status={bet.status}
-        title={`Your bet: ${bet.bet}${bet.book ? ` (${bet.book})` : ''}${bet.status !== 'pending' ? ` — ${bet.status}` : ''}${shared ? ` · also ${shared.names}` : ''}`}
+        title={`Your bet: ${bet.bet}${bet.live ? ' · live' : ''}${bet.book ? ` (${bet.book})` : ''}${bet.status !== 'pending' ? ` — ${bet.status}` : ''}${shared ? ` · also ${shared.names}` : ''}`}
         avatars={shared?.avatars}
         avatarCount={shared?.count}
         onClick={shared ? togglePanel(key) : undefined}
@@ -567,6 +568,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
       >
         <span className="hidden md:inline whitespace-nowrap">{badgeBetText(bet, false)}</span>
         <span className="md:hidden whitespace-nowrap">{badgeBetText(bet, true)}</span>
+        {bet.live && <LiveTag />}
       </MyBetBadge>
     );
   });

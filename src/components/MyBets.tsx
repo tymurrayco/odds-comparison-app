@@ -7,6 +7,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { fetchBets, fetchBetsOf, getBetStats, calculateProfit, Bet, BetStatus, BetType } from '@/lib/betService';
 import { listFollowing, type Profile } from '@/lib/social';
+import LiveTag from '@/components/LiveTag';
 import BetEditSheet from '@/components/BetEditSheet';
 
 // Bookmaker logos mapping - KEPT FROM YOUR ORIGINAL
@@ -114,6 +115,9 @@ export default function MyBets({ yearFilter = 'all', onYearsLoaded }: MyBetsProp
   // KEPT: All your existing state
   // 'settled' = won + lost + push (anything that is no longer pending)
   const [statusFilter, setStatusFilter] = useState<BetStatus | 'all' | 'settled'>('pending');
+  // Game bets placed live (after kickoff) vs before; the record and profit
+  // summary, the splits and the list all follow it
+  const [timing, setTiming] = useState<'all' | 'pregame' | 'live'>('all');
   const [expandedBetId, setExpandedBetId] = useState<string | null>(null);
   const [copiedBetId, setCopiedBetId] = useState<string | null>(null);
   // Bet open in the edit sheet (text / odds / stake / result / delete)
@@ -190,7 +194,7 @@ export default function MyBets({ yearFilter = 'all', onYearsLoaded }: MyBetsProp
   }, [myBets]);
 
   // KEPT: Separate bets into games and futures (updated to include teasers with games)
-  const gameBets = useMemo(() => {
+  const allGameBets = useMemo(() => {
     return yearBets.filter(bet => 
       bet.betType === 'spread' || 
       bet.betType === 'moneyline' || 
@@ -201,6 +205,11 @@ export default function MyBets({ yearFilter = 'all', onYearsLoaded }: MyBetsProp
       bet.betType === 'teaser'  // Added teasers to games
     );
   }, [yearBets]);
+  const hasLiveBets = useMemo(() => allGameBets.some((bet) => bet.live), [allGameBets]);
+  const gameBets = useMemo(
+    () => (timing === 'all' ? allGameBets : allGameBets.filter((bet) => !!bet.live === (timing === 'live'))),
+    [allGameBets, timing]
+  );
 
   const futureBets = useMemo(() => {
     return yearBets.filter(bet => 
@@ -752,6 +761,27 @@ export default function MyBets({ yearFilter = 'all', onYearsLoaded }: MyBetsProp
             Futures ({futureBets.length})
           </button>
         </div>
+        {/* Live vs pregame — only once there is a live bet to split out */}
+        {viewType === 'games' && (hasLiveBets || timing !== 'all') && (
+          <div className="mt-2 flex justify-center">
+            <div className="inline-flex rounded-lg bg-gray-200/80 p-0.5" role="radiogroup" aria-label="Pregame or live bets">
+              {([['all', 'All'], ['pregame', 'Pregame'], ['live', 'Live']] as const).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="radio"
+                  aria-checked={timing === id}
+                  onClick={() => setTiming(id)}
+                  className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                    timing === id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Compact Stats Bar - KEPT EXACTLY AS IS */}
@@ -1070,6 +1100,7 @@ export default function MyBets({ yearFilter = 'all', onYearsLoaded }: MyBetsProp
                           ? 'flex-1 text-left sm:text-right' 
                           : 'min-w-[60px] sm:min-w-[80px] text-right'
                       }`}>
+                        {bet.live && <LiveTag className="mr-1 align-middle" />}
                         {/* MOBILE: Show DESCRIPTION for futures, abbreviated BET for
                             games — team names shortened to ESPN abbreviations so the
                             spread stays visible ("TEX -3.5" instead of "Texas Long...") */}

@@ -26,6 +26,8 @@ export interface Bet {
   book?: string;
   team?: string;
   parlayTeams?: string[];
+  /** Placed after the game started (set by the ticket at save, or by hand in Edit / Bet Admin). */
+  live?: boolean;
 }
 
 /** A `bets` row as PostgREST returns it. */
@@ -49,6 +51,7 @@ export interface DbBetRow {
   notes: string | null;
   parlay_teams: string[] | null;
   deleted: boolean;
+  live?: boolean | null; // sql/bets_live.sql; absent until that has been run
 }
 
 export interface DbBetUpdate {
@@ -69,6 +72,7 @@ export interface DbBetUpdate {
   book?: string | null;
   notes?: string | null;
   parlay_teams?: string[] | null;
+  live?: boolean;
 }
 
 export function rowToBet(dbBet: DbBetRow): Bet {
@@ -91,6 +95,7 @@ export function rowToBet(dbBet: DbBetRow): Bet {
     notes: dbBet.notes || undefined,
     book: dbBet.book || undefined,
     parlayTeams: dbBet.parlay_teams || undefined,
+    live: dbBet.live === true,
   };
 }
 
@@ -114,6 +119,7 @@ export function betToInsertRow(bet: Omit<Bet, 'id'>): Omit<DbBetRow, 'id'> {
     notes: bet.notes || null,
     parlay_teams: bet.parlayTeams || null,
     deleted: false,
+    live: bet.live === true,
   };
 }
 
@@ -137,5 +143,6 @@ export function betToUpdateRow(updates: Partial<Bet>): DbBetUpdate {
   if (updates.book !== undefined) u.book = updates.book || null;
   if (updates.notes !== undefined) u.notes = updates.notes || null;
   if (updates.parlayTeams !== undefined) u.parlay_teams = updates.parlayTeams || null;
+  if (updates.live !== undefined) u.live = updates.live === true;
   return u;
 }

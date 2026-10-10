@@ -61,6 +61,7 @@ export async function GET(request: NextRequest) {
   const matchup = searchParams.get('matchup') || '';
   const league = searchParams.get('league') || '';
   const when = searchParams.get('when') || '';
+  const live = searchParams.get('live') === '1'; // placed after the game started
   const odds = searchParams.get('odds') || '';
   const units = searchParams.get('units') || '';
   const book = searchParams.get('book') || '';
@@ -145,9 +146,9 @@ export async function GET(request: NextRequest) {
                 {matchup}
               </span>
             )}
-            {(league || when) && (
+            {(league || when || live) && (
               <span style={{ color: INK_SOFT, fontSize: '25px', fontWeight: 600, marginTop: '6px' }}>
-                {[league, when].filter(Boolean).join('  ·  ')}
+                {[league, when, live ? 'LIVE BET' : ''].filter(Boolean).join('  ·  ')}
               </span>
             )}
           </div>
