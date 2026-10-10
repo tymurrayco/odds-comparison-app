@@ -44,7 +44,7 @@ import { hasTappedPrice, PRICE_TAPPED_EVENT } from '@/lib/betLinks';
 import { favoritesWhenSignedOut, saveFavorite, syncFavorites } from '@/lib/favorites';
 import { getTeamConference } from '@/lib/conferences';
 import { teamMatchesSearch } from '@/lib/teamNames';
-import { useTeamColorMap, teamInfoFromMap } from '@/lib/myGameBets';
+import { useTeamColorMap, teamInfoFromMap, TicketIcon } from '@/lib/myGameBets';
 
 interface CacheItem<T> {
   data: T;
@@ -1225,14 +1225,16 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt, leagueOrde
                     setActiveView(activeView === 'mybets' ? 'games' : 'mybets');
                   }
                 }}
-                className={`px-2 sm:px-3 py-2 rounded-xl text-sm font-medium transition-all select-none border border-gray-200 shadow-sm whitespace-nowrap ${
+                className={`inline-flex items-center gap-1.5 px-2 sm:px-3 py-2 rounded-xl text-sm font-medium transition-all select-none border border-gray-200 shadow-sm whitespace-nowrap ${
                   activeView === 'mybets'
                     ? 'bg-blue-600 text-white'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 } ${isHolding ? 'scale-95 ring-2 ring-blue-400' : ''}`}
                 style={{ userSelect: 'none' }}
               >
-                📊 Bets {isHolding && '...'}
+                {/* The same ticket that marks a bet on a game card, in the site blue */}
+                <TicketIcon className={`h-4 w-4 flex-none ${activeView === 'mybets' ? 'text-white' : 'text-blue-600'}`} />
+                Bets {isHolding && '...'}
               </button>
               )}
 
