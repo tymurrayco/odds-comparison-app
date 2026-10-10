@@ -8,7 +8,7 @@ import InjuryReport, { loadInjuries, startingQbOut, injuryStatusLabel, type Inju
 import { Game, ESPNGameScore } from '@/lib/api';
 import { GameRestData } from '@/lib/nhlRest';
 import { Bet } from '@/lib/betService';
-import { usePendingBetsForGame, useTeamColorMap, teamInfoFromMap, wageredTeamColor, MyBetBadge } from '@/lib/myGameBets';
+import { usePendingBetsForGame, useTeamColorMap, teamInfoFromMap, wageredTeamColor, MyBetBadge, TeamLogoImg } from '@/lib/myGameBets';
 import { NeutralGame, fetchNeutralGames, findNeutralGame, venueLocation } from '@/lib/neutralSites';
 import { usePrefs, zoneOption } from '@/lib/prefs';
 import { useGameNote } from '@/lib/gameNotes';
@@ -295,13 +295,21 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
   // the name minus its last word — or last two for the common two-word
   // mascots ("Yellow Jackets", "Sun Devils", …).
   const schoolName = (teamName: string): string => {
+    const shortState = (name: string) => name.replace(/\bState\b/g, 'St'); // "Arizona State" → "Arizona St"
     const school = teamInfoFromMap(teamColorMap, teamName)?.school;
-    if (school) return school;
+    if (school) return shortState(school);
     const words = teamName.trim().split(/\s+/);
     if (words.length < 2) return teamName;
     const drop = words.length > 2 && TWO_WORD_MASCOT_STARTS.has(words[words.length - 2].toLowerCase()) ? 2 : 1;
-    return words.slice(0, -drop).join(' ');
+    return shortState(words.slice(0, -drop).join(' '));
   };
+  // Logo beside each school in that title: ESPN's from the league map, then
+  // the live-score feed's, then the local file.
+  const titleLogos = (teamName: string, side: 'away' | 'home') => [
+    teamInfoFromMap(teamColorMap, teamName)?.logo,
+    (side === 'away' ? liveScore?.awayLogo : liveScore?.homeLogo) ?? undefined,
+    getTeamLogo(teamName),
+  ];
 
   // Team name → ESPN abbreviation ("Carolina Panthers" → "CAR") from the
   // league team map the badge already loads for its color; first word of the
@@ -552,9 +560,16 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
             <div className="flex items-center">
               <h3 className="text-[15px] md:text-[18px] font-semibold tracking-[-0.3px] md:tracking-[-0.45px] text-gray-900 truncate min-w-0">
                 {isNCAAF ? (
-                  // Phones: schools only ("Arizona @ West Virginia"); the mascots are what overflowed the line
+                  // Phones: logo + school only, "State" shortened ("Arizona St @ West Virginia");
+                  // the mascots are what overflowed the line
                   <>
-                    <span className="md:hidden">{schoolName(game.away_team)} @ {schoolName(game.home_team)}</span>
+                    <span className="md:hidden flex items-center gap-1.5 min-w-0">
+                      <TeamLogoImg srcs={titleLogos(game.away_team, 'away')} className="h-5 w-5 flex-none object-contain" />
+                      <span className="truncate">{schoolName(game.away_team)}</span>
+                      <span className="flex-none text-gray-400">@</span>
+                      <TeamLogoImg srcs={titleLogos(game.home_team, 'home')} className="h-5 w-5 flex-none object-contain" />
+                      <span className="truncate">{schoolName(game.home_team)}</span>
+                    </span>
                     <span className="hidden md:inline">{game.away_team} @ {game.home_team}</span>
                   </>
                 ) : (
