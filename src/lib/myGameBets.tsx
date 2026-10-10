@@ -4,8 +4,8 @@
 // shares a single Supabase query.
 'use client';
 
-import { useEffect, useState } from 'react';
-import { fetchBets, Bet } from './betService';
+import { useEffect, useState, useSyncExternalStore } from 'react';
+import { fetchBets, Bet, BETS_CHANGED_EVENT } from './betService';
 
 export const normalizeTeamKey = (s: string) =>
   s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -30,6 +30,26 @@ function loadAllBets(): Promise<Bet[]> {
   }
   return allBetsPromise;
 }
+
+// A bet was just saved, edited or deleted: drop the cached lists and have
+// every badge hook read again, so a new wager shows on its card at once.
+let betsVersion = 0;
+const versionListeners = new Set<() => void>();
+if (typeof window !== 'undefined') {
+  window.addEventListener(BETS_CHANGED_EVENT, () => {
+    allBetsPromise = null;
+    pendingBetsPromise = null;
+    betsVersion++;
+    versionListeners.forEach((l) => l());
+  });
+}
+const subscribeVersion = (l: () => void) => {
+  versionListeners.add(l);
+  return () => {
+    versionListeners.delete(l);
+  };
+};
+const useBetsVersion = () => useSyncExternalStore(subscribeVersion, () => betsVersion, () => 0);
 
 // ---- Team color/logo support for badge styling ----
 
@@ -151,6 +171,7 @@ export function betMatchesGame(b: Bet, awayTeam: string, homeTeam: string, comme
 // The visitor's game bets matching this game (see betMatchesGame).
 export function usePendingBetsForGame(awayTeam: string, homeTeam: string, commenceTime: string): Bet[] {
   const [matched, setMatched] = useState<Bet[]>([]);
+  const version = useBetsVersion();
 
   useEffect(() => {
     let cancelled = false;
@@ -159,7 +180,7 @@ export function usePendingBetsForGame(awayTeam: string, homeTeam: string, commen
       setMatched(bets.filter(b => b.betType !== 'future' && betMatchesGame(b, awayTeam, homeTeam, commenceTime)));
     });
     return () => { cancelled = true; };
-  }, [awayTeam, homeTeam, commenceTime]);
+  }, [awayTeam, homeTeam, commenceTime, version]);
 
   return matched;
 }
@@ -167,6 +188,7 @@ export function usePendingBetsForGame(awayTeam: string, homeTeam: string, commen
 // Pending FUTURE bets for a league (display name, e.g. 'NBA', 'NCAAF', 'PGA').
 export function usePendingFutureBets(leagueDisplay: string): Bet[] {
   const [bets, setBets] = useState<Bet[]>([]);
+  const version = useBetsVersion();
 
   useEffect(() => {
     let cancelled = false;
@@ -175,7 +197,7 @@ export function usePendingFutureBets(leagueDisplay: string): Bet[] {
       setBets(all.filter(b => b.betType === 'future' && b.league === leagueDisplay));
     });
     return () => { cancelled = true; };
-  }, [leagueDisplay]);
+  }, [leagueDisplay, version]);
 
   return bets;
 }

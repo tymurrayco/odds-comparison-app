@@ -12,6 +12,10 @@ import { rowToBet, type Bet, type BetStatus, type BetType, type DbBetRow } from 
 
 export type { Bet, BetStatus, BetType };
 
+// Fired on window after any bet is saved, edited or deleted, so badges that
+// cache the visitor's bets (src/lib/myGameBets.tsx) reload at once.
+export const BETS_CHANGED_EVENT = 'oddsday:bets-changed';
+
 // Fetch the signed-in visitor's bets (empty when signed out)
 export async function fetchBets(): Promise<Bet[]> {
   const { data: auth } = await supabase.auth.getSession();
@@ -68,6 +72,7 @@ async function writeBets(method: 'POST' | 'PATCH' | 'DELETE', body: unknown): Pr
   if (!res.ok) {
     throw new Error(json.error ?? `Bet write failed (${res.status})`);
   }
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(BETS_CHANGED_EVENT));
   return json;
 }
 
