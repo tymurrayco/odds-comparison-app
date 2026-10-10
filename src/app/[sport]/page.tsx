@@ -13,6 +13,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import OddsBoard from '@/components/OddsBoard';
 import { getBoardGames } from '@/lib/server/boardOdds';
+import { getLeagueOrder } from '@/lib/server/leagueOrder';
 import { sportBySlug, sportLongName } from '@/lib/sportSlugs';
 
 export const revalidate = 60;
@@ -44,6 +45,6 @@ export default async function SportPage({ params }: Params) {
   const s = sportBySlug(sport);
   if (!s) notFound();
 
-  const games = await getBoardGames(s.key);
-  return <OddsBoard initialLeague={s.key} initialGames={games} initialFetchedAt={Date.now()} />;
+  const [games, leagueOrder] = await Promise.all([getBoardGames(s.key), getLeagueOrder()]);
+  return <OddsBoard initialLeague={s.key} initialGames={games} initialFetchedAt={Date.now()} leagueOrder={leagueOrder} />;
 }

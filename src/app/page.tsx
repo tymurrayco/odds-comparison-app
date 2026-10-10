@@ -5,7 +5,11 @@
 // localStorage, as it always has.
 
 import OddsBoard from '@/components/OddsBoard';
+import { getLeagueOrder } from '@/lib/server/leagueOrder';
 
-export default function Home() {
-  return <OddsBoard />;
+// Rebuilt every 10 minutes so the league pills stay in busiest-day-first order
+export const revalidate = 600;
+
+export default async function Home() {
+  return <OddsBoard leagueOrder={await getLeagueOrder()} />;
 }

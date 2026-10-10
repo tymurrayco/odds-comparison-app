@@ -80,9 +80,11 @@ export interface OddsBoardProps {
   initialGames?: Game[];
   /** When initialGames were fetched (ms); seeds the cache timestamp. */
   initialFetchedAt?: number;
+  /** League ids for the pill row, busiest day first (src/lib/server/leagueOrder.ts). */
+  leagueOrder?: string[];
 }
 
-function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoardProps) {
+function HomeContent({ initialLeague, initialGames, initialFetchedAt, leagueOrder }: OddsBoardProps) {
   const router = useRouter();
   const { user, ready: authReady } = useUser();
   const prefs = usePrefs();
@@ -1237,6 +1239,7 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt }: OddsBoar
               lastUpdated={lastUpdated}
               apiRequestsRemaining={apiRequestsRemaining}
               favoritesCount={favoritedGamesFromCache.length}
+              order={leagueOrder}
             />
 
             {/* Page heading for search engines only — the one h1 so /nfl can

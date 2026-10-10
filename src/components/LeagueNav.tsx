@@ -1,5 +1,5 @@
 // src/components/LeagueNav.tsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { LEAGUES } from '@/lib/api';
 import { urlForSportKey } from '@/lib/sportSlugs';
 
@@ -10,6 +10,8 @@ interface LeagueNavProps {
   lastUpdated: Date;
   apiRequestsRemaining?: string | null;
   favoritesCount?: number;
+  /** League ids in display order (busiest day first); leagues not listed keep their LEAGUES place at the end. */
+  order?: string[];
 }
 
 // "just now" / "2m ago" / "1h ago" — recomputed on a timer so it stays honest.
@@ -39,7 +41,8 @@ export default function LeagueNav({
   onRefresh,
   lastUpdated,
   apiRequestsRemaining,
-  favoritesCount = 0
+  favoritesCount = 0,
+  order
 }: LeagueNavProps) {
   const [timeString, setTimeString] = useState<string>('');
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -65,6 +68,26 @@ export default function LeagueNav({
     ? Math.round(parseFloat(apiRequestsRemaining)).toLocaleString()
     : null;
 
+  const rank = (id: string) => {
+    const i = order ? order.indexOf(id) : -1;
+    return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+  };
+  const leagues = LEAGUES.filter(league => league.isActive).sort((a, b) => rank(a.id) - rank(b.id));
+
+  // The order changes from day to day, so the selected league can sit past
+  // the edge of the strip on a phone: bring it into view (the strip only —
+  // the page itself does not scroll).
+  const stripRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const strip = stripRef.current;
+    const pill = strip?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!strip || !pill) return;
+    const left = pill.offsetLeft - strip.offsetLeft;
+    if (left < strip.scrollLeft || left + pill.offsetWidth > strip.scrollLeft + strip.clientWidth - 28) {
+      strip.scrollTo({ left: Math.max(0, left - 8) });
+    }
+  }, [activeLeague]);
+
   const pillBase =
     'flex-none scroll-ml-2 snap-start px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors';
 
@@ -75,7 +98,7 @@ export default function LeagueNav({
         <div className="flex items-center gap-2">
           {/* Horizontally scrolling league strip with a fade at the right edge */}
           <div className="relative flex-1 min-w-0">
-            <div className="flex gap-2 overflow-x-auto snap-x snap-proximity scrollbar-none pb-0.5">
+            <div ref={stripRef} className="flex gap-2 overflow-x-auto snap-x snap-proximity scrollbar-none pb-0.5">
               <button
                 className={`${pillBase} ${
                   activeLeague === 'favorites'
@@ -92,7 +115,7 @@ export default function LeagueNav({
 
               {/* Real links (crawlers follow /nfl, /nba, ...) that switch
                   tabs in place for people — no full page load */}
-              {LEAGUES.filter(league => league.isActive).map(league => (
+              {leagues.map(league => (
                 <a
                   key={league.id}
                   href={urlForSportKey(league.id)}
