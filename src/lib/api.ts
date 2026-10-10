@@ -927,6 +927,26 @@ export const matchGameToScore = (
 };
 
 /**
+ * Find a game's entry in any list that names teams the way ESPN does (weather,
+ * for one). Unlike matchGameToScore this works days ahead: both teams must
+ * match and the kickoffs must be within 18 hours. Exact names are tried
+ * before the looser mascot / city matching.
+ */
+export function matchGameByTeams<T extends { homeTeam: string; awayTeam: string; kickoff: string }>(
+  game: Game,
+  list: T[]
+): T | null {
+  const at = new Date(game.commence_time).getTime();
+  const near = list.filter((x) => Math.abs(new Date(x.kickoff).getTime() - at) < 18 * 60 * 60 * 1000);
+  const fold = (s: string) => s.normalize('NFD').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+  return (
+    near.find((x) => fold(x.homeTeam) === fold(game.home_team) && fold(x.awayTeam) === fold(game.away_team)) ??
+    near.find((x) => teamsMatch(game.home_team, x.homeTeam) && teamsMatch(game.away_team, x.awayTeam)) ??
+    null
+  );
+}
+
+/**
  * Fetch live scores from ESPN
  */
 export async function fetchESPNScores(league: string): Promise<ESPNGameScore[]> {

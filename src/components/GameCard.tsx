@@ -12,6 +12,9 @@ import { usePendingBetsForGame, useTeamColorMap, teamInfoFromMap, wageredTeamCol
 import { NeutralGame, fetchNeutralGames, findNeutralGame, venueLocation } from '@/lib/neutralSites';
 import { usePrefs, zoneOption } from '@/lib/prefs';
 import { useGameNote } from '@/lib/gameNotes';
+import { matchGameByTeams } from '@/lib/api';
+import type { GameWeather } from '@/lib/weather';
+import { WeatherIcons, weatherFacts, weatherHeadline } from './WeatherIcons';
 import GameNoteSheet from './GameNoteSheet';
 
 // First word of the two-word college mascots (Yellow Jackets, Sun Devils, Red
@@ -83,6 +86,23 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
   // date line.
   const { note, canNote } = useGameNote(game.id);
   const [noteOpen, setNoteOpen] = useState(false);
+  // Game-time weather (outdoor NFL / college football, this week's games).
+  // Only games with a flag — rain, snow, storms, real wind — show anything.
+  const [weather, setWeather] = useState<GameWeather | null>(null);
+  const [showWeather, setShowWeather] = useState(false);
+  useEffect(() => {
+    if (game.sport_key !== 'americanfootball_nfl' && game.sport_key !== 'americanfootball_ncaaf') return;
+    let alive = true;
+    cachedJson<{ games?: GameWeather[] }>(`/api/weather?league=${game.sport_key}`)
+      .then((d) => {
+        if (alive) setWeather(matchGameByTeams(game, d.games ?? []));
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [game.sport_key, game.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const badWeather = weather && weather.flags.length > 0 ? weather : null;
   // "odds.day projections" off: the NCAAF analysis panel (Summary / FEI /
   // Ledger) and the NFL Ledger panel are projections, so close them and hide
   // their buttons. The NFL injury report stays.
@@ -576,6 +596,22 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                   <>{game.away_team} @ {game.home_team}</>
                 )}
               </h3>
+              {/* Bad weather at kickoff: icons right of the names; tap for the numbers */}
+              {badWeather && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowWeather((v) => !v);
+                  }}
+                  aria-expanded={showWeather}
+                  aria-label={`Weather: ${weatherHeadline(badWeather.flags)}. Tap for details`}
+                  title={`${weatherHeadline(badWeather.flags)} expected`}
+                  className={`ml-1.5 flex flex-none items-center gap-0.5 rounded-md px-1 py-0.5 transition-colors ${showWeather ? 'bg-slate-100' : 'hover:bg-slate-100'}`}
+                >
+                  <WeatherIcons flags={badWeather.flags} />
+                </button>
+              )}
               <span className="ml-auto pl-2 sm:ml-2 sm:pl-0 flex items-center flex-shrink-0">
                 {favoriteShareButtons}
               </span>
@@ -814,6 +850,16 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                       ? `${neutralGame.elevationFt.toLocaleString()} ft elevation`
                       : null,
                   ].filter(Boolean).join(' · ')}
+                </span>
+              </div>
+            )}
+            {/* Weather details, opened from the icons in the title row */}
+            {badWeather && showWeather && (
+              <div className="mt-1.5 rounded-lg bg-slate-50 px-2.5 py-1.5 text-xs leading-snug text-slate-600">
+                <span className="font-semibold text-slate-800">{weatherHeadline(badWeather.flags)} expected.</span>{' '}
+                {weatherFacts(badWeather).join(' · ')}
+                <span className="block text-[11px] text-slate-400">
+                  Forecast for kickoff and the three hours after{badWeather.venue ? ` · ${badWeather.venue}` : ''}{badWeather.city ? `, ${badWeather.city}` : ''}
                 </span>
               </div>
             )}
