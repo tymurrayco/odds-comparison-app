@@ -637,6 +637,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
 
   const renderLedgerChip = (placement: string) => (isNCAAF || isNFL) && ledgerChip && prefs.showProjections && (
     <button
+      data-thin-logos
       className={`${placement} items-center gap-1 px-1.5 md:px-2 py-1 text-xs md:text-sm font-semibold rounded-md tabular-nums ${
         LEDGER_TIER_CLASSES[ledgerChip.tier][
           expandedMarket === 'analysis' &&
@@ -741,7 +742,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                 {favoriteShareButtons}
               </span>
               {/* Desktop only: Live/Final scores inline with team names */}
-              <div className="hidden md:inline-flex">
+              <div className="hidden md:inline-flex" data-thin-logos>
                 {/* Live indicator with score */}
                 {isLive && liveScore && (
                   <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
@@ -842,7 +843,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
               <span className="hidden md:flex items-center gap-1.5 flex-wrap empty:hidden">{betBadges}</span>
               
               {/* Mobile only: Live/Final scores */}
-              <div className="md:hidden flex items-center">
+              <div className="md:hidden flex items-center" data-thin-logos>
                 {/* Live indicator with score */}
                 {isLive && liveScore && (
                   <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
@@ -897,7 +898,7 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
               
               {/* Implied Score - always show, inline after date/time + ticket */}
               {impliedScores && (
-                <div className="flex items-center gap-1 text-xs md:text-sm">
+                <div className="flex items-center gap-1 text-xs md:text-sm" data-thin-logos>
                   {!isLive && !isCompleted && <span className="text-gray-400 hidden md:inline">•</span>}
                   {(isLive || isCompleted) && liveScore && <span className="text-gray-400">•</span>}
                   <span className="text-gray-600 flex items-center gap-0.5">

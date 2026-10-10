@@ -351,3 +351,9 @@ html[data-theme="dark"] img[src*="/bookmaker-logos/"] { filter: drop-shadow(0 0 
 
 /* Switch knobs stay white */
 html[data-theme="dark"] [role="switch"] .bg-white { background-color: #fff; }
+
+/* A card's live score, Proj / Implied scores and Ledger chip (data-thin-logos in
+   GameCard): their 14-16px logos take a thinner edge, the full 1px reads heavy there */
+html[data-theme="dark"] [data-thin-logos] img {
+  filter: drop-shadow(0.6px 0 0 #fff) drop-shadow(-0.6px 0 0 #fff) drop-shadow(0 0.6px 0 #fff) drop-shadow(0 -0.6px 0 #fff);
+}
