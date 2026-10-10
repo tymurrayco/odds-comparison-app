@@ -175,6 +175,28 @@ export default function AccountButton({ user }: { user: User }) {
             </span>
           </button>
 
+          {/* Dark colour theme (applied by ThemeApplier) */}
+          <button
+            type="button"
+            role="switch"
+            aria-checked={prefs.darkMode}
+            onClick={() => savePrefs({ darkMode: !prefs.darkMode })}
+            className="flex w-full items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-left text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            <span>Dark mode</span>
+            <span
+              className={`relative h-6 w-10 flex-none rounded-full transition-colors ${
+                prefs.darkMode ? 'bg-green-500' : 'bg-gray-300'
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${
+                  prefs.darkMode ? 'left-[18px]' : 'left-0.5'
+                }`}
+              />
+            </span>
+          </button>
+
           <label className="flex items-center justify-between gap-3 px-2 py-1.5 text-sm font-medium text-gray-700">
             <span>Time zone</span>
             <select

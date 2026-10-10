@@ -1,10 +1,10 @@
 @import "tailwindcss";
 
 /*
- * Light-only (2026-10-04). The site has no dark: styles, so the old
- * prefers-color-scheme rule painted a near-black body behind white cards on
- * dark phones. color-scheme: light also keeps form controls and scrollbars
- * light. A real dark pass would replace this block, not add to it.
+ * Light by default. OS dark mode alone never darkens the site (the old
+ * prefers-color-scheme rule painted a near-black body behind white cards);
+ * color-scheme: light also keeps form controls and scrollbars light. Dark
+ * mode is the account's own switch: see the Dark mode block at the end.
  */
 :root {
   color-scheme: light;
@@ -164,3 +164,184 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .sheet-backdrop, .sheet-panel { animation: none !important; }
 }
+
+/* ---------------------------------------------------------------- Dark mode
+ * Turned on by the account menu switch (prefs.darkMode → <html data-theme="dark">,
+ * see ThemeApplier). The components carry no dark: classes; instead this block
+ * re-points the colour variables every Tailwind utility reads:
+ *   - white is the card surface, grays and slates run light-on-dark;
+ *   - each colour family keeps its 300-600 shades; its pale tints (50-200)
+ *     become dark tints and its dark text shades (700-900) become light.
+ * A few utilities then need fixing by class (text-white must stay white).
+ */
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #0a0f1c;
+  --foreground: #e5e7eb;
+  --color-white: #141b2b;
+  --color-gray-50: #1a2335;
+  --color-gray-100: #212c42;
+  --color-gray-200: #2c3850;
+  --color-gray-300: #3d4a64;
+  --color-gray-400: #8391a8;
+  --color-gray-500: #9aa7bb;
+  --color-gray-600: #b3bfcf;
+  --color-gray-700: #ccd5e1;
+  --color-gray-800: #e1e7ef;
+  --color-gray-900: #f0f3f8;
+  --color-gray-950: #f8fafc;
+  --color-slate-50: #1a2335;
+  --color-slate-100: #212c42;
+  --color-slate-200: #2c3850;
+  --color-slate-300: #3d4a64;
+  --color-slate-400: #8391a8;
+  --color-slate-500: #9aa7bb;
+  --color-slate-600: #b3bfcf;
+  --color-slate-700: #ccd5e1;
+  --color-slate-800: #e1e7ef;
+  --color-slate-900: #f0f3f8;
+  --color-slate-950: #f8fafc;
+  --color-blue-50: color-mix(in oklab, var(--color-blue-500) 13%, #141b2b);
+  --color-blue-100: color-mix(in oklab, var(--color-blue-500) 22%, #141b2b);
+  --color-blue-200: color-mix(in oklab, var(--color-blue-500) 34%, #141b2b);
+  --color-blue-700: var(--color-blue-300);
+  --color-blue-800: color-mix(in oklab, var(--color-blue-300) 65%, #fff);
+  --color-blue-900: color-mix(in oklab, var(--color-blue-300) 40%, #fff);
+  --color-red-50: color-mix(in oklab, var(--color-red-500) 13%, #141b2b);
+  --color-red-100: color-mix(in oklab, var(--color-red-500) 22%, #141b2b);
+  --color-red-200: color-mix(in oklab, var(--color-red-500) 34%, #141b2b);
+  --color-red-700: var(--color-red-300);
+  --color-red-800: color-mix(in oklab, var(--color-red-300) 65%, #fff);
+  --color-red-900: color-mix(in oklab, var(--color-red-300) 40%, #fff);
+  --color-green-50: color-mix(in oklab, var(--color-green-500) 13%, #141b2b);
+  --color-green-100: color-mix(in oklab, var(--color-green-500) 22%, #141b2b);
+  --color-green-200: color-mix(in oklab, var(--color-green-500) 34%, #141b2b);
+  --color-green-700: var(--color-green-300);
+  --color-green-800: color-mix(in oklab, var(--color-green-300) 65%, #fff);
+  --color-green-900: color-mix(in oklab, var(--color-green-300) 40%, #fff);
+  --color-purple-50: color-mix(in oklab, var(--color-purple-500) 13%, #141b2b);
+  --color-purple-100: color-mix(in oklab, var(--color-purple-500) 22%, #141b2b);
+  --color-purple-200: color-mix(in oklab, var(--color-purple-500) 34%, #141b2b);
+  --color-purple-700: var(--color-purple-300);
+  --color-purple-800: color-mix(in oklab, var(--color-purple-300) 65%, #fff);
+  --color-purple-900: color-mix(in oklab, var(--color-purple-300) 40%, #fff);
+  --color-emerald-50: color-mix(in oklab, var(--color-emerald-500) 13%, #141b2b);
+  --color-emerald-100: color-mix(in oklab, var(--color-emerald-500) 22%, #141b2b);
+  --color-emerald-200: color-mix(in oklab, var(--color-emerald-500) 34%, #141b2b);
+  --color-emerald-700: var(--color-emerald-300);
+  --color-emerald-800: color-mix(in oklab, var(--color-emerald-300) 65%, #fff);
+  --color-emerald-900: color-mix(in oklab, var(--color-emerald-300) 40%, #fff);
+  --color-amber-50: color-mix(in oklab, var(--color-amber-500) 13%, #141b2b);
+  --color-amber-100: color-mix(in oklab, var(--color-amber-500) 22%, #141b2b);
+  --color-amber-200: color-mix(in oklab, var(--color-amber-500) 34%, #141b2b);
+  --color-amber-700: var(--color-amber-300);
+  --color-amber-800: color-mix(in oklab, var(--color-amber-300) 65%, #fff);
+  --color-amber-900: color-mix(in oklab, var(--color-amber-300) 40%, #fff);
+  --color-orange-50: color-mix(in oklab, var(--color-orange-500) 13%, #141b2b);
+  --color-orange-100: color-mix(in oklab, var(--color-orange-500) 22%, #141b2b);
+  --color-orange-200: color-mix(in oklab, var(--color-orange-500) 34%, #141b2b);
+  --color-orange-700: var(--color-orange-300);
+  --color-orange-800: color-mix(in oklab, var(--color-orange-300) 65%, #fff);
+  --color-orange-900: color-mix(in oklab, var(--color-orange-300) 40%, #fff);
+  --color-yellow-50: color-mix(in oklab, var(--color-yellow-500) 13%, #141b2b);
+  --color-yellow-100: color-mix(in oklab, var(--color-yellow-500) 22%, #141b2b);
+  --color-yellow-200: color-mix(in oklab, var(--color-yellow-500) 34%, #141b2b);
+  --color-yellow-700: var(--color-yellow-300);
+  --color-yellow-800: color-mix(in oklab, var(--color-yellow-300) 65%, #fff);
+  --color-yellow-900: color-mix(in oklab, var(--color-yellow-300) 40%, #fff);
+  --color-rose-50: color-mix(in oklab, var(--color-rose-500) 13%, #141b2b);
+  --color-rose-100: color-mix(in oklab, var(--color-rose-500) 22%, #141b2b);
+  --color-rose-200: color-mix(in oklab, var(--color-rose-500) 34%, #141b2b);
+  --color-rose-700: var(--color-rose-300);
+  --color-rose-800: color-mix(in oklab, var(--color-rose-300) 65%, #fff);
+  --color-rose-900: color-mix(in oklab, var(--color-rose-300) 40%, #fff);
+  --color-violet-50: color-mix(in oklab, var(--color-violet-500) 13%, #141b2b);
+  --color-violet-100: color-mix(in oklab, var(--color-violet-500) 22%, #141b2b);
+  --color-violet-200: color-mix(in oklab, var(--color-violet-500) 34%, #141b2b);
+  --color-violet-700: var(--color-violet-300);
+  --color-violet-800: color-mix(in oklab, var(--color-violet-300) 65%, #fff);
+  --color-violet-900: color-mix(in oklab, var(--color-violet-300) 40%, #fff);
+  --color-indigo-50: color-mix(in oklab, var(--color-indigo-500) 13%, #141b2b);
+  --color-indigo-100: color-mix(in oklab, var(--color-indigo-500) 22%, #141b2b);
+  --color-indigo-200: color-mix(in oklab, var(--color-indigo-500) 34%, #141b2b);
+  --color-indigo-700: var(--color-indigo-300);
+  --color-indigo-800: color-mix(in oklab, var(--color-indigo-300) 65%, #fff);
+  --color-indigo-900: color-mix(in oklab, var(--color-indigo-300) 40%, #fff);
+  --color-sky-50: color-mix(in oklab, var(--color-sky-500) 13%, #141b2b);
+  --color-sky-100: color-mix(in oklab, var(--color-sky-500) 22%, #141b2b);
+  --color-sky-200: color-mix(in oklab, var(--color-sky-500) 34%, #141b2b);
+  --color-sky-700: var(--color-sky-300);
+  --color-sky-800: color-mix(in oklab, var(--color-sky-300) 65%, #fff);
+  --color-sky-900: color-mix(in oklab, var(--color-sky-300) 40%, #fff);
+  --color-cyan-50: color-mix(in oklab, var(--color-cyan-500) 13%, #141b2b);
+  --color-cyan-100: color-mix(in oklab, var(--color-cyan-500) 22%, #141b2b);
+  --color-cyan-200: color-mix(in oklab, var(--color-cyan-500) 34%, #141b2b);
+  --color-cyan-700: var(--color-cyan-300);
+  --color-cyan-800: color-mix(in oklab, var(--color-cyan-300) 65%, #fff);
+  --color-cyan-900: color-mix(in oklab, var(--color-cyan-300) 40%, #fff);
+  --color-teal-50: color-mix(in oklab, var(--color-teal-500) 13%, #141b2b);
+  --color-teal-100: color-mix(in oklab, var(--color-teal-500) 22%, #141b2b);
+  --color-teal-200: color-mix(in oklab, var(--color-teal-500) 34%, #141b2b);
+  --color-teal-700: var(--color-teal-300);
+  --color-teal-800: color-mix(in oklab, var(--color-teal-300) 65%, #fff);
+  --color-teal-900: color-mix(in oklab, var(--color-teal-300) 40%, #fff);
+  --color-pink-50: color-mix(in oklab, var(--color-pink-500) 13%, #141b2b);
+  --color-pink-100: color-mix(in oklab, var(--color-pink-500) 22%, #141b2b);
+  --color-pink-200: color-mix(in oklab, var(--color-pink-500) 34%, #141b2b);
+  --color-pink-700: var(--color-pink-300);
+  --color-pink-800: color-mix(in oklab, var(--color-pink-300) 65%, #fff);
+  --color-pink-900: color-mix(in oklab, var(--color-pink-300) 40%, #fff);
+}
+
+/* The page itself sits below the cards */
+html[data-theme="dark"] main.bg-blue-50,
+html[data-theme="dark"] main.bg-gray-100 { background-color: var(--background); }
+
+/* White text is white text (on blue buttons, red chips, ...) */
+html[data-theme="dark"] .text-white,
+html[data-theme="dark"] .hover\:text-white:hover { color: #fff; }
+html[data-theme="dark"] .text-white\/85 { color: rgb(255 255 255 / 0.85); }
+html[data-theme="dark"] .text-white\/70 { color: rgb(255 255 255 / 0.7); }
+
+/* Links and icons in the deep blues and purples need a lighter shade on dark */
+html[data-theme="dark"] .text-blue-600 { color: var(--color-blue-400); }
+html[data-theme="dark"] .text-purple-600 { color: var(--color-purple-400); }
+html[data-theme="dark"] .text-indigo-600 { color: var(--color-indigo-400); }
+html[data-theme="dark"] .text-violet-600 { color: var(--color-violet-400); }
+html[data-theme="dark"] .text-\[\#0052ff\], html[data-theme="dark"] .text-\[\#0043d6\] { color: #6b9bff; }
+
+/* Dark-by-design surfaces (toasts, tooltips, the account pointer) keep the
+   light theme's neutrals inside, so their light text stays light */
+html[data-theme="dark"] :is(.bg-gray-700, .bg-gray-800, .bg-gray-900, .bg-slate-700, .bg-slate-800, .bg-slate-900) {
+  --color-white: #fff;
+  --color-gray-50: #f9fafb;
+  --color-gray-100: #f3f4f6;
+  --color-gray-200: #e5e7eb;
+  --color-gray-300: #d1d5db;
+  --color-gray-400: #9ca3af;
+  --color-gray-500: #6b7280;
+  --color-gray-600: #4b5563;
+  --color-gray-700: #374151;
+  --color-gray-800: #1f2937;
+  --color-gray-900: #111827;
+  --color-gray-950: #030712;
+  --color-slate-50: #f8fafc;
+  --color-slate-100: #f1f5f9;
+  --color-slate-200: #e2e8f0;
+  --color-slate-300: #cbd5e1;
+  --color-slate-400: #94a3b8;
+  --color-slate-500: #64748b;
+  --color-slate-600: #475569;
+  --color-slate-700: #334155;
+  --color-slate-800: #1e293b;
+  --color-slate-900: #0f172a;
+  --color-slate-950: #020617;
+}
+
+/* Black or navy logos would vanish on a dark card: a hairline of light around them */
+html[data-theme="dark"] img[src*="teamlogos"],
+html[data-theme="dark"] img[src*="/team-logos/"],
+html[data-theme="dark"] img[src*="/bookmaker-logos/"] { filter: drop-shadow(0 0 0.6px rgb(255 255 255 / 0.75)); }
+
+/* Switch knobs stay white */
+html[data-theme="dark"] [role="switch"] .bg-white { background-color: #fff; }

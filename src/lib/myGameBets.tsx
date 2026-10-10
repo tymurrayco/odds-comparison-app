@@ -251,7 +251,7 @@ export function MyBetBadge({ accent, title, status, friend, avatars, avatarCount
         : 'bg-indigo-600 text-white'
   } ${status === 'lost' ? 'opacity-70' : ''}`;
   const style: React.CSSProperties = {
-    ...(accent ? { borderColor: accent, backgroundColor: friend ? '#ffffff' : hexToRgba(accent, 0.12) } : {}),
+    ...(accent ? { borderColor: accent, backgroundColor: friend ? 'var(--color-white)' : hexToRgba(accent, 0.12) } : {}),
     // room for the photos that hang past the right edge (7px, then 10px each)
     ...(avatarCount > 0 ? { marginRight: 7 + (avatarCount - 1) * 10 } : {}),
   };

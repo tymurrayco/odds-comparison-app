@@ -3,6 +3,7 @@ import { ReactNode } from 'react';
 import type { Metadata, Viewport } from 'next';
 import { Inter_Tight } from 'next/font/google';
 import SiteFooter from '@/components/SiteFooter';
+import ThemeApplier from '@/components/ThemeApplier';
 import './globals.css';
 
 // Site font (design pass 2026-09-07, see DESIGN.md). Exposed as a CSS variable
@@ -51,8 +52,8 @@ export const metadata: Metadata = {
   },
 };
 
-// The site is light-only (no dark: styles exist); tell the browser so OS dark
-// mode stops painting a black page behind white cards.
+// Light unless the account's Dark mode switch is on (globals.css sets
+// color-scheme for that); OS dark mode alone never darkens the site.
 export const viewport: Viewport = {
   colorScheme: 'light',
   themeColor: '#ffffff',
@@ -66,8 +67,19 @@ interface RootLayoutProps {
 
 export default function RootLayout({ children }: RootLayoutProps) {
   return (
-    <html lang="en" className={interTight.variable}>
+    // suppressHydrationWarning: the script below may set data-theme before React loads
+    <html lang="en" className={interTight.variable} suppressHydrationWarning>
+      <head>
+        {/* Dark mode chosen on an earlier visit: apply it before the first paint
+            (ThemeApplier keeps the key in step with the account's setting) */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: "try{if(localStorage.getItem('oddsdayTheme')==='dark')document.documentElement.dataset.theme='dark'}catch(e){}",
+          }}
+        />
+      </head>
       <body>
+        <ThemeApplier />
         {children}
         {/* Compliance footer on every page (21+, 1-800-GAMBLER, affiliate
             disclosure, Terms/Privacy). Share-preview pages (/game, /bet,

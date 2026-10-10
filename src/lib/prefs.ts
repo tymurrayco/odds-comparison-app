@@ -4,6 +4,7 @@
 //   showProjections — the Ledger (odds.day's own) projection chip on game cards
 //   timeZone        — show game times in this zone instead of the device's
 //   showFriendBets  — badges on game cards for bets of people you follow
+//   darkMode        — the dark colour theme (ThemeApplier + the dark block in globals.css)
 //   accountTipSeen  — the one-time "settings and friends are here" pointer was shown
 // Stored on the Supabase Auth user (user_metadata.prefs), so they follow the
 // account across devices with no table of their own. Signed-out visitors get
@@ -19,9 +20,10 @@ export interface Prefs {
   timeZone: string | null; // IANA name; null = the device's zone
   showFriendBets: boolean;
   accountTipSeen: boolean;
+  darkMode: boolean;
 }
 
-export const DEFAULT_PREFS: Prefs = { showProjections: true, timeZone: null, showFriendBets: true, accountTipSeen: true };
+export const DEFAULT_PREFS: Prefs = { showProjections: true, timeZone: null, showFriendBets: true, accountTipSeen: true, darkMode: false };
 
 export const TIME_ZONES: { id: string; label: string }[] = [
   { id: 'America/New_York', label: 'Eastern' },
@@ -53,6 +55,7 @@ function fromMetadata(meta: unknown): Prefs {
     timeZone: typeof p.timeZone === 'string' && p.timeZone ? p.timeZone : null,
     showFriendBets: p.showFriendBets !== false,
     accountTipSeen: p.accountTipSeen === true,
+    darkMode: p.darkMode === true,
   };
 }
 
