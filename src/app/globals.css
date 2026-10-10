@@ -338,12 +338,14 @@ html[data-theme="dark"] :is(.bg-gray-700, .bg-gray-800, .bg-gray-900, .bg-slate-
   --color-slate-950: #020617;
 }
 
-/* Team logos: ThemeApplier swaps ESPN logos for their dark-background versions
-   (.../500-dark/...). A logo with no dark version — a few ESPN ones, and our own
-   /team-logos/ files — gets a white edge instead so black and navy marks still read.
+/* Team logos keep their normal art with a solid white edge drawn round the shape,
+   so black and navy marks (West Virginia, Wake Forest, Iowa) still read on a dark
+   card. Tyler chose this over ESPN's recoloured dark-background logos (2026-10-10).
    Sportsbook logos get a hairline. */
-html[data-theme="dark"] img[src*="teamlogos"]:not([src*="500-dark"]),
-html[data-theme="dark"] img[src*="/team-logos/"] { filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff); }
+html[data-theme="dark"] img[src*="teamlogos"],
+html[data-theme="dark"] img[src*="/team-logos/"] {
+  filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 1.5px rgb(255 255 255 / 0.8));
+}
 html[data-theme="dark"] img[src*="/bookmaker-logos/"] { filter: drop-shadow(0 0 0.6px rgb(255 255 255 / 0.75)); }
 
 /* Switch knobs stay white */
