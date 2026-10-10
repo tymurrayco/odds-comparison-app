@@ -6,6 +6,15 @@ import { useRouter } from 'next/navigation';
 import { fetchBets, createBet, updateBet, deleteBet, Bet, BetStatus, BetType } from '@/lib/betService';
 import { signInWithGoogle, useUser } from '@/lib/userAuth';
 import CreditGauge from '@/components/CreditGauge';
+import { BOOKS } from '@/lib/books';
+
+// Book picker: every book on the board (books.ts), the original six first
+// under their short labels.
+const BOOK_SHORT_LABELS: Record<string, string> = { FanDuel: 'FD', DraftKings: 'DK', BetMGM: 'MGM', BetRivers: 'BR', Caesars: 'CZR', Kalshi: 'Kalshi' };
+const BOOK_OPTIONS = [
+  ...Object.keys(BOOK_SHORT_LABELS),
+  ...BOOKS.map((b) => b.title).filter((t) => !(t in BOOK_SHORT_LABELS)),
+].map((title) => ({ value: title, label: BOOK_SHORT_LABELS[title] ?? title }));
 
 interface BetTeamInfo {
   displayName: string;
@@ -1146,12 +1155,12 @@ export default function BetAdminPage() {
                     onChange={(e) => setFormData({ ...formData, book: e.target.value })}
                     className={fieldCls}
                   >
-                    <option value="FanDuel">FD</option>
-                    <option value="DraftKings">DK</option>
-                    <option value="BetMGM">MGM</option>
-                    <option value="BetRivers">BR</option>
-                    <option value="Caesars">CZR</option>
-                    <option value="Kalshi">Kalshi</option>
+                    {BOOK_OPTIONS.map((b) => (
+                      <option key={b.value} value={b.value}>{b.label}</option>
+                    ))}
+                    {formData.book && !BOOK_OPTIONS.some((b) => b.value === formData.book) && (
+                      <option value={formData.book}>{formData.book}</option>
+                    )}
                   </select>
                 </div>
               </div>
