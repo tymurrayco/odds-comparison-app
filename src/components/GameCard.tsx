@@ -11,6 +11,8 @@ import { Bet } from '@/lib/betService';
 import { usePendingBetsForGame, useTeamColorMap, teamInfoFromMap, wageredTeamColor, MyBetBadge } from '@/lib/myGameBets';
 import { NeutralGame, fetchNeutralGames, findNeutralGame, venueLocation } from '@/lib/neutralSites';
 import { usePrefs, zoneOption } from '@/lib/prefs';
+import { useGameNote } from '@/lib/gameNotes';
+import GameNoteSheet from './GameNoteSheet';
 
 interface GameCardProps {
   game: Game;
@@ -68,6 +70,11 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
   const prefs = usePrefs();
+  // Private note on this game (signed-in accounts): a third icon beside the
+  // star and share, and — only when a note exists — one quiet line under the
+  // date line.
+  const { note, canNote } = useGameNote(game.id);
+  const [noteOpen, setNoteOpen] = useState(false);
   // "odds.day projections" off: the NCAAF analysis panel (Summary / FEI /
   // Ledger) and the NFL Ledger panel are projections, so close them and hide
   // their buttons. The NFL injury report stays.
@@ -256,6 +263,22 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
           <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
         </svg>
       </button>
+      {canNote && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setNoteOpen(true);
+          }}
+          className={`ml-1 hover:scale-110 transition-all ${note ? 'text-amber-500 hover:text-amber-600' : 'text-gray-400 hover:text-blue-500'}`}
+          aria-label={note ? 'Edit note' : 'Add note'}
+          title={note ? 'Edit note' : 'Add note'}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill={note ? 'currentColor' : 'none'} fillOpacity={note ? 0.18 : undefined} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M7 3h7l5 5v11a2 2 0 01-2 2H7a2 2 0 01-2-2V5a2 2 0 012-2z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M14 3v5h5M9 13h6M9 17h4" />
+          </svg>
+        </button>
+      )}
     </>
   );
 
@@ -486,6 +509,15 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
       }`}
     >
       {/* Link copied toast */}
+      {noteOpen && (
+        <GameNoteSheet
+          gameId={game.id}
+          label={`${game.away_team} @ ${game.home_team}`}
+          commenceTime={game.commence_time}
+          initial={note}
+          onClose={() => setNoteOpen(false)}
+        />
+      )}
       {showLinkCopied && (
         <div className="absolute top-2 left-1/2 transform -translate-x-1/2 z-50 px-3 py-1 bg-gray-800 text-white text-xs rounded-full">
           Link copied!
@@ -740,6 +772,24 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                   ].filter(Boolean).join(' · ')}
                 </span>
               </div>
+            )}
+            {/* My note, when there is one: a single quiet line; tap to edit */}
+            {note && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setNoteOpen(true);
+                }}
+                title={note}
+                className="mt-1.5 flex max-w-full items-start gap-1.5 text-left text-xs text-gray-600 hover:text-gray-900"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="mt-px h-3.5 w-3.5 flex-none text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 3h7l5 5v11a2 2 0 01-2 2H7a2 2 0 01-2-2V5a2 2 0 012-2z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M14 3v5h5M9 13h6M9 17h4" />
+                </svg>
+                <span className="line-clamp-1">{note}</span>
+              </button>
             )}
           </div>
 
