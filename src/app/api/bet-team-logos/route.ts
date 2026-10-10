@@ -32,6 +32,8 @@ export interface BetTeamInfo {
   alternateColor?: string;
   abbreviation?: string;  // ESPN abbreviation (e.g., "KC", "TEX") — used by
                           // MyBets to shorten bet text so the spread fits
+  school?: string;        // ESPN location: the name without the mascot
+                          // ("West Virginia") — college game-card titles on phones
 }
 
 function normalize(s: string): string {
@@ -46,6 +48,7 @@ interface ESPNTeam {
   abbreviation?: string;
   name?: string;
   nickname?: string;
+  location?: string;
   color?: string;
   alternateColor?: string;
   logos?: { href?: string }[];
@@ -144,6 +147,7 @@ export async function GET(request: Request) {
         color: t.color || '',
         alternateColor: t.alternateColor,
         abbreviation: t.abbreviation,
+        school: t.location,
       };
 
       const variants = [t.displayName, t.shortDisplayName, t.abbreviation, t.name, t.nickname];

@@ -39,6 +39,7 @@ export interface BetTeamInfo {
   color: string;          // hex without leading #
   alternateColor?: string;
   abbreviation?: string;  // ESPN abbreviation ("CAR", "KC") — game-card wager badges
+  school?: string;        // name without the mascot ("West Virginia") — college card titles on phones
 }
 
 const SPORT_KEY_TO_LEAGUE: Record<string, string> = {

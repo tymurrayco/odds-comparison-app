@@ -14,6 +14,14 @@ import { usePrefs, zoneOption } from '@/lib/prefs';
 import { useGameNote } from '@/lib/gameNotes';
 import GameNoteSheet from './GameNoteSheet';
 
+// First word of the two-word college mascots (Yellow Jackets, Sun Devils, Red
+// Raiders, Fighting Irish, …) — only used when ESPN's team list has no match.
+const TWO_WORD_MASCOT_STARTS = new Set([
+  'yellow', 'green', 'thundering', 'sun', 'wolf', 'red', 'scarlet', 'fighting', "fightin'", 'blue', 'golden',
+  "ragin'", 'mean', 'rainbow', 'crimson', 'big', 'nittany', 'demon', 'horned', 'mountain', 'black', 'great',
+  'purple', 'tar', 'river', 'screaming', 'delta', "runnin'",
+]);
+
 interface GameCardProps {
   game: Game;
   selectedBookmakers?: string[];
@@ -282,6 +290,19 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
     </>
   );
 
+  // College team without its mascot ("West Virginia Mountaineers" → "West
+  // Virginia"): ESPN's school name when the team is in the league map, else
+  // the name minus its last word — or last two for the common two-word
+  // mascots ("Yellow Jackets", "Sun Devils", …).
+  const schoolName = (teamName: string): string => {
+    const school = teamInfoFromMap(teamColorMap, teamName)?.school;
+    if (school) return school;
+    const words = teamName.trim().split(/\s+/);
+    if (words.length < 2) return teamName;
+    const drop = words.length > 2 && TWO_WORD_MASCOT_STARTS.has(words[words.length - 2].toLowerCase()) ? 2 : 1;
+    return words.slice(0, -drop).join(' ');
+  };
+
   // Team name → ESPN abbreviation ("Carolina Panthers" → "CAR") from the
   // league team map the badge already loads for its color; first word of the
   // name until the map arrives or for leagues without abbreviations (soccer).
@@ -530,7 +551,15 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
                 icons onto their own line; icons right edge on mobile, inline on sm+ */}
             <div className="flex items-center">
               <h3 className="text-[15px] md:text-[18px] font-semibold tracking-[-0.3px] md:tracking-[-0.45px] text-gray-900 truncate min-w-0">
-                {game.away_team} @ {game.home_team}
+                {isNCAAF ? (
+                  // Phones: schools only ("Arizona @ West Virginia"); the mascots are what overflowed the line
+                  <>
+                    <span className="md:hidden">{schoolName(game.away_team)} @ {schoolName(game.home_team)}</span>
+                    <span className="hidden md:inline">{game.away_team} @ {game.home_team}</span>
+                  </>
+                ) : (
+                  <>{game.away_team} @ {game.home_team}</>
+                )}
               </h3>
               <span className="ml-auto pl-2 sm:ml-2 sm:pl-0 flex items-center flex-shrink-0">
                 {favoriteShareButtons}
