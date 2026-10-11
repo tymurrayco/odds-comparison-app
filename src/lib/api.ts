@@ -153,7 +153,8 @@ export const ODDS_API_BOOKMAKERS = [
 //      roughly 100% (any market) — both sides can't be favourites;
 //   2. drop a spread or total when either side is juiced past -200 — that is
 //      an alternate line, not the game's line.
-// Sportsbooks are left alone, and so is Kalshi (own feed, own line picker).
+// Sportsbooks are left alone. Kalshi (own feed, own line picker) is not in
+// this set but gets the same test where it is merged (mergeKalshiOdds).
 export const EXCHANGE_BOOK_KEYS = new Set(['novig', 'prophetx', 'polymarket']);
 export const EXCHANGE_MAX_LINE_JUICE = -200;
 // Fair two-sided prices sum to 1; a little over is vig, a little under is a wide book
@@ -367,6 +368,14 @@ export function mergeKalshiOdds(
   const kalshiBookmakers = new Map<Game, Bookmaker>();
 
   const attachMarket = (game: Game, market: Market) => {
+    // The same test the exchange books get. Days out, Kalshi's spread and
+    // total books can be empty apart from stray orders, and its line picker
+    // then lands on an alternate with both sides at 97 cents ("Notre Dame
+    // -27.5 -3477 / BYU +27.5 -5269" on a game the books had at -12.5,
+    // 2026-10-10) — not a price anyone can bet, and it took "Best".
+    // Moneylines are left as they are: a wide book there only shows a poor
+    // price, it cannot win "Best" on the line.
+    if (market.key !== 'h2h' && !isPlausibleExchangeMarket(market.key, market.outcomes)) return;
     const existing = kalshiBookmakers.get(game);
     if (existing) {
       existing.markets.push(market);

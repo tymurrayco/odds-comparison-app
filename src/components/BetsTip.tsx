@@ -41,7 +41,7 @@ export default function BetsTip({ onShowBets, suppressed }: { onShowBets: () => 
       <span className="absolute -top-1.5 right-6 h-3 w-3 rotate-45 bg-gray-900" />
       <div className="text-sm font-semibold">Saved. Your bets live here</div>
       <p className="mt-1 text-xs leading-snug text-gray-300">
-        Tap <span className="font-semibold text-white">Bets</span> for every bet you track, with your record and units.
+        Tap <span className="font-semibold text-white">Bets</span> for every bet you track, with your record and units. The bets of people you follow are there too.
       </p>
       <div className="mt-2.5 flex justify-end gap-2">
         <button type="button" onClick={retire} className="rounded-md px-2.5 py-1 text-xs font-medium text-gray-300 hover:text-white">
