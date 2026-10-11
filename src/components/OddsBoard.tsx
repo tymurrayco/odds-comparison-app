@@ -1415,29 +1415,30 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt, leagueOrde
                   {searchShown && ((effectiveView === 'games' && !supportsConferenceFilter) || effectiveView === 'props') && (
                     <div className="mt-2 basis-full lg:hidden">{searchInput(false)}</div>
                   )}
+                  {/* Live switch, phones and tablets: a league with no conference filter
+                      has no filter row for it to share, so it sits in this card under
+                      the tabs (alone on a row of its own it floated on the page) */}
+                  {effectiveView === 'games' && liveChip && !supportsConferenceFilter && activeLeague !== 'favorites' && (
+                    <div className="mt-2 flex basis-full justify-center lg:hidden">{liveChip}</div>
+                  )}
                 </div>
               )
             )}
             
-            {/* Games filters. Phones and tablets: conference filter and Live chip on
-                a row under the tabs — only when the league has one of them. Search
-                opens inside the tab card, or on this row when it has a conference
-                filter to sit beside. Wide screens: the same controls sit at the
-                right end of the tab bar, so this block is only the active-filter
-                chips there. */}
+            {/* Games filters. Phones and tablets: leagues with a conference filter get
+                a row under the tabs for it, with the Live switch and the search box
+                beside it; every other league keeps both inside the tab card. Wide
+                screens: the same controls sit at the right end of the tab bar, so
+                this block is only the active-filter chips there. */}
             {effectiveView === 'games' && activeLeague !== 'favorites' && (
-              <div className={`space-y-4 lg:mb-0 lg:space-y-0 ${supportsConferenceFilter || liveCount > 0 || teamFilter || selectedConferences.length > 0 ? 'mb-6' : ''}`}>
-                {(supportsConferenceFilter || liveCount > 0) && (
+              <div className={`space-y-4 lg:mb-0 lg:space-y-0 ${supportsConferenceFilter || teamFilter || selectedConferences.length > 0 ? 'mb-6' : ''}`}>
+                {supportsConferenceFilter && (
                   <div className="flex min-h-[42px] flex-wrap items-center gap-2 lg:hidden">
                     {conferenceControl}
-                    {/* beside the conference filter the switch sits centred in the space
-                        left over, unless the search box is open and takes that space */}
-                    {liveChip && supportsConferenceFilter && !searchShown ? (
-                      <div className="flex flex-1 justify-center">{liveChip}</div>
-                    ) : (
-                      liveChip
-                    )}
-                    {searchShown && supportsConferenceFilter && searchInput(true, 'min-w-36 flex-1')}
+                    {/* the switch sits centred in the space left over, unless the
+                        search box is open and takes that space */}
+                    {liveChip && !searchShown ? <div className="flex flex-1 justify-center">{liveChip}</div> : liveChip}
+                    {searchShown && searchInput(true, 'min-w-36 flex-1')}
                   </div>
                 )}
 
