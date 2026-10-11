@@ -13,7 +13,7 @@ import BetTicket, { type TicketPick } from '@/components/BetTicket';
 import { getSportFromLeague, getLeagueDisplayName } from '@/components/OddsTable';
 import { useUser } from '@/lib/userAuth';
 import { usePrefs, zoneOption } from '@/lib/prefs';
-import { openBetLink, markPriceTapped } from '@/lib/betLinks';
+import { resolveDeepLink, fillLinkTemplate, promptForState, openBetLink, appLinkHref, logClickBeacon, markPriceTapped } from '@/lib/betLinks';
 import { goUrl } from '@/lib/books';
 import { useTeamColorMap, teamInfoFromMap, TeamLogoImg } from '@/lib/myGameBets';
 import { cardTitleName, hasShortCardTitle } from '@/lib/teamNames';
@@ -124,8 +124,8 @@ export default function PropsTable({ markets, selectedBookmakers, playerFilter =
   // the chosen one has no matching player)
   const market = shownMarkets.find((m) => m.marketKey === marketKey) ?? shownMarkets[0];
 
-  // Chosen books that price this market. Books with no prop prices (Novig /
-  // ProphetX: the props feed is regions=us) would only add empty columns.
+  // Chosen books that price this market; a book with no price in it would
+  // only add an empty column.
   const books = market
     ? (selectedBookmakers && selectedBookmakers.length > 0 ? BOOKMAKERS.filter((b) => selectedBookmakers.includes(b)) : BOOKMAKERS).filter(
         (book) => market.props.some((p) => p.odds[book] && (p.odds[book].over !== null || p.odds[book].under !== null))
@@ -135,6 +135,16 @@ export default function PropsTable({ markets, selectedBookmakers, playerFilter =
   const lineOf = (prop: ProcessedProp, book: string) => prop.odds[book]?.line ?? prop.line;
   const priceOf = (prop: ProcessedProp, book: string, side: Side) =>
     (side === 'Over' ? prop.odds[book]?.over : prop.odds[book]?.under) ?? null;
+  const linkOf = (prop: ProcessedProp, book: string, side: Side) =>
+    side === 'Over' ? prop.odds[book]?.overLink : prop.odds[book]?.underLink;
+  // A Yes/No market (anytime TD) has no line: its two sides read Yes and No
+  const yesNo = !!market?.yesNo;
+  const sideWord = (side: Side) => (yesNo ? (side === 'Over' ? 'Yes' : 'No') : side);
+  // "Jalen Hurts Over 189.5 Pass Yards"; "Bo Melton Anytime TD Scorer" (and "… (No)")
+  const pickTitle = (prop: ProcessedProp, side: Side, line: number) =>
+    yesNo ? `${prop.playerName} ${prop.marketName}${side === 'Under' ? ' (No)' : ''}` : `${prop.playerName} ${side} ${line} ${prop.marketName}`;
+  const goFor = (prop: ProcessedProp, book: string, title: string) => (to?: string) =>
+    goUrl({ book, sport: league, game: event.id, market: prop.marketKey, outcome: title, to });
 
   // Best book(s) for one side of a prop. Books post different lines for the
   // same prop, so the LINE wins first (lower is better for Over, higher for
@@ -159,14 +169,30 @@ export default function PropsTable({ markets, selectedBookmakers, playerFilter =
     return best;
   };
 
-  // Tap on a price
-  const openPick = (prop: ProcessedProp, book: string, side: Side, line: number, price: number) => {
+  // Tap on a price. Signed in → the bet ticket. Signed out → the /go click-out,
+  // to the betslip when the feed has a link for that price, else the book's
+  // own page (same handling as OddsTable: BetMGM / BetRivers links need the
+  // visitor's state, asked once).
+  const openPick = (prop: ProcessedProp, book: string, side: Side, line: number, price: number, e: React.MouseEvent) => {
     markPriceTapped(); // retires the board's tap hint on this device
-    const title = `${prop.playerName} ${side} ${line} ${prop.marketName}`; // "Jalen Hurts Over 189.5 Pass Yards"
-    // The props feed carries no betslip links, so the book opens on its own page
-    const buildGo = (to?: string) => goUrl({ book, sport: league, game: event.id, market: prop.marketKey, outcome: title, to });
+    // Tap landed on the app-link overlay: let the native anchor navigate
+    if ((e.target as HTMLElement).closest?.('a[data-app-link]')) return;
+    const title = pickTitle(prop, side, line);
+    const link = linkOf(prop, book, side);
+    const buildGo = goFor(prop, book, title);
     if (!user) {
-      openBetLink(buildGo());
+      let resolved: string | undefined;
+      if (link) {
+        const r = resolveDeepLink(link);
+        if (r) {
+          resolved = r;
+        } else {
+          const state = promptForState();
+          if (!state) return;
+          resolved = fillLinkTemplate(link, state);
+        }
+      }
+      openBetLink(buildGo(resolved), resolved);
       return;
     }
     const matchup = `${event.away_team} @ ${event.home_team}`;
@@ -180,6 +206,7 @@ export default function PropsTable({ markets, selectedBookmakers, playerFilter =
       odds: price,
       book,
       bookLogo: BOOKMAKER_LOGOS[book],
+      link,
       buildGo,
       commenceTime: event.commence_time,
       draft: {
@@ -218,22 +245,35 @@ export default function PropsTable({ markets, selectedBookmakers, playerFilter =
       active ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
     }`;
 
-  // One price cell, the same build as OddsTable's: "O 189.5 (-113)", green with
-  // a Best tag when it is the best number for that side.
+  // One price cell, the same build as OddsTable's: "O 189.5 (-113)" (or
+  // "Yes +175"), green with a Best tag when it is the best number for that side.
   const cell = (prop: ProcessedProp, book: string, side: Side, isBest: boolean, border: string) => {
     const price = priceOf(prop, book, side);
     const line = lineOf(prop, book);
+    // App-link books (ProphetX) on phones, signed out: an invisible real <a>
+    // over the cell, since iOS only opens the app from a genuine link tap
+    const appHref = price !== null && !user ? appLinkHref(linkOf(prop, book, side)) : null;
     return (
       <td
         key={`${book}-${side}`}
         className={`relative px-2 md:px-4 pt-3 pb-4 whitespace-nowrap text-center select-none ${border} ${
           price !== null ? 'cursor-pointer hover:bg-blue-50' : ''
         }`}
-        onClick={() => price !== null && openPick(prop, book, side, line, price)}
+        onClick={(e) => price !== null && openPick(prop, book, side, line, price, e)}
       >
+        {appHref && (
+          <a
+            href={appHref}
+            onClick={() => logClickBeacon(goFor(prop, book, pickTitle(prop, side, line))(appHref))}
+            data-app-link
+            aria-label="Open in app"
+            className="absolute inset-0"
+            style={{ WebkitTouchCallout: 'none' }}
+          />
+        )}
         {price !== null ? (
           <div className={`text-xs md:text-sm tabular-nums ${isBest ? 'text-green-600 font-bold' : 'text-gray-900'}`}>
-            {side === 'Over' ? 'O' : 'U'} {line} ({formatOdds(price)})
+            {yesNo ? `${sideWord(side)} ${formatOdds(price)}` : `${side === 'Over' ? 'O' : 'U'} ${line} (${formatOdds(price)})`}
             {isBest && (
               // Sits in the cell's bottom padding (td is relative). These rows hold
               // text only, so the padding is a touch deeper than OddsTable's
@@ -308,18 +348,21 @@ export default function PropsTable({ markets, selectedBookmakers, playerFilter =
                 const bestUnder = bestBooks(prop, 'Under');
                 // a full line under each player, none after the last
                 const playerBorder = i < market.props.length - 1 ? 'border-b border-b-gray-200' : '';
+                // The second row only when a shown book prices that side (most
+                // sportsbooks post anytime TD as Yes alone)
+                const twoRows = books.some((book) => priceOf(prop, book, 'Under') !== null);
                 return (
                   <Fragment key={prop.playerName}>
                     <tr>
                       <td
-                        rowSpan={2}
+                        rowSpan={twoRows ? 2 : 1}
                         className={`px-2 md:px-4 py-2 text-xs md:text-sm font-medium leading-tight text-gray-900 sticky left-0 z-10 bg-white border-r border-gray-100 max-w-[104px] md:max-w-none ${playerBorder}`}
                       >
                         {prop.playerName}
                       </td>
-                      {books.map((book) => cell(prop, book, 'Over', bestOver.includes(book), 'border-b border-b-gray-100'))}
+                      {books.map((book) => cell(prop, book, 'Over', bestOver.includes(book), twoRows ? 'border-b border-b-gray-100' : playerBorder))}
                     </tr>
-                    <tr>{books.map((book) => cell(prop, book, 'Under', bestUnder.includes(book), playerBorder))}</tr>
+                    {twoRows && <tr>{books.map((book) => cell(prop, book, 'Under', bestUnder.includes(book), playerBorder))}</tr>}
                   </Fragment>
                 );
               })}

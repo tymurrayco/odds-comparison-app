@@ -62,15 +62,17 @@ export interface PropsEvent {
 }
 
 export interface PropOutcome {
-  name: string; // "Over" or "Under"
+  name: string; // "Over" / "Under", or "Yes" / "No" (anytime TD)
   description: string; // Player name (e.g., "Anthony Davis")
   price: number;
-  point: number; // The line (e.g., 24.5 points)
+  point?: number; // The line (e.g., 24.5 points); none on Yes/No markets
+  link?: string | null; // betslip link (exchanges=1 responses)
 }
 
 export interface PropMarket {
   key: string; // e.g., "player_points"
   last_update: string;
+  link?: string | null;
   outcomes: PropOutcome[];
 }
 
@@ -78,6 +80,7 @@ export interface PropsBookmaker {
   key: string;
   title: string;
   last_update: string;
+  link?: string | null;
   markets: PropMarket[];
 }
 
@@ -99,9 +102,11 @@ export interface ProcessedProp {
   line: number; // Default/display line (may vary by book)
   odds: {
     [bookmaker: string]: {
-      over: number | null;
-      under: number | null;
-      line?: number; // Line specific to this bookmaker
+      over: number | null;  // Over, or Yes on a Yes/No market
+      under: number | null; // Under, or No
+      line?: number; // Line specific to this bookmaker (0 on a Yes/No market)
+      overLink?: string;  // betslip link for that side, when the feed has one
+      underLink?: string;
     };
   };
 }
@@ -109,6 +114,7 @@ export interface ProcessedProp {
 export interface ProcessedPropsMarket {
   marketKey: string;
   marketName: string;
+  yesNo?: boolean; // a Yes/No market (anytime TD): no line, sides read Yes / No
   props: ProcessedProp[];
 }
 
@@ -697,6 +703,149 @@ export async function fetchPropsEvents(sport: string): Promise<ApiResponse<Props
   }
 }
 
+// Books that post a ladder of lines per player (or raw order books) instead of
+// one line: the exchanges in the feed, and Kalshi (one Yes/No market per rung).
+const PROP_LADDER_BOOKS = new Set([...EXCHANGE_BOOK_KEYS, 'kalshi']);
+
+// One key per player across books: accents, punctuation and a trailing
+// Jr / Sr / II / III differ by book ("Brian Thomas Jr." vs "Brian Thomas Jr")
+const propPlayerKey = (name: string) =>
+  name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\b(jr|sr|ii|iii|iv)\b\.?/g, '')
+    .replace(/[^a-z0-9]/g, '');
+
+type PropQuote = { over: number | null; under: number | null; overLink?: string; underLink?: string };
+
+/**
+ * Turn an event-odds response into the Props view's markets: per market, per
+ * player, one line and one Over/Under (or Yes/No) price per book.
+ *
+ * A sportsbook posts one line per player. The exchanges and Kalshi post many
+ * (Novig had 21 lines for one quarterback's passing yards, most of them stray
+ * orders such as Over -108 / Under -178), so for those books:
+ *   1. only lines priced on both sides count, and only when the two sides'
+ *      implied probabilities add up to roughly 100% (the same test the game
+ *      lines use) — that drops the one-sided and empty order books;
+ *   2. of those, the line nearest the sportsbooks' line is the book's line,
+ *      as long as it is within 10% of it (half a point at least); with no
+ *      sportsbook to go by, the most evenly priced line.
+ * A book left with no line is simply not shown for that player.
+ */
+export function processPropsData(rawData: PropsData): ProcessedPropsMarket[] {
+  type BookLines = { key: string; lines: Map<number | null, PropQuote> };
+  type Player = { name: string; fromSportsbook: boolean; books: Map<string, BookLines> };
+  const byMarket = new Map<string, Map<string, Player>>();
+
+  rawData.bookmakers?.forEach((bookmaker: PropsBookmaker) => {
+    const ladder = PROP_LADDER_BOOKS.has(bookmaker.key);
+    bookmaker.markets?.forEach((market: PropMarket) => {
+      if (!byMarket.has(market.key)) byMarket.set(market.key, new Map());
+      const players = byMarket.get(market.key)!;
+      market.outcomes?.forEach((outcome: PropOutcome) => {
+        // outcome.name = the side, outcome.description = the player
+        const name = outcome.description;
+        const sideName = outcome.name?.toLowerCase();
+        const yesNo = sideName === 'yes' || sideName === 'no';
+        const side = sideName === 'over' || sideName === 'yes' ? 'over' : sideName === 'under' || sideName === 'no' ? 'under' : null;
+        if (!name || !side || typeof outcome.price !== 'number') return;
+        const line = yesNo ? null : outcome.point;
+        if (line === undefined) return;
+
+        const key = propPlayerKey(name);
+        let player = players.get(key);
+        if (!player) {
+          player = { name, fromSportsbook: !ladder, books: new Map() };
+          players.set(key, player);
+        } else if (!ladder && !player.fromSportsbook) {
+          // show the sportsbooks' spelling of the name
+          player.name = name;
+          player.fromSportsbook = true;
+        }
+        let book = player.books.get(bookmaker.title);
+        if (!book) {
+          book = { key: bookmaker.key, lines: new Map() };
+          player.books.set(bookmaker.title, book);
+        }
+        let quote = book.lines.get(line);
+        if (!quote) {
+          quote = { over: null, under: null };
+          book.lines.set(line, quote);
+        }
+        // An exchange can list several resting orders on one side: keep the best price
+        if (quote[side] === null || outcome.price > quote[side]!) {
+          quote[side] = outcome.price;
+          const link = outcome.link ?? market.link ?? bookmaker.link ?? undefined;
+          if (side === 'over') quote.overLink = link;
+          else quote.underLink = link;
+        }
+      });
+    });
+  });
+
+  const twoSided = (q: PropQuote) => q.over !== null && q.under !== null;
+  const impliedSum = (q: PropQuote) => impliedProb(q.over!) + impliedProb(q.under!);
+  const lean = (q: PropQuote) => Math.abs(impliedProb(q.over!) - impliedProb(q.under!)); // 0 = even money both ways
+  const median = (values: number[]) => {
+    const v = [...values].sort((x, y) => x - y);
+    return v.length % 2 ? v[(v.length - 1) / 2] : (v[v.length / 2 - 1] + v[v.length / 2]) / 2;
+  };
+
+  const markets: ProcessedPropsMarket[] = [];
+  for (const [marketKey, players] of byMarket) {
+    const marketName = PROP_MARKET_NAMES[marketKey] || marketKey;
+    let yesNoMarket = false;
+    const props: ProcessedProp[] = [];
+    for (const player of players.values()) {
+      const chosen = new Map<string, { line: number | null; quote: PropQuote }>();
+      // Sportsbooks: their one line (should a book send two, the evenly priced one)
+      for (const [title, book] of player.books) {
+        if (PROP_LADDER_BOOKS.has(book.key)) continue;
+        const entries = [...book.lines.entries()];
+        const [line, quote] =
+          entries.length === 1 ? entries[0] : (entries.filter(([, q]) => twoSided(q)).sort((x, y) => lean(x[1]) - lean(y[1]))[0] ?? entries[0]);
+        chosen.set(title, { line, quote });
+      }
+      const bookLines = [...chosen.values()].map((c) => c.line).filter((l): l is number => l !== null);
+      const consensus = bookLines.length > 0 ? median(bookLines) : null;
+      // Exchanges and Kalshi: the plausible two-sided line nearest the consensus
+      for (const [title, book] of player.books) {
+        if (!PROP_LADDER_BOOKS.has(book.key)) continue;
+        const candidates = [...book.lines.entries()].filter(([, q]) => {
+          if (!twoSided(q)) return false;
+          const sum = impliedSum(q);
+          return sum >= IMPLIED_SUM_MIN && sum <= IMPLIED_SUM_MAX;
+        });
+        if (candidates.length === 0) continue;
+        let pick: [number | null, PropQuote] | undefined;
+        if (consensus === null || candidates[0][0] === null) {
+          pick = candidates.sort((x, y) => lean(x[1]) - lean(y[1]))[0];
+        } else {
+          const tolerance = Math.max(0.5, Math.abs(consensus) * 0.1);
+          pick = candidates
+            .filter(([l]) => l !== null && Math.abs(l - consensus) <= tolerance)
+            .sort((x, y) => Math.abs(x[0]! - consensus) - Math.abs(y[0]! - consensus) || lean(x[1]) - lean(y[1]))[0];
+        }
+        if (pick) chosen.set(title, { line: pick[0], quote: pick[1] });
+      }
+      if (chosen.size === 0) continue;
+
+      const odds: ProcessedProp['odds'] = {};
+      for (const [title, { line, quote }] of chosen) {
+        if (line === null) yesNoMarket = true;
+        odds[title] = { over: quote.over, under: quote.under, line: line ?? 0, overLink: quote.overLink, underLink: quote.underLink };
+      }
+      props.push({ playerName: player.name, marketKey, marketName, line: consensus ?? [...chosen.values()][0].line ?? 0, odds });
+    }
+    if (props.length === 0) continue;
+    props.sort((x, y) => x.playerName.localeCompare(y.playerName));
+    markets.push({ marketKey, marketName, ...(yesNoMarket ? { yesNo: true } : {}), props });
+  }
+  return markets;
+}
+
 /**
  * Fetch player props for a specific event
  * 
@@ -706,7 +855,8 @@ export async function fetchPropsEvents(sport: string): Promise<ApiResponse<Props
  */
 export async function fetchProps(sport: string, eventId: string): Promise<ApiResponse<ProcessedPropsMarket[]>> {
   try {
-    const response = await fetch(`/api/props?sport=${sport}&eventId=${eventId}`);
+    // exchanges=1: Novig / ProphetX / Polymarket, Kalshi and betslip links too
+    const response = await fetch(`/api/props?sport=${sport}&eventId=${eventId}&exchanges=1`);
     if (response.status === 429) {
       // Per-IP cap on the paid props call (see api/props/route.ts)
       throw new Error('Too many props requests — wait a few minutes and try again.');
@@ -717,72 +867,7 @@ export async function fetchProps(sport: string, eventId: string): Promise<ApiRes
     const rawData: PropsData = await response.json();
     const requestsRemaining = response.headers.get('x-requests-remaining');
     
-    // Process the raw data into a more usable format
-    // Group by market type (e.g., player_points), then by player name
-    const propsByMarket: { [marketKey: string]: { [playerName: string]: ProcessedProp } } = {};
-    
-    rawData.bookmakers?.forEach((bookmaker: PropsBookmaker) => {
-      bookmaker.markets?.forEach((market: PropMarket) => {
-        const marketKey = market.key;
-        const marketName = PROP_MARKET_NAMES[marketKey] || marketKey;
-        
-        if (!propsByMarket[marketKey]) {
-          propsByMarket[marketKey] = {};
-        }
-        
-        market.outcomes?.forEach((outcome: PropOutcome) => {
-          // In the API response:
-          // - outcome.name = "Over" or "Under"
-          // - outcome.description = player name (e.g., "Anthony Davis")
-          const playerName = outcome.description;
-          const overUnder = outcome.name;
-          const line = outcome.point;
-          
-          if (!playerName || line === undefined || line === null) return;
-          
-          if (!propsByMarket[marketKey][playerName]) {
-            propsByMarket[marketKey][playerName] = {
-              playerName,
-              marketKey,
-              marketName,
-              line: 0, // Will be set per-bookmaker
-              odds: {}
-            };
-          }
-          
-          if (!propsByMarket[marketKey][playerName].odds[bookmaker.title]) {
-            propsByMarket[marketKey][playerName].odds[bookmaker.title] = {
-              over: null,
-              under: null,
-              line: line
-            };
-          }
-          
-          // Set over or under based on outcome.name
-          if (overUnder?.toLowerCase() === 'over') {
-            propsByMarket[marketKey][playerName].odds[bookmaker.title].over = outcome.price;
-            propsByMarket[marketKey][playerName].odds[bookmaker.title].line = line;
-          } else if (overUnder?.toLowerCase() === 'under') {
-            propsByMarket[marketKey][playerName].odds[bookmaker.title].under = outcome.price;
-            propsByMarket[marketKey][playerName].odds[bookmaker.title].line = line;
-          }
-        });
-      });
-    });
-    
-    // Convert to array format and sort
-    const processedMarkets: ProcessedPropsMarket[] = Object.entries(propsByMarket).map(([marketKey, players]) => {
-      const props = Object.values(players).sort((a, b) => {
-        // Sort by player name
-        return a.playerName.localeCompare(b.playerName);
-      });
-      
-      return {
-        marketKey,
-        marketName: PROP_MARKET_NAMES[marketKey] || marketKey,
-        props
-      };
-    });
+    const processedMarkets = processPropsData(rawData);
     
     // Sort markets by a predefined order (most popular first)
     const marketOrder = [

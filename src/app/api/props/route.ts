@@ -2,6 +2,8 @@
 import { NextResponse } from 'next/server';
 import { isAdminRequest } from '@/lib/adminAuth';
 import { clientIp, rateLimit } from '@/lib/rateLimit';
+import { ODDS_API_BOOKMAKERS } from '@/lib/api';
+import { fetchKalshiPropsBookmaker } from '@/lib/server/kalshiProps';
 
 // Per-IP allowance for the paid per-event props call: 30 events per 10 min.
 // A person browsing props opens a handful; a loop over a 60-game NCAAF slate
@@ -124,6 +126,11 @@ export async function GET(request: Request) {
   const eventId = searchParams.get('eventId');
   // Optional explicit market list (e.g. alternate lines for the prop pricer)
   const marketsOverride = searchParams.get('markets');
+  // The public Props view asks for the prediction markets too: the exchange
+  // books in the feed (Novig, ProphetX, Polymarket), betslip links, and
+  // Kalshi from its own API. The admin prop pricers leave it off and keep the
+  // sportsbook-only response they were built on.
+  const withExchanges = searchParams.get('exchanges') === '1';
 
   if (!sport) {
     return NextResponse.json({ error: 'Missing sport parameter' }, { status: 400 });
@@ -164,7 +171,11 @@ export async function GET(request: Request) {
     
     try {
       const marketsParam = markets.join(',');
-      const apiUrl = `https://api.the-odds-api.com/v4/sports/${sport}/events/${eventId}/odds?apiKey=${apiKey}&regions=us&markets=${marketsParam}&oddsFormat=american`;
+      // An explicit book list of ≤10 bills as ONE region, the same as
+      // regions=us (checked: 4 markets → 4 credits either way), and the
+      // exchange books sit outside "us". Links are free.
+      const books = withExchanges ? `bookmakers=${ODDS_API_BOOKMAKERS.join(',')}&includeLinks=true` : 'regions=us';
+      const apiUrl = `https://api.the-odds-api.com/v4/sports/${sport}/events/${eventId}/odds?apiKey=${apiKey}&${books}&markets=${marketsParam}&oddsFormat=american`;
       console.log('Requesting props URL:', apiUrl.replace(apiKey || '', '[REDACTED]'));
       
       // Shared server-side cache (2 min) — props fan out to many paid calls
@@ -178,6 +189,13 @@ export async function GET(request: Request) {
       
       const data = await response.json();
       
+      // Kalshi's props ride along as one more bookmaker (free, own API). A
+      // failure there just leaves Kalshi out.
+      if (withExchanges && data && Array.isArray(data.bookmakers) && data.home_team && data.away_team) {
+        const kalshi = await fetchKalshiPropsBookmaker(SPORT_ALIASES[sport] ?? sport, data.away_team, data.home_team).catch(() => null);
+        if (kalshi) data.bookmakers.push(kalshi);
+      }
+
       // Extract rate limit headers
       const requestsRemaining = response.headers.get('x-requests-remaining');
       const requestsUsed = response.headers.get('x-requests-used');
