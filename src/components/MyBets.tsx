@@ -118,6 +118,10 @@ export default function MyBets({ yearFilter = 'all', onYearsLoaded }: MyBetsProp
   // Game bets placed live (after kickoff) vs before; the record and profit
   // summary, the splits and the list all follow it
   const [timing, setTiming] = useState<'all' | 'pregame' | 'live'>('all');
+  // Game bets for all time, or one day / week / month at a time; the offset
+  // counts periods from the current one (0 = today / this week / this month)
+  const [period, setPeriod] = useState<'all' | 'day' | 'week' | 'month'>('all');
+  const [periodOffset, setPeriodOffset] = useState(0);
   const [expandedBetId, setExpandedBetId] = useState<string | null>(null);
   const [copiedBetId, setCopiedBetId] = useState<string | null>(null);
   // Bet open in the edit sheet (text / odds / stake / result / delete)
@@ -254,9 +258,53 @@ export default function MyBets({ yearFilter = 'all', onYearsLoaded }: MyBetsProp
     );
   }, [yearBets]);
   const hasLiveBets = useMemo(() => allGameBets.some((bet) => bet.live), [allGameBets]);
+
+  // Period view: one day, one week (Monday to Sunday) or one month of game
+  // bets, by the game's date, stepped back and forth with the arrows. The
+  // record, the league rows and the list below all follow it. Dates are
+  // compared as local YYYY-MM-DD strings, the form a bet's event date is in.
+  const periodRange = useMemo(() => {
+    if (period === 'all') return null;
+    const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const short = (d: Date, withYear = false) =>
+      d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(withYear ? { year: 'numeric' } : {}) });
+    const now = new Date();
+    const thisYear = now.getFullYear();
+    let start = new Date(thisYear, now.getMonth(), now.getDate());
+    let end: Date;
+    let label: string;
+    if (period === 'day') {
+      start.setDate(start.getDate() + periodOffset);
+      end = new Date(start);
+      const named = periodOffset === 0 ? 'Today' : periodOffset === -1 ? 'Yesterday' : periodOffset === 1 ? 'Tomorrow' : null;
+      const date = start.toLocaleDateString('en-US', {
+        weekday: 'short', month: 'short', day: 'numeric', ...(start.getFullYear() !== thisYear ? { year: 'numeric' } : {}),
+      });
+      label = named ? `${named} · ${date}` : date;
+    } else if (period === 'week') {
+      start.setDate(start.getDate() - ((start.getDay() + 6) % 7) + periodOffset * 7); // back to Monday
+      end = new Date(start);
+      end.setDate(end.getDate() + 6);
+      const span = `${short(start)} – ${short(end, end.getFullYear() !== thisYear)}`;
+      label = periodOffset === 0 ? `This week · ${span}` : periodOffset === -1 ? `Last week · ${span}` : span;
+    } else {
+      start = new Date(thisYear, now.getMonth() + periodOffset, 1);
+      end = new Date(start.getFullYear(), start.getMonth() + 1, 0);
+      label = start.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    }
+    return { from: ymd(start), to: ymd(end), label };
+  }, [period, periodOffset]);
+  const periodGameBets = useMemo(() => {
+    if (!periodRange) return allGameBets;
+    return allGameBets.filter((bet) => {
+      const day = String(bet.eventDate).substring(0, 10);
+      return day >= periodRange.from && day <= periodRange.to;
+    });
+  }, [allGameBets, periodRange]);
+
   const gameBets = useMemo(
-    () => (timing === 'all' ? allGameBets : allGameBets.filter((bet) => !!bet.live === (timing === 'live'))),
-    [allGameBets, timing]
+    () => (timing === 'all' ? periodGameBets : periodGameBets.filter((bet) => !!bet.live === (timing === 'live'))),
+    [periodGameBets, timing]
   );
 
   const futureBets = useMemo(() => {
@@ -813,6 +861,57 @@ export default function MyBets({ yearFilter = 'all', onYearsLoaded }: MyBetsProp
             Futures ({futureBets.length})
           </button>
         </div>
+        {/* Game bets by period: all of them, or a day / week / month at a time */}
+        {viewType === 'games' && (
+          <div className="mt-2 flex flex-col items-center gap-2">
+            <div className="inline-flex rounded-lg bg-gray-200/80 p-0.5" role="radiogroup" aria-label="Period">
+              {([['all', 'All'], ['day', 'Day'], ['week', 'Week'], ['month', 'Month']] as const).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="radio"
+                  aria-checked={period === id}
+                  onClick={() => {
+                    setPeriod(id);
+                    setPeriodOffset(0);
+                    // a period shows everything in it, not just what is still open
+                    if (id !== 'all') setStatusFilter('all');
+                  }}
+                  className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                    period === id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {periodRange && (
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  aria-label={`Previous ${period}`}
+                  onClick={() => setPeriodOffset((n) => n - 1)}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <span className="min-w-[11rem] text-center text-sm font-medium text-gray-900">{periodRange.label}</span>
+                <button
+                  type="button"
+                  aria-label={`Next ${period}`}
+                  onClick={() => setPeriodOffset((n) => n + 1)}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
         {/* Live vs pregame — only once there is a live bet to split out */}
         {viewType === 'games' && (hasLiveBets || timing !== 'all') && (
           <div className="mt-2 flex justify-center">
