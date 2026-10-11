@@ -6,6 +6,7 @@
 //   showFriendBets  — badges on game cards for bets of people you follow
 //   darkMode        — the dark colour theme (ThemeApplier + the dark block in globals.css)
 //   accountTipSeen  — the one-time "settings and friends are here" pointer was shown
+//   betsTipSeen     — the one-time "your bets live here" pointer (first tracked bet) was shown
 // Stored on the Supabase Auth user (user_metadata.prefs), so they follow the
 // account across devices with no table of their own. Signed-out visitors get
 // the defaults.
@@ -20,10 +21,11 @@ export interface Prefs {
   timeZone: string | null; // IANA name; null = the device's zone
   showFriendBets: boolean;
   accountTipSeen: boolean;
+  betsTipSeen: boolean;
   darkMode: boolean;
 }
 
-export const DEFAULT_PREFS: Prefs = { showProjections: true, timeZone: null, showFriendBets: true, accountTipSeen: true, darkMode: false };
+export const DEFAULT_PREFS: Prefs = { showProjections: true, timeZone: null, showFriendBets: true, accountTipSeen: true, betsTipSeen: true, darkMode: false };
 
 export const TIME_ZONES: { id: string; label: string }[] = [
   { id: 'America/New_York', label: 'Eastern' },
@@ -55,6 +57,7 @@ function fromMetadata(meta: unknown): Prefs {
     timeZone: typeof p.timeZone === 'string' && p.timeZone ? p.timeZone : null,
     showFriendBets: p.showFriendBets !== false,
     accountTipSeen: p.accountTipSeen === true,
+    betsTipSeen: p.betsTipSeen === true,
     darkMode: p.darkMode === true,
   };
 }

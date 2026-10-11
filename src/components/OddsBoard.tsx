@@ -37,6 +37,7 @@ import ConferenceFilter from '@/components/ConferenceFilter';
 import BookmakerSelector from '@/components/BookmakerSelector';
 import MyBets, { BetYearFilter } from '@/components/MyBets';
 import AccountButton from '@/components/AccountButton';
+import BetsTip from '@/components/BetsTip';
 import dynamic from 'next/dynamic';
 import { signInWithGoogle, useUser } from '@/lib/userAuth';
 import { usePrefs } from '@/lib/prefs';
@@ -1193,6 +1194,8 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt, leagueOrde
               )}
 
               {user && (
+              // relative: the one-time Bets pointer hangs under the button
+              <div className="relative">
               <button
                 onMouseDown={(e) => {
                   e.preventDefault();
@@ -1244,6 +1247,8 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt, leagueOrde
                 <TicketIcon className={`h-4 w-4 flex-none ${activeView === 'mybets' ? 'text-white' : 'text-blue-600'}`} />
                 Bets {isHolding && '...'}
               </button>
+              <BetsTip suppressed={activeView === 'mybets'} onShowBets={() => setActiveView('mybets')} />
+              </div>
               )}
 
               {user && <AccountButton user={user} />}

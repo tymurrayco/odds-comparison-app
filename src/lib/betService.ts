@@ -15,6 +15,8 @@ export type { Bet, BetStatus, BetType };
 // Fired on window after any bet is saved, edited or deleted, so badges that
 // cache the visitor's bets (src/lib/myGameBets.tsx) reload at once.
 export const BETS_CHANGED_EVENT = 'oddsday:bets-changed';
+// Fired on window after a NEW bet is saved (the one-time Bets pointer, BetsTip)
+export const BET_CREATED_EVENT = 'oddsday:bet-created';
 
 // Fetch the signed-in visitor's bets (empty when signed out)
 export async function fetchBets(): Promise<Bet[]> {
@@ -80,6 +82,7 @@ async function writeBets(method: 'POST' | 'PATCH' | 'DELETE', body: unknown): Pr
 export async function createBet(bet: Omit<Bet, 'id'>) {
   try {
     const { bet: row } = await writeBets('POST', { bet });
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event(BET_CREATED_EVENT));
     return row;
   } catch (error) {
     console.error('Error creating bet:', error);

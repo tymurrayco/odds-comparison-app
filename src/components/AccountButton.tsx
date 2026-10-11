@@ -103,7 +103,7 @@ export default function AccountButton({ user }: { user: User }) {
             <span className="absolute -top-1.5 right-3 h-3 w-3 rotate-45 bg-gray-900" />
             <div className="text-sm font-semibold">Your account lives here</div>
             <p className="mt-1 text-xs leading-snug text-gray-300">
-              Tap your picture for settings, your time zone, and <span className="font-semibold text-white">Find friends</span> to follow other bettors.
+              Tap your picture for dark mode, your time zone, and <span className="font-semibold text-white">Find friends</span> to follow other bettors.
             </p>
             <div className="mt-2.5 flex justify-end gap-2">
               <button type="button" onClick={retireTip} className="rounded-md px-2.5 py-1 text-xs font-medium text-gray-300 hover:text-white">
