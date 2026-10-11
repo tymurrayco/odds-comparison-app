@@ -106,6 +106,25 @@ export async function searchProfiles(text: string): Promise<Profile[]> {
   return (data as ProfileRow[]).map(toProfile);
 }
 
+/**
+ * Everyone with a profile, newest first, without the caller: the list "Find
+ * friends" opens on. Any signed-in visitor may read profiles (name, handle,
+ * picture — the same rows search returns), so this shows nothing new.
+ */
+export const PEOPLE_LIST_LIMIT = 100;
+export async function listProfiles(): Promise<Profile[]> {
+  const id = await myId();
+  if (!id) return [];
+  const { data, error } = await supabase
+    .from('profiles')
+    .select(PROFILE_COLS)
+    .neq('id', id)
+    .order('created_at', { ascending: false })
+    .limit(PEOPLE_LIST_LIMIT);
+  if (error || !data) return [];
+  return (data as ProfileRow[]).map(toProfile);
+}
+
 /** Everyone the caller follows (accepted and still-pending). */
 export async function listFollowing(): Promise<FollowEdge[]> {
   const id = await myId();

@@ -1,7 +1,7 @@
 // src/components/PeopleSheet.tsx
 //
 // "Friends & profile" ("Find friends" in the account menu), opened from the account menu: edit your own name,
-// handle and private switch; find people by name; see who you follow and who
+// handle and private switch; see everyone signed up, or find people by name; see who you follow and who
 // follows you (approving requests when your account is private). Same sheet
 // styling and motion as BetTicket. Data and rules: src/lib/social.ts.
 'use client';
@@ -13,6 +13,8 @@ import {
   ensureProfile,
   updateProfile,
   searchProfiles,
+  listProfiles,
+  PEOPLE_LIST_LIMIT,
   listFollowing,
   listFollowers,
   followUser,
@@ -71,6 +73,8 @@ export default function PeopleSheet({ onClose }: { onClose: () => void }) {
   const [followers, setFollowers] = useState<FollowEdge[]>([]);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Profile[]>([]);
+  // Everyone signed up, newest first: shown until a search is typed
+  const [everyone, setEveryone] = useState<Profile[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const reloadLists = useCallback(async () => {
@@ -89,6 +93,7 @@ export default function PeopleSheet({ onClose }: { onClose: () => void }) {
       setReady(true);
     });
     reloadLists();
+    listProfiles().then((list) => alive && setEveryone(list));
     return () => {
       alive = false;
     };
@@ -150,6 +155,7 @@ export default function PeopleSheet({ onClose }: { onClose: () => void }) {
   };
 
   const followingIds = new Map(following.map((f) => [f.profile.id, f.status]));
+  const searching = query.trim().length >= 2;
   const requests = followers.filter((f) => f.status === 'pending');
   const accepted = followers.filter((f) => f.status === 'accepted');
   const heading = 'mt-5 mb-1 text-xs font-semibold uppercase tracking-wide text-gray-400';
@@ -252,8 +258,15 @@ export default function PeopleSheet({ onClose }: { onClose: () => void }) {
                 className={field}
                 aria-label="Search people"
               />
-              {query.trim().length >= 2 && results.length === 0 && <div className="py-2 text-xs text-gray-500">No one found.</div>}
-              {results.map((p) => {
+              {searching && results.length === 0 && <div className="py-2 text-xs text-gray-500">No one found.</div>}
+              {!searching && (
+                <div className="pt-2 text-xs text-gray-500">
+                  {everyone.length === 0
+                    ? 'No one else has signed up yet.'
+                    : `Everyone on odds.day (${everyone.length}${everyone.length === PEOPLE_LIST_LIMIT ? '+' : ''}), newest first`}
+                </div>
+              )}
+              {(searching ? results : everyone).map((p) => {
                 const status = followingIds.get(p.id);
                 return (
                   <PersonRow key={p.id} p={p} note={p.isPrivate ? 'private' : undefined}>
