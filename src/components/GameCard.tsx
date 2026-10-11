@@ -869,9 +869,9 @@ export default function GameCard({ game, selectedBookmakers, isFavorite = false,
               {impliedScores && (
                 <div className="flex items-center gap-1 text-xs md:text-sm" data-thin-logos>
                   {!isLive && !isCompleted && <span className="text-gray-400 hidden md:inline">•</span>}
-                  {(isLive || isCompleted) && liveScore && <span className="text-gray-400">•</span>}
                   <span className="text-gray-600 flex items-center gap-0.5">
-                    <span className="text-gray-500">{gameStarted ? 'Proj' : 'Implied:'}</span>
+                    {/* started: no bullet after the score chip, and a space's width before the logo */}
+                    <span className={`text-gray-500 ${gameStarted ? 'mr-1' : ''}`}>{gameStarted ? 'Proj' : 'Implied:'}</span>
                     {impliedScores.awayWinning ? (
                       <>
                         <img 
