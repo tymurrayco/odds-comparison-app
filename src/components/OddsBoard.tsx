@@ -1425,7 +1425,13 @@ function HomeContent({ initialLeague, initialGames, initialFetchedAt, leagueOrde
                 {(supportsConferenceFilter || liveCount > 0) && (
                   <div className="flex min-h-[42px] flex-wrap items-center gap-2 lg:hidden">
                     {conferenceControl}
-                    {liveChip}
+                    {/* beside the conference filter the switch sits centred in the space
+                        left over, unless the search box is open and takes that space */}
+                    {liveChip && supportsConferenceFilter && !searchShown ? (
+                      <div className="flex flex-1 justify-center">{liveChip}</div>
+                    ) : (
+                      liveChip
+                    )}
                     {searchShown && supportsConferenceFilter && searchInput(true, 'min-w-36 flex-1')}
                   </div>
                 )}
